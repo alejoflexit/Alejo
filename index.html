@@ -1,0 +1,432 @@
+import { useState, useCallback, useRef, useEffect } from "react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+
+const BRAND = {
+  navy:    "#0D0D2B",
+  navyMid: "#12123A",
+  navyCard:"#1A1A4A",
+  teal:    "#2ECFAA",
+  blue:    "#3A8FD4",
+  white:   "#FFFFFF",
+  muted:   "rgba(255,255,255,0.5)",
+  faint:   "rgba(255,255,255,0.08)",
+  border:  "rgba(255,255,255,0.1)",
+};
+
+const SLA_VERDE = 98;
+const SLA_AMARILLO = 95;
+
+function getSemaforo(sla) {
+  if (sla === null) return { color: "#555577", bg: "rgba(85,85,119,0.15)", label: "SIN DATOS", emoji: "⚪" };
+  if (sla >= SLA_VERDE)    return { color: "#2ECFAA", bg: "rgba(46,207,170,0.15)",  label: "OK",      emoji: "🟢" };
+  if (sla >= SLA_AMARILLO) return { color: "#EF9F27", bg: "rgba(239,159,39,0.15)",  label: "RIESGO",  emoji: "🟡" };
+  return                          { color: "#E24B4A", bg: "rgba(226,75,74,0.15)",   label: "CRÍTICO", emoji: "🔴" };
+}
+
+function evaluar(demorados, sla) {
+  if (sla === null) return "SIN DATOS";
+  if (demorados >= 5 || sla < 90) return "MUY MALO";
+  if (demorados >= 3 || sla < 95) return "MALO";
+  if (sla < 98) return "MEDIO";
+  return "BUENO";
+}
+
+function useXLSX() {
+  const [ready, setReady] = useState(typeof window !== "undefined" && !!window.XLSX);
+  useEffect(() => {
+    if (window.XLSX) { setReady(true); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.onload = () => setReady(true);
+    document.head.appendChild(s);
+  }, []);
+  return ready;
+}
+
+function parsearExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = window.XLSX.read(e.target.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = window.XLSX.utils.sheet_to_json(ws, { header: 1 });
+        let headerRow = -1;
+        for (let i = 0; i < Math.min(10, raw.length); i++) {
+          if (raw[i] && raw[i].some(c => String(c || "").includes("Cadete"))) { headerRow = i; break; }
+        }
+        if (headerRow === -1) { reject(new Error("No se encontró la columna 'Cadete'")); return; }
+        const headers = raw[headerRow].map(h => String(h || "").trim());
+        const rows = raw.slice(headerRow + 1)
+          .filter(r => r && r.some(c => c !== null && c !== undefined && c !== ""))
+          .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ""; }); return o; });
+        resolve(rows);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function calcularDia(rows, fecha) {
+  const map = {};
+  for (const row of rows) {
+    const cadete = String(row["Cadete"] || "").trim();
+    if (!cadete) continue;
+    const estado = String(row["Estado"] || "").trim();
+    const origen = String(row["Origen"] || "").trim();
+    const esML = origen === "ML";
+    const esPendiente = estado === "En camino al destinatario";
+    const esDemorado = esML && esPendiente;
+    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0 };
+    map[cadete].cantidad++;
+    if (esPendiente) map[cadete].pendientes++;
+    if (esDemorado)  map[cadete].demorados++;
+    if (esML)        map[cadete].envios_ml++;
+  }
+  return Object.values(map).map(m => {
+    const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
+    const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: sla !== null ? +sla.toFixed(2) : null, evaluacion: evaluar(m.demorados, sla), fecha };
+  });
+}
+
+function acumularSemana(dias) {
+  const map = {};
+  for (const dia of dias) {
+    for (const m of dia.datos) {
+      if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0 };
+      map[m.cadete].cantidad  += m.cantidad;
+      map[m.cadete].pendientes+= m.pendientes;
+      map[m.cadete].demorados += m.demorados;
+      map[m.cadete].envios_ml += m.envios_ml;
+    }
+  }
+  return Object.values(map).map(m => {
+    const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
+    const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: sla !== null ? +sla.toFixed(2) : null, evaluacion: evaluar(m.demorados, sla) };
+  }).sort((a, b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
+}
+
+function tendenciaCadete(cadete, semanas) {
+  const puntos = [];
+  for (const sem of semanas) {
+    for (const dia of sem.dias) {
+      const m = dia.datos.find(d => d.cadete === cadete);
+      if (m) puntos.push({ fecha: dia.fecha, sla: m.slaMeli, demorados: m.demorados });
+    }
+  }
+  return puntos.sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+function getWeekLabel(fecha) {
+  const d = new Date(fecha + "T00:00:00");
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const lunes = new Date(d); lunes.setDate(diff);
+  const viernes = new Date(lunes); viernes.setDate(lunes.getDate() + 4);
+  const fmt = (x) => `${x.getDate().toString().padStart(2,"0")}/${(x.getMonth()+1).toString().padStart(2,"0")}`;
+  return `${fmt(lunes)}-${fmt(viernes)}`;
+}
+
+function SemaforoCard({ m, onClick, selected }) {
+  const sem = getSemaforo(m.slaMeli);
+  return (
+    <div onClick={() => onClick(m.cadete)} style={{
+      background: selected ? sem.bg : BRAND.navyCard,
+      border: `1px solid ${selected ? sem.color : BRAND.border}`,
+      borderLeft: `3px solid ${sem.color}`,
+      borderRadius: 12, padding: "1rem", cursor: "pointer", transition: "all 0.15s",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.white, lineHeight: 1.3, flex: 1, marginRight: 8 }}>{m.cadete}</div>
+        <div style={{ fontSize: 18 }}>{sem.emoji}</div>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: sem.color, marginBottom: 6 }}>
+        {m.slaMeli !== null ? m.slaMeli.toFixed(1) + "%" : "—"}
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: BRAND.muted }}>{m.cantidad} envíos</span>
+        {m.demorados > 0 && <span style={{ fontSize: 11, color: "#E24B4A", fontWeight: 600 }}>{m.demorados} dem.</span>}
+        {m.pendientes > 0 && <span style={{ fontSize: 11, color: "#3A8FD4" }}>{m.pendientes} pend.</span>}
+      </div>
+      <div style={{ height: 4, background: BRAND.faint, borderRadius: 2, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${Math.min(m.slaMeli ?? 0, 100)}%`, background: sem.color, borderRadius: 2 }} />
+      </div>
+    </div>
+  );
+}
+
+const ttStyle = { background: "#1A1A4A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12, color: "#fff" };
+
+export default function App() {
+  const xlsxReady = useXLSX();
+  const [semanas, setSemanas]               = useState([]);
+  const [semanaActiva, setSemanaActiva]     = useState(null);
+  const [fecha, setFecha]                   = useState(() => new Date().toISOString().slice(0, 10));
+  const [loading, setLoading]               = useState(false);
+  const [error, setError]                   = useState("");
+  const [tab, setTab]                       = useState("semaforo");
+  const [cadeteSeleccionado, setCadeteSeleccionado] = useState(null);
+  const [filtro, setFiltro]                 = useState("todos");
+  const fileRef = useRef();
+
+  const onFile = useCallback(async (file) => {
+    if (!file || !xlsxReady) return;
+    setLoading(true); setError("");
+    try {
+      const rows = await parsearExcel(file);
+      const datos = calcularDia(rows, fecha);
+      const weekLabel = getWeekLabel(fecha);
+      setSemanas(prev => {
+        const next = [...prev];
+        let si = next.findIndex(s => s.label === weekLabel);
+        if (si === -1) { next.push({ label: weekLabel, dias: [] }); si = next.length - 1; }
+        const di = next[si].dias.findIndex(d => d.fecha === fecha);
+        if (di === -1) next[si].dias.push({ fecha, datos });
+        else next[si].dias[di] = { fecha, datos };
+        next[si].dias.sort((a, b) => a.fecha.localeCompare(b.fecha));
+        return next.sort((a, b) => a.label.localeCompare(b.label));
+      });
+      setSemanaActiva(weekLabel);
+      setTab("semaforo");
+    } catch (e) { setError("Error: " + e.message); }
+    finally { setLoading(false); }
+  }, [fecha, xlsxReady]);
+
+  const onDrop = useCallback((e) => { e.preventDefault(); onFile(e.dataTransfer.files[0]); }, [onFile]);
+
+  const semana    = semanas.find(s => s.label === semanaActiva);
+  const acumulado = semana ? acumularSemana(semana.dias) : [];
+
+  const filtrados = acumulado.filter(m => {
+    if (filtro === "critico") return m.slaMeli !== null && m.slaMeli < SLA_AMARILLO;
+    if (filtro === "riesgo")  return m.slaMeli !== null && m.slaMeli >= SLA_AMARILLO && m.slaMeli < SLA_VERDE;
+    if (filtro === "ok")      return m.slaMeli !== null && m.slaMeli >= SLA_VERDE;
+    return true;
+  });
+
+  const criticos = acumulado.filter(m => m.slaMeli !== null && m.slaMeli < SLA_AMARILLO).length;
+  const enRiesgo = acumulado.filter(m => m.slaMeli !== null && m.slaMeli >= SLA_AMARILLO && m.slaMeli < SLA_VERDE).length;
+  const ok       = acumulado.filter(m => m.slaMeli !== null && m.slaMeli >= SLA_VERDE).length;
+
+  const tendencia   = cadeteSeleccionado ? tendenciaCadete(cadeteSeleccionado, semanas) : [];
+  const comparativa = acumulado.slice(0, 20).map(m => ({ name: m.cadete.split(" ")[0], sla: m.slaMeli ?? 0, color: getSemaforo(m.slaMeli).color }));
+
+  const inp = { padding: "7px 12px", fontSize: 13, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: "none" };
+  const card = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: "1.25rem" };
+
+  return (
+    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: BRAND.navy, minHeight: "100vh", padding: "1.5rem", color: BRAND.white }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: "2rem" }}>
+        <div style={{ width: 44, height: 44, background: "linear-gradient(135deg,#2ECFAA,#3A8FD4)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <i className="ti ti-truck-delivery" style={{ fontSize: 24, color: "#fff" }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Control de flota</div>
+          <div style={{ fontSize: 13, color: BRAND.muted }}>Semáforo semanal de SLA · Mercado Libre</div>
+        </div>
+      </div>
+
+      {/* Upload */}
+      <div style={{ display: "flex", gap: 12, marginBottom: "1.5rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div>
+          <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Fecha del reparto</div>
+          <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inp} />
+        </div>
+        <div onDrop={onDrop} onDragOver={e => e.preventDefault()} onClick={() => xlsxReady && fileRef.current.click()}
+          style={{ flex: 1, minWidth: 220, border: "1px dashed #2ECFAA", borderRadius: 10, padding: "12px 20px", cursor: xlsxReady ? "pointer" : "wait", textAlign: "center", fontSize: 13, color: "#2ECFAA", background: "rgba(46,207,170,0.05)" }}>
+          <i className="ti ti-upload" style={{ fontSize: 18, marginRight: 8 }} />
+          {!xlsxReady ? "Cargando..." : loading ? "Procesando..." : "Subir Excel de LightData — se agrega a la semana automáticamente"}
+          <input ref={fileRef} type="file" accept=".xls,.xlsx" style={{ display: "none" }} onChange={e => onFile(e.target.files[0])} />
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: "1rem" }}>
+          {error}
+        </div>
+      )}
+
+      {/* Semana tabs */}
+      {semanas.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: "1.5rem" }}>
+          {semanas.map(s => (
+            <button key={s.label} onClick={() => setSemanaActiva(s.label)} style={{ padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: "pointer", border: `1px solid ${semanaActiva === s.label ? "#2ECFAA" : BRAND.border}`, background: semanaActiva === s.label ? "rgba(46,207,170,0.15)" : BRAND.faint, color: semanaActiva === s.label ? "#2ECFAA" : BRAND.muted }}>
+              Semana {s.label} <span style={{ opacity: 0.6 }}>({s.dias.length}d)</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {acumulado.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "5rem 2rem", color: BRAND.muted }}>
+          <i className="ti ti-truck-delivery" style={{ fontSize: 56, display: "block", marginBottom: 16, color: "#2ECFAA", opacity: 0.3 }} />
+          <div style={{ fontSize: 18, fontWeight: 600, color: BRAND.white, marginBottom: 8 }}>Sin datos todavía</div>
+          <div style={{ fontSize: 14 }}>Subí el Excel de LightData para comenzar — la libreta semanal se arma sola</div>
+        </div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10, marginBottom: "1.5rem" }}>
+            {[
+              ["Cadetes",      acumulado.length,  BRAND.white, "ti-users"],
+              ["🔴 Críticos",  criticos,           "#E24B4A",  "ti-alert-circle"],
+              ["🟡 En riesgo", enRiesgo,           "#EF9F27",  "ti-alert-triangle"],
+              ["🟢 OK",        ok,                 "#2ECFAA",  "ti-circle-check"],
+              ["Días cargados",semana?.dias.length||0, "#3A8FD4","ti-calendar"],
+            ].map(([label, val, color, icon]) => (
+              <div key={label} style={{ ...card, padding: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: BRAND.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+                  <i className={`ti ${icon}`} style={{ fontSize: 16, color, opacity: 0.7 }} />
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, color }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Alerta críticos */}
+          {criticos > 0 && (
+            <div style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.3)", borderRadius: 10, padding: "10px 16px", marginBottom: "1rem", fontSize: 13, color: "#E24B4A" }}>
+              <i className="ti ti-alert-circle" style={{ marginRight: 8 }} />
+              <strong>{criticos} cadete{criticos > 1 ? "s" : ""} con SLA crítico</strong> — por debajo del 95%. Requieren atención inmediata.
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${BRAND.border}`, marginBottom: "1.5rem" }}>
+            {[["semaforo","ti-traffic-lights","Semáforo"],["tendencia","ti-chart-line","Tendencia"],["tabla","ti-table","Tabla"]].map(([key, icon, label]) => (
+              <button key={key} onClick={() => setTab(key)} style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none", background: "none", marginBottom: -1, color: tab === key ? "#2ECFAA" : BRAND.muted, borderBottom: `2px solid ${tab === key ? "#2ECFAA" : "transparent"}` }}>
+                <i className={`ti ${icon}`} style={{ marginRight: 6, fontSize: 14 }} />{label}
+              </button>
+            ))}
+          </div>
+
+          {/* SEMÁFORO */}
+          {tab === "semaforo" && (
+            <>
+              <div style={{ display: "flex", gap: 8, marginBottom: "1rem", flexWrap: "wrap" }}>
+                {[["todos","Todos"],["critico","🔴 Críticos"],["riesgo","🟡 En riesgo"],["ok","🟢 OK"]].map(([key, label]) => (
+                  <button key={key} onClick={() => setFiltro(key)} style={{ padding: "5px 14px", fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: "pointer", border: `1px solid ${filtro === key ? "#2ECFAA" : BRAND.border}`, background: filtro === key ? "rgba(46,207,170,0.15)" : BRAND.faint, color: filtro === key ? "#2ECFAA" : BRAND.muted }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                {filtrados.map(m => (
+                  <SemaforoCard key={m.cadete} m={m} onClick={(c) => { setCadeteSeleccionado(c === cadeteSeleccionado ? null : c); setTab("tendencia"); }} selected={cadeteSeleccionado === m.cadete} />
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 12 }}>
+                Clic en un cadete para ver su evolución · 🟢 ≥98% · 🟡 95–98% · 🔴 &lt;95%
+              </div>
+            </>
+          )}
+
+          {/* TENDENCIA */}
+          {tab === "tendencia" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+              {cadeteSeleccionado && tendencia.length > 0 ? (
+                <div style={card}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Evolución SLA Meli</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: BRAND.white, marginTop: 2 }}>{cadeteSeleccionado}</div>
+                    </div>
+                    <button onClick={() => setCadeteSeleccionado(null)} style={{ background: BRAND.faint, border: `1px solid ${BRAND.border}`, borderRadius: 8, padding: "4px 12px", fontSize: 12, color: BRAND.muted, cursor: "pointer" }}>
+                      Ver todos
+                    </button>
+                  </div>
+                  <div style={{ height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={tendencia} margin={{ left: 0, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
+                        <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: BRAND.muted }} tickFormatter={v => { const p = v.split("-"); return `${p[2]}/${p[1]}`; }} />
+                        <YAxis domain={[0, 100]} tickFormatter={v => v + "%"} tick={{ fontSize: 11, fill: BRAND.muted }} />
+                        <Tooltip contentStyle={ttStyle} formatter={v => [v !== null ? v.toFixed(1) + "%" : "—", "SLA Meli"]} labelFormatter={v => { const p = v.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; }} />
+                        <Line type="monotone" dataKey="sla" stroke="#2ECFAA" strokeWidth={2.5} dot={{ fill: "#2ECFAA", r: 5 }} activeDot={{ r: 7 }} connectNulls />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ ...card, textAlign: "center", padding: "2rem", color: BRAND.muted }}>
+                  <i className="ti ti-hand-click" style={{ fontSize: 32, display: "block", marginBottom: 8 }} />
+                  Hacé clic en un cadete del semáforo para ver su evolución diaria
+                </div>
+              )}
+
+              <div style={card}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: BRAND.muted, marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Ranking semanal — peores primero
+                </div>
+                <div style={{ height: Math.max(260, comparativa.length * 32) }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={comparativa} layout="vertical" margin={{ left: 10, right: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={BRAND.border} />
+                      <XAxis type="number" domain={[0, 100]} tickFormatter={v => v + "%"} tick={{ fontSize: 11, fill: BRAND.muted }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: BRAND.muted }} width={80} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={ttStyle} formatter={v => [v.toFixed(1) + "%", "SLA Meli"]} />
+                      <Bar dataKey="sla" radius={[0, 4, 4, 0]} label={{ position: "right", formatter: v => v.toFixed(0) + "%", fontSize: 11, fill: BRAND.muted }}>
+                        {comparativa.map((e, i) => <Cell key={i} fill={e.color} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12 }}>
+                  {[["#E24B4A","Crítico (<95%)"],["#EF9F27","En riesgo (95–98%)"],["#2ECFAA","OK (≥98%)"]].map(([c, l]) => (
+                    <span key={l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: BRAND.muted }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: "inline-block" }} />{l}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TABLA */}
+          {tab === "tabla" && (
+            <>
+              <div style={{ marginBottom: "1rem", fontSize: 13, color: BRAND.muted }}>
+                Días cargados: {semana?.dias.map(d => { const p = d.fecha.split("-"); return `${p[2]}/${p[1]}`; }).join(" · ")}
+              </div>
+              <div style={{ overflowX: "auto", borderRadius: 12, border: `1px solid ${BRAND.border}` }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+                  <thead>
+                    <tr style={{ background: BRAND.navyMid }}>
+                      {["Cadete","Total","Pendientes","Demorados ML","% Entrega","SLA Meli","Estado"].map(h => (
+                        <th key={h} style={{ padding: "10px 14px", fontSize: 11, fontWeight: 600, color: BRAND.muted, textAlign: "left", borderBottom: `1px solid ${BRAND.border}`, whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {acumulado.map((m, i) => {
+                      const sem = getSemaforo(m.slaMeli);
+                      return (
+                        <tr key={m.cadete} style={{ background: i % 2 === 0 ? BRAND.navyCard : BRAND.navy, borderLeft: `3px solid ${sem.color}` }}>
+                          <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 600, color: BRAND.white, borderBottom: `1px solid ${BRAND.border}` }}>{m.cadete}</td>
+                          <td style={{ padding: "10px 14px", fontSize: 13, color: BRAND.white, borderBottom: `1px solid ${BRAND.border}` }}>{m.cantidad}</td>
+                          <td style={{ padding: "10px 14px", fontSize: 13, color: m.pendientes > 0 ? "#3A8FD4" : BRAND.muted, borderBottom: `1px solid ${BRAND.border}` }}>{m.pendientes}</td>
+                          <td style={{ padding: "10px 14px", fontSize: 13, color: m.demorados > 0 ? "#E24B4A" : BRAND.muted, fontWeight: m.demorados > 0 ? 700 : 400, borderBottom: `1px solid ${BRAND.border}` }}>{m.demorados}</td>
+                          <td style={{ padding: "10px 14px", fontSize: 13, color: BRAND.white, borderBottom: `1px solid ${BRAND.border}` }}>{m.pctEntrega.toFixed(1)}%</td>
+                          <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, color: sem.color, borderBottom: `1px solid ${BRAND.border}` }}>{m.slaMeli !== null ? m.slaMeli.toFixed(1) + "%" : "—"}</td>
+                          <td style={{ padding: "10px 14px", borderBottom: `1px solid ${BRAND.border}` }}>
+                            <span style={{ background: sem.bg, color: sem.color, border: `1px solid ${sem.color}40`, borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>{sem.emoji} {sem.label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
