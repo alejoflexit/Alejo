@@ -139,38 +139,39 @@ async function main() {
   const fechaFmt = `${day}/${month}/${year}`;
   const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&cantidadColumnas=1`;
 
-  console.log("Descargando Excel...");
+  console.log("Descargando Excel via CDPSession...");
+
+  // Usar CDP para descargar directamente con las cookies de sesión activas
+  const excelPath = path.join(downloadPath, 'envios.xls');
   
-  // Descargar via fetch con cookies de sesión
-  const response = await page.evaluate(async (url) => {
-    const res = await fetch(url);
-    const buffer = await res.arrayBuffer();
-    return { 
-      status: res.status,
-      size: buffer.byteLength,
-      data: Array.from(new Uint8Array(buffer))
-    };
-  }, excelUrl);
+  await page.goto(excelUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.waitForTimeout(5000);
+  
+  // Verificar si se descargó o si la página tiene contenido
+  const pageContent = await page.content();
+  console.log("Page content length:", pageContent.length);
+  console.log("Page title:", await page.title());
 
   await browser.close();
 
-  console.log(`Respuesta: status ${response.status}, size ${response.size} bytes`);
+  // Verificar archivos descargados
+  const files = fs.readdirSync(downloadPath);
+  console.log("Archivos en /tmp/lightdata:", files);
   
-  // Si el archivo es muy pequeño, mostrar contenido para debug
-  if (response.size < 5000) {
-    const text = Buffer.from(response.data).toString('utf8').slice(0, 500);
-    console.log("Contenido respuesta:", text);
-  }
-
-  if (response.status !== 200 || response.size < 1000) {
-    console.error(`Error descargando Excel: status ${response.status}, size ${response.size}`);
+  const excelFiles = files.filter(f => f.endsWith('.xls') || f.endsWith('.xlsx'));
+  if (excelFiles.length === 0) {
+    console.error("No se encontró el Excel en /tmp/lightdata");
     process.exit(1);
   }
-
-  // Guardar Excel
-  const excelPath = path.join(downloadPath, 'envios.xls');
-  fs.writeFileSync(excelPath, Buffer.from(response.data));
-  console.log(`Excel descargado: ${response.size} bytes`);
+  
+  const finalPath = path.join(downloadPath, excelFiles[excelFiles.length-1]);
+  const fileSize = fs.statSync(finalPath).size;
+  console.log(`Excel encontrado: ${excelFiles[excelFiles.length-1]} (${fileSize} bytes)`);
+  
+  if (fileSize < 1000) {
+    console.error("El archivo Excel es demasiado pequeño, probablemente es una página de error");
+    process.exit(1);
+  }
 
   // Parsear Excel
   const wb = XLSX.readFile(excelPath);
