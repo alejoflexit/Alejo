@@ -8,6 +8,7 @@
     "puppeteer-core": "^21.0.0",
     "@sparticuz/chromium": "^123.0.0",
     "xlsx": "^0.18.5",
-    "@supabase/supabase-js": "^2.0.0"
+    "@supabase/supabase-js": "^2.0.0",
+    "ws": "^8.0.0"
   }
 }

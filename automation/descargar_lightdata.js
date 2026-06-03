@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const { createClient } = require('@supabase/supabase-js');
+const ws = require('ws');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,7 +11,7 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const TOKEN_EMPRESA = "ldae_125_6e2c8f1d4a9b3d7c5f0a2e8b1c4d7a96";
 const ID_EMPRESA = "125";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { realtime: { transport: ws } });
 
 function getYesterdayDate() {
   const d = new Date();
@@ -228,4 +229,3 @@ async function main() {
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
- 
