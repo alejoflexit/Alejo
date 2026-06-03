@@ -1,4 +1,4 @@
-name: Descargar LightData diario
+name: Flexit Automatizacion Diaria
 
 on:
   schedule:
@@ -9,23 +9,23 @@ jobs:
   descargar:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout código
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Instalar Node.js 22
+      - name: Node 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Instalar dependencias
+      - name: Instalar deps
         run: cd automation && npm install
 
-      - name: Crear carpeta de descarga
+      - name: Crear carpeta
         run: mkdir -p /tmp/lightdata
 
-      - name: Ejecutar script
+      - name: Ejecutar
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: cd automation && node descargar_lightdata.js
+        run: cd automation && node --version && node descargar_lightdata.js
         timeout-minutes: 10
