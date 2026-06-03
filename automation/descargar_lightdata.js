@@ -109,6 +109,10 @@ async function main() {
   const weekLabel = getWeekLabel(fecha);
   console.log(`Procesando datos del ${fecha}...`);
 
+  const downloadPath = '/tmp/lightdata';
+  fs.mkdirSync(downloadPath, { recursive: true });
+
+  // Login con Puppeteer para obtener sesión
   const browser = await puppeteer.launch({
     args: chromium.args,
     defaultViewport: chromium.defaultViewport,
@@ -117,53 +121,51 @@ async function main() {
   });
 
   const page = await browser.newPage();
-  const downloadPath = '/tmp/lightdata';
-  fs.mkdirSync(downloadPath, { recursive: true });
-
-  const client = await page.createCDPSession();
-  await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath });
-
-  // Login
-  await page.goto('https://flexit.lightdata.app', { waitUntil: 'networkidle2' });
+  await page.goto('https://flexit.lightdata.app', { waitUntil: 'networkidle2', timeout: 30000 });
   await page.waitForSelector('input', { timeout: 15000 });
   const inputs = await page.$$('input');
   await inputs[0].type('beto');
   await inputs[1].type('123456');
   await page.keyboard.press('Enter');
-  await page.waitForNavigation({ waitUntil: 'networkidle2' });
+  await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
   console.log("Login OK");
 
-  // Ir a listado de envíos y exportar
+  // Obtener cookies de sesión
+  const cookies = await page.cookies();
+  const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+  // Construir URL de descarga directa
   const [year, month, day] = fecha.split('-');
   const fechaFmt = `${day}/${month}/${year}`;
-  await page.goto('https://flexit.lightdata.app/index.php?seccion=envios&accion=listado', { waitUntil: 'networkidle2' });
-  await page.waitForTimeout(2000);
+  const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&cantidadColumnas=1`;
 
-  // Setear fechas
-  await page.evaluate((f) => {
-    const inputs = document.querySelectorAll('input[type="text"]');
-    inputs.forEach(input => {
-      if (input.name && input.name.includes('fecha')) {
-        input.value = f;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    });
-  }, fechaFmt);
+  console.log("Descargando Excel...");
+  
+  // Descargar via fetch con cookies de sesión
+  const response = await page.evaluate(async (url) => {
+    const res = await fetch(url);
+    const buffer = await res.arrayBuffer();
+    return { 
+      status: res.status,
+      size: buffer.byteLength,
+      data: Array.from(new Uint8Array(buffer))
+    };
+  }, excelUrl);
 
-  // Buscar y click en exportar
-  await page.evaluate(() => {
-    const btns = Array.from(document.querySelectorAll('button, a, input[type="submit"]'));
-    const exportBtn = btns.find(b => b.textContent.toLowerCase().includes('export') || b.textContent.toLowerCase().includes('excel') || b.href?.includes('export'));
-    if (exportBtn) exportBtn.click();
-  });
-  await page.waitForTimeout(8000);
   await browser.close();
 
-  // Leer Excel descargado
-  const files = fs.readdirSync(downloadPath).filter(f => f.endsWith('.xls') || f.endsWith('.xlsx'));
-  if (files.length === 0) { console.error("No se encontró el Excel"); process.exit(1); }
+  if (response.status !== 200 || response.size < 1000) {
+    console.error(`Error descargando Excel: status ${response.status}, size ${response.size}`);
+    process.exit(1);
+  }
 
-  const wb = XLSX.readFile(path.join(downloadPath, files[files.length-1]));
+  // Guardar Excel
+  const excelPath = path.join(downloadPath, 'envios.xls');
+  fs.writeFileSync(excelPath, Buffer.from(response.data));
+  console.log(`Excel descargado: ${response.size} bytes`);
+
+  // Parsear Excel
+  const wb = XLSX.readFile(excelPath);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
