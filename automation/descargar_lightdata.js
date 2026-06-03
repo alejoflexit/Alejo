@@ -154,6 +154,14 @@ async function main() {
 
   await browser.close();
 
+  console.log(`Respuesta: status ${response.status}, size ${response.size} bytes`);
+  
+  // Si el archivo es muy pequeño, mostrar contenido para debug
+  if (response.size < 5000) {
+    const text = Buffer.from(response.data).toString('utf8').slice(0, 500);
+    console.log("Contenido respuesta:", text);
+  }
+
   if (response.status !== 200 || response.size < 1000) {
     console.error(`Error descargando Excel: status ${response.status}, size ${response.size}`);
     process.exit(1);
