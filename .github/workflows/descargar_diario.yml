@@ -1,0 +1,30 @@
+name: Descargar LightData diario
+
+on:
+  schedule:
+    - cron: '0 4 * * 1-6'  # 1am Argentina (UTC-3) = 4am UTC, lunes a sábado
+  workflow_dispatch:  # permite ejecutar manualmente
+
+jobs:
+  descargar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Instalar dependencias
+        run: cd automation && npm install
+
+      - name: Crear carpeta de descarga
+        run: mkdir -p /tmp/lightdata
+
+      - name: Ejecutar script de descarga
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: cd automation && node descargar_lightdata.js
