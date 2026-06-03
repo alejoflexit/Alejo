@@ -1,0 +1,12 @@
+{
+  "name": "flexit-automation",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node descargar_lightdata.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "xlsx": "^0.18.5",
+    "@supabase/supabase-js": "^2.0.0"
+  }
+}
