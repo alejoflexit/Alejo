@@ -1,10 +1,13 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const TOKEN_EMPRESA = process.env.TOKEN_EMPRESA || "ldae_125_6e2c8f1d4a9b3d7c5f0a2e8b1c4d7a96";
+const TOKEN_EMPRESA = "ldae_125_6e2c8f1d4a9b3d7c5f0a2e8b1c4d7a96";
 const ID_EMPRESA = "125";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -43,32 +46,21 @@ async function esDemorReal(idInterno, codCliente, tokens) {
     const codStr = String(codCliente).trim();
     const token = tokens[codStr] || tokens[codStr.replace(/^0+/, '')] || tokens[codStr.padStart(4,'0')];
     if (!token) return true;
-
     const res = await fetch("https://apiexterna.lightdata.com.ar/externa/obtener-datos-envio", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${TOKEN_EMPRESA}`
-      },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TOKEN_EMPRESA}` },
       body: JSON.stringify({ idEmpresa: ID_EMPRESA, idEnvio: String(idInterno), token })
     });
     if (!res.ok) return true;
     const data = await res.json();
     if (!data.success || !data.data?.estadosHistorial) return true;
-    const historial = data.data.estadosHistorial;
-    const tuvoNadieAntes21 = historial.some(h => {
+    const tuvoNadieAntes21 = data.data.estadosHistorial.some(h => {
       const estadoH = String(h.estado).toLowerCase();
-      const esNadieORepro = estadoH.includes("nadie") || estadoH.includes("reprogramado");
-      if (!esNadieORepro) return false;
-      try {
-        const hora = new Date(h.fecha).getHours();
-        return hora < 21;
-      } catch(e) { return true; }
+      if (!estadoH.includes("nadie") && !estadoH.includes("reprogramado")) return false;
+      try { return new Date(h.fecha).getHours() < 21; } catch(e) { return true; }
     });
     return !tuvoNadieAntes21;
-  } catch(e) {
-    return true;
-  }
+  } catch(e) { return true; }
 }
 
 function calcularDia(rows, fecha, noEsDemora) {
@@ -87,15 +79,12 @@ function calcularDia(rows, fecha, noEsDemora) {
     const esDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
     const fechaEstado = String(row["Fecha estado"] || "").trim();
     const esEntregado = ["Entregado","Entregado 2DA visita"].includes(estado);
-
     let esPost21 = false;
     if (esEntregado && fechaEstado) {
       const hora = fechaEstado.split(" ")[1];
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
-
     const esRepro21 = esML && estado === "reprogramado por meli" && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
-
     if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
@@ -118,54 +107,63 @@ function calcularDia(rows, fecha, noEsDemora) {
 async function main() {
   const fecha = getYesterdayDate();
   const weekLabel = getWeekLabel(fecha);
-  console.log(`Descargando datos del ${fecha}...`);
+  console.log(`Procesando datos del ${fecha}...`);
 
-  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-  const page = await browser.newPage();
-
-  // Login
-  await page.goto('https://flexit.lightdata.app');
-  await page.waitForSelector('input[name="usuario"]');
-  await page.type('input[name="usuario"]', 'beto');
-  await page.type('input[name="password"]', '123456');
-  await page.click('button[type="submit"]');
-  await page.waitForNavigation();
-  console.log("Login exitoso");
-
-  // Navegar a exportar listado
-  const client = await page.createCDPSession();
-  await client.send('Page.setDownloadBehavior', {
-    behavior: 'allow',
-    downloadPath: '/tmp/lightdata'
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless,
   });
 
-  // Construir fecha para filtro
+  const page = await browser.newPage();
+  const downloadPath = '/tmp/lightdata';
+  fs.mkdirSync(downloadPath, { recursive: true });
+
+  const client = await page.createCDPSession();
+  await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath });
+
+  // Login
+  await page.goto('https://flexit.lightdata.app', { waitUntil: 'networkidle2' });
+  await page.waitForSelector('input', { timeout: 15000 });
+  const inputs = await page.$$('input');
+  await inputs[0].type('beto');
+  await inputs[1].type('123456');
+  await page.keyboard.press('Enter');
+  await page.waitForNavigation({ waitUntil: 'networkidle2' });
+  console.log("Login OK");
+
+  // Ir a listado de envíos y exportar
   const [year, month, day] = fecha.split('-');
   const fechaFmt = `${day}/${month}/${year}`;
+  await page.goto('https://flexit.lightdata.app/index.php?seccion=envios&accion=listado', { waitUntil: 'networkidle2' });
+  await page.waitForTimeout(2000);
 
-  await page.goto(`https://flexit.lightdata.app/index.php?seccion=envios&accion=listado`);
-  await page.waitForSelector('input[name="fecha_desde"]', { timeout: 10000 });
-  await page.$eval('input[name="fecha_desde"]', (el, v) => el.value = v, fechaFmt);
-  await page.$eval('input[name="fecha_hasta"]', (el, v) => el.value = v, fechaFmt);
-  await page.click('button[type="submit"]');
-  await page.waitForTimeout(3000);
+  // Setear fechas
+  await page.evaluate((f) => {
+    const inputs = document.querySelectorAll('input[type="text"]');
+    inputs.forEach(input => {
+      if (input.name && input.name.includes('fecha')) {
+        input.value = f;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+  }, fechaFmt);
 
-  // Exportar Excel
-  const exportBtn = await page.$('a[href*="exportar"]');
-  if (exportBtn) {
-    await exportBtn.click();
-    await page.waitForTimeout(5000);
-    console.log("Excel descargado");
-  }
-
+  // Buscar y click en exportar
+  await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button, a, input[type="submit"]'));
+    const exportBtn = btns.find(b => b.textContent.toLowerCase().includes('export') || b.textContent.toLowerCase().includes('excel') || b.href?.includes('export'));
+    if (exportBtn) exportBtn.click();
+  });
+  await page.waitForTimeout(8000);
   await browser.close();
 
-  // Leer Excel
-  const fs = require('fs');
-  const files = fs.readdirSync('/tmp/lightdata').filter(f => f.endsWith('.xls') || f.endsWith('.xlsx'));
+  // Leer Excel descargado
+  const files = fs.readdirSync(downloadPath).filter(f => f.endsWith('.xls') || f.endsWith('.xlsx'));
   if (files.length === 0) { console.error("No se encontró el Excel"); process.exit(1); }
 
-  const wb = XLSX.readFile(`/tmp/lightdata/${files[files.length-1]}`);
+  const wb = XLSX.readFile(path.join(downloadPath, files[files.length-1]));
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
@@ -198,29 +196,24 @@ async function main() {
   console.log(`Verificando ${enCaminoML.length} envíos via API...`);
   const noEsDemora = new Set();
   for (const row of enCaminoML) {
-    const idInterno = String(row["ID (Interno)"]).trim();
-    const codCliente = row["Cod.Cliente"];
-    const esReal = await esDemorReal(idInterno, codCliente, tokens);
-    if (!esReal) noEsDemora.add(idInterno);
+    const esReal = await esDemorReal(String(row["ID (Interno)"]).trim(), row["Cod.Cliente"], tokens);
+    if (!esReal) noEsDemora.add(String(row["ID (Interno)"]).trim());
   }
-  console.log(`No son demora real: ${noEsDemora.size}`);
 
   const datos = calcularDia(rows, fecha, noEsDemora);
 
   // Guardar en Supabase
   await supabase.from('semanas').delete().eq('fecha', fecha).eq('label', weekLabel);
-  const rowsToInsert = datos.map(m => ({
+  const { error } = await supabase.from('semanas').insert(datos.map(m => ({
     label: weekLabel, fecha, cadete: m.cadete,
     cantidad: m.cantidad, pendientes: m.pendientes,
     demorados: m.demorados, envios_ml: m.envios_ml,
-    post21: m.post21 || 0, dem21: m.dem21 || 0,
-    envios_particular: m.envios_particular || 0,
-    inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null,
-  }));
-  const { error } = await supabase.from('semanas').insert(rowsToInsert);
+    post21: m.post21||0, dem21: m.dem21||0,
+    envios_particular: m.envios_particular||0,
+    inicio_ruta: m.inicio_ruta||null, fin_ruta: m.fin_ruta||null,
+  })));
   if (error) { console.error("Error guardando:", error); process.exit(1); }
-
-  console.log(`✅ Datos del ${fecha} guardados exitosamente — ${datos.length} cadetes`);
+  console.log(`✅ ${fecha} guardado — ${datos.length} cadetes`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
