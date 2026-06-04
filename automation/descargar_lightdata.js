@@ -219,14 +219,22 @@ async function main() {
   const fechaFmt = `${day}/${month}/${year}`;
   const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&cantidadColumnas=1`;
 
-  console.log("Descargando Excel...");
+  console.log("Descargando Excel via fetch...");
   const response = await page.evaluate(async (url) => {
-    const res = await fetch(url);
-    const buffer = await res.arrayBuffer();
-    return { status: res.status, size: buffer.byteLength, data: Array.from(new Uint8Array(buffer)) };
+    try {
+      const res = await fetch(url, { credentials: 'include' });
+      const buffer = await res.arrayBuffer();
+      return { status: res.status, size: buffer.byteLength, data: Array.from(new Uint8Array(buffer)), ok: true };
+    } catch(e) {
+      return { ok: false, error: String(e) };
+    }
   }, excelUrl);
 
   await browser.close();
+
+  if (!response.ok) {
+    console.error("Error fetch:", response.error); process.exit(1);
+  }
 
   console.log(`Excel: status=${response.status}, size=${response.size} bytes`);
   if (response.size < 5000) {
@@ -234,7 +242,7 @@ async function main() {
     console.log("Contenido:", text);
   }
   if (response.status !== 200 || response.size < 1000) {
-    console.error("Error descargando Excel"); process.exit(1);
+    console.error("Excel muy pequeño o error"); process.exit(1);
   }
 
   const excelPath = path.join(downloadPath, 'envios.xls');
