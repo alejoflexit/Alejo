@@ -1,8 +1,6 @@
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
-const { createClient } = require('@supabase/supabase-js');
-const ws = require('ws');
 const fs = require('fs');
 const path = require('path');
 
@@ -10,8 +8,48 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const TOKEN_EMPRESA = "ldae_125_6e2c8f1d4a9b3d7c5f0a2e8b1c4d7a96";
 const ID_EMPRESA = "125";
+const LD_USER = "beto";
+const LD_PASS = "123456";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { realtime: { transport: ws } });
+// Supabase via fetch directo (sin WebSocket)
+async function supabaseGet(table, params = "") {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`
+    }
+  });
+  return res.json();
+}
+
+async function supabaseDelete(table, params) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
+    method: "DELETE",
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`
+    }
+  });
+  return res.ok;
+}
+
+async function supabaseInsert(table, rows) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: "POST",
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation"
+    },
+    body: JSON.stringify(rows)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase insert error: ${text}`);
+  }
+  return res.json();
+}
 
 function getYesterdayDate() {
   const d = new Date();
@@ -30,31 +68,72 @@ function getWeekLabel(fecha) {
 }
 
 async function getClienteTokens() {
-  const { data } = await supabase.from('clientes_tokens').select('codigo,token');
+  const data = await supabaseGet("clientes_tokens", "select=codigo,token&limit=1000");
   const map = {};
-  if (data) {
+  if (Array.isArray(data)) {
     data.forEach(r => {
       map[r.codigo] = r.token;
       map[String(r.codigo).replace(/^0+/, '')] = r.token;
       map[String(r.codigo).padStart(4, '0')] = r.token;
     });
   }
+  console.log(`Tokens cargados: ${Object.keys(map).length / 3}`);
   return map;
 }
 
-async function esDemorReal(idInterno, codCliente, tokens) {
+async function getLDHistorial(idInterno, ldCookies) {
   try {
+    const res = await fetch("https://flexit.lightdata.app/modules/envios/alta/controlador.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cookie": ldCookies
+      },
+      body: `operador=get&did=${idInterno}`
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.historial || [];
+  } catch(e) { return []; }
+}
+
+async function esDemorReal(idInterno, codCliente, tokens, ldCookies) {
+  try {
+    // Primero intentar con historial interno de LightData
+    const historial = await getLDHistorial(idInterno, ldCookies);
+    
+    if (historial.length > 0) {
+      // Codigos: 6=Nadie, 11=Repro meli, 12=Repro comprador
+      const ESTADOS_NO_DEMORA = new Set(["6", "11", "12"]);
+      const tuvoNoDemoraAntes21 = historial.some(h => {
+        if (!ESTADOS_NO_DEMORA.has(String(h.estado))) return false;
+        try {
+          const partes = String(h.fecha).split(" ");
+          if (partes.length < 2) return false;
+          const hora = parseInt(partes[1].split(":")[0]);
+          return hora < 21;
+        } catch(e) { return false; }
+      });
+      return !tuvoNoDemoraAntes21;
+    }
+
+    // Fallback: API externa
     const codStr = String(codCliente).trim();
     const token = tokens[codStr] || tokens[codStr.replace(/^0+/, '')] || tokens[codStr.padStart(4,'0')];
     if (!token) return true;
+
     const res = await fetch("https://apiexterna.lightdata.com.ar/externa/obtener-datos-envio", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TOKEN_EMPRESA}` },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TOKEN_EMPRESA}`
+      },
       body: JSON.stringify({ idEmpresa: ID_EMPRESA, idEnvio: String(idInterno), token })
     });
     if (!res.ok) return true;
     const data = await res.json();
     if (!data.success || !data.data?.estadosHistorial) return true;
+    
     const tuvoNadieAntes21 = data.data.estadosHistorial.some(h => {
       const estadoH = String(h.estado).toLowerCase();
       if (!estadoH.includes("nadie") && !estadoH.includes("reprogramado")) return false;
@@ -108,12 +187,12 @@ function calcularDia(rows, fecha, noEsDemora) {
 async function main() {
   const fecha = getYesterdayDate();
   const weekLabel = getWeekLabel(fecha);
-  console.log(`Procesando datos del ${fecha}...`);
+  console.log(`Procesando datos del ${fecha} (${weekLabel})...`);
 
   const downloadPath = '/tmp/lightdata';
   fs.mkdirSync(downloadPath, { recursive: true });
 
-  // Login con Puppeteer para obtener sesión
+  // Login en LightData con Puppeteer
   const browser = await puppeteer.launch({
     args: chromium.args,
     defaultViewport: chromium.defaultViewport,
@@ -125,54 +204,41 @@ async function main() {
   await page.goto('https://flexit.lightdata.app', { waitUntil: 'networkidle2', timeout: 30000 });
   await page.waitForSelector('input', { timeout: 15000 });
   const inputs = await page.$$('input');
-  await inputs[0].type('beto');
-  await inputs[1].type('123456');
+  await inputs[0].type(LD_USER);
+  await inputs[1].type(LD_PASS);
   await page.keyboard.press('Enter');
   await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
-  console.log("Login OK");
+  console.log("Login LightData OK");
 
-  // Obtener cookies de sesión
+  // Obtener cookies para requests server-side
   const cookies = await page.cookies();
-  const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  const ldCookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-  // Construir URL de descarga directa
+  // Descargar Excel via URL directa
   const [year, month, day] = fecha.split('-');
   const fechaFmt = `${day}/${month}/${year}`;
   const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&cantidadColumnas=1`;
 
-  console.log("Descargando Excel via CDPSession...");
-
-  // Usar CDP para descargar directamente con las cookies de sesión activas
-  const excelPath = path.join(downloadPath, 'envios.xls');
-  
-  await page.goto(excelUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-  await page.waitForTimeout(5000);
-  
-  // Verificar si se descargó o si la página tiene contenido
-  const pageContent = await page.content();
-  console.log("Page content length:", pageContent.length);
-  console.log("Page title:", await page.title());
+  console.log("Descargando Excel...");
+  const response = await page.evaluate(async (url) => {
+    const res = await fetch(url);
+    const buffer = await res.arrayBuffer();
+    return { status: res.status, size: buffer.byteLength, data: Array.from(new Uint8Array(buffer)) };
+  }, excelUrl);
 
   await browser.close();
 
-  // Verificar archivos descargados
-  const files = fs.readdirSync(downloadPath);
-  console.log("Archivos en /tmp/lightdata:", files);
-  
-  const excelFiles = files.filter(f => f.endsWith('.xls') || f.endsWith('.xlsx'));
-  if (excelFiles.length === 0) {
-    console.error("No se encontró el Excel en /tmp/lightdata");
-    process.exit(1);
+  console.log(`Excel: status=${response.status}, size=${response.size} bytes`);
+  if (response.size < 5000) {
+    const text = Buffer.from(response.data).toString('utf8').slice(0, 300);
+    console.log("Contenido:", text);
   }
-  
-  const finalPath = path.join(downloadPath, excelFiles[excelFiles.length-1]);
-  const fileSize = fs.statSync(finalPath).size;
-  console.log(`Excel encontrado: ${excelFiles[excelFiles.length-1]} (${fileSize} bytes)`);
-  
-  if (fileSize < 1000) {
-    console.error("El archivo Excel es demasiado pequeño, probablemente es una página de error");
-    process.exit(1);
+  if (response.status !== 200 || response.size < 1000) {
+    console.error("Error descargando Excel"); process.exit(1);
   }
+
+  const excelPath = path.join(downloadPath, 'envios.xls');
+  fs.writeFileSync(excelPath, Buffer.from(response.data));
 
   // Parsear Excel
   const wb = XLSX.readFile(excelPath);
@@ -192,7 +258,7 @@ async function main() {
 
   console.log(`Total filas: ${rows.length}`);
 
-  // Verificar demorados via API
+  // Cargar tokens y verificar demorados
   const tokens = await getClienteTokens();
   const enCaminoML = rows.filter(r => {
     const origen = String(r["Origen"]||"").trim();
@@ -205,18 +271,20 @@ async function main() {
     return (esEnCaminoML || esReproAntes21) && idInterno;
   });
 
-  console.log(`Verificando ${enCaminoML.length} envíos via API...`);
+  console.log(`Verificando ${enCaminoML.length} envíos...`);
   const noEsDemora = new Set();
   for (const row of enCaminoML) {
-    const esReal = await esDemorReal(String(row["ID (Interno)"]).trim(), row["Cod.Cliente"], tokens);
-    if (!esReal) noEsDemora.add(String(row["ID (Interno)"]).trim());
+    const idInterno = String(row["ID (Interno)"]).trim();
+    const esReal = await esDemorReal(idInterno, row["Cod.Cliente"], tokens, ldCookies);
+    if (!esReal) noEsDemora.add(idInterno);
   }
+  console.log(`No son demora real: ${noEsDemora.size}`);
 
   const datos = calcularDia(rows, fecha, noEsDemora);
 
-  // Guardar en Supabase
-  await supabase.from('semanas').delete().eq('fecha', fecha).eq('label', weekLabel);
-  const { error } = await supabase.from('semanas').insert(datos.map(m => ({
+  // Guardar en Supabase via fetch
+  await supabaseDelete("semanas", `fecha=eq.${fecha}&label=eq.${encodeURIComponent(weekLabel)}`);
+  await supabaseInsert("semanas", datos.map(m => ({
     label: weekLabel, fecha, cadete: m.cadete,
     cantidad: m.cantidad, pendientes: m.pendientes,
     demorados: m.demorados, envios_ml: m.envios_ml,
@@ -224,7 +292,7 @@ async function main() {
     envios_particular: m.envios_particular||0,
     inicio_ruta: m.inicio_ruta||null, fin_ruta: m.fin_ruta||null,
   })));
-  if (error) { console.error("Error guardando:", error); process.exit(1); }
+
   console.log(`✅ ${fecha} guardado — ${datos.length} cadetes`);
 }
 
