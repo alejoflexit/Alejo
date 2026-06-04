@@ -1,0 +1,32 @@
+name: Flexit Carga Diaria v2
+
+on:
+  schedule:
+    - cron: '0 4 * * 1-6'
+  workflow_dispatch:
+
+jobs:
+  carga:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          
+      - name: Verificar Node
+        run: node --version
+          
+      - name: Instalar dependencias
+        run: cd automation && rm -rf node_modules package-lock.json && npm install
+
+      - name: Crear carpeta temporal
+        run: mkdir -p /tmp/lightdata
+
+      - name: Ejecutar descarga
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: cd automation && node descargar_lightdata.js
+        timeout-minutes: 10
