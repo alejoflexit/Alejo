@@ -17,8 +17,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Instalar deps
-        run: cd automation && npm install
+      - name: Instalar deps limpias
+        run: cd automation && rm -rf node_modules && npm install
 
       - name: Crear carpeta
         run: mkdir -p /tmp/lightdata
