@@ -62,9 +62,9 @@ function getWeekLabel(fecha) {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   const lunes = new Date(d); lunes.setDate(diff);
-  const viernes = new Date(lunes); viernes.setDate(lunes.getDate() + 4);
+  const sabado = new Date(lunes); sabado.setDate(lunes.getDate() + 5);
   const fmt = (x) => `${x.getDate().toString().padStart(2,"0")}/${(x.getMonth()+1).toString().padStart(2,"0")}`;
-  return `${fmt(lunes)}-${fmt(viernes)}`;
+  return `${fmt(lunes)}-${fmt(sabado)}`;
 }
 
 async function getClienteTokens() {
