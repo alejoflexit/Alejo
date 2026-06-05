@@ -2,7 +2,7 @@ name: Flexit Carga Diaria v2
 
 on:
   schedule:
-    - cron: '0 4 * * 1-6'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:
