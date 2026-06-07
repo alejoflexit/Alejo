@@ -13,7 +13,7 @@ const LD_PASS = "123456";
 
 // Supabase via fetch directo (sin WebSocket)
 async function supabaseGet(table, params = "") {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {h
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
     headers: {
       "apikey": SUPABASE_KEY,
       "Authorization": `Bearer ${SUPABASE_KEY}`
