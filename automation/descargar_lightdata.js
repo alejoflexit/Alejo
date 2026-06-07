@@ -292,8 +292,10 @@ async function main() {
 
   // Guardar en Supabase via fetch
   // Limpiar label viejo si cambió (antes domingo usaba +5 en vez de +6)
-  const oldWeekLabel = (() => { const d2 = new Date(fecha + "T00:00:00"); const day2 = d2.getDay(); const diff2 = d2.getDate() - day2 + (day2 === 0 ? -6 : 1); const lunes2 = new Date(d2); lunes2.setDate(diff2); const domingo2 = new Date(lunes2); domingo2.setDate(lunes2.getDate() + 5); const fmt2 = (x) => `${x.getDate().toString().padStart(2,"0")}/${(x.getMonth()+1).toString().padStart(2,"0")}`; return `${fmt2(lunes2)}-${fmt2(domingo2)}`; })();
-  if (oldWeekLabel !== weekLabel) await supabaseDelete("semanas", `label=eq.${encodeURIComponent(oldWeekLabel)}`);
+  const d2 = new Date(fecha + "T00:00:00"); const day2 = d2.getDay(); const diff2 = d2.getDate() - day2 + (day2 === 0 ? -6 : 1); const lunes2 = new Date(d2); lunes2.setDate(diff2); const domingo2 = new Date(lunes2); domingo2.setDate(lunes2.getDate() + 5);
+  const fmt2 = (x) => x.getDate().toString().padStart(2,"0") + "/" + (x.getMonth()+1).toString().padStart(2,"0");
+  const oldWeekLabel = fmt2(lunes2) + "-" + fmt2(domingo2);
+  if (oldWeekLabel !== weekLabel) await supabaseDelete("semanas", "label=eq." + encodeURIComponent(oldWeekLabel));
   await supabaseDelete("semanas", `fecha=eq.${fecha}&label=eq.${encodeURIComponent(weekLabel)}`);
   await supabaseInsert("semanas", datos.map(m => ({
     label: weekLabel, fecha, cadete: m.cadete,
