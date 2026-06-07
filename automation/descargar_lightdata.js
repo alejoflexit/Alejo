@@ -12,7 +12,7 @@ const LD_USER = "beto";
 const LD_PASS = "123456";
 
 // Supabase via fetch directo (sin WebSocket)
-async function supabaseGet(table, params = "") {h
+async function supabaseGet(table, params = "") {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
     headers: {
       "apikey": SUPABASE_KEY,
