@@ -164,7 +164,7 @@ function calcularDia(rows, fecha, noEsDemora) {
       const hora = fechaEstado.split(" ")[1];
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
-    const esRepro21 = esML && estado === "reprogramado por meli" && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
+    const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
     if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
