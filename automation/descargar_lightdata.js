@@ -189,6 +189,17 @@ async function main() {
   const weekLabel = getWeekLabel(fecha);
   console.log(`Procesando datos del ${fecha} (${weekLabel})...`);
 
+  // Anti-overwrite: si ya existen datos para esta fecha y es hora laboral AR (>=9hs),
+  // probablemente hubo una carga manual previa — no pisar.
+  // Esto también evita gastar minutos de Actions en Puppeteer innecesariamente.
+  const existentes = await supabaseGet("semanas", `fecha=eq.${fecha}&select=id&limit=1`).catch(() => []);
+  const horaAR = (new Date().getUTCHours() - 3 + 24) % 24;
+  console.log(`Hora Argentina: ${horaAR}hs | Registros existentes para ${fecha}: ${existentes.length}`);
+  if (existentes.length > 0 && horaAR >= 9) {
+    console.log(`⚠️ Saltando: ya existen datos y son las ${horaAR}hs AR — posible carga manual previa`);
+    return;
+  }
+
   const downloadPath = '/tmp/lightdata';
   fs.mkdirSync(downloadPath, { recursive: true });
 
