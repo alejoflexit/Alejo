@@ -165,10 +165,14 @@ function calcularDia(rows, fecha, noEsDemora) {
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
     const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
-    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null, demoradosDetalle:[] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
-    if (esDemorado)  map[cadete].demorados++;
+    if (esDemorado) {
+      map[cadete].demorados++;
+      const dir = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
+      map[cadete].demoradosDetalle.push({ id: idInterno, dir, estado });
+    }
     if (esML)        map[cadete].envios_ml++;
     if (!esML)       map[cadete].envios_particular++;
     if (esPost21)    map[cadete].post21++;
@@ -308,14 +312,22 @@ async function main() {
   const oldWeekLabel = fmt2(lunes2) + "-" + fmt2(domingo2);
   if (oldWeekLabel !== weekLabel) await supabaseDelete("semanas", "label=eq." + encodeURIComponent(oldWeekLabel));
   await supabaseDelete("semanas", `fecha=eq.${fecha}&label=eq.${encodeURIComponent(weekLabel)}`);
-  await supabaseInsert("semanas", datos.map(m => ({
+  const insertRows = datos.map(m => ({
     label: weekLabel, fecha, cadete: m.cadete,
     cantidad: m.cantidad, pendientes: m.pendientes,
     demorados: m.demorados, envios_ml: m.envios_ml,
     post21: m.post21||0, dem21: m.dem21||0,
     envios_particular: m.envios_particular||0,
     inicio_ruta: m.inicio_ruta||null, fin_ruta: m.fin_ruta||null,
-  })));
+    demorados_detalle: m.demoradosDetalle || [],
+  }));
+  try {
+    await supabaseInsert("semanas", insertRows);
+  } catch(e) {
+    // Fallback sin demorados_detalle si la columna aún no existe
+    const fallback = insertRows.map(({ demorados_detalle, ...r }) => r);
+    await supabaseInsert("semanas", fallback);
+  }
 
   console.log(`✅ ${fecha} guardado — ${datos.length} cadetes`);
 }
