@@ -2,9 +2,9 @@ name: Flexit Carga Diaria v2
 
 on:
   schedule:
-    - cron: '0 4 * * 1-6'   # 1am AR — intento principal
-    - cron: '0 5 * * 1-6'   # 2am AR — backup si el de 1am se retrasa
-    - cron: '0 6 * * 1-6'   # 3am AR — backup adicional
+    - cron: '0 4 * * *'   # 1am AR — todos los días (incluye domingo→sábado)
+    - cron: '0 5 * * *'   # 2am AR — backup
+    - cron: '0 6 * * *'   # 3am AR — backup adicional
   workflow_dispatch:
 
 jobs:
