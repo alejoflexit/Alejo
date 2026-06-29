@@ -60,6 +60,95 @@ const thSt = {
   borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap',
 };
 
+// ── CHOFER PICKER ──
+function ChoferPicker({ chs, choferesList, onUpdate }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [editIdx, setEditIdx] = useState(null);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setQuery(''); } };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const all = ['A coordinar', ...choferesList];
+  const filtered = query ? all.filter(c => c.toLowerCase().includes(query.toLowerCase())) : all;
+
+  const assign = ch => {
+    let next;
+    if (editIdx !== null) {
+      next = [...chs]; next[editIdx] = ch;
+    } else {
+      const base = chs.filter(x => x !== 'A coordinar');
+      next = [...base, ch];
+      if (!next.length) next = ['A coordinar'];
+    }
+    onUpdate({ choferes: next });
+    setOpen(false); setQuery(''); setEditIdx(null);
+  };
+
+  const remove = (i, e) => {
+    e.stopPropagation();
+    const next = chs.filter((_, j) => j !== i);
+    onUpdate({ choferes: next.length ? next : ['A coordinar'] });
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative', minWidth: 150 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+        {chs.map((ch, i) => {
+          const warn = ch === 'A coordinar';
+          return (
+            <div key={i} onClick={() => { setEditIdx(i); setQuery(''); setOpen(true); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 20, border: `1px solid ${warn ? 'rgba(251,191,36,0.45)' : 'rgba(46,207,170,0.35)'}`, background: warn ? 'rgba(251,191,36,0.08)' : 'rgba(46,207,170,0.06)', fontSize: 11, color: warn ? '#FBBF24' : '#2ECFAA', cursor: 'pointer', userSelect: 'none' }}>
+              {ch}
+              {chs.length > 1 && (
+                <span onClick={e => remove(i, e)} style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, lineHeight: 1 }}>✕</span>
+              )}
+            </div>
+          );
+        })}
+        <button onClick={() => { setEditIdx(null); setQuery(''); setOpen(true); }}
+          style={{ width: 20, height: 20, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
+      </div>
+
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 300, width: 210, background: '#162d42', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.55)' }}>
+          <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>🔍</span>
+            <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="Buscar chofer..."
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setOpen(false); setQuery(''); }
+                if (e.key === 'Enter' && filtered.length > 0) assign(filtered[0]);
+              }}
+              style={{ border: 'none', background: 'transparent', color: '#fff', fontSize: 12, outline: 'none', width: '100%' }} />
+          </div>
+          <div style={{ maxHeight: 185, overflowY: 'auto' }}>
+            {filtered.slice(0, 12).map(ch => (
+              <div key={ch} onClick={() => assign(ch)}
+                style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: ch === 'A coordinar' ? '#FBBF24' : '#fff' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                {ch}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>Sin resultados</div>
+            )}
+            {filtered.length > 12 && (
+              <div style={{ padding: '4px 12px 8px', fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>Seguí escribiendo para filtrar...</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Colectas() {
   const [navView, setNavView] = useState('colectas'); // 'colectas' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
@@ -362,27 +451,12 @@ export default function Colectas() {
                             )}
                           </td>
                           {/* Choferes */}
-                          <td style={{ padding:'8px 12px', minWidth:140 }}>
-                            <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-                              {chs.map((ch, i) => (
-                                <div key={i} style={{ display:'flex', alignItems:'center', gap:3 }}>
-                                  <select
-                                    value={ch}
-                                    onChange={e => { const n=[...chs]; n[i]=e.target.value; updateRegistro(c.id,{choferes:n}); }}
-                                    style={{ ...inpSt, padding:'3px 7px', fontSize:11, border:`1px solid ${ch==='A coordinar'?'rgba(251,191,36,0.4)':BRAND.border}`, background:ch==='A coordinar'?'rgba(251,191,36,0.08)':BRAND.faint, color:ch==='A coordinar'?'#FBBF24':BRAND.white }}>
-                                    <option value="A coordinar">A coordinar</option>
-                                    {choferesList.map(x => <option key={x} value={x}>{x}</option>)}
-                                  </select>
-                                  {chs.length > 1 && (
-                                    <button onClick={() => updateRegistro(c.id,{choferes:chs.filter((_,j)=>j!==i)})} style={{ background:'none', border:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:'0 2px' }}>✕</button>
-                                  )}
-                                </div>
-                              ))}
-                              <button onClick={() => updateRegistro(c.id,{choferes:[...chs,'A coordinar']})}
-                                style={{ width:20, height:20, borderRadius:'50%', border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, cursor:'pointer', fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', alignSelf:'flex-start' }}>
-                                +
-                              </button>
-                            </div>
+                          <td style={{ padding:'8px 12px', minWidth:160 }}>
+                            <ChoferPicker
+                              chs={chs}
+                              choferesList={choferesList}
+                              onUpdate={updates => updateRegistro(c.id, updates)}
+                            />
                           </td>
                           {/* Dirección */}
                           <td style={{ padding:'8px 12px', fontSize:12, color:BRAND.muted, maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -649,72 +723,4 @@ export default function Colectas() {
     </div>
   );
 
-  const viewTitles = {
-    colectas: 'Colectas',
-    pagos: 'Pagos a cadetes',
-    clientes: 'Clientes',
-    choferes: 'Choferes',
-  };
-
-  // ── MAIN RENDER ──
-  return (
-    <div style={{ display:'flex', gap:0, minHeight:'60vh', borderRadius:14, overflow:'hidden', border:`1px solid ${BRAND.border}` }}>
-
-      {/* SIDEBAR */}
-      <div style={{
-        width:152, flexShrink:0, background:BRAND.navySide,
-        borderRight:`1px solid ${BRAND.border}`,
-        padding:'18px 0',
-        display:'flex', flexDirection:'column', gap:0,
-      }}>
-        {sidebarItems.map(group => (
-          <div key={group.section} style={{ marginBottom:8 }}>
-            <div style={{
-              fontSize:10, fontWeight:700, letterSpacing:'0.1em',
-              color:'rgba(255,255,255,0.22)', padding:'0 14px 6px',
-              textTransform:'uppercase',
-            }}>
-              {group.section}
-            </div>
-            {group.items.map(item => {
-              const active = navView === item.id;
-              return (
-                <button key={item.id} onClick={() => setNavView(item.id)} style={{
-                  display:'flex', alignItems:'center', gap:8,
-                  width:'100%', padding:'8px 14px', border:'none', cursor:'pointer',
-                  background: active ? 'rgba(46,207,170,0.1)' : 'transparent',
-                  color: active ? BRAND.teal : BRAND.muted,
-                  fontSize:13, fontWeight: active ? 600 : 400,
-                  borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
-                  textAlign:'left', transition:'all 0.15s',
-                }}>
-                  <span style={{ fontSize:14 }}>{item.icon}</span>
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      {/* MAIN CONTENT */}
-      <div style={{ flex:1, padding:'20px 24px', background:BRAND.navy, minWidth:0 }}>
-        <div style={{ fontSize:16, fontWeight:700, letterSpacing:'-0.01em', marginBottom:16, color:BRAND.white }}>
-          {viewTitles[navView]}
-        </div>
-
-        {error && (
-          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            {error}
-            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
-          </div>
-        )}
-
-        {navView === 'colectas' && <>{zoneTabs}{renderZona()}</>}
-        {navView === 'pagos'    && renderPagos()}
-        {navView === 'clientes' && renderClientes()}
-        {navView === 'choferes' && renderChoferes()}
-      </div>
-    </div>
-  );
-}
+  con
