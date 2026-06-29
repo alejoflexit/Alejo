@@ -4,14 +4,15 @@ const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2bGFnb29zbXh4Y3NiZXZrcmh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMTE1ODMsImV4cCI6MjA5NDg4NzU4M30.h0cyc0TI8yEZSny-udR2-5tzihd5jvJRTiFEbkCnVng";
 
 const BRAND = {
-  navy:    "#0D0D2B",
-  navyMid: "#12123A",
-  navyCard:"#1A1A4A",
+  navy:    "#0d1b2a",
+  navyMid: "#112236",
+  navyCard:"#162d42",
+  navySide:"#0a1520",
   teal:    "#2ECFAA",
   white:   "#FFFFFF",
-  muted:   "rgba(255,255,255,0.5)",
-  faint:   "rgba(255,255,255,0.08)",
-  border:  "rgba(255,255,255,0.1)",
+  muted:   "rgba(255,255,255,0.45)",
+  faint:   "rgba(255,255,255,0.06)",
+  border:  "rgba(255,255,255,0.09)",
 };
 
 const SECCIONES = ['CABA', 'SUR', 'NOROESTE', 'SABADOS'];
@@ -55,11 +56,12 @@ function getWeekRange(fechaStr) {
 
 const thSt = {
   padding: '9px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600,
-  color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em',
-  borderBottom: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap',
+  color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em',
+  borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap',
 };
 
 export default function Colectas() {
+  const [navView, setNavView] = useState('colectas'); // 'colectas' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
   const [fecha, setFecha] = useState(todayStr);
   const [clientes, setClientes] = useState([]);
@@ -168,9 +170,9 @@ export default function Colectas() {
     });
   }, [flushSaves]);
 
-  // Pagos
+  // Pagos — se carga cuando navView === 'pagos'
   useEffect(() => {
-    if (tab !== 'pagos') return;
+    if (navView !== 'pagos') return;
     setLoadingPagos(true);
     const { start, end } = getWeekRange(semanaFecha);
     sbFetch(`colectas_registros?select=*,colectas_clientes(nombre,monto)&fecha=gte.${start}&fecha=lte.${end}`)
@@ -189,7 +191,7 @@ export default function Colectas() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoadingPagos(false));
-  }, [tab, semanaFecha]);
+  }, [navView, semanaFecha]);
 
   // Save cliente
   const saveCliente = async () => {
@@ -264,13 +266,6 @@ export default function Colectas() {
     borderRadius:8, background:BRAND.faint, color:BRAND.white, outline:'none',
   };
 
-  const tabBtn = active => ({
-    padding:'5px 14px', fontSize:12, fontWeight:600, borderRadius:20, cursor:'pointer',
-    border:`1px solid ${active?'#2ECFAA':BRAND.border}`,
-    background:active?'rgba(46,207,170,0.15)':BRAND.faint,
-    color:active?'#2ECFAA':BRAND.muted,
-  });
-
   // ── ZONA RENDER ──
   function renderZona() {
     if (loading) return <div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>Cargando...</div>;
@@ -279,7 +274,7 @@ export default function Colectas() {
       <div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>
         <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
         <div>No hay clientes activos en {tab}.</div>
-        <button onClick={() => setTab('clientes')}
+        <button onClick={() => setNavView('clientes')}
           style={{ marginTop:12, padding:'6px 16px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:13 }}>
           Ir a Clientes →
         </button>
@@ -327,7 +322,7 @@ export default function Colectas() {
                 return (
                   <React.Fragment key={chofer}>
                     {/* Group header */}
-                    <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.03)' }}>
+                    <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)' }}>
                       <td colSpan={6} style={{ padding:'6px 12px', borderBottom:`1px solid ${BRAND.border}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span style={{ fontSize:12, fontWeight:600, color:isWarn?'#FBBF24':BRAND.muted }}>
@@ -351,11 +346,11 @@ export default function Colectas() {
                       const confirmed = reg.confirmado;
                       const unassigned = chs.every(x => x === 'A coordinar');
                       return (
-                        <tr key={c.id} style={{ background: confirmed?'rgba(46,207,170,0.06)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy, borderBottom:`1px solid ${BRAND.border}` }}>
+                        <tr key={c.id} style={{ background: confirmed?'rgba(46,207,170,0.05)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy, borderBottom:`1px solid ${BRAND.border}` }}>
                           {/* Confirm */}
                           <td style={{ padding:'8px 12px', width:36 }}>
                             <button onClick={() => updateRegistro(c.id, { confirmado:!confirmed })}
-                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${confirmed?'#2ECFAA':'rgba(255,255,255,0.2)'}`, background:confirmed?'#2ECFAA':'transparent', cursor:'pointer', color:'#0D0D2B', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${confirmed?'#2ECFAA':'rgba(255,255,255,0.2)'}`, background:confirmed?'#2ECFAA':'transparent', cursor:'pointer', color:'#0d1b2a', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>
                               {confirmed ? '✓' : ''}
                             </button>
                           </td>
@@ -470,9 +465,16 @@ export default function Colectas() {
   // ── CLIENTES RENDER ──
   function renderClientes() {
     const filtrados = clienteFiltroSec === 'todos' ? clientes : clientes.filter(c => c.seccion === clienteFiltroSec);
+
+    const tabBtn = active => ({
+      padding:'4px 12px', fontSize:12, fontWeight:600, borderRadius:20, cursor:'pointer',
+      border:`1px solid ${active?BRAND.teal:BRAND.border}`,
+      background:active?'rgba(46,207,170,0.12)':BRAND.faint,
+      color:active?BRAND.teal:BRAND.muted,
+    });
+
     return (
       <div>
-        {/* Filtros + botón agregar */}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16, flexWrap:'wrap' }}>
           <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
             {['todos', ...SECCIONES].map(s => (
@@ -487,7 +489,6 @@ export default function Colectas() {
           </button>
         </div>
 
-        {/* Formulario */}
         {showForm && (
           <div style={{ background:BRAND.navyCard, border:'1px solid rgba(46,207,170,0.3)', borderRadius:12, padding:'1.25rem', marginBottom:16 }}>
             <div style={{ fontSize:14, fontWeight:700, marginBottom:12 }}>{editId ? 'Editar cliente' : 'Nuevo cliente'}</div>
@@ -509,7 +510,7 @@ export default function Colectas() {
             </div>
             <div style={{ display:'flex', gap:8, marginTop:14 }}>
               <button onClick={saveCliente}
-                style={{ padding:'7px 18px', borderRadius:8, border:'none', background:BRAND.teal, color:'#0D0D2B', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                style={{ padding:'7px 18px', borderRadius:8, border:'none', background:BRAND.teal, color:'#0d1b2a', fontWeight:700, fontSize:13, cursor:'pointer' }}>
                 {editId ? 'Guardar cambios' : 'Agregar'}
               </button>
               <button onClick={() => { setShowForm(false); setEditId(null); }}
@@ -520,8 +521,7 @@ export default function Colectas() {
           </div>
         )}
 
-        {/* Tabla clientes */}
-        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, marginBottom:24 }}>
+        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}` }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:480 }}>
             <thead>
               <tr style={{ background:BRAND.navyMid }}>
@@ -567,64 +567,154 @@ export default function Colectas() {
             </tbody>
           </table>
         </div>
+      </div>
+    );
+  }
 
-        {/* Choferes */}
-        <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'1rem 1.25rem' }}>
-          <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>👤 Choferes disponibles</div>
-          <div style={{ fontSize:12, color:BRAND.muted, marginBottom:12 }}>Lista que aparece en el selector al asignar colectas.</div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+  // ── CHOFERES RENDER ──
+  function renderChoferes() {
+    return (
+      <div>
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>👤 Choferes disponibles</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>
+            Lista que aparece en el selector al asignar colectas.
+          </div>
+        </div>
+
+        <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'1.25rem', marginBottom:16 }}>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:14 }}>
             {choferesList.map(ch => (
-              <div key={ch} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:20, background:BRAND.navyMid, border:`1px solid ${BRAND.border}`, fontSize:12 }}>
-                {ch}
+              <div key={ch} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:20, background:BRAND.navyMid, border:`1px solid ${BRAND.border}`, fontSize:13 }}>
+                <span>👤</span>
+                <span>{ch}</span>
                 <button onClick={() => setChoferesList(prev => prev.filter(x => x !== ch))}
-                  style={{ background:'none', border:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:0, lineHeight:1 }}>✕</button>
+                  style={{ background:'none', border:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:'0 0 0 4px', lineHeight:1, display:'flex', alignItems:'center' }}>✕</button>
               </div>
             ))}
+            {choferesList.length === 0 && (
+              <div style={{ color:BRAND.muted, fontSize:13 }}>No hay choferes cargados.</div>
+            )}
           </div>
+
           <form onSubmit={e => {
             e.preventDefault();
             const name = e.target.chofer.value.trim();
             if (name && !choferesList.includes(name)) setChoferesList(prev => [...prev, name]);
             e.target.chofer.value = '';
-          }} style={{ display:'flex', gap:6 }}>
-            <input name="chofer" placeholder="Agregar chofer..." style={{ ...inpSt, padding:'5px 10px', width:170 }} />
+          }} style={{ display:'flex', gap:8 }}>
+            <input name="chofer" placeholder="Nombre del chofer..." style={{ ...inpSt, padding:'7px 12px', flex:1, maxWidth:240 }} />
             <button type="submit"
-              style={{ padding:'5px 14px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:12, fontWeight:600 }}>
+              style={{ padding:'7px 16px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'rgba(46,207,170,0.1)', color:BRAND.teal, cursor:'pointer', fontSize:13, fontWeight:600 }}>
               + Agregar
             </button>
           </form>
+        </div>
+
+        <div style={{ fontSize:12, color:BRAND.muted, padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:`1px solid ${BRAND.border}` }}>
+          💡 Los choferes se guardan en este dispositivo. Si cambiás de computadora, tenés que cargarlos de nuevo.
         </div>
       </div>
     );
   }
 
+  // ── SIDEBAR CONFIG ──
+  const sidebarItems = [
+    { section: 'OPERACIÓN', items: [
+      { id: 'colectas', icon: '📦', label: 'Colectas' },
+      { id: 'pagos',    icon: '💰', label: 'Pagos' },
+    ]},
+    { section: 'CONFIG', items: [
+      { id: 'clientes', icon: '📋', label: 'Clientes' },
+      { id: 'choferes', icon: '👤', label: 'Choferes' },
+    ]},
+  ];
+
+  // Zone tabs (solo cuando navView === 'colectas')
+  const zoneTabs = (
+    <div style={{ display:'flex', gap:0, marginBottom:20, borderBottom:`1px solid ${BRAND.border}` }}>
+      {SECCIONES.map(s => {
+        const active = tab === s;
+        return (
+          <button key={s} onClick={() => setTab(s)} style={{
+            padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', border:'none',
+            background:'transparent', color: active ? BRAND.teal : BRAND.muted,
+            borderBottom: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
+            marginBottom:-1, transition:'color 0.15s',
+          }}>
+            {s}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const viewTitles = {
+    colectas: 'Colectas',
+    pagos: 'Pagos a cadetes',
+    clientes: 'Clientes',
+    choferes: 'Choferes',
+  };
+
   // ── MAIN RENDER ──
   return (
-    <div>
-      <div style={{ marginBottom:'1.25rem' }}>
-        <div style={{ fontSize:22, fontWeight:700, letterSpacing:'-0.02em' }}>Colectas</div>
-        <div style={{ fontSize:13, color:BRAND.muted }}>Gestión de colectas · Flexit</div>
-      </div>
+    <div style={{ display:'flex', gap:0, minHeight:'60vh', borderRadius:14, overflow:'hidden', border:`1px solid ${BRAND.border}` }}>
 
-      {/* Tabs */}
-      <div style={{ display:'flex', gap:6, marginBottom:'1.25rem', flexWrap:'wrap' }}>
-        {[...SECCIONES, 'pagos', 'clientes'].map(t => (
-          <button key={t} onClick={() => setTab(t)} style={tabBtn(tab===t)}>
-            {t==='pagos' ? '💰 Pagos' : t==='clientes' ? '📋 Clientes' : t}
-          </button>
+      {/* SIDEBAR */}
+      <div style={{
+        width:152, flexShrink:0, background:BRAND.navySide,
+        borderRight:`1px solid ${BRAND.border}`,
+        padding:'18px 0',
+        display:'flex', flexDirection:'column', gap:0,
+      }}>
+        {sidebarItems.map(group => (
+          <div key={group.section} style={{ marginBottom:8 }}>
+            <div style={{
+              fontSize:10, fontWeight:700, letterSpacing:'0.1em',
+              color:'rgba(255,255,255,0.22)', padding:'0 14px 6px',
+              textTransform:'uppercase',
+            }}>
+              {group.section}
+            </div>
+            {group.items.map(item => {
+              const active = navView === item.id;
+              return (
+                <button key={item.id} onClick={() => setNavView(item.id)} style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  width:'100%', padding:'8px 14px', border:'none', cursor:'pointer',
+                  background: active ? 'rgba(46,207,170,0.1)' : 'transparent',
+                  color: active ? BRAND.teal : BRAND.muted,
+                  fontSize:13, fontWeight: active ? 600 : 400,
+                  borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
+                  textAlign:'left', transition:'all 0.15s',
+                }}>
+                  <span style={{ fontSize:14 }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
         ))}
       </div>
 
-      {error && (
-        <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          {error}
-          <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
+      {/* MAIN CONTENT */}
+      <div style={{ flex:1, padding:'20px 24px', background:BRAND.navy, minWidth:0 }}>
+        <div style={{ fontSize:16, fontWeight:700, letterSpacing:'-0.01em', marginBottom:16, color:BRAND.white }}>
+          {viewTitles[navView]}
         </div>
-      )}
 
-      {SECCIONES.includes(tab) && renderZona()}
-      {tab === 'pagos'    && renderPagos()}
-      {tab === 'clientes' && renderClientes()}
+        {error && (
+          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            {error}
+            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
+          </div>
+        )}
+
+        {navView === 'colectas' && <>{zoneTabs}{renderZona()}</>}
+        {navView === 'pagos'    && renderPagos()}
+        {navView === 'clientes' && renderClientes()}
+        {navView === 'choferes' && renderChoferes()}
+      </div>
     </div>
   );
 }
