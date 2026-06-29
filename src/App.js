@@ -783,13 +783,13 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>Métricas Flexit</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>Control de SLA · Mercado Libre</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
-        {/* Upload compacto */}
+        {/* Upload compacto - solo en métricas */}
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          {!isMobile && (<>
+          {!isMobile && seccion !== "colectas" && (<>
           <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){setPendingFile(f);setShowDateModal(true);}}} onDragOver={e=>e.preventDefault()} onClick={()=>xlsxReady&&!loading&&setShowDateModal(true)}
             style={{ border:"1px solid #2ECFAA", borderRadius:8, padding:"6px 16px", cursor:xlsxReady&&!loading?"pointer":"wait", fontSize:12, color:"#2ECFAA", background:"rgba(46,207,170,0.08)", whiteSpace:"nowrap" }}>
             <i className="ti ti-upload" style={{ fontSize:14, marginRight:6 }} />
