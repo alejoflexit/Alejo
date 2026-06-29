@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from "react"; // build: 17
+import React, { useState, useCallback, useRef, useEffect } from "react"; // build: 18
+import Colectas from "./Colectas";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -350,28 +351,38 @@ function SemaforoCard({ m, onClick, selected }) {
 
 const ttStyle = { background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, fontSize:12, color:"#fff" };
 
-function DemoradosPopover({ detalle, count }) {
+function DemoradosPopover({ detalle, count, cadete }) {
   const [show, setShow] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!show) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setShow(false); setCopied(false); } };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [show]);
   if (!count) return <span style={{ color:"rgba(255,255,255,0.3)" }}>0</span>;
   const hasDetalle = detalle && detalle.length > 0;
-  const copyAll = () => {
+  const copyAll = (e) => {
+    e.stopPropagation();
     const text = detalle.map(d => d.dir || d.id).filter(Boolean).join("\n");
     navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   };
   return (
-    <div style={{ position:"relative", display:"inline-block" }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => { setShow(false); setCopied(false); }}>
-      <span style={{ color:"#E24B4A", fontWeight:700, cursor: hasDetalle ? "pointer" : "default", borderBottom: hasDetalle ? "1px dashed rgba(226,75,74,0.5)" : "none" }}>
+    <div ref={ref} style={{ position:"relative", display:"inline-block" }}>
+      <span
+        onClick={(e) => { e.stopPropagation(); if (hasDetalle) { setShow(s => !s); setCopied(false); } }}
+        style={{ color:"#E24B4A", fontWeight:700, cursor: hasDetalle ? "pointer" : "default", borderBottom: hasDetalle ? "1px dashed rgba(226,75,74,0.5)" : "none" }}>
         {count}
       </span>
       {show && hasDetalle && (
-        <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:"#0D0D2B", border:"1px solid rgba(226,75,74,0.4)", borderRadius:10, padding:"10px", zIndex:999, minWidth:240, maxWidth:320, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}
-          onMouseEnter={() => setShow(true)}>
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:"#0D0D2B", border:"1px solid rgba(226,75,74,0.4)", borderRadius:10, padding:"10px", zIndex:999, minWidth:240, maxWidth:320, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
-            <span style={{ color:"#E24B4A", fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.05em" }}>🔴 {count} demorado{count>1?"s":""}</span>
-            <button onClick={copyAll} title="Copiar todas las direcciones" style={{ background:"none", border:"none", cursor:"pointer", color: copied ? "#2ECFAA" : "rgba(255,255,255,0.5)", fontSize:16, padding:"2px 4px", display:"flex", alignItems:"center" }}>
+            <div>
+              <span style={{ color:"#E24B4A", fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>🔴 {count} demorado{count>1?"s":""}</span>
+              {cadete && <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginTop:4 }}>{cadete}</div>}
+            </div>
+            <button onClick={copyAll} title="Copiar todas las direcciones" style={{ background:"none", border:"none", cursor:"pointer", color: copied ? "#2ECFAA" : "rgba(255,255,255,0.4)", fontSize:16, padding:"2px 4px", display:"flex", alignItems:"center" }}>
               {copied ? "✓" : "⎘"}
             </button>
           </div>
@@ -465,6 +476,8 @@ export default function App() {
   const [semanas, setSemanas]     = useState([]);
   const [semanaActiva, setSemanaActiva] = useState(null);
   const [fecha, setFecha]         = useState(() => new Date().toISOString().slice(0,10));
+  const [pendingFile, setPendingFile] = useState(null);
+  const [showDateModal, setShowDateModal] = useState(false);
   const [loading, setLoading]     = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [loadingDB, setLoadingDB] = useState(true);
@@ -498,6 +511,8 @@ export default function App() {
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [seccion, setSeccion] = useState("metricas");
   const fileRef = useRef();
 
   // Cargar desde Supabase al inicio
@@ -591,6 +606,7 @@ export default function App() {
   const semana    = semanas.find(s => s.label === semanaActiva);
   const diasDisponibles = semana?.dias || [];
   const acumulado = semana ? (diaActivo ? acumularSemana(semana.dias.filter(d => d.fecha === diaActivo)) : acumularSemana(semana.dias)) : [];
+  const acumuladoSemanaCompleta = semana ? acumularSemana(semana.dias) : [];
   const diasLabels = semana?.dias.map(d => { const p=d.fecha.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; }) || [];
 
   const toggleSort = (col) => {
@@ -672,7 +688,7 @@ export default function App() {
     const p = dia.fecha.split("-");
     return { fecha: `${p[2]}/${p[1]}`, sla };
   });
-  const rankingData = (rankingVista === "semana" ? acumulado : mesData)
+  const rankingData = (rankingVista === "semana" ? acumuladoSemanaCompleta : mesData)
     .filter(m => m.slaMeli !== null)
     .sort((a,b) => (a.slaMeli ?? 200) - (b.slaMeli ?? 200));
   const comparativa = rankingData.slice(0,25).map(m => ({ name:m.cadete, sla:m.slaMeli??0, color:getSemaforo(m.slaMeli).color }));
@@ -694,9 +710,75 @@ export default function App() {
   return (
     <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background:BRAND.navy, minHeight:"100vh", padding:"1.5rem", paddingBottom: isMobile ? "5rem" : "1.5rem", color:BRAND.white }}>
 
+      {/* Modal: elegir fecha antes de procesar Excel */}
+      {showDateModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}
+          onClick={()=>setShowDateModal(false)}>
+          <div style={{ background:"#0D0D2B", border:"1px solid rgba(46,207,170,0.4)", borderRadius:14, padding:"1.5rem", minWidth:280, boxShadow:"0 12px 40px rgba(0,0,0,0.7)" }}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>¿De qué fecha es el archivo?</div>
+            <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
+              style={{ width:"100%", background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"8px 12px", color:BRAND.white, fontSize:14, marginBottom:16, boxSizing:"border-box" }} />
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <button onClick={()=>setShowDateModal(false)}
+                style={{ padding:"7px 16px", borderRadius:8, border:"1px solid rgba(255,255,255,0.15)", background:"none", color:BRAND.muted, cursor:"pointer", fontSize:13 }}>
+                Cancelar
+              </button>
+              <button onClick={()=>{setShowDateModal(false);fileRef.current.click();}}
+                style={{ padding:"7px 16px", borderRadius:8, border:"none", background:"#2ECFAA", color:"#0D0D2B", cursor:"pointer", fontSize:13, fontWeight:700 }}>
+                Elegir archivo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar overlay */}
+      {sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, backdropFilter:"blur(2px)" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem" }}>
+            {/* Sidebar header */}
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:"2rem", paddingBottom:"1rem", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+              <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:32, height:32, objectFit:"cover", borderRadius:8 }} />
+              <span style={{ fontSize:15, fontWeight:700, color:"#fff" }}>Flexit</span>
+            </div>
+            {/* Nav items */}
+            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+              <div style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6, paddingLeft:10 }}>Navegación</div>
+              <button onClick={() => { setSeccion("metricas"); setSidebarOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="metricas"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="metricas"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="metricas"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
+                <i className="ti ti-chart-bar" style={{ fontSize:18 }} />
+                Métricas
+              </button>
+              <button onClick={() => { setSeccion("colectas"); setSidebarOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="colectas"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="colectas"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="colectas"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
+                <i className="ti ti-package" style={{ fontSize:18 }} />
+                Colectas
+              </button>
+              <a href="/choferes.html"
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.75)", fontSize:14, fontWeight:500, cursor:"pointer", textDecoration:"none" }}>
+                <i className="ti ti-user-plus" style={{ fontSize:18 }} />
+                Alta de Choferes
+              </a>
+            </div>
+            {/* Bottom close */}
+            <button onClick={() => setSidebarOpen(false)}
+              style={{ marginTop:"auto", padding:"8px 12px", borderRadius:8, border:"1px solid rgba(255,255,255,0.08)", background:"none", color:"rgba(255,255,255,0.3)", fontSize:13, cursor:"pointer" }}>
+              Cerrar ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+        <button onClick={() => setSidebarOpen(true)}
+          style={{ width:36, height:36, borderRadius:9, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+          ☰
+        </button>
         <div style={{ width:44, height:44, borderRadius:12, flexShrink:0, overflow:"hidden" }}>
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
@@ -707,31 +789,12 @@ export default function App() {
         </div>
         {/* Upload compacto */}
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          {/* Última carga — siempre visible */}
-          <div style={{ fontSize:12, color:BRAND.muted }}>
-            {semanas.length > 0 && (
-              <span>Última carga: <strong style={{color:BRAND.white}}>
-                {(() => { 
-                  const dias = semanas.flatMap(s=>s.dias); 
-                  if(!dias.length) return "—"; 
-                  const ultimo = dias.sort((a,b)=>b.fecha.localeCompare(a.fecha))[0]; 
-                  const p=ultimo.fecha.split("-"); 
-                  const fecha=`${p[2]}/${p[1]}/${p[0]}`;
-                  const nombres=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
-                  const dia=nombres[new Date(ultimo.fecha+"T12:00:00").getDay()];
-                  const color=dia==="Lun"?"#EF9F27":"#2ECFAA";
-                  return <span><span style={{color, marginRight:4}}>{dia}</span>{fecha}</span>;
-                })()}
-              </strong></span>
-            )}
-          </div>
           {!isMobile && (<>
-          <div style={{fontSize:11, color:BRAND.muted, marginBottom:3}}>Fecha del archivo</div><input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} style={{...inp, fontSize:12, padding:"5px 10px"}} />
-          <div onDrop={onDrop} onDragOver={e=>e.preventDefault()} onClick={()=>xlsxReady&&fileRef.current.click()}
-            style={{ border:"1px solid #2ECFAA", borderRadius:8, padding:"6px 16px", cursor:xlsxReady?"pointer":"wait", fontSize:12, color:"#2ECFAA", background:"rgba(46,207,170,0.08)", whiteSpace:"nowrap" }}>
+          <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){setPendingFile(f);setShowDateModal(true);}}} onDragOver={e=>e.preventDefault()} onClick={()=>xlsxReady&&!loading&&setShowDateModal(true)}
+            style={{ border:"1px solid #2ECFAA", borderRadius:8, padding:"6px 16px", cursor:xlsxReady&&!loading?"pointer":"wait", fontSize:12, color:"#2ECFAA", background:"rgba(46,207,170,0.08)", whiteSpace:"nowrap" }}>
             <i className="ti ti-upload" style={{ fontSize:14, marginRight:6 }} />
             {!xlsxReady?"Cargando...":loading?(loadingMsg||"Procesando..."):"Subir Excel"}
-            <input ref={fileRef} type="file" accept=".xls,.xlsx" style={{ display:"none" }} onChange={e=>onFile(e.target.files[0])} />
+            <input ref={fileRef} type="file" accept=".xls,.xlsx" style={{ display:"none" }} onChange={e=>{const f=e.target.files[0];if(f)onFile(f);e.target.value="";}} />
           </div>
           </>)}
         </div>
@@ -739,6 +802,9 @@ export default function App() {
 
 
 
+      {seccion === "colectas" && <Colectas />}
+
+      {seccion === "metricas" && (<>
       {error && <div style={{ background:"rgba(226,75,74,0.15)", color:"#E24B4A", border:"1px solid rgba(226,75,74,0.3)", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:"1rem" }}>{error}</div>}
 
 
@@ -891,7 +957,7 @@ export default function App() {
                 );
               })()}
               <TooltipKpi label="Pendientes" val={totalPendientes} color="#3A8FD4" icon="ti-clock" />
-              <TooltipKpi label="Demorados" val={totalDemorados} color="#E24B4A" icon="ti-alert-circle" />
+              <TooltipKpi label="Demorados" val={totalDemorados} color="#E24B4A" icon="ti-alert-circle" tooltipDem={{demML: totalDemDia, dem21: totalDem21}} />
               <TooltipKpi label="SLA Flexit" val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
               <TooltipKpi label="Cadetes" val={acumulado.length} color={BRAND.muted} icon="ti-users" />
             </div>
@@ -1154,9 +1220,6 @@ export default function App() {
 
           {tab==="tabla" && (
             <>
-              <div style={{ marginBottom:"1rem", fontSize:13, color:BRAND.muted }}>
-                Días cargados: {diasLabels.join(" · ")}
-              </div>
 
               <div style={{ display:"flex", gap:8, marginBottom:"1rem", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between" }}>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -1197,7 +1260,7 @@ export default function App() {
                           <td style={{ padding:"10px 14px", fontSize:13, color:BRAND.white, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.cantidad}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:"#2ECFAA", borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.cantidad-m.pendientes}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:m.pendientes>0?"#3A8FD4":BRAND.muted, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.pendientes}</td>
-                          <td style={{ padding:"10px 14px", fontSize:13, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}><DemoradosPopover count={m.demorados} detalle={m.demoradosDetalle} /></td>
+                          <td style={{ padding:"10px 14px", fontSize:13, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}><DemoradosPopover count={m.demorados} detalle={m.demoradosDetalle} cadete={m.cadete} /></td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:(m.dem21||0)>0?"#E24B4A":BRAND.muted, fontWeight:(m.dem21||0)>0?700:400, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.dem21||0}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:(m.post21||0)>0?"#EF9F27":BRAND.muted, fontWeight:(m.post21||0)>0?600:400, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.post21||0}</td>
 
@@ -1247,6 +1310,7 @@ export default function App() {
           )}
         </>
       )}
+      </>)}
     </div>
   );
 }
