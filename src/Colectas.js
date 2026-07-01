@@ -479,7 +479,7 @@ export default function Colectas() {
                       const ECOLOR  = { blanco:'transparent', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
-                      const ECYCLE  = { blanco:'amarillo', amarillo:'verde', verde:'rojo', rojo:'blanco' };
+                      const ECYCLE  = { blanco:'amarillo', amarillo:'verde', verde:'blanco', rojo:'blanco' };
 
                       const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(239,159,39,0.04)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy;
 
@@ -493,13 +493,21 @@ export default function Colectas() {
                       return (
                         <tr key={c.id} style={{ background: rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1 }}>
                           {/* Estado */}
-                          <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
-                            <button
-                              onClick={() => updateRegistro(c.id, { estado: ECYCLE[estado] })}
-                              title="Clic: blanco → amarillo → verde → rojo → blanco"
-                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[estado]}`, background:ECOLOR[estado], cursor:'pointer', color:estado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                              {EICON[estado]}
-                            </button>
+                          <td style={{ padding:'8px 6px 8px 10px', width:52 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                              <button
+                                onClick={() => updateRegistro(c.id, { estado: ECYCLE[estado] })}
+                                title="Clic: blanco → amarillo → verde → blanco"
+                                style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[estado]}`, background:ECOLOR[estado], cursor:'pointer', color:estado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                {EICON[estado]}
+                              </button>
+                              <button
+                                onClick={() => updateRegistro(c.id, { estado: estado==='rojo'?'blanco':'rojo' })}
+                                title={estado==='rojo' ? 'Quitar cancelado' : 'Sin envíos hoy'}
+                                style={{ width:16, height:16, borderRadius:'50%', border:`1.5px solid ${estado==='rojo'?'#E24B4A':'rgba(255,255,255,0.15)'}`, background:estado==='rojo'?'rgba(226,75,74,0.2)':'transparent', cursor:'pointer', color:estado==='rojo'?'#E24B4A':'rgba(255,255,255,0.25)', fontWeight:700, fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, lineHeight:1 }}>
+                                ✕
+                              </button>
+                            </div>
                           </td>
                           {/* Nombre */}
                           <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none' }}>
