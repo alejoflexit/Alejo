@@ -224,7 +224,8 @@ export default function Colectas() {
           map[r.cliente_id] = {
             id: r.id,
             choferes: r.choferes?.length ? r.choferes : ['A coordinar'],
-            confirmado: r.confirmado || false,
+            estado: r.estado || (r.confirmado ? 'verde' : 'blanco'),
+            confirmado_por: r.confirmado_por || [],
           };
         });
         setRegistros(map);
@@ -245,12 +246,12 @@ export default function Colectas() {
           await sbFetch(`colectas_registros?id=eq.${existing.id}`, {
             method: 'PATCH',
             headers: { 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ choferes: data.choferes, confirmado: data.confirmado }),
+            body: JSON.stringify({ choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por }),
           });
         } else {
           const result = await sbFetch('colectas_registros', {
             method: 'POST',
-            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, confirmado: data.confirmado }),
+            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por }),
           });
           const row = Array.isArray(result) ? result[0] : result;
           if (row?.id) {
@@ -267,7 +268,7 @@ export default function Colectas() {
 
   const updateRegistro = useCallback((clienteId, updates) => {
     setRegistros(prev => {
-      const current = prev[clienteId] || { choferes: ['A coordinar'], confirmado: false };
+      const current = prev[clienteId] || { choferes: ['A coordinar'], estado: 'blanco', confirmado_por: [] };
       const next = { ...current, ...updates };
       pendingSavesRef.current.set(clienteId, next);
       setSaveStatus('saving');
@@ -291,7 +292,7 @@ export default function Colectas() {
             if (!ch || ch === 'A coordinar') return;
             if (!map[ch]) map[ch] = { cadete: ch, total: 0, confirmadas: 0, monto: 0 };
             map[ch].total++;
-            if (r.confirmado) { map[ch].confirmadas++; map[ch].monto += monto; }
+            if (r.confirmado_por?.length > 0 || r.estado === 'verde') { map[ch].confirmadas++; map[ch].monto += monto; }
           });
         });
         setPagosData(Object.values(map).sort((a, b) => b.monto - a.monto));
@@ -350,8 +351,8 @@ export default function Colectas() {
         if (!groups[ch].find(x => x.id === c.id)) groups[ch].push(c);
       });
     });
-    const uniq = [...new Set(order)];
-    return { groups, order: ['A coordinar', ...uniq.filter(c => c !== 'A coordinar')].filter(c => groups[c]) };
+    const uniq = [...new Set(order)].filter(c => c !== 'A coordinar').sort((a,b) => a.localeCompare(b, 'es'));
+    return { groups, order: ['A coordinar', ...uniq].filter(c => groups[c]) };
   }
 
   function buildMsg(chofer) {
@@ -459,40 +460,68 @@ export default function Colectas() {
                     </tr>
                     {/* Data rows */}
                     {rows.map(c => {
-                      const reg = registros[c.id] || { choferes:['A coordinar'], confirmado:false };
+                      const reg = registros[c.id] || { choferes:['A coordinar'], estado:'blanco', confirmado_por:[] };
                       const chs = reg.choferes?.length ? reg.choferes : ['A coordinar'];
-                      const confirmed = reg.confirmado;
+                      const estado = reg.estado || 'blanco';
+                      const confirmadoPor = reg.confirmado_por || [];
                       const unassigned = chs.every(x => x === 'A coordinar');
+                      const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
+
+                      const ECOLOR  = { blanco:'transparent', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
+                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
+                      const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
+                      const ECYCLE  = { blanco:'amarillo', amarillo:'verde', verde:'blanco', rojo:'blanco' };
+
+                      const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(239,159,39,0.04)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy;
+
+                      const handleConfirmarChofer = (ch) => {
+                        const nuevos = confirmadoPor.includes(ch) ? confirmadoPor.filter(x => x !== ch) : [...confirmadoPor, ch];
+                        const activos = chs.filter(x => x !== 'A coordinar');
+                        const todosOk = activos.length > 0 && activos.every(c2 => nuevos.includes(c2));
+                        updateRegistro(c.id, { confirmado_por: nuevos, estado: todosOk ? 'verde' : estado === 'verde' ? 'amarillo' : estado });
+                      };
+
                       return (
-                        <tr key={c.id} style={{ background: confirmed?'rgba(46,207,170,0.05)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy, borderBottom:`1px solid ${BRAND.border}` }}>
-                          {/* Confirm */}
-                          <td style={{ padding:'8px 12px', width:36 }}>
-                            <button onClick={() => updateRegistro(c.id, { confirmado:!confirmed })}
-                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${confirmed?'#2ECFAA':'rgba(255,255,255,0.2)'}`, background:confirmed?'#2ECFAA':'transparent', cursor:'pointer', color:'#0d1b2a', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                              {confirmed ? '✓' : ''}
+                        <tr key={c.id} style={{ background: rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1 }}>
+                          {/* Estado */}
+                          <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
+                            <button
+                              onClick={() => updateRegistro(c.id, { estado: ECYCLE[estado] })}
+                              onDoubleClick={(e) => { e.preventDefault(); updateRegistro(c.id, { estado: estado==='rojo'?'blanco':'rojo' }); }}
+                              title="Clic: cambiar estado · Doble clic: sin envíos"
+                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[estado]}`, background:ECOLOR[estado], cursor:'pointer', color:estado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                              {EICON[estado]}
                             </button>
                           </td>
                           {/* Nombre */}
-                          <td style={{ padding:'8px 12px', fontWeight:500, fontSize:13 }}>
+                          <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none' }}>
                             {c.nombre}
-                            {chs.length > 1 && (
+                            {isDividida && (
                               <span style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>dividida</span>
                             )}
                           </td>
                           {/* Choferes */}
-                          <td style={{ padding:'8px 12px', minWidth:160 }}>
-                            <ChoferPicker
-                              chs={chs}
-                              choferesList={choferesList}
-                              onUpdate={updates => updateRegistro(c.id, updates)}
-                            />
+                          <td style={{ padding:'8px 8px', minWidth:160 }}>
+                            <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                              <ChoferPicker
+                                chs={chs}
+                                choferesList={choferesList}
+                                onUpdate={updates => updateRegistro(c.id, updates)}
+                              />
+                              {isDividida && estado !== 'blanco' && estado !== 'rojo' && chs.filter(x => x !== 'A coordinar').map(ch => (
+                                <button key={ch} onClick={() => handleConfirmarChofer(ch)}
+                                  style={{ alignSelf:'flex-start', padding:'2px 8px', borderRadius:5, fontSize:11, cursor:'pointer', border:confirmadoPor.includes(ch)?`1px solid #2ECFAA`:`1px solid rgba(255,255,255,0.15)`, background:confirmadoPor.includes(ch)?'rgba(46,207,170,0.12)':'transparent', color:confirmadoPor.includes(ch)?'#2ECFAA':'rgba(255,255,255,0.4)' }}>
+                                  {confirmadoPor.includes(ch) ? `✓ ${ch}` : `Confirmar ${ch}`}
+                                </button>
+                              ))}
+                            </div>
                           </td>
                           {/* Dirección */}
-                          <td style={{ padding:'8px 12px', fontSize:12, color:BRAND.muted, maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          <td style={{ padding:'8px 8px', fontSize:12, color:BRAND.muted, maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                             {c.direccion}
                           </td>
                           {/* Zona */}
-                          <td style={{ padding:'8px 12px' }}>
+                          <td style={{ padding:'8px 8px' }}>
                             {c.zona_barrio && (
                               <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(58,143,212,0.15)', color:'#3A8FD4' }}>
                                 {c.zona_barrio}
@@ -500,7 +529,7 @@ export default function Colectas() {
                             )}
                           </td>
                           {/* Monto */}
-                          <td style={{ padding:'8px 12px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>
+                          <td style={{ padding:'8px 10px 8px 8px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>
                             {fmtMonto(c.monto)}
                           </td>
                         </tr>
