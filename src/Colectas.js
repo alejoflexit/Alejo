@@ -158,6 +158,7 @@ export default function Colectas() {
   const [saveStatus, setSaveStatus] = useState('saved');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [copiedChofer, setCopiedChofer] = useState(null);
 
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
@@ -342,12 +343,23 @@ export default function Colectas() {
     const fechaFmt = d.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'numeric' });
     let msg = `🚚 *Colectas ${tab} – ${fechaFmt}*\n\n`;
     rows.forEach(c => {
-      msg += `• ${c.nombre} – ${c.direccion}`;
-      if (c.hora_habitual) msg += ` (${c.hora_habitual}hs)`;
+      msg += `• *${c.nombre}*`;
+      if (c.zona_barrio) msg += ` (${c.zona_barrio})`;
+      msg += `\n  📍 ${c.direccion}`;
+      if (c.hora_habitual) msg += ` · ${c.hora_habitual}hs`;
+      if (c.monto) msg += ` · $${Number(c.monto).toLocaleString('es-AR')}`;
       msg += '\n';
     });
     msg += '\n✅ Confirmá cuando llegues a cada local.';
     return msg;
+  }
+
+  function copyMsg(chofer) {
+    const msg = buildMsg(chofer);
+    navigator.clipboard.writeText(msg).then(() => {
+      setCopiedChofer(chofer);
+      setTimeout(() => setCopiedChofer(null), 2000);
+    });
   }
 
   const inpSt = {
@@ -420,9 +432,9 @@ export default function Colectas() {
                           </span>
                           {!isWarn && (
                             <button
-                              onClick={() => window.open('https://wa.me/?text='+encodeURIComponent(buildMsg(chofer)),'_blank')}
-                              style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:6, border:'1px solid #25D366', color:'#25D366', background:'transparent', fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                              📱 {chofer}
+                              onClick={() => copyMsg(chofer)}
+                              style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:6, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(255,255,255,0.2)'}`, color:copiedChofer===chofer?'#2ECFAA':'rgba(255,255,255,0.5)', background:copiedChofer===chofer?'rgba(46,207,170,0.08)':'transparent', fontSize:11, fontWeight:600, cursor:'pointer', transition:'all 0.2s' }}>
+                              {copiedChofer===chofer ? '✓ Copiado' : `📋 Copiar ${chofer}`}
                             </button>
                           )}
                         </div>
@@ -723,4 +735,72 @@ export default function Colectas() {
     </div>
   );
 
-  con
+  const viewTitles = {
+    colectas: 'Colectas',
+    pagos: 'Pagos a cadetes',
+    clientes: 'Clientes',
+    choferes: 'Choferes',
+  };
+
+  // ── MAIN RENDER ──
+  return (
+    <div style={{ display:'flex', gap:0, minHeight:'60vh', borderRadius:14, overflow:'hidden', border:`1px solid ${BRAND.border}` }}>
+
+      {/* SIDEBAR */}
+      <div style={{
+        width:152, flexShrink:0, background:BRAND.navySide,
+        borderRight:`1px solid ${BRAND.border}`,
+        padding:'18px 0',
+        display:'flex', flexDirection:'column', gap:0,
+      }}>
+        {sidebarItems.map(group => (
+          <div key={group.section} style={{ marginBottom:8 }}>
+            <div style={{
+              fontSize:10, fontWeight:700, letterSpacing:'0.1em',
+              color:'rgba(255,255,255,0.22)', padding:'0 14px 6px',
+              textTransform:'uppercase',
+            }}>
+              {group.section}
+            </div>
+            {group.items.map(item => {
+              const active = navView === item.id;
+              return (
+                <button key={item.id} onClick={() => setNavView(item.id)} style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  width:'100%', padding:'8px 14px', border:'none', cursor:'pointer',
+                  background: active ? 'rgba(46,207,170,0.1)' : 'transparent',
+                  color: active ? BRAND.teal : BRAND.muted,
+                  fontSize:13, fontWeight: active ? 600 : 400,
+                  borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
+                  textAlign:'left', transition:'all 0.15s',
+                }}>
+                  <span style={{ fontSize:14 }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* MAIN CONTENT */}
+      <div style={{ flex:1, padding:'20px 24px', background:BRAND.navy, minWidth:0 }}>
+        <div style={{ fontSize:16, fontWeight:700, letterSpacing:'-0.01em', marginBottom:16, color:BRAND.white }}>
+          {viewTitles[navView]}
+        </div>
+
+        {error && (
+          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            {error}
+            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
+          </div>
+        )}
+
+        {navView === 'colectas' && <>{zoneTabs}{renderZona()}</>}
+        {navView === 'pagos'    && renderPagos()}
+        {navView === 'clientes' && renderClientes()}
+        {navView === 'choferes' && renderChoferes()}
+      </div>
+    </div>
+  );
+}
