@@ -174,9 +174,20 @@ export default function Colectas() {
 
   // Choferes list
   const [choferesList, setChoferesList] = useState(() => {
-    try { const s = localStorage.getItem('flexit_choferes'); return s ? JSON.parse(s) : DEFAULT_CHOFERES; }
-    catch { return DEFAULT_CHOFERES; }
+    try { const s = localStorage.getItem('flexit_choferes'); return s ? JSON.parse(s) : []; }
+    catch { return []; }
   });
+  const [syncingChoferes, setSyncingChoferes] = useState(false);
+
+  const syncChoferes = useCallback(async () => {
+    setSyncingChoferes(true);
+    try {
+      const rows = await sbFetch('semanas?select=cadete&order=fecha.desc&limit=5000');
+      const unique = [...new Set(rows.map(r => r.cadete).filter(n => n && !n.includes('⚠️')))].sort();
+      if (unique.length > 0) setChoferesList(unique);
+    } catch(e) { console.error('Error sincronizando choferes:', e); }
+    finally { setSyncingChoferes(false); }
+  }, []);
 
   const saveTimer = useRef(null);
   const registrosRef = useRef({});
@@ -184,6 +195,12 @@ export default function Colectas() {
 
   useEffect(() => { registrosRef.current = registros; }, [registros]);
 
+  // Sincronizar choferes desde Supabase al montar (si la lista está vacía)
+  useEffect(() => {
+    if (choferesList.length === 0) syncChoferes();
+  }, [syncChoferes]);
+
+  // Persistir cambios manuales en localStorage
   useEffect(() => {
     try { localStorage.setItem('flexit_choferes', JSON.stringify(choferesList)); } catch {}
   }, [choferesList]);
@@ -697,8 +714,12 @@ export default function Colectas() {
           </form>
         </div>
 
-        <div style={{ fontSize:12, color:BRAND.muted, padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:`1px solid ${BRAND.border}` }}>
-          💡 Los choferes se guardan en este dispositivo. Si cambiás de computadora, tenés que cargarlos de nuevo.
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:`1px solid ${BRAND.border}` }}>
+          <span style={{ fontSize:12, color:BRAND.muted }}>💡 Lista sincronizada desde métricas. Podés agregar o quitar choferes manualmente.</span>
+          <button onClick={syncChoferes} disabled={syncingChoferes}
+            style={{ padding:'5px 12px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:'transparent', color:syncingChoferes ? BRAND.muted : BRAND.teal, cursor:syncingChoferes ? 'default' : 'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap', marginLeft:12 }}>
+            {syncingChoferes ? 'Sincronizando...' : '↺ Sincronizar desde métricas'}
+          </button>
         </div>
       </div>
     );
@@ -772,35 +793,4 @@ export default function Colectas() {
                   color: active ? BRAND.teal : BRAND.muted,
                   fontSize:13, fontWeight: active ? 600 : 400,
                   borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
-                  textAlign:'left', transition:'all 0.15s',
-                }}>
-                  <span style={{ fontSize:14 }}>{item.icon}</span>
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      {/* MAIN CONTENT */}
-      <div style={{ flex:1, padding:'20px 24px', background:BRAND.navy, minWidth:0 }}>
-        <div style={{ fontSize:16, fontWeight:700, letterSpacing:'-0.01em', marginBottom:16, color:BRAND.white }}>
-          {viewTitles[navView]}
-        </div>
-
-        {error && (
-          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            {error}
-            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
-          </div>
-        )}
-
-        {navView === 'colectas' && <>{zoneTabs}{renderZona()}</>}
-        {navView === 'pagos'    && renderPagos()}
-        {navView === 'clientes' && renderClientes()}
-        {navView === 'choferes' && renderChoferes()}
-      </div>
-    </div>
-  );
-}
+                  textAlign:'left', transiti
