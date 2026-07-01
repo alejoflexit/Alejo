@@ -412,6 +412,13 @@ export default function Colectas() {
     const { groups, order } = getGroups(seccionClientes);
     const sinAsignar = groups['A coordinar']?.length || 0;
 
+    // Conteo de estados
+    const conteoEstados = seccionClientes.reduce((acc, c) => {
+      const est = registros[c.id]?.estado || 'blanco';
+      acc[est] = (acc[est] || 0) + 1;
+      return acc;
+    }, {});
+
     return (
       <>
         {/* Toolbar */}
@@ -432,6 +439,23 @@ export default function Colectas() {
             {saveStatus==='error'  && '✗ Error al guardar'}
           </div>
         </div>
+
+        {/* Conteo de estados */}
+        {seccionClientes.length > 0 && (
+          <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+            {[
+              { key:'verde',   label:'Confirmado', color:'#2ECFAA', bg:'rgba(46,207,170,0.1)',  border:'rgba(46,207,170,0.3)'  },
+              { key:'amarillo',label:'Con envíos',  color:'#EF9F27', bg:'rgba(239,159,39,0.1)', border:'rgba(239,159,39,0.3)'  },
+              { key:'blanco',  label:'Pendiente',   color:BRAND.muted, bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.12)' },
+              { key:'rojo',    label:'Sin envíos',  color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
+            ].map(({ key, label, color, bg, border }) => conteoEstados[key] ? (
+              <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:20, background:bg, border:`1px solid ${border}` }}>
+                <span style={{ fontSize:11, fontWeight:700, color }}>{conteoEstados[key]}</span>
+                <span style={{ fontSize:11, color }}>{label}</span>
+              </div>
+            ) : null)}
+          </div>
+        )}
 
         {/* Table */}
         <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}` }}>
