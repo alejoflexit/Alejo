@@ -793,4 +793,35 @@ export default function Colectas() {
                   color: active ? BRAND.teal : BRAND.muted,
                   fontSize:13, fontWeight: active ? 600 : 400,
                   borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
-                  textAlign:'left', transiti
+                  textAlign:'left', transition:'all 0.15s',
+                }}>
+                  <span style={{ fontSize:14 }}>{item.icon}</span>
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* MAIN CONTENT */}
+      <div style={{ flex:1, padding:'20px 24px', background:BRAND.navy, minWidth:0 }}>
+        <div style={{ fontSize:16, fontWeight:700, letterSpacing:'-0.01em', marginBottom:16, color:BRAND.white }}>
+          {viewTitles[navView]}
+        </div>
+
+        {error && (
+          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            {error}
+            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
+          </div>
+        )}
+
+        {navView === 'colectas' && <>{zoneTabs}{renderZona()}</>}
+        {navView === 'pagos'    && renderPagos()}
+        {navView === 'clientes' && renderClientes()}
+        {navView === 'choferes' && renderChoferes()}
+      </div>
+    </div>
+  );
+}
