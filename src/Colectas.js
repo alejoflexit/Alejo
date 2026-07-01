@@ -218,7 +218,7 @@ export default function Colectas() {
     setLoading(true);
     setRegistros({});
     sbFetch(`colectas_registros?select=*&fecha=eq.${fecha}`)
-      .then(rows => {
+      .then(async rows => {
         const map = {};
         rows.forEach(r => {
           map[r.cliente_id] = {
@@ -228,6 +228,15 @@ export default function Colectas() {
             confirmado_por: r.confirmado_por || [],
           };
         });
+        // Carry-forward: pre-cargar choferes del último día anterior para clientes sin registro hoy
+        try {
+          const prev = await sbFetch(`colectas_registros?select=cliente_id,choferes,fecha&fecha=lt.${fecha}&order=fecha.desc&limit=3000`);
+          const latest = {};
+          prev.forEach(r => { if (!latest[r.cliente_id] && r.choferes?.length) latest[r.cliente_id] = r.choferes; });
+          Object.entries(latest).forEach(([cid, chs]) => {
+            if (!map[cid]) map[cid] = { id: null, choferes: chs, estado: 'blanco', confirmado_por: [] };
+          });
+        } catch(_) {}
         setRegistros(map);
       })
       .catch(e => setError('Error cargando registros: ' + e.message))
@@ -470,7 +479,7 @@ export default function Colectas() {
                       const ECOLOR  = { blanco:'transparent', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
-                      const ECYCLE  = { blanco:'amarillo', amarillo:'verde', verde:'blanco', rojo:'blanco' };
+                      const ECYCLE  = { blanco:'amarillo', amarillo:'verde', verde:'rojo', rojo:'blanco' };
 
                       const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(239,159,39,0.04)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy;
 
@@ -487,8 +496,7 @@ export default function Colectas() {
                           <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
                             <button
                               onClick={() => updateRegistro(c.id, { estado: ECYCLE[estado] })}
-                              onDoubleClick={(e) => { e.preventDefault(); updateRegistro(c.id, { estado: estado==='rojo'?'blanco':'rojo' }); }}
-                              title="Clic: cambiar estado · Doble clic: sin envíos"
+                              title="Clic: blanco → amarillo → verde → rojo → blanco"
                               style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[estado]}`, background:ECOLOR[estado], cursor:'pointer', color:estado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                               {EICON[estado]}
                             </button>
