@@ -562,12 +562,7 @@ export default function Colectas() {
                                 choferesList={choferesList}
                                 onUpdate={updates => updateRegistro(c.id, updates)}
                               />
-                              {isDividida && estado !== 'blanco' && estado !== 'rojo' && chs.filter(x => x !== 'A coordinar').map(ch => (
-                                <button key={ch} onClick={() => handleConfirmarChofer(ch)}
-                                  style={{ alignSelf:'flex-start', padding:'2px 8px', borderRadius:5, fontSize:11, cursor:'pointer', border:confirmadoPor.includes(ch)?`1px solid #2ECFAA`:`1px solid rgba(255,255,255,0.15)`, background:confirmadoPor.includes(ch)?'rgba(46,207,170,0.12)':'transparent', color:confirmadoPor.includes(ch)?'#2ECFAA':'rgba(255,255,255,0.4)' }}>
-                                  {confirmadoPor.includes(ch) ? `✓ ${ch}` : `Confirmar ${ch}`}
-                                </button>
-                              ))}
+
                             </div>
                           </td>
                           {/* Dirección */}
