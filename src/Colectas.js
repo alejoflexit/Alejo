@@ -518,15 +518,14 @@ export default function Colectas() {
                           <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
                             <button
                               onClick={() => {
+                                // unassigned: no puede llegar a verde (sin chofer no se confirma)
                                 const ciclo = unassigned
-                                  ? { blanco:'amarillo', amarillo:'blanco', verde:'blanco', rojo:'blanco' }
-                                  : isDividida
-                                    ? { blanco:'amarillo', amarillo:'rojo', rojo:'blanco', verde:'blanco' }
-                                    : { blanco:'amarillo', amarillo:'verde', verde:'rojo', rojo:'blanco' };
+                                  ? { blanco:'amarillo', amarillo:'rojo', rojo:'blanco', verde:'blanco' }
+                                  : { blanco:'amarillo', amarillo:'verde', verde:'rojo', rojo:'blanco' };
                                 const nextEstado = ciclo[estado] || 'blanco';
                                 updateRegistro(c.id, { estado: nextEstado, ...(nextEstado === 'blanco' ? { confirmado_por: [] } : {}) });
                               }}
-                              title={unassigned ? 'Asigná un chofer primero' : isDividida ? 'blanco → amarillo → cancelado' : 'blanco → amarillo → verde → cancelado'}
+                              title={unassigned ? 'blanco → amarillo → cancelado (asigná chofer para confirmar)' : 'blanco → amarillo → verde → cancelado'}
                               style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[estado]}`, background:ECOLOR[estado], cursor:'pointer', color:estado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                               {EICON[estado]}
                             </button>
