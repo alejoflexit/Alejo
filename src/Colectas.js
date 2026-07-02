@@ -486,11 +486,18 @@ export default function Colectas() {
                             </span>
                           </span>
                           {!isWarn && (
-                            <button
-                              onClick={() => copyMsg(chofer)}
-                              style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:6, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(255,255,255,0.2)'}`, color:copiedChofer===chofer?'#2ECFAA':'rgba(255,255,255,0.5)', background:copiedChofer===chofer?'rgba(46,207,170,0.08)':'transparent', fontSize:11, fontWeight:600, cursor:'pointer', transition:'all 0.2s' }}>
-                              {copiedChofer===chofer ? '✓ Copiado' : `📋 Copiar ${chofer}`}
-                            </button>
+                            <div style={{ position:'relative', display:'inline-block' }}>
+                              <button
+                                onClick={() => copyMsg(chofer)}
+                                onMouseEnter={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='1'; }}
+                                onMouseLeave={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='0'; }}
+                                style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(46,207,170,0.5)'}`, color:'#2ECFAA', background:copiedChofer===chofer?'rgba(46,207,170,0.2)':'rgba(46,207,170,0.1)', fontSize:14, cursor:'pointer', transition:'all 0.2s' }}>
+                                {copiedChofer===chofer ? '✓' : '📱'}
+                              </button>
+                              <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', left:'50%', transform:'translateX(-50%)', whiteSpace:'nowrap', background:'#1a2e3a', color:'#2ECFAA', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,207,170,0.3)', pointerEvents:'none' }}>
+                                Copiar {chofer}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </td>
