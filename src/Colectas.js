@@ -503,13 +503,37 @@ export default function Colectas() {
                       const ECOLOR  = { blanco:'transparent', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
+
+                      // Para divididas: el círculo muestra el estado del chofer de ESTA sección
+                      const esteChoferActivo = isDividida && chofer !== 'A coordinar';
+                      const esteChoferConfirmado = esteChoferActivo && confirmadoPor.includes(chofer);
+                      const circleEstado = esteChoferActivo
+                        ? (esteChoferConfirmado ? 'verde' : estado === 'rojo' ? 'rojo' : estado === 'blanco' ? 'blanco' : 'amarillo')
+                        : estado;
+
                       const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(239,159,39,0.04)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy;
 
-                      const handleConfirmarChofer = (ch) => {
-                        const nuevos = confirmadoPor.includes(ch) ? confirmadoPor.filter(x => x !== ch) : [...confirmadoPor, ch];
-                        const activos = chs.filter(x => x !== 'A coordinar');
-                        const todosOk = activos.length > 0 && activos.every(c2 => nuevos.includes(c2));
-                        updateRegistro(c.id, { confirmado_por: nuevos, estado: todosOk ? 'verde' : estado === 'verde' ? 'amarillo' : estado });
+                      const handleCircleClick = () => {
+                        if (esteChoferActivo) {
+                          // Dividida: click confirma/desconfirma solo este chofer
+                          const nuevos = esteChoferConfirmado
+                            ? confirmadoPor.filter(x => x !== chofer)
+                            : [...confirmadoPor, chofer];
+                          const activos = chs.filter(x => x !== 'A coordinar');
+                          const todosOk = activos.length > 0 && activos.every(c2 => nuevos.includes(c2));
+                          let nuevoEstado = estado;
+                          if (todosOk) nuevoEstado = 'verde';
+                          else if (estado === 'verde') nuevoEstado = 'amarillo';
+                          else if (estado === 'blanco') nuevoEstado = 'amarillo';
+                          updateRegistro(c.id, { confirmado_por: nuevos, estado: nuevoEstado });
+                        } else {
+                          // Normal / unassigned: ciclo de estado
+                          const ciclo = unassigned
+                            ? { blanco:'amarillo', amarillo:'rojo', rojo:'blanco', verde:'blanco' }
+                            : { blanco:'amarillo', amarillo:'verde', verde:'rojo', rojo:'blanco' };
+                          const nextEstado = ciclo[estado] || 'blanco';
+                          updateRegistro(c.id, { estado: nextEstado, ...(nextEstado === 'blanco' ? { confirmado_por: [] } : {}) });
+                        }
                       };
 
                       return (
@@ -517,17 +541,10 @@ export default function Colectas() {
                           {/* Estado */}
                           <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
                             <button
-                              onClick={() => {
-                                // unassigned: no puede llegar a verde (sin chofer no se confirma)
-                                const ciclo = unassigned
-                                  ? { blanco:'amarillo', amarillo:'rojo', rojo:'blanco', verde:'blanco' }
-                                  : { blanco:'amarillo', amarillo:'verde', verde:'rojo', rojo:'blanco' };
-                                const nextEstado = ciclo[estado] || 'blanco';
-                                updateRegistro(c.id, { estado: nextEstado, ...(nextEstado === 'blanco' ? { confirmado_por: [] } : {}) });
-                              }}
-                              title={unassigned ? 'blanco → amarillo → cancelado (asigná chofer para confirmar)' : 'blanco → amarillo → verde → cancelado'}
-                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[estado]}`, background:ECOLOR[estado], cursor:'pointer', color:estado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                              {EICON[estado]}
+                              onClick={handleCircleClick}
+                              title={esteChoferActivo ? `Confirmar ${chofer} (independiente)` : unassigned ? 'blanco → amarillo → cancelado' : 'blanco → amarillo → verde → cancelado'}
+                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[circleEstado]}`, background:ECOLOR[circleEstado], cursor:'pointer', color:circleEstado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                              {EICON[circleEstado]}
                             </button>
                           </td>
                           {/* Nombre */}
