@@ -128,6 +128,14 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
               style={{ border: 'none', background: 'transparent', color: '#fff', fontSize: 12, outline: 'none', width: '100%' }} />
           </div>
           <div style={{ maxHeight: 185, overflowY: 'auto' }}>
+            {!chs.every(x => x === 'A coordinar') && (
+              <div onClick={() => { onUpdate({ choferes: ['A coordinar'], estado: 'blanco', confirmado_por: [] }); setOpen(false); setQuery(''); }}
+                style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: '#E24B4A', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(226,75,74,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                × Desasignar
+              </div>
+            )}
             {filtered.slice(0, 12).map(ch => (
               <div key={ch} onClick={() => assign(ch)}
                 style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: ch === 'A coordinar' ? '#FBBF24' : '#fff' }}
