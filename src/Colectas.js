@@ -61,7 +61,7 @@ const thSt = {
 };
 
 // ── CHOFER PICKER ──
-function ChoferPicker({ chs, choferesList, onUpdate }) {
+function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [editIdx, setEditIdx] = useState(null);
@@ -99,7 +99,7 @@ function ChoferPicker({ chs, choferesList, onUpdate }) {
   return (
     <div ref={ref} style={{ position: 'relative', minWidth: 150 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-        {chs.map((ch, i) => {
+        {!hideChips && chs.map((ch, i) => {
           const warn = ch === 'A coordinar';
           return (
             <div key={i} onClick={() => { setEditIdx(i); setQuery(''); setOpen(true); }}
@@ -565,6 +565,7 @@ export default function Colectas() {
                                 chs={chs}
                                 choferesList={choferesList}
                                 onUpdate={updates => updateRegistro(c.id, updates)}
+                                hideChips={!isDividida && chofer !== 'A coordinar'}
                               />
 
                             </div>
