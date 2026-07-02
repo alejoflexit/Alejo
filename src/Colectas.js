@@ -195,9 +195,9 @@ export default function Colectas() {
 
   useEffect(() => { registrosRef.current = registros; }, [registros]);
 
-  // Sincronizar choferes desde Supabase al montar (si la lista está vacía)
+  // Sincronizar choferes desde Supabase siempre al montar
   useEffect(() => {
-    if (choferesList.length === 0) syncChoferes();
+    syncChoferes();
   }, [syncChoferes]);
 
   // Persistir cambios manuales en localStorage
