@@ -365,7 +365,7 @@ export default function Colectas() {
   }
 
   function buildMsg(chofer) {
-    const rows = seccionClientes.filter(c => registros[c.id]?.choferes?.includes(chofer));
+    const rows = seccionClientes.filter(c => registros[c.id]?.choferes?.includes(chofer) && registros[c.id]?.estado !== 'rojo');
     const d = new Date(fecha + 'T12:00:00');
     const fechaFmt = d.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'numeric' });
     let msg = `🚚 *Colectas ${tab} – ${fechaFmt}*\n\n`;
