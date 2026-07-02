@@ -475,11 +475,15 @@ export default function Colectas() {
                   <React.Fragment key={chofer}>
                     {/* Group header */}
                     <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)' }}>
-                      <td colSpan={6} style={{ padding:'6px 12px', borderBottom:`1px solid ${BRAND.border}` }}>
+                      <td colSpan={6} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${BRAND.teal}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                          <span style={{ fontSize:12, fontWeight:600, color:isWarn?'#FBBF24':BRAND.muted }}>
-                            {isWarn ? '⚠️' : '👤'} {chofer}{' '}
-                            <span style={{ fontWeight:400, opacity:0.6 }}>({rows.length})</span>
+                          <span>
+                            <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#FBBF24':'rgba(255,255,255,0.85)' }}>
+                              {isWarn ? '⚠️ ' : ''}{chofer}
+                            </span>
+                            <span style={{ fontSize:12, color:isWarn?'rgba(251,191,36,0.7)':BRAND.teal, marginLeft:6 }}>
+                              {rows.length}
+                            </span>
                           </span>
                           {!isWarn && (
                             <button
