@@ -446,7 +446,7 @@ export default function Colectas() {
             {[
               { key:'verde',   label:'Confirmado', color:'#2ECFAA', bg:'rgba(46,207,170,0.1)',  border:'rgba(46,207,170,0.3)'  },
               { key:'amarillo',label:'Con envíos',  color:'#EF9F27', bg:'rgba(239,159,39,0.1)', border:'rgba(239,159,39,0.3)'  },
-              { key:'blanco',  label:'Pendiente',   color:'#EF9F27', bg:'rgba(239,159,39,0.06)', border:'rgba(239,159,39,0.2)' },
+              { key:'blanco',  label:'Pendiente',   color:'#FBBF24', bg:'rgba(251,191,36,0.08)', border:'rgba(251,191,36,0.25)' },
               { key:'rojo',    label:'Sin envíos',  color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
             ].map(({ key, label, color, bg, border }) => conteoEstados[key] ? (
               <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:20, background:bg, border:`1px solid ${border}` }}>
@@ -501,7 +501,7 @@ export default function Colectas() {
                       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
 
                       const ECOLOR  = { blanco:'transparent', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
-                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
+                      const EBORDER = { blanco:'#FBBF24', amarillo:'#EF9F27', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
 
                       // Para divididas: el círculo muestra el estado del chofer de ESTA sección
