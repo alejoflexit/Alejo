@@ -520,7 +520,7 @@ export default function Colectas() {
                           <td style={{ padding:'8px 6px 8px 10px', width:52 }}>
                             <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                               <button
-                                onClick={() => updateRegistro(c.id, { estado: ECYCLE[estado] })}
+                                onClick={() => { if (isDividida) { updateRegistro(c.id, { estado: estado === 'blanco' ? 'amarillo' : estado === 'rojo' ? 'blanco' : 'blanco', confirmado_por: [] }); } else { updateRegistro(c.id, { estado: ECYCLE[estado] }); } }}
                                 title="Clic: blanco → amarillo → verde → blanco"
                                 style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[estado]}`, background:ECOLOR[estado], cursor:'pointer', color:estado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                                 {EICON[estado]}
