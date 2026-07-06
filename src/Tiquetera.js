@@ -164,9 +164,9 @@ function edadTxt(caso) {
 function edadColor(caso) {
   if (caso.estado === "resuelto") return "rgba(255,255,255,0.25)";
   const m = edadMin(caso);
-  if (m < 30) return "#2ECFAA";
-  if (m < 120) return "#FFB020";
-  return "#FF5C5C";
+  if (m < 30) return "#4A9EFF";   // nuevo (azul — verde confunde con "resuelto")
+  if (m < 120) return "#FFB020";  // esperando hace 30min-2hs
+  return "#FF5C5C";               // +2hs sin resolver
 }
 function dormido(c)   { return c.snooze_hasta && new Date(c.snooze_hasta) > new Date(); }
 function desperto(c)  { return c.snooze_hasta && new Date(c.snooze_hasta) <= new Date() && c.estado !== "resuelto"; }
