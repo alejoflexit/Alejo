@@ -103,10 +103,10 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
           const warn = ch === 'A coordinar';
           return (
             <div key={i} onClick={() => { setEditIdx(i); setQuery(''); setOpen(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 20, border: `1px solid ${warn ? 'rgba(251,191,36,0.45)' : 'rgba(46,207,170,0.35)'}`, background: warn ? 'rgba(251,191,36,0.08)' : 'rgba(46,207,170,0.06)', fontSize: 11, color: warn ? '#FBBF24' : '#2ECFAA', cursor: 'pointer', userSelect: 'none' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 20, border: `1px solid ${warn ? '#FBBF24' : '#2ECFAA'}`, background: warn ? '#FBBF24' : '#2ECFAA', fontSize: 11, fontWeight: 700, color: '#14171c', cursor: 'pointer', userSelect: 'none' }}>
               {ch}
               {chs.length > 1 && (
-                <span onClick={e => remove(i, e)} style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, lineHeight: 1 }}>✕</span>
+                <span onClick={e => remove(i, e)} style={{ color: 'rgba(0,0,0,0.45)', fontSize: 12, lineHeight: 1 }}>✕</span>
               )}
             </div>
           );
