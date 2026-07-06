@@ -1,4 +1,4 @@
-// build: tiquetera 2 — panel Info del envío
+// build: tiquetera 3 — nombre de cliente limpio + alarma configurable
 import { useState, useEffect, useCallback } from "react";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -170,6 +170,13 @@ function edadColor(caso) {
 }
 function dormido(c)   { return c.snooze_hasta && new Date(c.snooze_hasta) > new Date(); }
 function desperto(c)  { return c.snooze_hasta && new Date(c.snooze_hasta) <= new Date() && c.estado !== "resuelto"; }
+// "Soporte Lemirk - Flexit" → "Lemirk" · "Tiziano Vila - Soporte Flexit" → "Tiziano Vila" · "Alejo - Flexit" → "Alejo"
+function nombreCliente(txt) {
+  if (!txt) return "";
+  let t = String(txt).trim();
+  t = t.replace(/^soporte\s+/i, "").replace(/\s*[-–]\s*soporte\s+flexit\s*$/i, "").replace(/\s*[-–]\s*flexit\s*$/i, "");
+  return t.trim() || String(txt).trim();
+}
 function ordenGrupo(c) {
   if (c.fijado && c.estado !== "resuelto") return 0;
   if (desperto(c)) return 1;
@@ -291,7 +298,7 @@ export default function Tiquetera() {
             }}>
               <div onClick={() => setAbierto(exp ? null : c.id)}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120 }}>{c.grupo || c.autor || c.chat_id || "—"}</span>
+                <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120 }}>{nombreCliente(c.grupo || c.autor) || c.chat_id || "—"}</span>
                 <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 <span style={{ flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 120 }}>{c.mensaje}</span>
                 {c.fijado && c.estado !== "resuelto" && <span style={{ fontSize: 11.5, color: "#2ECFAA", background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", padding: "2px 8px", borderRadius: 6 }}>📌 Fijado</span>}
@@ -308,7 +315,7 @@ export default function Tiquetera() {
               {exp && (
                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "14px 16px" }}>
                   <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", maxWidth: 640, fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{c.autor || "Cliente"}</div>
+                    <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
                     {c.mensaje}
                   </div>
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
@@ -356,9 +363,18 @@ export default function Tiquetera() {
                         {c.estado === "esperando_cadete" ? "Volver a abierto" : "Esperando cadete"}
                       </button>
                       <button style={btn(false)} title="Fijar arriba" onClick={() => patch(c.id, { fijado: !c.fijado })}>📌</button>
-                      <button style={btn(false)} title="Posponer 1 hora" onClick={() => patch(c.id, { snooze_hasta: new Date(Date.now() + 3600000).toISOString() })}>⏰ +1h</button>
-                      <button style={btn(false)} title="Posponer hasta mañana 9hs" onClick={() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); patch(c.id, { snooze_hasta: d.toISOString() }); }}>⏰ mañana</button>
-                      {dorm && <button style={btn(false)} onClick={() => patch(c.id, { snooze_hasta: null })}>Despertar ahora</button>}
+                      <select defaultValue="" title="Posponer este caso (la alarma lo despierta)"
+                        onChange={e => { const v = e.target.value; if (!v) return; let d; if (v === "manana") { d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); } else { d = new Date(Date.now() + Number(v) * 3600000); } patch(c.id, { snooze_hasta: d.toISOString() }); e.target.value = ""; }}
+                        style={{ ...btn(false), background: "#12123A", color: "rgba(255,255,255,0.7)" }}>
+                        <option value="" disabled>⏰ Posponer…</option>
+                        <option value="0.5">30 min</option>
+                        <option value="1">1 hora</option>
+                        <option value="2">2 horas</option>
+                        <option value="4">4 horas</option>
+                        <option value="8">8 horas</option>
+                        <option value="manana">Mañana 9hs</option>
+                      </select>
+                      {c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(255,176,32,0.5)", color: "#FFB020" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
                       <button style={{ ...btn(false), borderColor: "rgba(46,207,170,0.4)", color: "#2ECFAA" }}
                         onClick={() => patch(c.id, { estado: "resuelto", resuelto_por: "equipo", resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false })}>
                         Resolver
