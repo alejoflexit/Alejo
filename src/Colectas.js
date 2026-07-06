@@ -466,10 +466,10 @@ export default function Colectas() {
         )}
 
         {/* Table */}
-        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}` }}>
+        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'#1b1e24' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580 }}>
             <thead>
-              <tr style={{ background:BRAND.navyMid }}>
+              <tr style={{ background:'#252932' }}>
                 {['','Cliente','Chofer(es)','Dirección','Zona','$$$'].map((h,i) => (
                   <th key={i} style={{ ...thSt, width:i===0?36:undefined }}>{h}</th>
                 ))}
@@ -530,7 +530,7 @@ export default function Colectas() {
                         ? (esteChoferConfirmado ? 'verde' : estado === 'rojo' ? 'rojo' : estado === 'blanco' ? 'blanco' : 'amarillo')
                         : estado;
 
-                      const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(251,191,36,0.04)':unassigned?'rgba(251,191,36,0.03)':BRAND.navy;
+                      const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(251,191,36,0.04)':unassigned?'rgba(251,191,36,0.03)':'transparent';
 
                       const handleCircleClick = () => {
                         if (esteChoferActivo) {
@@ -722,10 +722,10 @@ export default function Colectas() {
           </div>
         )}
 
-        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}` }}>
+        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'#1b1e24' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:480 }}>
             <thead>
-              <tr style={{ background:BRAND.navyMid }}>
+              <tr style={{ background:'#252932' }}>
                 {['Cliente / Dirección','Sección','Zona','Monto','Estado',''].map((h,i) => (
                   <th key={i} style={thSt}>{h}</th>
                 ))}
