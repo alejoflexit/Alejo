@@ -1,0 +1,34 @@
+name: Sync Envios Agente WhatsApp
+
+# Sincroniza los envíos de los últimos días a la tabla `envios_busqueda`
+# para que el agente de WhatsApp responda "¿dónde está mi pedido?".
+# AISLADO de métricas: NO toca la tabla `semanas` ni la carga nocturna.
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 9am AR
+    - cron: '0 15 * * *'   # 12pm AR
+    - cron: '0 18 * * *'   # 3pm AR
+    - cron: '0 21 * * *'   # 6pm AR
+    - cron: '0 23 * * *'   # 8pm AR
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar dependencias
+        run: cd automation && npm install
+
+      - name: Ejecutar sync de envios para el agente
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: cd automation && node sync_envios_agente.js
+        timeout-minutes: 10
