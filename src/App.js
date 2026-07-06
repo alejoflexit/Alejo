@@ -125,6 +125,7 @@ async function cargarDesdeSupabase() {
   }
   const map = {};
   for (const r of rows) {
+    if (new Date(r.fecha + "T12:00:00").getDay() === 0) continue; // domingos: no se opera, no mostrar
     if (!map[r.label]) map[r.label] = { label: r.label, dias: {} };
     if (!map[r.label].dias[r.fecha]) map[r.label].dias[r.fecha] = [];
     map[r.label].dias[r.fecha].push({
@@ -869,19 +870,16 @@ export default function App() {
             {semana && semana.dias.length > 0 && (
               <div style={{ display:"flex", gap:6, alignItems:"center", borderLeft:`1px solid ${BRAND.border}`, paddingLeft:16, overflowX:"auto", flexShrink:1, minWidth:0, scrollbarWidth:"none" }}>
                 <span style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.06em" }}>Día:</span>
-                <button onClick={()=>setDiaActivo(null)} style={{ padding:"3px 12px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${diaActivo===null?"#2ECFAA":BRAND.border}`, background:diaActivo===null?"rgba(46,207,170,0.15)":BRAND.faint, color:diaActivo===null?"#2ECFAA":BRAND.muted, flexShrink:0 }}>
-                  Todos
-                </button>
-                {semana.dias.map(d => {
-                  const p = d.fecha.split("-");
-                  const nombres=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
-                  const dia=nombres[new Date(d.fecha+"T12:00:00").getDay()];
-                  return (
-                    <button key={d.fecha} onClick={()=>setDiaActivo(d.fecha)} style={{ padding:"3px 12px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${diaActivo===d.fecha?"#2ECFAA":BRAND.border}`, background:diaActivo===d.fecha?"rgba(46,207,170,0.15)":BRAND.faint, color:diaActivo===d.fecha?"#2ECFAA":BRAND.muted, flexShrink:0 }}>
-                      <span style={{marginRight:3}}>{dia}</span>{`${p[2]}/${p[1]}`}
-                    </button>
-                  );
-                })}
+                <select value={diaActivo || ""} onChange={e=>setDiaActivo(e.target.value || null)}
+                  style={{ padding:"4px 10px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:"1px solid #2ECFAA", background:"rgba(46,207,170,0.15)", color:"#2ECFAA", outline:"none", flexShrink:0 }}>
+                  <option value="" style={{background:"#141a2e",color:"#fff"}}>Todos los días</option>
+                  {semana.dias.map(d => {
+                    const p = d.fecha.split("-");
+                    const nombres=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+                    const dia=nombres[new Date(d.fecha+"T12:00:00").getDay()];
+                    return <option key={d.fecha} value={d.fecha} style={{background:"#141a2e",color:"#fff"}}>{dia} {p[2]}/{p[1]}</option>;
+                  })}
+                </select>
               </div>
             )}
           </div>

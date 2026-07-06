@@ -190,6 +190,11 @@ function calcularDia(rows, fecha, noEsDemora) {
 
 async function main() {
   const fecha = getYesterdayDate();
+  // Flexit no opera domingos: si "ayer" fue domingo (corrida de lunes), no cargar nada.
+  if (new Date(fecha + "T12:00:00").getDay() === 0) {
+    console.log(`Domingo ${fecha}: no se opera, no se carga nada.`);
+    return;
+  }
   const weekLabel = getWeekLabel(fecha);
   console.log(`Procesando datos del ${fecha} (${weekLabel})...`);
 
