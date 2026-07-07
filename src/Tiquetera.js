@@ -1,4 +1,4 @@
-// build: tiquetera 6 — contestado visible en la lista
+// build: tiquetera 7 — PIN + operador + preasignación de equipo
 import { useState, useEffect, useCallback } from "react";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -135,6 +135,10 @@ function InfoEnvio({ envioId }) {
   );
 }
 
+// Acceso al equipo: PIN compartido + identidad por persona (cambiar el PIN acá si se filtra)
+const PIN_EQUIPO = "2121";
+const OPERADORES = ["Santi", "Paco", "Tiago", "Lean", "Alejo"];
+
 const TIPO_COLORES = {
   "estado de envío": { bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
   "demorado":        { bg: "rgba(255,176,32,0.15)", color: "#FFB020" },
@@ -194,6 +198,9 @@ export default function Tiquetera() {
   const [abierto, setAbierto] = useState(null);
   const [textos, setTextos] = useState({});
   const [notaTxt, setNotaTxt] = useState("");
+  const [operador, setOperador] = useState(() => localStorage.getItem("tk_operador") || "");
+  const [pinTxt, setPinTxt] = useState("");
+  const [pinErr, setPinErr] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -250,6 +257,23 @@ export default function Tiquetera() {
     color: primario ? "#fff" : "rgba(255,255,255,0.7)",
   });
 
+  if (!operador) return (
+    <div style={{ maxWidth: 400, margin: "60px auto", padding: 24, borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", textAlign: "center" }}>
+      <div style={{ fontSize: 34, marginBottom: 6 }}>🎟️</div>
+      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 2 }}>Tiquetera Flexit</div>
+      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 14 }}>Ingresá el PIN del equipo y elegí quién sos</div>
+      <input type="password" inputMode="numeric" value={pinTxt} onChange={e => { setPinTxt(e.target.value); setPinErr(false); }} placeholder="PIN del equipo"
+        style={{ width: 160, textAlign: "center", padding: "10px 12px", borderRadius: 8, border: `1px solid ${pinErr ? "#FF5C5C" : "rgba(255,255,255,0.15)"}`, background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 16, letterSpacing: 4, marginBottom: 6, boxSizing: "border-box" }} />
+      {pinErr && <div style={{ color: "#FF5C5C", fontSize: 12, marginTop: 4 }}>PIN incorrecto</div>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 14 }}>
+        {OPERADORES.map(n => (
+          <button key={n} onClick={() => { if (pinTxt === PIN_EQUIPO) { localStorage.setItem("tk_operador", n); setOperador(n); } else setPinErr(true); }}
+            style={{ padding: "10px 18px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(46,207,170,0.4)", background: "rgba(46,207,170,0.08)", color: "#2ECFAA" }}>{n}</button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div>
       <style>{`@keyframes temblarTk{0%,100%{transform:translateX(0)}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-2px)}40%{transform:translateX(2px)}50%{transform:translateX(0)}}`}</style>
@@ -273,6 +297,10 @@ export default function Tiquetera() {
         <div onClick={() => setChip("cadete")} style={chipStyle(chip === "cadete")}>Esp. cadete <b>{counts.cadete}</b></div>
         <div onClick={() => setChip("deposito")} style={chipStyle(chip === "deposito")}>Esp. depósito <b>{counts.deposito}</b></div>
         <div onClick={() => setChip("resueltos")} style={chipStyle(chip === "resueltos")}>Resueltos hoy <b>{counts.resueltos}</b></div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
+          👤 <b style={{ color: "#fff" }}>{operador}</b>
+          <span onClick={() => { localStorage.removeItem("tk_operador"); setOperador(""); setPinTxt(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>cambiar</span>
+        </div>
       </div>
 
       {visibles.length === 0 && (
@@ -301,6 +329,7 @@ export default function Tiquetera() {
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", flexWrap: "wrap" }}>
                 <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120 }}>{nombreCliente(c.grupo || c.autor) || c.chat_id || "—"}</span>
                 <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
+                {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
                 <span style={{ flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 120 }}>{c.mensaje}</span>
                 {c.fijado && c.estado !== "resuelto" && <span style={{ fontSize: 11.5, color: "#2ECFAA", background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", padding: "2px 8px", borderRadius: 6 }}>📌 Fijado</span>}
                 {dorm && <span style={{ fontSize: 11.5, color: "#FFB020", background: "rgba(255,176,32,0.12)", padding: "2px 8px", borderRadius: 6 }}>⏰ hasta {new Date(c.snooze_hasta).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
@@ -355,7 +384,7 @@ export default function Tiquetera() {
                     <div style={{ display: "flex", gap: 8, maxWidth: 640, marginBottom: 10 }}>
                       <input value={notaTxt} onChange={e => setNotaTxt(e.target.value)} placeholder="Nota interna para el equipo (no la ve el cliente)…"
                         style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 13 }} />
-                      <button style={btn(false)} onClick={() => { if (!notaTxt.trim()) return; patch(c.id, { notas: [...(c.notas || []), { quien: "equipo", texto: notaTxt.trim(), at: new Date().toISOString() }] }); setNotaTxt(""); }}>+ Nota</button>
+                      <button style={btn(false)} onClick={() => { if (!notaTxt.trim()) return; patch(c.id, { notas: [...(c.notas || []), { quien: operador, texto: notaTxt.trim(), at: new Date().toISOString() }] }); setNotaTxt(""); }}>+ Nota</button>
                     </div>
                     <div style={{ display: "flex", gap: 8, maxWidth: 640, flexWrap: "wrap" }}>
                       <button style={btn(true)} title="Copiar la respuesta al portapapeles" onClick={(e) => {
@@ -367,11 +396,11 @@ export default function Tiquetera() {
                       <button style={btn(false)} onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
-                        patch(c.id, { respuesta_enviada: txt, estado: "enviando" });
+                        patch(c.id, { respuesta_enviada: txt, estado: "enviando", enviado_por: operador });
                       }}>✓ Aprobar y enviar</button>
                       <button style={btn(false)} title="Si copiaste el mensaje y lo pegaste vos en WhatsApp, marcá el caso como respondido con esto" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
-                        patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual" });
+                        patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual", enviado_por: operador });
                       }}>✓✓ Enviado</button>
                       <button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_cadete" ? "abierto" : "esperando_cadete" })}>
                         {c.estado === "esperando_cadete" ? "Volver a abierto" : "Esperando cadete"}
@@ -390,7 +419,7 @@ export default function Tiquetera() {
                       </select>
                       {c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(255,176,32,0.5)", color: "#FFB020" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
                       <button style={{ ...btn(false), borderColor: "rgba(46,207,170,0.4)", color: "#2ECFAA" }}
-                        onClick={() => patch(c.id, { estado: "resuelto", resuelto_por: "equipo", resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false })}>
+                        onClick={() => patch(c.id, { estado: "resuelto", resuelto_por: operador, resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false })}>
                         Resolver
                       </button>
                     </div>
