@@ -431,7 +431,8 @@ export default function Colectas() {
     const norm = t => String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     const clientesFiltrados = seccionClientes.filter(c => {
       const reg = registros[c.id];
-      if (filtroEstado && (reg?.estado || (c.fija ? 'amarillo' : 'blanco')) !== filtroEstado) return false;
+      const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
+      if (filtroEstado && estEf !== filtroEstado) return false;
       if (busqueda.trim()) {
         const q = norm(busqueda);
         if (!norm(c.nombre).includes(q) && !(reg?.choferes||[]).some(ch => norm(ch).includes(q))) return false;
@@ -443,7 +444,8 @@ export default function Colectas() {
 
     // Conteo de estados
     const conteoEstados = seccionClientes.reduce((acc, c) => {
-      const est = registros[c.id]?.estado || (c.fija ? 'amarillo' : 'blanco');
+      const _e = registros[c.id]?.estado;
+      const est = (c.fija && (!_e || _e === 'blanco')) ? 'amarillo' : (_e || 'blanco');
       acc[est] = (acc[est] || 0) + 1;
       return acc;
     }, {});
@@ -555,7 +557,7 @@ export default function Colectas() {
                     {rows.map(c => {
                       const reg = registros[c.id] || { choferes:['A coordinar'], estado:'blanco', confirmado_por:[] };
                       const chs = reg.choferes?.length ? reg.choferes : ['A coordinar'];
-                      const estado = reg.estado || (c.fija ? 'amarillo' : 'blanco');
+                      const estado = (c.fija && (!reg.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg.estado || 'blanco');
                       const confirmadoPor = reg.confirmado_por || [];
                       const unassigned = chs.every(x => x === 'A coordinar');
                       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
