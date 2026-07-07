@@ -1,4 +1,4 @@
-// build: tiquetera 7 — PIN + operador + preasignación de equipo
+// build: tiquetera 8 — config editable desde panel admin + login rediseñado
 import { useState, useEffect, useCallback } from "react";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -135,9 +135,8 @@ function InfoEnvio({ envioId }) {
   );
 }
 
-// Acceso al equipo: PIN compartido + identidad por persona (cambiar el PIN acá si se filtra)
-const PIN_EQUIPO = "2121";
-const OPERADORES = ["Santi", "Paco", "Tiago", "Lean", "Alejo"];
+// Config del equipo (PIN, operadores, duplas): vive en la tabla tiquetera_config y se edita desde el panel ⚙️ (solo Alejo)
+const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Emanuel", "Alejo"], duplas: ["Paco/Tiago", "Santi/Emanuel"] };
 
 const TIPO_COLORES = {
   "estado de envío": { bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
@@ -201,6 +200,11 @@ export default function Tiquetera() {
   const [operador, setOperador] = useState(() => localStorage.getItem("tk_operador") || "");
   const [pinTxt, setPinTxt] = useState("");
   const [pinErr, setPinErr] = useState(false);
+  const [cfg, setCfg] = useState(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [admPin, setAdmPin] = useState("");
+  const [admOps, setAdmOps] = useState("");
+  const [admDuplas, setAdmDuplas] = useState("");
 
   const cargar = useCallback(async () => {
     try {
@@ -212,6 +216,21 @@ export default function Tiquetera() {
   }, []);
 
   useEffect(() => { cargar(); const t = setInterval(cargar, 30000); return () => clearInterval(t); }, [cargar]);
+
+  useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
+
+  async function guardarAdmin() {
+    const nuevo = {
+      pin: admPin.trim() || "2121",
+      operadores: admOps.split(",").map(s => s.trim()).filter(Boolean),
+      duplas: admDuplas.split(",").map(s => s.trim()).filter(Boolean),
+    };
+    try {
+      await sb("tiquetera_config?id=eq.1", { method: "PATCH", body: JSON.stringify(nuevo) });
+      setCfg({ ...cfg, ...nuevo });
+      setAdminOpen(false);
+    } catch (e) { setError("No se pudo guardar la configuración: " + e.message); }
+  }
 
   async function patch(id, cambios) {
     try {
@@ -257,19 +276,24 @@ export default function Tiquetera() {
     color: primario ? "#fff" : "rgba(255,255,255,0.7)",
   });
 
+  if (!cfg) return <div style={{ padding: 60, textAlign: "center", color: "rgba(255,255,255,0.4)" }}>Cargando…</div>;
+
   if (!operador) return (
-    <div style={{ maxWidth: 400, margin: "60px auto", padding: 24, borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", textAlign: "center" }}>
-      <div style={{ fontSize: 34, marginBottom: 6 }}>🎟️</div>
-      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 2 }}>Tiquetera Flexit</div>
-      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 14 }}>Ingresá el PIN del equipo y elegí quién sos</div>
-      <input type="password" inputMode="numeric" value={pinTxt} onChange={e => { setPinTxt(e.target.value); setPinErr(false); }} placeholder="PIN del equipo"
-        style={{ width: 160, textAlign: "center", padding: "10px 12px", borderRadius: 8, border: `1px solid ${pinErr ? "#FF5C5C" : "rgba(255,255,255,0.15)"}`, background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 16, letterSpacing: 4, marginBottom: 6, boxSizing: "border-box" }} />
-      {pinErr && <div style={{ color: "#FF5C5C", fontSize: 12, marginTop: 4 }}>PIN incorrecto</div>}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 14 }}>
-        {OPERADORES.map(n => (
-          <button key={n} onClick={() => { if (pinTxt === PIN_EQUIPO) { localStorage.setItem("tk_operador", n); setOperador(n); } else setPinErr(true); }}
-            style={{ padding: "10px 18px", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(46,207,170,0.4)", background: "rgba(46,207,170,0.08)", color: "#2ECFAA" }}>{n}</button>
-        ))}
+    <div style={{ minHeight: "62vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 430, maxWidth: "94vw", padding: "38px 34px", borderRadius: 22, border: "1px solid rgba(46,207,170,0.22)", background: "linear-gradient(165deg, rgba(46,207,170,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))", boxShadow: "0 20px 60px rgba(0,0,0,0.45)", textAlign: "center" }}>
+        <div style={{ width: 66, height: 66, margin: "0 auto 16px", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", boxShadow: "0 6px 20px rgba(46,207,170,0.15)" }}>🎟️</div>
+        <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: "-0.02em" }}>Tiquetera Flexit</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginTop: 4, marginBottom: 24 }}>Consultas de WhatsApp · Agente</div>
+        <input type="password" inputMode="numeric" autoFocus value={pinTxt} onChange={e => { setPinTxt(e.target.value); setPinErr(false); }} placeholder="PIN del equipo"
+          style={{ width: 200, textAlign: "center", padding: "12px 14px", borderRadius: 12, border: `1px solid ${pinErr ? "#FF5C5C" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 18, letterSpacing: 6, boxSizing: "border-box", outline: "none" }} />
+        {pinErr && <div style={{ color: "#FF5C5C", fontSize: 12.5, marginTop: 8 }}>PIN incorrecto — probá de nuevo</div>}
+        <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: "1.5px", color: "rgba(255,255,255,0.35)", margin: "22px 0 12px" }}>Elegí quién sos</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {(cfg.operadores || []).map(n => (
+            <button key={n} onClick={() => { if (pinTxt === cfg.pin) { localStorage.setItem("tk_operador", n); setOperador(n); } else setPinErr(true); }}
+              style={{ padding: "13px 10px", borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(46,207,170,0.35)", background: "rgba(46,207,170,0.07)", color: "#2ECFAA" }}>👤 {n}</button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -297,11 +321,34 @@ export default function Tiquetera() {
         <div onClick={() => setChip("cadete")} style={chipStyle(chip === "cadete")}>Esp. cadete <b>{counts.cadete}</b></div>
         <div onClick={() => setChip("deposito")} style={chipStyle(chip === "deposito")}>Esp. depósito <b>{counts.deposito}</b></div>
         <div onClick={() => setChip("resueltos")} style={chipStyle(chip === "resueltos")}>Resueltos hoy <b>{counts.resueltos}</b></div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
           👤 <b style={{ color: "#fff" }}>{operador}</b>
           <span onClick={() => { localStorage.removeItem("tk_operador"); setOperador(""); setPinTxt(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>cambiar</span>
+          {operador === "Alejo" && <span title="Configuración de la tiquetera" onClick={() => { setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdminOpen(!adminOpen); }} style={{ cursor: "pointer", fontSize: 15 }}>⚙️</span>}
         </div>
       </div>
+
+      {adminOpen && (
+        <div style={{ border: "1px solid rgba(74,158,255,0.35)", borderRadius: 12, padding: "14px 16px", marginBottom: "1rem", background: "rgba(74,158,255,0.06)", maxWidth: 680 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>⚙️ Configuración de la tiquetera</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>PIN del equipo
+              <input value={admPin} onChange={e => setAdmPin(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
+            </label>
+            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Operadores (separados por coma)
+              <input value={admOps} onChange={e => setAdmOps(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
+            </label>
+            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Duplas para el reparto automático (separadas por coma)
+              <input value={admDuplas} onChange={e => setAdmDuplas(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button style={btn(true)} onClick={guardarAdmin}>Guardar</button>
+            <button style={btn(false)} onClick={() => setAdminOpen(false)}>Cancelar</button>
+          </div>
+          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.4)", marginTop: 8 }}>Los cambios aplican para los casos e ingresos nuevos; los casos ya asignados no se tocan.</div>
+        </div>
+      )}
 
       {visibles.length === 0 && (
         <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 14 }}>
