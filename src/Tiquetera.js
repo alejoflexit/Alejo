@@ -291,7 +291,12 @@ export default function Tiquetera() {
           e.preventDefault();
           if (loginBusy) return;
           setLoginBusy(true); setLoginErr("");
-          try { const ses = await login(loginEmail, loginPass); setOperador(ses.nombre); }
+          try {
+            const ses = await login(loginEmail, loginPass);
+            setOperador(ses.nombre);
+            cargar();
+            try { const r = await sb("tiquetera_config?id=eq.1"); if (r && r[0]) setCfg(r[0]); } catch {}
+          }
           catch (err) { setLoginErr(err.message || "No se pudo iniciar sesión"); }
           finally { setLoginBusy(false); }
         }}>
