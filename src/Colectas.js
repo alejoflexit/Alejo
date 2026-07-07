@@ -162,6 +162,8 @@ export default function Colectas() {
   const [tab, setTab] = useState('CABA');
   const [fecha, setFecha] = useState(todayStr);
   const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
+  const [filtroEstado, setFiltroEstado] = useState(null); // null = todos | verde/amarillo/blanco/rojo
+  const [busqueda, setBusqueda] = useState(''); // buscador de cliente o chofer
   const [clientes, setClientes] = useState([]);
   const [registros, setRegistros] = useState({});
   const [saveStatus, setSaveStatus] = useState('saved');
@@ -419,8 +421,18 @@ export default function Colectas() {
       </div>
     );
 
-    const { groups, order } = getGroups(seccionClientes);
-    const sinAsignar = groups['A coordinar']?.length || 0;
+    const norm = t => String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const clientesFiltrados = seccionClientes.filter(c => {
+      const reg = registros[c.id];
+      if (filtroEstado && (reg?.estado || 'blanco') !== filtroEstado) return false;
+      if (busqueda.trim()) {
+        const q = norm(busqueda);
+        if (!norm(c.nombre).includes(q) && !(reg?.choferes||[]).some(ch => norm(ch).includes(q))) return false;
+      }
+      return true;
+    });
+    const { groups, order } = getGroups(clientesFiltrados);
+    const sinAsignar = getGroups(seccionClientes).groups['A coordinar']?.length || 0;
 
     // Conteo de estados
     const conteoEstados = seccionClientes.reduce((acc, c) => {
@@ -438,6 +450,14 @@ export default function Colectas() {
             <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
               style={{ ...inpSt, padding:'5px 10px' }} />
           </div>
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+            onKeyDown={e => { if (e.key==='Escape') setBusqueda(''); }}
+            placeholder="🔍 Cliente o chofer..."
+            style={{ ...inpSt, padding:'5px 10px', width:180 }} />
+          {busqueda && (
+            <button onClick={() => setBusqueda('')} title="Limpiar búsqueda"
+              style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:2 }}>✕</button>
+          )}
           {sinAsignar > 0 && (
             <div style={{ padding:'3px 12px', borderRadius:20, background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:12, fontWeight:600 }}>
               ⚠️ {sinAsignar} sin asignar
@@ -459,15 +479,27 @@ export default function Colectas() {
               { key:'blanco',  label:'Pendiente',   color:BRAND.muted, bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.12)' },
               { key:'rojo',    label:'Sin envíos',  color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
             ].map(({ key, label, color, bg, border }) => conteoEstados[key] ? (
-              <div key={key} style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:20, background:bg, border:`1px solid ${border}` }}>
+              <div key={key} onClick={() => setFiltroEstado(filtroEstado === key ? null : key)}
+                title={filtroEstado === key ? 'Quitar filtro' : `Ver solo ${label.toLowerCase()}`}
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:20, background:bg, border:`1px solid ${filtroEstado === key ? color : border}`, cursor:'pointer', userSelect:'none', opacity: filtroEstado && filtroEstado !== key ? 0.4 : 1, boxShadow: filtroEstado === key ? `0 0 0 1px ${color}` : 'none' }}>
                 <span style={{ fontSize:11, fontWeight:700, color }}>{conteoEstados[key]}</span>
                 <span style={{ fontSize:11, color }}>{label}</span>
+                {filtroEstado === key && <span style={{ fontSize:10, color }}>✕</span>}
               </div>
             ) : null)}
           </div>
         )}
 
         {/* Table */}
+        {order.length === 0 && (filtroEstado || busqueda) ? (
+          <div style={{ color:BRAND.muted, padding:'2.5rem', textAlign:'center', fontSize:13 }}>
+            Sin resultados con el filtro actual.
+            <button onClick={() => { setFiltroEstado(null); setBusqueda(''); }}
+              style={{ marginLeft:8, padding:'3px 10px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:12 }}>
+              Limpiar filtros
+            </button>
+          </div>
+        ) : (
         <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'#1b1e24' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580 }}>
             <thead>
@@ -627,6 +659,7 @@ export default function Colectas() {
             </tbody>
           </table>
         </div>
+        )}
       </>
     );
   }
