@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flexit — Alta de Choferes</title>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0D0D2B;color:#fff;min-height:100vh}
+.container{max-width:960px;margin:0 auto;padding:28px 20px}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.logo{font-size:20px;font-weight:700;letter-spacing:-0.5px;color:#fff}.logo span{color:#2ECFAA}
+.status{display:flex;align-items:center;gap:6px;font-size:13px;color:rgba(255,255,255,0.5)}
+.dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);flex-shrink:0;transition:background 0.3s}
+.dot.on{background:#2ECFAA}
+.card{background:#1A1A4A;border:1px solid rgba(255,255,255,0.08);border-radius:14px;margin-bottom:18px;overflow:hidden}
+.card-header{padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.06em}
+.card-body{padding:20px}
+button{cursor:pointer;border:none;border-radius:8px;font-size:14px;font-weight:500;padding:9px 16px;transition:all .15s;font-family:inherit}
+.btn-dark{background:rgba(255,255,255,0.1);color:white;border:1px solid rgba(255,255,255,0.15)}.btn-dark:hover{background:rgba(255,255,255,0.15)}
+.btn-dark:disabled{background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.25);cursor:not-allowed}
+.btn-outline{background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7)}
+.btn-outline:hover:not(:disabled){background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.25)}
+.btn-outline:disabled{color:rgba(255,255,255,0.25);cursor:not-allowed}
+.btn-green{background:#2ECFAA;color:#0D0D2B;font-weight:600}.btn-green:hover:not(:disabled){background:#26b896}
+.btn-green:disabled{background:rgba(46,207,170,0.2);color:rgba(255,255,255,0.3);cursor:not-allowed}
+.btn-indigo{background:#3A8FD4;color:white}.btn-indigo:hover:not(:disabled){background:#2e7bbf}
+.btn-indigo:disabled{background:rgba(58,143,212,0.2);color:rgba(255,255,255,0.3);cursor:not-allowed}
+.btn-sm{padding:6px 12px;font-size:12px}
+.auth-bar{display:flex;align-items:center;gap:14px;padding:16px 20px;background:#1A1A4A;border:1px solid rgba(255,255,255,0.08);border-radius:14px;margin-bottom:18px}
+.auth-bar.connected{background:rgba(46,207,170,0.08);border-color:rgba(46,207,170,0.3)}
+.auth-icon{font-size:22px;flex-shrink:0}.auth-text{flex:1}
+.auth-text strong{display:block;font-size:14px;font-weight:600;margin-bottom:2px;color:#fff}
+.auth-text small{font-size:12px;color:rgba(255,255,255,0.4)}
+.apikey-bar{background:rgba(239,159,39,0.08);border:1px solid rgba(239,159,39,0.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.apikey-bar input{flex:1;border:1px solid rgba(255,255,255,0.12);border-radius:7px;padding:7px 10px;font-size:13px;font-family:monospace;outline:none;background:rgba(255,255,255,0.06);color:#fff}
+.apikey-bar input:focus{border-color:#3A8FD4}
+.apikey-bar span{font-size:13px;white-space:nowrap;color:rgba(255,255,255,0.8)}
+.drop-zone{border:2px dashed rgba(255,255,255,0.12);border-radius:14px;padding:32px 20px;text-align:center;transition:all .2s;background:rgba(255,255,255,0.03)}
+.drop-zone.over{border-color:#2ECFAA;background:rgba(46,207,170,0.07)}
+.dz-icon{font-size:36px;margin-bottom:8px}
+.dz-title{font-size:14px;font-weight:600;color:rgba(255,255,255,0.8);margin-bottom:4px}
+.dz-hint{font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:14px}
+.btn-upload{display:inline-block;padding:9px 22px;background:#3A8FD4;color:white;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;border:none;font-family:inherit}
+.btn-upload:hover{background:#2e7bbf}
+.previews-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:14px}
+.preview-card{position:relative;border:1px solid rgba(255,255,255,0.1);border-radius:10px;overflow:hidden;background:#12123A}
+.preview-card img{width:100%;height:90px;object-fit:contain;display:block;padding:4px}
+.pc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 8px;text-align:center}
+.pc-label.dni{background:rgba(58,143,212,0.2);color:#3A8FD4}
+.pc-label.registro{background:rgba(46,207,170,0.15);color:#2ECFAA}
+.pc-label.seguro{background:rgba(239,159,39,0.15);color:#EF9F27}
+.pc-label.unknown{background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.4)}
+.pc-remove{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:white;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;line-height:1}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em}
+.fg input{border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 11px;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;background:rgba(255,255,255,0.05);color:#fff}
+.fg input:focus{border-color:#2ECFAA;box-shadow:0 0 0 3px rgba(46,207,170,0.1)}
+.fg input::placeholder{color:rgba(255,255,255,0.2)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:rgba(255,255,255,0.04);padding:9px 13px;text-align:left;font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid rgba(255,255,255,0.07);white-space:nowrap}
+tbody td{padding:9px 13px;border-bottom:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.8);white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:rgba(255,255,255,0.03)}
+.badge-venc{display:inline-block;font-size:11px;padding:2px 7px;border-radius:999px;font-weight:500}
+.badge-ok{background:rgba(46,207,170,0.15);color:#2ECFAA}
+.badge-warn{background:rgba(239,159,39,0.15);color:#EF9F27}
+.badge-expired{background:rgba(226,75,74,0.15);color:#E24B4A}
+.empty{text-align:center;padding:40px;color:rgba(255,255,255,0.25);font-size:13px}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.2);border-top-color:white;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle;margin-right:5px}
+.spinner.dark{border-color:rgba(255,255,255,.1);border-top-color:rgba(255,255,255,.6)}
+@keyframes spin{to{transform:rotate(360deg)}}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1A1A4A;border:1px solid rgba(46,207,170,0.3);color:white;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:500;opacity:0;transition:opacity .25s;pointer-events:none;z-index:9999;white-space:nowrap}
+#toast.show{opacity:1}
+.section-actions{display:flex;gap:8px}
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <a href="/" style="font-size:13px;color:rgba(255,255,255,0.5);text-decoration:none;padding:6px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:rgba(255,255,255,0.05);">← Volver</a>
+    <div class="logo">Flexit <span>·</span> Alta de Choferes</div>
+  </div>
+  <div class="status"><div class="dot" id="dot"></div><span id="status-txt">Sin conectar</span></div>
+</header>
+
+<div class="apikey-bar" id="apikey-bar">
+  <span>🔑</span>
+  <span style="font-weight:600;font-size:13px;">API Key Anthropic</span>
+  <input type="password" id="apikey-input" placeholder="sk-ant-api03-...">
+  <button class="btn-dark btn-sm" onclick="saveApiKey()">Guardar</button>
+  <button class="btn-outline btn-sm" onclick="document.getElementById('apikey-bar').style.display='none'">✕</button>
+</div>
+
+<div class="auth-bar" id="auth-bar">
+  <div class="auth-icon">📋</div>
+  <div class="auth-text">
+    <strong id="auth-title">Conectar Google Sheets</strong>
+    <small id="auth-sub">Para ver y guardar choferes en la planilla</small>
+  </div>
+  <div id="auth-actions"><button class="btn-dark" onclick="doAuth()">Conectar con Google</button></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Documentos</div>
+    <button class="btn-indigo btn-sm" id="extract-btn" onclick="extractData()">✨ Extraer con IA</button>
+  </div>
+  <div class="card-body">
+    <div class="drop-zone" id="drop-zone"
+      ondrop="handleDrop(event)"
+      ondragover="event.preventDefault();this.classList.add('over')"
+      ondragleave="this.classList.remove('over')">
+      <div class="dz-icon">📁</div>
+      <div class="dz-title">Tirar fotos aca</div>
+      <div class="dz-hint">DNI, registro y seguro en cualquier orden — la IA los identifica</div>
+      <button class="btn-upload" onclick="document.getElementById('file-input').click()">📂 Elegir fotos</button>
+    </div>
+    <input type="file" id="file-input" accept="image/*" multiple style="display:none">
+    <div class="previews-grid" id="previews-grid"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><div class="card-title">Datos del chofer</div></div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="fg"><label>Apellido</label><input type="text" id="f-apellido" placeholder="Garcia"></div>
+      <div class="fg"><label>Nombre</label><input type="text" id="f-nombre" placeholder="Juan"></div>
+      <div class="fg"><label>N° DNI</label><input type="text" id="f-nro_dni" placeholder="12.345.678"></div>
+      <div class="fg"><label>Venc. Registro</label><input type="text" id="f-venc_registro" placeholder="31/12/2026"></div>
+      <div class="fg"><label>Patente</label><input type="text" id="f-nro_patente" placeholder="ABC 123"></div>
+      <div class="fg"><label>Aseguradora</label><input type="text" id="f-aseguradora" placeholder="Fed. Patronal"></div>
+      <div class="fg"><label>N° Póliza</label><input type="text" id="f-nro_poliza" placeholder="1234567"></div>
+      <div class="fg"><label>Venc. Seguro</label><input type="text" id="f-venc_seguro" placeholder="31/12/2026"></div>
+    </div>
+    <div class="actions" style="margin-top:18px;">
+      <button class="btn-green" id="save-btn" onclick="saveToSheet()" disabled>💾 Guardar en Sheet</button>
+      <button class="btn-outline" onclick="clearForm()">Limpiar</button>
+      <button class="btn-outline" onclick="document.getElementById('apikey-bar').style.display='flex'" style="margin-left:auto;font-size:12px;color:#a1a1aa;">🔑 API Key</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Choferes en planilla</div>
+    <div class="section-actions">
+      <button class="btn-outline btn-sm" id="refresh-btn" onclick="loadSheet()" disabled>Actualizar</button>
+    </div>
+  </div>
+  <div id="table-container"><div class="empty">Conecta con Google para ver los choferes</div></div>
+</div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+var SHEET_ID='10vqU7Vi6E4kySp1HXg8jLpNL547XxHkotXdid69M4hY';
+var CLIENT_ID='802531868412-vap5vm9efaeb5q2hm9fm11rgjh6j9ajr.apps.googleusercontent.com';
+var SCOPE='https://www.googleapis.com/auth/spreadsheets';
+var RANGE='A:I';
+var COLS=['Apellido','Nombre','DNI','Venc. Registro','Patente','Aseguradora','N Poliza','Venc. Seguro','Fecha Alta'];
+var FIELDS=['apellido','nombre','nro_dni','venc_registro','nro_patente','aseguradora','nro_poliza','venc_seguro'];
+var tokenClient=null,accessToken=null,uploadedFiles=[];
+
+window.onload=function(){
+  var k=localStorage.getItem('ak');
+  if(k){document.getElementById('apikey-input').value=k;document.getElementById('apikey-bar').style.display='none';}
+  document.getElementById('file-input').addEventListener('change',function(e){
+    if(e.target.files&&e.target.files.length>0){addFiles(Array.from(e.target.files));e.target.value='';}
+  });
+  waitForGoogle();
+};
+
+function waitForGoogle(){
+  if(window.google&&window.google.accounts&&window.google.accounts.oauth2){
+    tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPE,callback:onToken});
+    // Intentar reconexion silenciosa (funciona si ya autorizaron antes)
+    tokenClient.requestAccessToken({prompt:''});
+  }else{
+    setTimeout(waitForGoogle,200);
+  }
+}
+
+function saveApiKey(){
+  var v=document.getElementById('apikey-input').value.trim();
+  if(!v.startsWith('sk-ant-')){showToast('API key invalida');return;}
+  localStorage.setItem('ak',v);
+  document.getElementById('apikey-bar').style.display='none';
+  showToast('API key guardada');
+}
+
+function doAuth(){
+  if(!tokenClient){showToast('Google todavia cargando, esperá un segundo');return;}
+  tokenClient.requestAccessToken();
+}
+
+function onToken(r){
+  if(r.error){showToast('Error: '+r.error);return;}
+  accessToken=r.access_token;
+  document.getElementById('dot').classList.add('on');
+  document.getElementById('status-txt').textContent='Conectado';
+  document.getElementById('auth-bar').classList.add('connected');
+  document.getElementById('auth-title').textContent='Conectado a Google Sheets';
+  document.getElementById('auth-sub').textContent='Planilla de choferes lista';
+  document.getElementById('auth-actions').innerHTML='';
+  document.getElementById('save-btn').disabled=false;
+  document.getElementById('refresh-btn').disabled=false;
+  loadSheet();
+}
+
+function handleDrop(e){
+  e.preventDefault();
+  e.currentTarget.classList.remove('over');
+  addFiles(Array.from(e.dataTransfer.files));
+}
+
+function addFiles(files){
+  var imgs=files.filter(function(f){return f.type.startsWith('image/')||/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(f.name);});
+  if(!imgs.length){showToast('Solo se aceptan imagenes');return;}
+  imgs.forEach(function(file){
+    var r=new FileReader();
+    r.onload=function(ev){
+      var src=ev.target.result;
+      uploadedFiles.push({base64:src.split(',')[1],mime:file.type||'image/jpeg',type:'unknown',src:src});
+      renderPreviews();
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+function removeFile(i){uploadedFiles.splice(i,1);renderPreviews();}
+
+function renderPreviews(){
+  var g=document.getElementById('previews-grid');
+  if(!uploadedFiles.length){g.innerHTML='';return;}
+  var lb={dni:'DNI',registro:'Registro',seguro:'Seguro',unknown:'Sin identificar'};
+  g.innerHTML=uploadedFiles.map(function(f,i){
+    return '<div class="preview-card"><img src="'+f.src+'" alt="doc"><div class="pc-label '+f.type+'">'+lb[f.type]+'</div><button class="pc-remove" onclick="removeFile('+i+')">x</button></div>';
+  }).join('');
+}
+
+function extractData(){
+  var ak=localStorage.getItem('ak');
+  if(!ak){document.getElementById('apikey-bar').style.display='flex';showToast('Ingresa tu API key primero');return;}
+  if(!uploadedFiles.length){showToast('Subi al menos una imagen primero');return;}
+  var btn=document.getElementById('extract-btn');
+  btn.innerHTML='<span class="spinner"></span>Identificando...';
+  btn.disabled=true;
+  var content=[];
+  uploadedFiles.forEach(function(f,i){
+    content.push({type:'image',source:{type:'base64',media_type:f.mime,data:f.base64}});
+    content.push({type:'text',text:'Imagen '+(i+1)+'.'});
+  });
+  content.push({type:'text',text:'Analiza todas las imagenes. Son documentos de un chofer argentino: DNI, registro de conducir y/o poliza de seguro.\n\nResponde UNICAMENTE con JSON:\n{"apellido":"","nombre":"","nro_dni":"","nro_registro":"","venc_registro":"","nro_patente":"","aseguradora":"","nro_poliza":"","venc_seguro":"","tipos_detectados":["dni","registro","seguro"]}\n\nFechas en DD/MM/AAAA. Campos vacios si no encontras. En tipos_detectados solo los que identificaste.'});
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'x-api-key':ak,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:content}]})
+  }).then(function(res){
+    if(!res.ok){return res.json().then(function(e){throw new Error(e.error?e.error.message:'HTTP '+res.status);});}
+    return res.json();
+  }).then(function(data){
+    var raw=data.content[0].text.trim();
+    var m=raw.match(/\{[\s\S]*\}/);
+    if(!m){throw new Error('Respuesta inesperada');}
+    var p=JSON.parse(m[0]);
+    var tipos=p.tipos_detectados||[];
+    uploadedFiles.forEach(function(f,i){f.type=tipos[i]||'unknown';});
+    renderPreviews();
+    FIELDS.forEach(function(f){var el=document.getElementById('f-'+f);if(el&&p[f])el.value=p[f];});
+    showToast('Datos extraidos correctamente');
+  }).catch(function(err){
+    showToast('Error: '+err.message);
+  }).finally(function(){
+    btn.innerHTML='Extraer con IA';
+    btn.disabled=false;
+  });
+}
+
+function loadSheet(){
+  if(!accessToken)return;
+  var btn=document.getElementById('refresh-btn');
+  btn.innerHTML='<span class="spinner dark"></span>';btn.disabled=true;
+  fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SHEET_ID+'/values/'+RANGE,{
+    headers:{'Authorization':'Bearer '+accessToken}
+  }).then(function(res){
+    if(!res.ok){throw new Error('Error al leer la planilla');}
+    return res.json();
+  }).then(function(data){
+    renderTable(data.values||[]);
+  }).catch(function(err){
+    showToast('Error: '+err.message);
+  }).finally(function(){
+    btn.innerHTML='Actualizar';btn.disabled=false;
+  });
+}
+
+function renderTable(rows){
+  if(!rows.length){document.getElementById('table-container').innerHTML='<div class="empty">Sin choferes cargados</div>';return;}
+  var fl=(rows[0][0]||'').toLowerCase();
+  var isH=fl.indexOf('apellido')>=0||fl.indexOf('nombre')>=0;
+  var headers=isH?rows[0]:COLS;
+  var data=isH?rows.slice(1):rows;
+  if(!data.length){document.getElementById('table-container').innerHTML='<div class="empty">Sin choferes aun</div>';return;}
+  var h='<div class="table-wrap"><table><thead><tr>';
+  headers.forEach(function(x){h+='<th>'+x+'</th>';});
+  h+='</tr></thead><tbody>';
+  data.forEach(function(row){
+    h+='<tr>';
+    headers.forEach(function(_,i){
+      var v=row[i]||'—';
+      h+='<td>'+(i===4||i===7?badgeVenc(v):v)+'</td>';
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  document.getElementById('table-container').innerHTML=h;
+}
+
+function badgeVenc(v){
+  if(!v||v==='—')return v;
+  var p=v.split('/');
+  if(p.length!==3)return v;
+  var d=new Date(p[2]+'-'+p[1]+'-'+p[0]);
+  var diff=(d-new Date())/86400000;
+  if(isNaN(diff))return v;
+  if(diff<0)return '<span class="badge-venc badge-expired">'+v+'</span>';
+  if(diff<60)return '<span class="badge-venc badge-warn">'+v+'</span>';
+  return '<span class="badge-venc badge-ok">'+v+'</span>';
+}
+
+function saveToSheet(){
+  if(!accessToken){showToast('Conecta con Google primero');return;}
+  var vals=FIELDS.map(function(f){return document.getElementById('f-'+f).value.trim();});
+  if(!vals[0]&&!vals[2]){showToast('Completa al menos Apellido o DNI');return;}
+  vals.push(new Date().toLocaleDateString('es-AR'));
+  var btn=document.getElementById('save-btn');
+  btn.innerHTML='<span class="spinner"></span>Guardando...';btn.disabled=true;
+  fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SHEET_ID+'/values/'+RANGE+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+    body:JSON.stringify({values:[vals]})
+  }).then(function(res){
+    if(!res.ok){return res.json().then(function(e){throw new Error(e.error?e.error.message:'HTTP '+res.status);});}
+    showToast('Chofer guardado en la planilla');
+    clearForm();loadSheet();
+  }).catch(function(err){
+    showToast('Error: '+err.message);
+  }).finally(function(){
+    btn.innerHTML='Guardar en Sheet';btn.disabled=false;
+  });
+}
+
+function clearForm(){
+  FIELDS.forEach(function(f){document.getElementById('f-'+f).value='';});
+  uploadedFiles=[];renderPreviews();
+}
+
+function showToast(msg){
+  var el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(el._t);
+  el._t=setTimeout(function(){el.classList.remove('show');},3500);
+}
+</script>
+</body>
+</html>
