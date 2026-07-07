@@ -1,4 +1,4 @@
-// build: tiquetera 9 — número de caso visible + PIN de admin
+// build: tiquetera 10 — filtro sin contestar + orden por antigüedad
 import { useState, useEffect, useCallback } from "react";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -194,6 +194,7 @@ export default function Tiquetera() {
   const [error, setError] = useState("");
   const [busca, setBusca] = useState("");
   const [chip, setChip] = useState("abiertos");
+  const [orden, setOrden] = useState("antiguos");
   const [abierto, setAbierto] = useState(null);
   const [textos, setTextos] = useState({});
   const [notaTxt, setNotaTxt] = useState("");
@@ -242,6 +243,7 @@ export default function Tiquetera() {
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const counts = {
     abiertos: casos.filter(c => ["abierto", "enviando"].includes(c.estado) && !dormido(c)).length,
+    sinContestar: casos.filter(c => c.estado === "abierto" && !dormido(c)).length,
     cadete: casos.filter(c => c.estado === "esperando_cadete").length,
     deposito: casos.filter(c => c.estado === "esperando_deposito").length,
     resueltos: casos.filter(c => c.estado === "resuelto" && c.resuelto_at && new Date(c.resuelto_at) >= hoy).length,
@@ -256,12 +258,13 @@ export default function Tiquetera() {
         if (!blob.includes(q)) return false;
       }
       if (chip === "abiertos") return c.estado !== "resuelto";
+      if (chip === "sin_contestar") return c.estado === "abierto";
       if (chip === "cadete") return c.estado === "esperando_cadete";
       if (chip === "deposito") return c.estado === "esperando_deposito";
       if (chip === "resueltos") return c.estado === "resuelto";
       return true;
     })
-    .sort((a, b) => ordenGrupo(a) - ordenGrupo(b) || new Date(a.created_at) - new Date(b.created_at));
+    .sort((a, b) => ordenGrupo(a) - ordenGrupo(b) || (orden === "antiguos" ? new Date(a.created_at) - new Date(b.created_at) : new Date(b.created_at) - new Date(a.created_at)));
 
   const chipStyle = (activo) => ({
     padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", border: "1px solid",
@@ -318,9 +321,15 @@ export default function Tiquetera() {
             style={{ width: "100%", padding: "9px 12px 9px 34px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "#fff", fontSize: 14, boxSizing: "border-box" }} />
         </div>
         <div onClick={() => setChip("abiertos")} style={chipStyle(chip === "abiertos")}>Abiertos <b>{counts.abiertos}</b></div>
+        <div onClick={() => setChip("sin_contestar")} style={{ ...chipStyle(chip === "sin_contestar"), borderColor: chip === "sin_contestar" ? "#FF5C5C" : "rgba(255,92,92,0.35)", color: chip === "sin_contestar" ? "#FF5C5C" : "rgba(255,140,140,0.8)", background: chip === "sin_contestar" ? "rgba(255,92,92,0.12)" : "rgba(255,92,92,0.04)" }}>Sin contestar <b>{counts.sinContestar}</b></div>
         <div onClick={() => setChip("cadete")} style={chipStyle(chip === "cadete")}>Esp. cadete <b>{counts.cadete}</b></div>
         <div onClick={() => setChip("deposito")} style={chipStyle(chip === "deposito")}>Esp. depósito <b>{counts.deposito}</b></div>
         <div onClick={() => setChip("resueltos")} style={chipStyle(chip === "resueltos")}>Resueltos hoy <b>{counts.resueltos}</b></div>
+        <select value={orden} onChange={e => setOrden(e.target.value)} title="Orden de la lista"
+          style={{ padding: "6px 10px", borderRadius: 20, fontSize: 12.5, cursor: "pointer", border: "1px solid rgba(255,255,255,0.12)", background: "#12123A", color: "rgba(255,255,255,0.6)" }}>
+          <option value="antiguos">⇅ Antiguos primero</option>
+          <option value="nuevos">⇅ Nuevos primero</option>
+        </select>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
           👤 <b style={{ color: "#fff" }}>{operador}</b>
           <span onClick={() => { localStorage.removeItem("tk_operador"); setOperador(""); setPinTxt(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>cambiar</span>
