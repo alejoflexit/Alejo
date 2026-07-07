@@ -482,7 +482,7 @@ export default function Colectas() {
                 return (
                   <React.Fragment key={chofer}>
                     {/* Group header */}
-                    <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)' }}>
+                    <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(46,207,170,0.18)' }}>
                       <td colSpan={6} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${BRAND.teal}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
