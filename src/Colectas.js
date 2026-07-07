@@ -235,7 +235,7 @@ export default function Colectas() {
           map[r.cliente_id] = {
             id: r.id,
             choferes: r.choferes?.length ? r.choferes : ['A coordinar'],
-            estado: r.estado || (r.confirmado ? 'verde' : 'blanco'),
+            estado: r.estado || (r.confirmado ? 'verde' : null),
             confirmado_por: r.confirmado_por || [],
           };
         });
@@ -245,7 +245,7 @@ export default function Colectas() {
           const latest = {};
           prev.forEach(r => { if (!latest[r.cliente_id] && r.choferes?.length) latest[r.cliente_id] = r.choferes; });
           Object.entries(latest).forEach(([cid, chs]) => {
-            if (!map[cid]) map[cid] = { id: null, choferes: chs, estado: 'blanco', confirmado_por: [] };
+            if (!map[cid]) map[cid] = { id: null, choferes: chs, estado: null, confirmado_por: [] };
           });
         } catch(_) {}
         setRegistros(map);
@@ -351,6 +351,13 @@ export default function Colectas() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const toggleFija = async c => {
+    await sbFetch(`colectas_clientes?id=eq.${c.id}`, {
+      method:'PATCH', headers:{'Prefer':'return=minimal'}, body: JSON.stringify({ fija: !c.fija }),
+    });
+    setClientes(prev => prev.map(x => x.id === c.id ? { ...x, fija: !x.fija } : x));
+  };
+
   const toggleActivo = async c => {
     await sbFetch(`colectas_clientes?id=eq.${c.id}`, {
       method:'PATCH', headers:{'Prefer':'return=minimal'}, body: JSON.stringify({ activo: !c.activo }),
@@ -424,7 +431,7 @@ export default function Colectas() {
     const norm = t => String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     const clientesFiltrados = seccionClientes.filter(c => {
       const reg = registros[c.id];
-      if (filtroEstado && (reg?.estado || 'blanco') !== filtroEstado) return false;
+      if (filtroEstado && (reg?.estado || (c.fija ? 'amarillo' : 'blanco')) !== filtroEstado) return false;
       if (busqueda.trim()) {
         const q = norm(busqueda);
         if (!norm(c.nombre).includes(q) && !(reg?.choferes||[]).some(ch => norm(ch).includes(q))) return false;
@@ -436,7 +443,7 @@ export default function Colectas() {
 
     // Conteo de estados
     const conteoEstados = seccionClientes.reduce((acc, c) => {
-      const est = registros[c.id]?.estado || 'blanco';
+      const est = registros[c.id]?.estado || (c.fija ? 'amarillo' : 'blanco');
       acc[est] = (acc[est] || 0) + 1;
       return acc;
     }, {});
@@ -548,7 +555,7 @@ export default function Colectas() {
                     {rows.map(c => {
                       const reg = registros[c.id] || { choferes:['A coordinar'], estado:'blanco', confirmado_por:[] };
                       const chs = reg.choferes?.length ? reg.choferes : ['A coordinar'];
-                      const estado = reg.estado || 'blanco';
+                      const estado = reg.estado || (c.fija ? 'amarillo' : 'blanco');
                       const confirmadoPor = reg.confirmado_por || [];
                       const unassigned = chs.every(x => x === 'A coordinar');
                       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
@@ -801,6 +808,10 @@ export default function Colectas() {
                   </td>
                   <td style={{ padding:'8px 12px' }}>
                     <div style={{ display:'flex', gap:6 }}>
+                      <button onClick={() => toggleFija(c)} title="Colecta fija: arranca todos los días en naranja (Con envíos)"
+                        style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${c.fija?'#FBBF24':'rgba(255,255,255,0.15)'}`, background:c.fija?'rgba(251,191,36,0.12)':'none', color:c.fija?'#FBBF24':BRAND.muted, fontSize:11, cursor:'pointer', fontWeight:c.fija?700:400 }}>
+                        {c.fija ? '🔁 Fija' : 'Fijar'}
+                      </button>
                       <button onClick={() => editCliente(c)}
                         style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, fontSize:11, cursor:'pointer' }}>
                         Editar
