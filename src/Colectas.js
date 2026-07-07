@@ -161,6 +161,7 @@ export default function Colectas() {
   const [navView, setNavView] = useState('colectas'); // 'colectas' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
   const [fecha, setFecha] = useState(todayStr);
+  const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
   const [clientes, setClientes] = useState([]);
   const [registros, setRegistros] = useState({});
   const [saveStatus, setSaveStatus] = useState('saved');
@@ -263,12 +264,12 @@ export default function Colectas() {
           await sbFetch(`colectas_registros?id=eq.${existing.id}`, {
             method: 'PATCH',
             headers: { 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por }),
+            body: JSON.stringify({ choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}) }),
           });
         } else {
           const result = await sbFetch('colectas_registros', {
             method: 'POST',
-            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por }),
+            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}) }),
           });
           const row = Array.isArray(result) ? result[0] : result;
           if (row?.id) {
@@ -304,7 +305,7 @@ export default function Colectas() {
       .then(regs => {
         const map = {};
         regs.forEach(r => {
-          const monto = Number(r.colectas_clientes?.monto || 0);
+          const monto = Number(r.monto ?? r.colectas_clientes?.monto ?? 0);
           (r.choferes || []).forEach(ch => {
             if (!ch || ch === 'A coordinar') return;
             if (!map[ch]) map[ch] = { cadete: ch, total: 0, confirmadas: 0, monto: 0 };
@@ -382,7 +383,8 @@ export default function Colectas() {
       if (c.zona_barrio) msg += ` (${c.zona_barrio})`;
       msg += `\n  📍 ${c.direccion}`;
       if (c.hora_habitual) msg += ` · ${c.hora_habitual}hs`;
-      if (c.monto) msg += ` · $${Number(c.monto).toLocaleString('es-AR')}`;
+      const montoDia = registros[c.id]?.monto ?? c.monto;
+      if (montoDia) msg += ` · $${Number(montoDia).toLocaleString('es-AR')}`;
       msg += '\n';
     });
     msg += '\n✅ Confirmá cuando llegues a cada local.';
@@ -482,7 +484,7 @@ export default function Colectas() {
                 return (
                   <React.Fragment key={chofer}>
                     {/* Group header */}
-                    <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(46,207,170,0.18)' }}>
+                    <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)' }}>
                       <td colSpan={6} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${BRAND.teal}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
@@ -576,13 +578,16 @@ export default function Colectas() {
                           {/* Choferes */}
                           <td style={{ padding:'8px 8px', minWidth:160 }}>
                             <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                              {estado === 'rojo' ? (
+                                <span style={{ fontSize:11, color:BRAND.muted, fontStyle:'italic' }}>Cancelada</span>
+                              ) : (
                               <ChoferPicker
                                 chs={chs}
                                 choferesList={choferesList}
                                 onUpdate={updates => updateRegistro(c.id, updates)}
                                 hideChips={!isDividida && chofer !== 'A coordinar'}
                               />
-
+                              )}
                             </div>
                           </td>
                           {/* Dirección */}
@@ -597,9 +602,21 @@ export default function Colectas() {
                               </span>
                             )}
                           </td>
-                          {/* Monto */}
+                          {/* Monto — click para editar el precio del día (default: monto del cliente) */}
                           <td style={{ padding:'8px 10px 8px 8px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>
-                            {fmtMonto(c.monto)}
+                            {montoEdit?.id === c.id ? (
+                              <input autoFocus type="number" value={montoEdit.valor}
+                                onChange={e => setMontoEdit({ id:c.id, valor:e.target.value })}
+                                onKeyDown={e => { if (e.key==='Enter') e.currentTarget.blur(); if (e.key==='Escape') setMontoEdit(null); }}
+                                onBlur={() => { const v = montoEdit.valor==='' ? null : Number(montoEdit.valor); updateRegistro(c.id, { monto: (v===null || v===Number(c.monto||0)) ? null : v }); setMontoEdit(null); }}
+                                style={{ width:80, background:'#14171c', border:'1px solid #2ECFAA', borderRadius:6, color:'#fff', fontSize:13, padding:'3px 6px' }} />
+                            ) : (
+                              <span onClick={() => setMontoEdit({ id:c.id, valor: (reg.monto ?? c.monto) ?? '' })}
+                                title="Click para cambiar el precio de hoy (el predeterminado no se toca)"
+                                style={{ cursor:'pointer', borderBottom:'1px dashed rgba(255,255,255,0.25)', color: reg.monto!=null ? '#FBBF24' : undefined }}>
+                                {fmtMonto(reg.monto ?? c.monto)}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
