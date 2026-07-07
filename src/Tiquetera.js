@@ -136,7 +136,7 @@ function InfoEnvio({ envioId }) {
 }
 
 // Config del equipo (PIN, operadores, duplas): vive en la tabla tiquetera_config y se edita desde el panel ⚙️ (solo Alejo)
-const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Emanuel", "Alejo"], duplas: ["Paco/Tiago", "Santi/Emanuel"] };
+const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Emanuel", "Admin"], duplas: ["Paco/Tiago", "Santi/Emanuel"] };
 
 const TIPO_COLORES = {
   "estado de envío": { bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
@@ -324,7 +324,7 @@ export default function Tiquetera() {
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
           👤 <b style={{ color: "#fff" }}>{operador}</b>
           <span onClick={() => { localStorage.removeItem("tk_operador"); setOperador(""); setPinTxt(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>cambiar</span>
-          {operador === "Alejo" && <span title="Configuración de la tiquetera (pide PIN de admin)" onClick={() => {
+          {operador === "Admin" && <span title="Configuración de la tiquetera (pide PIN de admin)" onClick={() => {
             if (adminOpen) { setAdminOpen(false); return; }
             const ok = sessionStorage.getItem("tk_admin_ok") === "1" || window.prompt("PIN de administrador:") === (cfg.pin_admin || "4747");
             if (!ok) { setError("PIN de administrador incorrecto."); return; }
