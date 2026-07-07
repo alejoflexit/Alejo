@@ -1,4 +1,4 @@
-// build: tiquetera 4 — bloque "enviado al cliente"
+// build: tiquetera 5 — botón "ya lo mandé a mano"
 import { useState, useEffect, useCallback } from "react";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -337,7 +337,7 @@ export default function Tiquetera() {
                   {c.respuesta_enviada && (
                     <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 10, padding: "10px 12px", maxWidth: 640, marginBottom: 10 }}>
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, marginBottom: 4 }}>
-                        {c.estado === "enviando" ? "📤 En cola — sale en menos de 1 minuto" : ("✓✓ Enviado al cliente" + (c.enviado_at ? " · " + new Date(c.enviado_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""))}
+                        {c.estado === "enviando" ? "📤 En cola — sale en menos de 1 minuto" : ("✓✓ Enviado al cliente" + (c.enviado_via === "manual" ? " (a mano)" : "") + (c.enviado_at ? " · " + new Date(c.enviado_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""))}
                       </div>
                       <div style={{ fontSize: 13.5, color: "rgba(255,255,255,0.85)", lineHeight: 1.45 }}>{c.respuesta_enviada}</div>
                     </div>
@@ -368,6 +368,10 @@ export default function Tiquetera() {
                         if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
                         patch(c.id, { respuesta_enviada: txt, estado: "enviando" });
                       }}>✓ Aprobar y enviar</button>
+                      <button style={btn(false)} title="Si copiaste el mensaje y lo pegaste vos en WhatsApp, marcá el caso como respondido con esto" onClick={() => {
+                        const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
+                        patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual" });
+                      }}>✋ Ya lo mandé a mano</button>
                       <button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_cadete" ? "abierto" : "esperando_cadete" })}>
                         {c.estado === "esperando_cadete" ? "Volver a abierto" : "Esperando cadete"}
                       </button>
