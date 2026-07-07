@@ -11,3 +11,8 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Input de precio en Colectas: sin flechas de spinner */
+input.monto-edit::-webkit-outer-spin-button,
+input.monto-edit::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input.monto-edit { -moz-appearance: textfield; appearance: textfield; }

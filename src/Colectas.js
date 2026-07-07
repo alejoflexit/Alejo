@@ -637,7 +637,7 @@ export default function Colectas() {
                           {/* Monto — click para editar el precio del día (default: monto del cliente) */}
                           <td style={{ padding:'8px 10px 8px 8px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>
                             {montoEdit?.id === c.id ? (
-                              <input autoFocus type="number" value={montoEdit.valor}
+                              <input autoFocus type="number" className="monto-edit" value={montoEdit.valor}
                                 onChange={e => setMontoEdit({ id:c.id, valor:e.target.value })}
                                 onKeyDown={e => { if (e.key==='Enter') e.currentTarget.blur(); if (e.key==='Escape') setMontoEdit(null); }}
                                 onBlur={() => { const v = montoEdit.valor==='' ? null : Number(montoEdit.valor); updateRegistro(c.id, { monto: (v===null || v===Number(c.monto||0)) ? null : v }); setMontoEdit(null); }}
@@ -645,8 +645,9 @@ export default function Colectas() {
                             ) : (
                               <span onClick={() => setMontoEdit({ id:c.id, valor: (reg.monto ?? c.monto) ?? '' })}
                                 title="Click para cambiar el precio de hoy (el predeterminado no se toca)"
-                                style={{ cursor:'pointer', borderBottom:'1px dashed rgba(255,255,255,0.25)', color: reg.monto!=null ? '#FBBF24' : undefined }}>
+                                style={{ cursor:'pointer', color: reg.monto!=null ? '#FBBF24' : undefined, display:'inline-flex', alignItems:'center', gap:5 }}>
                                 {fmtMonto(reg.monto ?? c.monto)}
+                                <i className="ti ti-pencil" style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }} />
                               </span>
                             )}
                           </td>
