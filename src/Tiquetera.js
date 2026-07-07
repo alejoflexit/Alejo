@@ -1,4 +1,4 @@
-// build: tiquetera 8 — config editable desde panel admin + login rediseñado
+// build: tiquetera 9 — número de caso visible + PIN de admin
 import { useState, useEffect, useCallback } from "react";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -252,7 +252,7 @@ export default function Tiquetera() {
     .filter(c => {
       if (busca) {
         const q = busca.toLowerCase();
-        const blob = `${c.grupo || ""} ${c.chat_id || ""} ${c.autor || ""} ${c.mensaje || ""} ${c.envio_id || ""} ${c.cadete || ""} ${c.tipo || ""}`.toLowerCase();
+        const blob = `#${c.id} ${c.id} ${c.grupo || ""} ${c.chat_id || ""} ${c.autor || ""} ${c.mensaje || ""} ${c.envio_id || ""} ${c.cadete || ""} ${c.tipo || ""} ${c.asignado || ""}`.toLowerCase();
         if (!blob.includes(q)) return false;
       }
       if (chip === "abiertos") return c.estado !== "resuelto";
@@ -324,7 +324,13 @@ export default function Tiquetera() {
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
           👤 <b style={{ color: "#fff" }}>{operador}</b>
           <span onClick={() => { localStorage.removeItem("tk_operador"); setOperador(""); setPinTxt(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>cambiar</span>
-          {operador === "Alejo" && <span title="Configuración de la tiquetera" onClick={() => { setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdminOpen(!adminOpen); }} style={{ cursor: "pointer", fontSize: 15 }}>⚙️</span>}
+          {operador === "Alejo" && <span title="Configuración de la tiquetera (pide PIN de admin)" onClick={() => {
+            if (adminOpen) { setAdminOpen(false); return; }
+            const ok = sessionStorage.getItem("tk_admin_ok") === "1" || window.prompt("PIN de administrador:") === (cfg.pin_admin || "4747");
+            if (!ok) { setError("PIN de administrador incorrecto."); return; }
+            sessionStorage.setItem("tk_admin_ok", "1");
+            setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdminOpen(true);
+          }} style={{ cursor: "pointer", fontSize: 15 }}>⚙️</span>}
         </div>
       </div>
 
@@ -374,6 +380,7 @@ export default function Tiquetera() {
             }}>
               <div onClick={() => setAbierto(exp ? null : c.id)}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120 }}>{nombreCliente(c.grupo || c.autor) || c.chat_id || "—"}</span>
                 <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
