@@ -1,16 +1,14 @@
-// build: tiquetera 10 — filtro sin contestar + orden por antigüedad
+// build: tiquetera 11 — login con Supabase Auth (email+contraseña por persona)
 import { useState, useEffect, useCallback } from "react";
+import { login, logout, getSession, authedFetch } from "./auth";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2bGFnb29zbXh4Y3NiZXZrcmh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMTE1ODMsImV4cCI6MjA5NDg4NzU4M30.h0cyc0TI8yEZSny-udR2-5tzihd5jvJRTiFEbkCnVng";
+const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
 async function sb(path, options = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
       "Prefer": "return=representation",
       ...(options.headers || {}),
     },
@@ -198,9 +196,11 @@ export default function Tiquetera() {
   const [abierto, setAbierto] = useState(null);
   const [textos, setTextos] = useState({});
   const [notaTxt, setNotaTxt] = useState("");
-  const [operador, setOperador] = useState(() => localStorage.getItem("tk_operador") || "");
-  const [pinTxt, setPinTxt] = useState("");
-  const [pinErr, setPinErr] = useState(false);
+  const [operador, setOperador] = useState(() => (getSession() || {}).nombre || "");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const [loginErr, setLoginErr] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
   const [cfg, setCfg] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [admPin, setAdmPin] = useState("");
@@ -287,16 +287,23 @@ export default function Tiquetera() {
         <div style={{ width: 66, height: 66, margin: "0 auto 16px", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", boxShadow: "0 6px 20px rgba(46,207,170,0.15)" }}>🎟️</div>
         <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: "-0.02em" }}>Tiquetera Flexit</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginTop: 4, marginBottom: 24 }}>Consultas de WhatsApp · Agente</div>
-        <input type="password" inputMode="numeric" autoFocus value={pinTxt} onChange={e => { setPinTxt(e.target.value); setPinErr(false); }} placeholder="PIN del equipo"
-          style={{ width: 200, textAlign: "center", padding: "12px 14px", borderRadius: 12, border: `1px solid ${pinErr ? "#FF5C5C" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 18, letterSpacing: 6, boxSizing: "border-box", outline: "none" }} />
-        {pinErr && <div style={{ color: "#FF5C5C", fontSize: 12.5, marginTop: 8 }}>PIN incorrecto — probá de nuevo</div>}
-        <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: "1.5px", color: "rgba(255,255,255,0.35)", margin: "22px 0 12px" }}>Elegí quién sos</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {(cfg.operadores || []).map(n => (
-            <button key={n} onClick={() => { if (pinTxt === cfg.pin) { localStorage.setItem("tk_operador", n); setOperador(n); } else setPinErr(true); }}
-              style={{ padding: "13px 10px", borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(46,207,170,0.35)", background: "rgba(46,207,170,0.07)", color: "#2ECFAA" }}>👤 {n}</button>
-          ))}
-        </div>
+        <form onSubmit={async e => {
+          e.preventDefault();
+          if (loginBusy) return;
+          setLoginBusy(true); setLoginErr("");
+          try { const ses = await login(loginEmail, loginPass); setOperador(ses.nombre); }
+          catch (err) { setLoginErr(err.message || "No se pudo iniciar sesión"); }
+          finally { setLoginBusy(false); }
+        }}>
+          <input type="email" autoFocus autoComplete="username" value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginErr(""); }} placeholder="Email"
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${loginErr ? "#FF5C5C" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 15, boxSizing: "border-box", outline: "none", marginBottom: 10 }} />
+          <input type="password" autoComplete="current-password" value={loginPass} onChange={e => { setLoginPass(e.target.value); setLoginErr(""); }} placeholder="Contraseña"
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${loginErr ? "#FF5C5C" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 15, boxSizing: "border-box", outline: "none" }} />
+          {loginErr && <div style={{ color: "#FF5C5C", fontSize: 12.5, marginTop: 8 }}>{loginErr}</div>}
+          <button type="submit" disabled={loginBusy}
+            style={{ width: "100%", marginTop: 16, padding: "13px 10px", borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(46,207,170,0.35)", background: loginBusy ? "rgba(46,207,170,0.04)" : "rgba(46,207,170,0.12)", color: "#2ECFAA" }}>
+            {loginBusy ? "Entrando…" : "Entrar"}</button>
+        </form>
       </div>
     </div>
   );
@@ -332,7 +339,7 @@ export default function Tiquetera() {
         </select>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
           👤 <b style={{ color: "#fff" }}>{operador}</b>
-          <span onClick={() => { localStorage.removeItem("tk_operador"); setOperador(""); setPinTxt(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>cambiar</span>
+          <span onClick={() => { logout(); setOperador(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>salir</span>
           {operador === "Admin" && <span title="Configuración de la tiquetera (pide PIN de admin)" onClick={() => {
             if (adminOpen) { setAdminOpen(false); return; }
             const ok = sessionStorage.getItem("tk_admin_ok") === "1" || window.prompt("PIN de administrador:") === (cfg.pin_admin || "4747");

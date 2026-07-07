@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { login, logout, getSession, authedFetch } from './auth';
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2bGFnb29zbXh4Y3NiZXZrcmh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMTE1ODMsImV4cCI6MjA5NDg4NzU4M30.h0cyc0TI8yEZSny-udR2-5tzihd5jvJRTiFEbkCnVng";
+const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
 const BRAND = {
   navy:    "#0d1b2a",
@@ -19,12 +20,9 @@ const SECCIONES = ['CABA', 'SUR', 'NOROESTE', 'SABADOS'];
 const DEFAULT_CHOFERES = ['Alric','Capra','Cepero','Vaccaro','Dani Vargas','Gonzalo','Maxi','Renzo','Cris','Pedro'];
 
 async function sbFetch(path, options = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
       "Prefer": "return=representation",
       ...options.headers,
     },
@@ -157,7 +155,35 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
   );
 }
 
-export default function Colectas() {
+function LoginColectas({ onOk }) {
+  const [em, setEm] = useState('');
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const inp = { width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${err ? '#FF5C5C' : 'rgba(255,255,255,0.18)'}`, background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, boxSizing: 'border-box', outline: 'none' };
+  return (
+    <div style={{ minHeight: '62vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 400, maxWidth: '94vw', padding: '36px 32px', borderRadius: 22, border: '1px solid rgba(46,207,170,0.22)', background: 'linear-gradient(165deg, rgba(46,207,170,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))', textAlign: 'center' }}>
+        <div style={{ fontSize: 30, marginBottom: 10 }}>📦</div>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>Colectas Flexit</div>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4, marginBottom: 22 }}>Ingresá con tu usuario del equipo</div>
+        <form onSubmit={async e => {
+          e.preventDefault(); if (busy) return; setBusy(true); setErr('');
+          try { const ses = await login(em, pw); onOk(ses.nombre); }
+          catch (er) { setErr(er.message || 'No se pudo iniciar sesión'); }
+          finally { setBusy(false); }
+        }}>
+          <input type="email" autoFocus autoComplete="username" value={em} onChange={e => { setEm(e.target.value); setErr(''); }} placeholder="Email" style={{ ...inp, marginBottom: 10 }} />
+          <input type="password" autoComplete="current-password" value={pw} onChange={e => { setPw(e.target.value); setErr(''); }} placeholder="Contraseña" style={inp} />
+          {err && <div style={{ color: '#FF5C5C', fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+          <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 16, padding: '13px 10px', borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(46,207,170,0.35)', background: 'rgba(46,207,170,0.12)', color: '#2ECFAA' }}>{busy ? 'Entrando…' : 'Entrar'}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ColectasInner() {
   const [navView, setNavView] = useState('colectas'); // 'colectas' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
   const [fecha, setFecha] = useState(todayStr);
@@ -986,4 +1012,10 @@ export default function Colectas() {
       </div>
     </div>
   );
+}
+
+export default function Colectas() {
+  const [usuario, setUsuario] = useState(() => (getSession() || {}).nombre || '');
+  if (!usuario) return <LoginColectas onOk={setUsuario} />;
+  return <ColectasInner />;
 }
