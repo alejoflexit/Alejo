@@ -812,7 +812,7 @@ export default function Colectas() {
                     <div style={{ display:'flex', gap:6 }}>
                       <button onClick={() => toggleFija(c)} title="Colecta fija: arranca todos los días en naranja (Con envíos)"
                         style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${c.fija?'#FBBF24':'rgba(255,255,255,0.15)'}`, background:c.fija?'rgba(251,191,36,0.12)':'none', color:c.fija?'#FBBF24':BRAND.muted, fontSize:11, cursor:'pointer', fontWeight:c.fija?700:400 }}>
-                        {c.fija ? '🔁 Fija' : 'Fijar'}
+                        {c.fija ? '📌 Fija' : '📌 Fijar'}
                       </button>
                       <button onClick={() => editCliente(c)}
                         style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, fontSize:11, cursor:'pointer' }}>
