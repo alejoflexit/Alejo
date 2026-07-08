@@ -182,6 +182,7 @@ function nombreCliente(txt) {
 function ordenGrupo(c) {
   if (c.fijado && c.estado !== "resuelto") return 0;
   if (desperto(c)) return 1;
+  if (c.estado === "abierto" && !dormido(c)) return 1.5; // sin contestar: arriba del resto
   if (c.estado === "resuelto") return 4;
   if (dormido(c)) return 3;
   return 2;
@@ -217,6 +218,13 @@ export default function Tiquetera() {
   }, []);
 
   useEffect(() => { cargar(); const t = setInterval(cargar, 30000); return () => clearInterval(t); }, [cargar]);
+
+  // Titulo de la pestana: "(N) Tiquetera" cuando hay casos sin contestar
+  useEffect(() => {
+    const n = casos.filter(c => c.estado === "abierto" && !dormido(c)).length;
+    document.title = n > 0 ? `(${n}) Tiquetera Flexit` : "Tiquetera Flexit";
+    return () => { document.title = "Métricas Flexit"; };
+  }, [casos]);
 
   useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
 
