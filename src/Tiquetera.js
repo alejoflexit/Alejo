@@ -134,7 +134,7 @@ function InfoEnvio({ envioId }) {
 }
 
 // Config del equipo (PIN, operadores, duplas): vive en la tabla tiquetera_config y se edita desde el panel ⚙️ (solo Alejo)
-const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Emanuel", "Admin"], duplas: ["Paco/Tiago", "Santi/Emanuel"], macros: [] };
+const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Emanuel", "Admin"], duplas: ["Paco/Tiago", "Santi/Emanuel"] };
 
 const TIPO_COLORES = {
   "estado de envío": { bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
@@ -153,6 +153,19 @@ const ESTADO_BADGES = {
   esperando_cliente:  { txt: "✓ Contestado",  bg: "rgba(46,207,170,0.15)", color: "#2ECFAA" },
   resuelto:           { txt: "✓ Resuelto",       bg: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" },
 };
+
+// Posibles duplicados: mismo envio_id o mismo numero clave (direccion/orden, 3+ digitos) en el mensaje
+function numerosClave(c) {
+  const nums = new Set();
+  if (c.envio_id) nums.add(String(c.envio_id));
+  (String(c.mensaje || "").match(/\d{3,12}/g) || []).forEach(n => nums.add(n));
+  return nums;
+}
+function posiblesDuplicados(c, casos) {
+  const mios = numerosClave(c);
+  if (!mios.size) return [];
+  return casos.filter(o => o.id !== c.id && [...numerosClave(o)].some(n => mios.has(n))).slice(0, 3);
+}
 
 function edadMin(caso) { return (Date.now() - new Date(caso.created_at).getTime()) / 60000; }
 function edadTxt(caso) {
@@ -207,7 +220,6 @@ export default function Tiquetera() {
   const [admPin, setAdmPin] = useState("");
   const [admOps, setAdmOps] = useState("");
   const [admDuplas, setAdmDuplas] = useState("");
-  const [admMacros, setAdmMacros] = useState("");
   const [viendo, setViendo] = useState({}); // casoId -> [operadores que lo estan viendo]
   const presCh = useRef(null);
 
@@ -262,7 +274,6 @@ export default function Tiquetera() {
       pin: admPin.trim() || "2121",
       operadores: admOps.split(",").map(s => s.trim()).filter(Boolean),
       duplas: admDuplas.split(",").map(s => s.trim()).filter(Boolean),
-      macros: admMacros.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const i = l.indexOf("::"); return i > 0 ? { titulo: l.slice(0, i).trim(), texto: l.slice(i + 2).trim() } : { titulo: l.slice(0, 24), texto: l }; }),
     };
     try {
       await sb("tiquetera_config?id=eq.1", { method: "PATCH", body: JSON.stringify(nuevo) });
@@ -388,7 +399,7 @@ export default function Tiquetera() {
             const ok = sessionStorage.getItem("tk_admin_ok") === "1" || window.prompt("PIN de administrador:") === (cfg.pin_admin || "4747");
             if (!ok) { setError("PIN de administrador incorrecto."); return; }
             sessionStorage.setItem("tk_admin_ok", "1");
-            setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdmMacros((cfg.macros || []).map(m => m.titulo + " :: " + m.texto).join("\n")); setAdminOpen(true);
+            setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdminOpen(true);
           }} style={{ cursor: "pointer", fontSize: 15 }}>⚙️</span>}
         </div>
       </div>
@@ -405,9 +416,6 @@ export default function Tiquetera() {
             </label>
             <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Duplas para el reparto automático (separadas por coma)
               <input value={admDuplas} onChange={e => setAdmDuplas(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
-            </label>
-            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Macros — respuestas rápidas (una por línea, formato: Título :: Texto)
-              <textarea value={admMacros} onChange={e => setAdmMacros(e.target.value)} rows={4} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
             </label>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -492,19 +500,18 @@ export default function Tiquetera() {
                     </div>
                   )}
 
+                  {(() => { const dups = posiblesDuplicados(c, casos); return dups.length > 0 && (
+                    <div style={{ maxWidth: 640, marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(255,176,32,0.4)", background: "rgba(255,176,32,0.07)", fontSize: 12.5, color: "#FFB020" }}>
+                      ⚠ Posible duplicado (mismo envío o número):{dups.map(d => (
+                        <span key={d.id} onClick={() => setAbierto(d.id)} title={d.mensaje} style={{ cursor: "pointer", textDecoration: "underline", marginLeft: 6 }}>
+                          #{d.id}{d.estado === "resuelto" ? " (resuelto)" : d.respuesta_enviada ? " (contestado)" : ""}
+                        </span>
+                      ))}
+                    </div>
+                  ); })()}
                   {c.estado !== "resuelto" && (<>
                     <div style={{ border: "1px dashed rgba(46,207,170,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,207,170,0.04)", maxWidth: 640, marginBottom: 10 }}>
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, marginBottom: 5 }}>{c.respuesta_enviada ? "✦ Enviar otro mensaje (opcional)" : "✦ Respuesta — editá antes de enviar"}</div>
-                      {(cfg.macros || []).length > 0 && (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 7 }}>
-                          {(cfg.macros || []).map((m, mi) => (
-                            <span key={mi} onClick={() => setTextos({ ...textos, [c.id]: m.texto })} title={m.texto}
-                              style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 20, cursor: "pointer", border: "1px solid rgba(46,207,170,0.4)", color: "#2ECFAA", background: "rgba(46,207,170,0.07)", userSelect: "none" }}>
-                              ⚡ {m.titulo}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                       <textarea value={textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_enviada ? "" : (c.respuesta_sugerida || ""))}
                         onChange={e => setTextos({ ...textos, [c.id]: e.target.value })}
                         rows={2}
