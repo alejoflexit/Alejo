@@ -203,7 +203,9 @@ function ColectasInner() {
   const [loadingPagos, setLoadingPagos] = useState(false);
 
   // Clientes ABM
-  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', hora_habitual:'', monto:'', activo:true };
+  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', hora_habitual:'', monto:'', activo:true, chat_id:'' };
+  const [gruposWA, setGruposWA] = useState([]); // grupos de WhatsApp que conoce el bot (agente_config)
+  const [avisoBot, setAvisoBot] = useState('');
   const [clienteForm, setClienteForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -275,6 +277,12 @@ function ColectasInner() {
     try { localStorage.setItem('flexit_choferes', JSON.stringify(choferesList)); } catch {}
   }, [choferesList]);
 
+  // Grupos de WhatsApp del bot (para vincular clientes y mandar avisos)
+  useEffect(() => {
+    sbFetch('agente_config?tipo=eq.grupo&estado=eq.activo&select=chat_id,nombre_grupo,cliente&order=nombre_grupo.asc')
+      .then(setGruposWA).catch(() => setGruposWA([]));
+  }, []);
+
   // Load clients
   useEffect(() => {
     sbFetch('colectas_clientes?select=*&order=seccion.asc,nombre.asc')
@@ -345,6 +353,31 @@ function ColectasInner() {
     }
   }, [fecha]);
 
+  // Preguntar por WhatsApp a los pendientes de hoy si tienen envios (via bot: casos estado 'enviando')
+  const preguntarPendientes = async (pendientes) => {
+    const conGrupo = pendientes.filter(c => c.chat_id);
+    const sinGrupo = pendientes.length - conGrupo.length;
+    if (!conGrupo.length) { setAvisoBot('Ningún pendiente tiene grupo de WhatsApp vinculado (se vincula en Clientes).'); setTimeout(() => setAvisoBot(''), 8000); return; }
+    const MSG = 'Hola, buen día! 👋 ¿Cómo va? ¿Tienen envíos para hoy?';
+    if (!window.confirm(`Mandar "${MSG}" a ${conGrupo.length} grupo(s)` + (sinGrupo ? ` — ojo: ${sinGrupo} pendiente(s) sin grupo vinculado no reciben` : '') + '?')) return;
+    const quien = (getSession() || {}).nombre || 'Colectas';
+    let ok = 0, fail = 0;
+    for (const c of conGrupo) {
+      const g = gruposWA.find(x => x.chat_id === c.chat_id);
+      try {
+        await sbFetch('casos', { method: 'POST', body: JSON.stringify({
+          chat_id: c.chat_id, grupo: g?.nombre_grupo || c.nombre, autor: 'Colectas Flexit',
+          mensaje: `(aviso automático) Consulta de colecta a ${c.nombre}`,
+          tipo: 'colecta', estado: 'enviando', respuesta_enviada: MSG,
+          enviado_via: 'colectas', enviado_por: quien, enviado_at: new Date().toISOString(),
+        }) });
+        ok++;
+      } catch (e) { fail++; }
+    }
+    setAvisoBot(`🤖 ${ok} mensaje(s) encolado(s) — el bot los manda en el próximo minuto (solo a grupos habilitados).` + (fail ? ` ${fail} fallaron.` : ''));
+    setTimeout(() => setAvisoBot(''), 12000);
+  };
+
   const updateRegistro = useCallback((clienteId, updates) => {
     setRegistros(prev => {
       const current = prev[clienteId] || { choferes: ['A coordinar'], estado: 'blanco', confirmado_por: [] };
@@ -386,6 +419,7 @@ function ColectasInner() {
       ...clienteForm,
       hora_habitual: clienteForm.hora_habitual !== '' ? Number(clienteForm.hora_habitual) : null,
       monto: clienteForm.monto !== '' ? Number(clienteForm.monto) : null,
+      chat_id: clienteForm.chat_id || null,
     };
     try {
       if (editId) {
@@ -405,7 +439,7 @@ function ColectasInner() {
 
   const editCliente = c => {
     setEditId(c.id);
-    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, hora_habitual:c.hora_habitual??'', monto:c.monto??'', activo:c.activo });
+    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, hora_habitual:c.hora_habitual??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'' });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -531,6 +565,13 @@ function ColectasInner() {
               ⚠️ {sinAsignar} sin asignar
             </div>
           )}
+          {(() => { const pend = seccionClientes.filter(c => (registros[c.id]?.estado || 'blanco') === 'blanco'); return pend.length > 0 && (
+            <button onClick={() => preguntarPendientes(pend)} title="Preguntarles por WhatsApp si tienen envíos hoy (bot)"
+              style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(74,158,255,0.4)', background:'rgba(74,158,255,0.08)', color:'#4A9EFF', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              🤖 Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
+            </button>
+          ); })()}
+          {avisoBot && <div style={{ fontSize:12, color:'#4A9EFF' }}>{avisoBot}</div>}
           <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
             {saveStatus==='saving' && '💾 Guardando...'}
             {saveStatus==='saved'  && '✓ Guardado'}
@@ -825,6 +866,14 @@ function ColectasInner() {
                 <select value={clienteForm.seccion} onChange={e => setClienteForm(p => ({...p,seccion:e.target.value}))}
                   style={{ ...inpSt, width:'100%' }}>
                   {SECCIONES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Grupo WhatsApp (avisos del bot)</div>
+                <select value={clienteForm.chat_id} onChange={e => setClienteForm(p => ({...p,chat_id:e.target.value}))}
+                  style={{ ...inpSt, width:'100%' }}>
+                  <option value="">— Sin grupo —</option>
+                  {gruposWA.map(g => <option key={g.chat_id} value={g.chat_id}>{g.nombre_grupo}{g.cliente ? ` (${g.cliente})` : ''}</option>)}
                 </select>
               </div>
             </div>
