@@ -146,7 +146,7 @@ const TIPO_COLORES = {
 };
 
 const ESTADO_BADGES = {
-  abierto:            { txt: "● Nuevo",          bg: "rgba(46,207,170,0.15)", color: "#2ECFAA" },
+  abierto:            { txt: "● Nuevo",          bg: "rgba(255,92,92,0.15)", color: "#FF5C5C" },
   enviando:           { txt: "📤 Enviando…",     bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
   esperando_cadete:   { txt: "⏳ Esp. cadete",   bg: "rgba(255,176,32,0.15)", color: "#FFB020" },
   esperando_deposito: { txt: "📦 Esp. depósito", bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
@@ -242,7 +242,7 @@ export default function Tiquetera() {
 
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const counts = {
-    abiertos: casos.filter(c => ["abierto", "enviando"].includes(c.estado) && !dormido(c)).length,
+    abiertos: casos.filter(c => c.estado !== "resuelto").length,
     sinContestar: casos.filter(c => c.estado === "abierto" && !dormido(c)).length,
     cadete: casos.filter(c => c.estado === "esperando_cadete").length,
     deposito: casos.filter(c => c.estado === "esperando_deposito").length,
@@ -384,7 +384,7 @@ export default function Tiquetera() {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {visibles.map(c => {
+        {visibles.map((c, i) => {
           const tc = TIPO_COLORES[c.tipo] || TIPO_COLORES.otro;
           const eb = ESTADO_BADGES[c.estado] || ESTADO_BADGES.abierto;
           const exp = abierto === c.id;
@@ -395,7 +395,7 @@ export default function Tiquetera() {
               borderRadius: 10, overflow: "hidden", opacity: dorm || c.estado === "resuelto" ? 0.55 : 1,
               border: `1px solid ${desp ? "#FFB020" : c.fijado ? "#2ECFAA" : "rgba(255,255,255,0.1)"}`,
               borderLeft: `4px solid ${edadColor(c)}`,
-              background: "rgba(255,255,255,0.03)",
+              background: i % 2 ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.02)",
               boxShadow: desp ? "0 0 12px rgba(255,176,32,0.35)" : "none",
               animation: desp ? "temblarTk 1.6s ease-in-out infinite" : "none",
             }}>
