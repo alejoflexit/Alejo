@@ -16,3 +16,9 @@ code {
 input.monto-edit::-webkit-outer-spin-button,
 input.monto-edit::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input.monto-edit { -moz-appearance: textfield; appearance: textfield; }
+
+/* Dropdowns nativos: opciones en oscuro (el default del browser es blanco) */
+select option {
+  background-color: #141a2e;
+  color: #fff;
+}

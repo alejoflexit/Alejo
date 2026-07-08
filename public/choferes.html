@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Flexit — Alta de Choferes</title>
+<script>
+// Candado: requiere sesion de la app (mismo login que tiquetera/colectas)
+try { var _s = JSON.parse(localStorage.getItem("fx_session")); if (!_s || !_s.access_token) location.replace("/"); }
+catch (e) { location.replace("/"); }
+</script>
 <script src="https://accounts.google.com/gsi/client" async></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -86,7 +91,7 @@ tbody tr:hover td{background:rgba(255,255,255,0.03)}
 <header>
   <div style="display:flex;align-items:center;gap:12px;">
     <a href="/" style="font-size:13px;color:rgba(255,255,255,0.5);text-decoration:none;padding:6px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:rgba(255,255,255,0.05);">← Volver</a>
-    <div class="logo">Flexit <span>·</span> Alta de Choferes</div>
+    <div class="logo"><a href="/" style="color:rgba(255,255,255,0.5);text-decoration:none;font-size:13px;font-weight:600;margin-right:14px" title="Volver a la app">← App</a>Flexit <span>·</span> Alta de Choferes</div>
   </div>
   <div class="status"><div class="dot" id="dot"></div><span id="status-txt">Sin conectar</span></div>
 </header>
