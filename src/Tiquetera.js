@@ -364,7 +364,7 @@ export default function Tiquetera() {
 
   return (
     <div>
-      <style>{`@keyframes temblarTk{0%,100%{transform:translateX(0)}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-2px)}40%{transform:translateX(2px)}50%{transform:translateX(0)}}`}</style>
+      <style>{`@keyframes pingTk{75%,100%{transform:scale(2.4);opacity:0}}@keyframes temblarTk{0%,100%{transform:translateX(0)}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-2px)}40%{transform:translateX(2px)}50%{transform:translateX(0)}}`}</style>
 
       {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: "1rem" }}>{error}</div>}
 
@@ -452,6 +452,12 @@ export default function Tiquetera() {
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", flexWrap: "wrap" }}>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120 }}>{nombreCliente(c.grupo || c.autor) || c.chat_id || "—"}</span>
+                {c.estado === "abierto" && !dorm && (
+                  <span title="Caso nuevo, sin contestar" style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
+                  </span>
+                )}
                 <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
                 <span style={{ flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 120 }}>{c.mensaje}</span>
@@ -461,9 +467,8 @@ export default function Tiquetera() {
                 {(viendo[c.id] || []).length > 0 && (
                   <span title={"Cuidado: tambien lo esta viendo " + viendo[c.id].join(" y ")} style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: "rgba(255,176,32,0.15)", color: "#FFB020", whiteSpace: "nowrap" }}>👀 {viendo[c.id].join(", ")}</span>
                 )}
-                <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color, whiteSpace: "nowrap" }}>{eb.txt}</span>
+                {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color, whiteSpace: "nowrap" }}>{eb.txt}</span>}
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>
-                  <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: edadColor(c), marginRight: 5, boxShadow: edadMin(c) > 120 && c.estado !== "resuelto" ? `0 0 6px ${edadColor(c)}` : "none" }} />
                   {edadTxt(c)}
                 </span>
                 <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, transform: exp ? "rotate(90deg)" : "none", transition: "transform .2s" }}>▶</span>
