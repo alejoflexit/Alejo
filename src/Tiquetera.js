@@ -1,6 +1,6 @@
 // build: tiquetera 11 — login con Supabase Auth (email+contraseña por persona)
-import { useState, useEffect, useCallback } from "react";
-import { login, logout, getSession, authedFetch } from "./auth";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { login, logout, getSession, authedFetch, getToken } from "./auth";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -134,7 +134,7 @@ function InfoEnvio({ envioId }) {
 }
 
 // Config del equipo (PIN, operadores, duplas): vive en la tabla tiquetera_config y se edita desde el panel ⚙️ (solo Alejo)
-const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Emanuel", "Admin"], duplas: ["Paco/Tiago", "Santi/Emanuel"] };
+const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Emanuel", "Admin"], duplas: ["Paco/Tiago", "Santi/Emanuel"], macros: [] };
 
 const TIPO_COLORES = {
   "estado de envío": { bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
@@ -207,6 +207,9 @@ export default function Tiquetera() {
   const [admPin, setAdmPin] = useState("");
   const [admOps, setAdmOps] = useState("");
   const [admDuplas, setAdmDuplas] = useState("");
+  const [admMacros, setAdmMacros] = useState("");
+  const [viendo, setViendo] = useState({}); // casoId -> [operadores que lo estan viendo]
+  const presCh = useRef(null);
 
   const cargar = useCallback(async () => {
     try {
@@ -218,6 +221,32 @@ export default function Tiquetera() {
   }, []);
 
   useEffect(() => { cargar(); const t = setInterval(cargar, 30000); return () => clearInterval(t); }, [cargar]);
+
+  // Deteccion de colision: presencia realtime — quien esta mirando que caso
+  useEffect(() => {
+    if (!window.supabase || !operador) return;
+    let client = null, cancelled = false;
+    (async () => {
+      const token = await getToken().catch(() => null);
+      if (cancelled) return;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      if (token) client.realtime.setAuth(token);
+      const ch = client.channel("tiquetera-presencia", { config: { presence: { key: operador } } });
+      ch.on("presence", { event: "sync" }, () => {
+        const st = ch.presenceState();
+        const map = {};
+        Object.entries(st).forEach(([quien, metas]) => {
+          if (quien === operador) return;
+          (metas || []).forEach(m => { if (m.caso) (map[m.caso] = map[m.caso] || []).push(quien); });
+        });
+        setViendo(map);
+      });
+      ch.subscribe(st => { if (st === "SUBSCRIBED") { presCh.current = ch; try { ch.track({ caso: null }); } catch {} } });
+    })();
+    return () => { cancelled = true; presCh.current = null; try { client && client.realtime.disconnect(); } catch {} };
+  }, [operador]);
+
+  useEffect(() => { try { presCh.current && presCh.current.track({ caso: abierto }); } catch {} }, [abierto]);
 
   // Titulo de la pestana: "(N) Tiquetera" cuando hay casos sin contestar
   useEffect(() => {
@@ -233,6 +262,7 @@ export default function Tiquetera() {
       pin: admPin.trim() || "2121",
       operadores: admOps.split(",").map(s => s.trim()).filter(Boolean),
       duplas: admDuplas.split(",").map(s => s.trim()).filter(Boolean),
+      macros: admMacros.split("\n").map(l => l.trim()).filter(Boolean).map(l => { const i = l.indexOf("::"); return i > 0 ? { titulo: l.slice(0, i).trim(), texto: l.slice(i + 2).trim() } : { titulo: l.slice(0, 24), texto: l }; }),
     };
     try {
       await sb("tiquetera_config?id=eq.1", { method: "PATCH", body: JSON.stringify(nuevo) });
@@ -358,7 +388,7 @@ export default function Tiquetera() {
             const ok = sessionStorage.getItem("tk_admin_ok") === "1" || window.prompt("PIN de administrador:") === (cfg.pin_admin || "4747");
             if (!ok) { setError("PIN de administrador incorrecto."); return; }
             sessionStorage.setItem("tk_admin_ok", "1");
-            setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdminOpen(true);
+            setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdmMacros((cfg.macros || []).map(m => m.titulo + " :: " + m.texto).join("\n")); setAdminOpen(true);
           }} style={{ cursor: "pointer", fontSize: 15 }}>⚙️</span>}
         </div>
       </div>
@@ -375,6 +405,9 @@ export default function Tiquetera() {
             </label>
             <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Duplas para el reparto automático (separadas por coma)
               <input value={admDuplas} onChange={e => setAdmDuplas(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
+            </label>
+            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Macros — respuestas rápidas (una por línea, formato: Título :: Texto)
+              <textarea value={admMacros} onChange={e => setAdmMacros(e.target.value)} rows={4} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
             </label>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -417,6 +450,9 @@ export default function Tiquetera() {
                 {c.fijado && c.estado !== "resuelto" && <span style={{ fontSize: 11.5, color: "#2ECFAA", background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", padding: "2px 8px", borderRadius: 6 }}>📌 Fijado</span>}
                 {dorm && <span style={{ fontSize: 11.5, color: "#FFB020", background: "rgba(255,176,32,0.12)", padding: "2px 8px", borderRadius: 6 }}>⏰ hasta {new Date(c.snooze_hasta).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
                 {desp && <span style={{ fontSize: 11.5, color: "#FFB020", background: "rgba(255,176,32,0.2)", fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>⏰ ¡Despertó!</span>}
+                {(viendo[c.id] || []).length > 0 && (
+                  <span title={"Cuidado: tambien lo esta viendo " + viendo[c.id].join(" y ")} style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: "rgba(255,176,32,0.15)", color: "#FFB020", whiteSpace: "nowrap" }}>👀 {viendo[c.id].join(", ")}</span>
+                )}
                 <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color, whiteSpace: "nowrap" }}>{eb.txt}</span>
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>
                   <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: edadColor(c), marginRight: 5, boxShadow: edadMin(c) > 120 && c.estado !== "resuelto" ? `0 0 6px ${edadColor(c)}` : "none" }} />
@@ -459,6 +495,16 @@ export default function Tiquetera() {
                   {c.estado !== "resuelto" && (<>
                     <div style={{ border: "1px dashed rgba(46,207,170,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,207,170,0.04)", maxWidth: 640, marginBottom: 10 }}>
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, marginBottom: 5 }}>{c.respuesta_enviada ? "✦ Enviar otro mensaje (opcional)" : "✦ Respuesta — editá antes de enviar"}</div>
+                      {(cfg.macros || []).length > 0 && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 7 }}>
+                          {(cfg.macros || []).map((m, mi) => (
+                            <span key={mi} onClick={() => setTextos({ ...textos, [c.id]: m.texto })} title={m.texto}
+                              style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 20, cursor: "pointer", border: "1px solid rgba(46,207,170,0.4)", color: "#2ECFAA", background: "rgba(46,207,170,0.07)", userSelect: "none" }}>
+                              ⚡ {m.titulo}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <textarea value={textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_enviada ? "" : (c.respuesta_sugerida || ""))}
                         onChange={e => setTextos({ ...textos, [c.id]: e.target.value })}
                         rows={2}
