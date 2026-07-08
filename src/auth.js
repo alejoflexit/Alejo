@@ -53,7 +53,7 @@ async function refreshSession() {
   return n;
 }
 
-async function getToken() {
+export async function getToken() {
   const s = getSession();
   if (!s) return null;
   if (Date.now() < s.exp) return s.access_token;

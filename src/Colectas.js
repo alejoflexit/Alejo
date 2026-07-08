@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { login, logout, getSession, authedFetch } from './auth';
+import { login, logout, getSession, authedFetch, getToken } from './auth';
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -231,6 +231,39 @@ function ColectasInner() {
   const pendingSavesRef = useRef(new Map());
 
   useEffect(() => { registrosRef.current = registros; }, [registros]);
+
+  // Tiempo real: cambios de otros usuarios en el dia activo (Supabase Realtime)
+  useEffect(() => {
+    if (!fecha || !window.supabase) return;
+    let client = null, channel = null, cancelled = false, retryTimer = null;
+    const cleanup = () => {
+      try { if (channel && client) client.removeChannel(channel); } catch {}
+      try { if (client) client.realtime.disconnect(); } catch {}
+      channel = null; client = null;
+    };
+    const connect = async () => {
+      const token = await getToken().catch(() => null);
+      if (!token || cancelled) return;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      client.realtime.setAuth(token);
+      channel = client.channel('colectas-rt-' + fecha)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'colectas_registros', filter: `fecha=eq.${fecha}` }, payload => {
+          const row = payload.new;
+          if (!row || !row.cliente_id) return;
+          if (pendingSavesRef.current.has(row.cliente_id)) return; // no pisar una edicion local en curso
+          setRegistros(prev => ({ ...prev, [row.cliente_id]: { ...prev[row.cliente_id], ...row } }));
+        })
+        .subscribe(status => {
+          // token vencido o corte de red: reconectar con token fresco
+          if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) {
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => { cleanup(); connect(); }, 5000);
+          }
+        });
+    };
+    connect();
+    return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
+  }, [fecha]);
 
   // Sincronizar choferes desde Supabase siempre al montar
   useEffect(() => {
