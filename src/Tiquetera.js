@@ -220,6 +220,8 @@ export default function Tiquetera() {
   const [admPin, setAdmPin] = useState("");
   const [admOps, setAdmOps] = useState("");
   const [admDuplas, setAdmDuplas] = useState("");
+  const [gruposOpen, setGruposOpen] = useState(false);
+  const [grupos, setGrupos] = useState([]);
   const [viendo, setViendo] = useState({}); // casoId -> [operadores que lo estan viendo]
   const presCh = useRef(null);
 
@@ -280,6 +282,20 @@ export default function Tiquetera() {
       setCfg({ ...cfg, ...nuevo });
       setAdminOpen(false);
     } catch (e) { setError("No se pudo guardar la configuración: " + e.message); }
+  }
+
+  const cargarGrupos = useCallback(async () => {
+    try {
+      const rows = await sb("agente_config?tipo=eq.grupo&order=estado.asc,nombre_grupo.asc");
+      setGrupos(rows || []);
+    } catch (e) { setError("No se pudieron cargar los grupos: " + e.message); }
+  }, []);
+
+  async function patchGrupo(id, cambios) {
+    try {
+      await sb(`agente_config?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(cambios) });
+      await cargarGrupos();
+    } catch (e) { setError("No se pudo cambiar el grupo (¿entraste como Admin?): " + e.message); }
   }
 
   async function patch(id, cambios) {
@@ -401,6 +417,13 @@ export default function Tiquetera() {
             sessionStorage.setItem("tk_admin_ok", "1");
             setAdmPin(cfg.pin); setAdmOps((cfg.operadores || []).join(", ")); setAdmDuplas((cfg.duplas || []).join(", ")); setAdminOpen(true);
           }} style={{ cursor: "pointer", fontSize: 15 }}>⚙️</span>}
+          {operador === "Admin" && <span title="Grupos de WhatsApp del agente" onClick={() => {
+            if (gruposOpen) { setGruposOpen(false); return; }
+            const ok = sessionStorage.getItem("tk_admin_ok") === "1" || window.prompt("PIN de administrador:") === (cfg.pin_admin || "4747");
+            if (!ok) { setError("PIN de administrador incorrecto."); return; }
+            sessionStorage.setItem("tk_admin_ok", "1");
+            cargarGrupos(); setGruposOpen(true);
+          }} style={{ cursor: "pointer", fontSize: 15 }}>📱</span>}
         </div>
       </div>
 
@@ -423,6 +446,46 @@ export default function Tiquetera() {
             <button style={btn(false)} onClick={() => setAdminOpen(false)}>Cancelar</button>
           </div>
           <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.4)", marginTop: 8 }}>Los cambios aplican para los casos e ingresos nuevos; los casos ya asignados no se tocan.</div>
+        </div>
+      )}
+
+      {gruposOpen && (
+        <div style={{ border: "1px solid rgba(74,158,255,0.35)", borderRadius: 12, padding: "14px 16px", marginBottom: "1rem", background: "rgba(74,158,255,0.06)", maxWidth: 720 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>📱 Grupos de WhatsApp del agente</div>
+          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>
+            <b>Pendiente</b> = grupo nuevo detectado, el bot está mudo ahí. <b>Activá</b> para que empiece a crear casos (sigue sin enviar hasta que prendas “Envío”). <b>Envío</b> = el bot puede mandar respuestas aprobadas al cliente.
+          </div>
+          {grupos.length === 0 && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.4)" }}>No hay grupos cargados todavía.</div>}
+          <div style={{ display: "grid", gap: 8 }}>
+            {grupos.map(g => {
+              const col = g.estado === "activo" ? "#39d98a" : g.estado === "pendiente" ? "#f5a623" : "rgba(255,255,255,0.4)";
+              return (
+                <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 10px", borderRadius: 8, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: "#fff", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.nombre_grupo || g.chat_id}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{g.cliente || "cliente sin identificar"}{g.cod_cliente ? ` · cód ${g.cod_cliente}` : ""}</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: col, textTransform: "uppercase", letterSpacing: 0.4 }}>{g.estado}</span>
+                  {g.estado !== "activo"
+                    ? <button style={btn(true)} onClick={() => patchGrupo(g.id, { estado: "activo" })}>Activar</button>
+                    : <button style={btn(false)} onClick={() => patchGrupo(g.id, { estado: "inactivo", envio_habilitado: false })}>Pausar</button>}
+                  {g.estado === "activo" && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: g.envio_habilitado ? "#39d98a" : "rgba(255,255,255,0.55)", cursor: "pointer" }}>
+                      <input type="checkbox" checked={!!g.envio_habilitado} onChange={e => {
+                        if (e.target.checked && !window.confirm(`¿Habilitar ENVÍO para "${g.nombre_grupo || g.chat_id}"?\n\nEl bot va a poder mandar respuestas aprobadas al cliente en este grupo.`)) return;
+                        patchGrupo(g.id, { envio_habilitado: e.target.checked });
+                      }} />
+                      Envío
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button style={btn(false)} onClick={() => setGruposOpen(false)}>Cerrar</button>
+            <button style={btn(false)} onClick={cargarGrupos}>↻ Actualizar</button>
+          </div>
         </div>
       )}
 
