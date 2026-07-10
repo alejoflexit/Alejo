@@ -626,7 +626,6 @@ export default function Tiquetera() {
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
                     {c.envio_id && <span>Envío <b style={{ color: "#fff" }}>#{c.envio_id}</b></span>}
                     {c.cadete && <span>Cadete: <b style={{ color: "#fff" }}>{c.cadete}</b></span>}
-                    <span>Chat: {c.chat_id}</span>
                     {c.turno && <span>Turno: {c.turno}</span>}
                     {c.resuelto_por && <span style={{ color: "#2ECFAA" }}>✓ Resuelto por {c.resuelto_por}</span>}
                   </div>
@@ -671,10 +670,10 @@ export default function Tiquetera() {
                       <button style={btn(false)} onClick={() => { if (!notaTxt.trim()) return; patch(c.id, { notas: [...(c.notas || []), { quien: operador, texto: notaTxt.trim(), at: new Date().toISOString() }] }); setNotaTxt(""); }}>+ Nota</button>
                     </div>
                     <div style={{ display: "flex", gap: 8, maxWidth: 640, flexWrap: "wrap" }}>
-                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, ...(copiado === c.id ? { borderColor: "rgba(57,217,138,0.6)", color: "#39d98a" } : {}) }} title="Copiar la respuesta" onClick={() => {
+                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, ...(copiado === c.id ? { background: "#1A9E7C", borderColor: "transparent", color: "#fff" } : {}) }} title="Copiar la respuesta" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("No hay respuesta para copiar."); return; }
-                        navigator.clipboard.writeText(txt); setCopiado(c.id); setTimeout(() => setCopiado(m => (m === c.id ? null : m)), 1200);
+                        navigator.clipboard.writeText(txt); setCopiado(c.id);
                       }}>{copiado === c.id ? "✓" : "📋"}</button>
                       <button style={btn(false)} onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
