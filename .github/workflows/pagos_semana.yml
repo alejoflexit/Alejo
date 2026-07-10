@@ -1,0 +1,50 @@
+name: Pagos - Descarga semanal de entregados
+
+# Guarda en la tabla `pagos_entregados` los envíos ENTREGADOS de la semana
+# cerrada (lunes–sábado anterior, por fecha de entrega). Automatiza el paso 1
+# del flujo de pagos de Alejo. AISLADO: no toca `semanas` ni `envios_busqueda`.
+#
+# Se puede re-correr o hacer backfill manualmente (workflow_dispatch) pasando
+# fecha_desde/fecha_hasta (DD/MM/YYYY = semana de ENTREGA a procesar).
+# LightData retiene el histórico, así que re-correr es seguro (upsert idempotente).
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'   # lunes 10:00 UTC = 07:00 AR (semana cerrada anterior)
+  workflow_dispatch:
+    inputs:
+      fecha_desde:
+        description: 'Semana de entrega - desde (DD/MM/YYYY). Vacío = semana cerrada anterior.'
+        required: false
+        default: ''
+      fecha_hasta:
+        description: 'Semana de entrega - hasta (DD/MM/YYYY).'
+        required: false
+        default: ''
+      dias_buffer:
+        description: 'Días a-planta antes del lunes para cubrir la semana (default 12).'
+        required: false
+        default: ''
+
+jobs:
+  pagos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar dependencias
+        run: cd automation && npm install
+
+      - name: Descargar entregados de la semana
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FECHA_DESDE: ${{ github.event.inputs.fecha_desde }}
+          FECHA_HASTA: ${{ github.event.inputs.fecha_hasta }}
+          DIAS_BUFFER: ${{ github.event.inputs.dias_buffer }}
+        run: cd automation && node sync_pagos_semana.js
+        timeout-minutes: 15
