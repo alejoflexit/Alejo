@@ -591,13 +591,11 @@ export default function Tiquetera() {
             }}>
               <div onClick={() => setAbierto(c.id)}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", cursor: "pointer", flexWrap: "wrap" }}>
-                <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : (eb.txt || c.estado)} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
-                  {c.estado === "abierto" && !dorm ? (<>
+                <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : undefined} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
+                  {c.estado === "abierto" && !dorm && (<>
                     <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
                     <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
-                  </>) : (
-                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(255,255,255,0.25)" }} />
-                  )}
+                  </>)}
                 </span>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.32)" }}>#{c.id}</span>
                 <span style={{ fontWeight: 600, fontSize: 14, minWidth: 120, display: "flex", alignItems: "center" }}>
@@ -628,10 +626,17 @@ export default function Tiquetera() {
         if (!c) return null;
         const tc = TIPO_COLORES[c.tipo] || TIPO_COLORES.otro;
         const eb = ESTADO_BADGES[c.estado] || ESTADO_BADGES.abierto;
+        const dorm = dormido(c);
         return (
           <div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.30)", backdropFilter: "blur(1.5px)", WebkitBackdropFilter: "blur(1.5px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
             <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, margin: "auto", background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
+                {c.estado === "abierto" && !dorm && (
+                  <span title="Sin contestar" style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
+                  </span>
+                )}
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
                 <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
