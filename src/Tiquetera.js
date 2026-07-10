@@ -559,31 +559,30 @@ export default function Tiquetera() {
         {visibles.map((c, i) => {
           const tc = TIPO_COLORES[c.tipo] || TIPO_COLORES.otro;
           const eb = ESTADO_BADGES[c.estado] || ESTADO_BADGES.abierto;
-          const exp = abierto === c.id;
           const desp = desperto(c);
           const dorm = dormido(c);
           return (
             <div key={c.id} style={{
               borderRadius: 10, overflow: "hidden", opacity: dorm || c.estado === "resuelto" ? 0.55 : 1,
               border: `1px solid ${desp ? "#FFB020" : c.fijado ? "#2ECFAA" : "rgba(255,255,255,0.1)"}`,
-              borderLeft: `4px solid ${edadColor(c)}`,
+              borderLeft: `3px solid ${edadColor(c)}`,
               background: i % 2 ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.02)",
               boxShadow: desp ? "0 0 12px rgba(255,176,32,0.35)" : "none",
               animation: desp ? "temblarTk 1.6s ease-in-out infinite" : "none",
             }}>
               <div onClick={() => setAbierto(c.id)}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", flexWrap: "wrap" }}>
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", cursor: "pointer", flexWrap: "wrap" }}>
                 <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : undefined} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
                   {c.estado === "abierto" && !dorm && (<>
                     <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
                     <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
                   </>)}
                 </span>
-                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
-                <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120, display: "flex", alignItems: "center" }}>
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.32)" }}>#{c.id}</span>
+                <span style={{ fontWeight: 600, fontSize: 14, minWidth: 120, display: "flex", alignItems: "center" }}>
                   {nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "—"}
                 </span>
-                <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
+                <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
                 <span style={{ flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 120 }}>{c.mensaje}</span>
                 {c.fijado && c.estado !== "resuelto" && <span style={{ fontSize: 11.5, color: "#2ECFAA", background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", padding: "2px 8px", borderRadius: 6 }}>📌 Fijado</span>}
@@ -596,7 +595,6 @@ export default function Tiquetera() {
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>
                   {edadTxt(c)}
                 </span>
-                <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, transform: exp ? "rotate(90deg)" : "none", transition: "transform .2s" }}>▶</span>
               </div>
 
 
@@ -615,7 +613,7 @@ export default function Tiquetera() {
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
-                <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
+                <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color }}>{eb.txt}</span>}
                 <button onClick={() => setAbierto(null)} title="Cerrar" style={{ marginLeft: "auto", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>\u00d7</button>
               </div>
