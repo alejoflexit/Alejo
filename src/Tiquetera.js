@@ -223,6 +223,11 @@ export default function Tiquetera() {
   const [gruposOpen, setGruposOpen] = useState(false);
   const [grupos, setGrupos] = useState([]);
   const [viendo, setViendo] = useState({}); // casoId -> [operadores que lo estan viendo]
+  const [bugPara, setBugPara] = useState(null);
+  const [bugTxt, setBugTxt] = useState("");
+  const [bugMsg, setBugMsg] = useState(null);
+  const [bugsOpen, setBugsOpen] = useState(false);
+  const [reportes, setReportes] = useState([]);
   const presCh = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -298,6 +303,27 @@ export default function Tiquetera() {
     } catch (e) { setError("No se pudo cambiar el grupo (¿entraste como Admin?): " + e.message); }
   }
 
+  async function reportarBug(c) {
+    const texto = bugTxt.trim();
+    if (!texto) return;
+    try {
+      await sb("reportes_bug", { method: "POST", body: JSON.stringify({ caso_id: c.id, chat_id: c.chat_id, autor_caso: c.autor, reporta: operador, texto }) });
+      setBugTxt(""); setBugPara(null); setError(""); setBugMsg(c.id);
+      setTimeout(() => setBugMsg(m => (m === c.id ? null : m)), 3500);
+    } catch (e) { setError("No se pudo guardar el reporte: " + e.message); }
+  }
+  const cargarReportes = useCallback(async () => {
+    try {
+      const rows = await sb("reportes_bug?order=estado.asc,created_at.desc&limit=200");
+      setReportes(rows || []);
+    } catch (e) { setError("No se pudieron cargar los reportes: " + e.message); }
+  }, []);
+  async function marcarRevisado(id) {
+    try {
+      await sb(`reportes_bug?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ estado: "revisado", revisado_por: operador, revisado_at: new Date().toISOString() }) });
+      await cargarReportes();
+    } catch (e) { setError("No se pudo marcar revisado: " + e.message); }
+  }
   async function patch(id, cambios) {
     try {
       await sb(`casos?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(cambios) });
@@ -424,6 +450,13 @@ export default function Tiquetera() {
             sessionStorage.setItem("tk_admin_ok", "1");
             cargarGrupos(); setGruposOpen(true);
           }} style={{ cursor: "pointer", fontSize: 15 }}>📱</span>}
+          {operador === "Admin" && <span title="Reportes de bugs del equipo" onClick={() => {
+            if (bugsOpen) { setBugsOpen(false); return; }
+            const ok = sessionStorage.getItem("tk_admin_ok") === "1" || window.prompt("PIN de administrador:") === (cfg.pin_admin || "4747");
+            if (!ok) { setError("PIN de administrador incorrecto."); return; }
+            sessionStorage.setItem("tk_admin_ok", "1");
+            cargarReportes(); setBugsOpen(true);
+          }} style={{ cursor: "pointer", fontSize: 15 }}>🐛</span>}
         </div>
       </div>
 
@@ -485,6 +518,31 @@ export default function Tiquetera() {
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button style={btn(false)} onClick={() => setGruposOpen(false)}>Cerrar</button>
             <button style={btn(false)} onClick={cargarGrupos}>↻ Actualizar</button>
+          </div>
+        </div>
+      )}
+
+      {bugsOpen && (
+        <div style={{ border: "1px solid rgba(229,115,115,0.35)", borderRadius: 12, padding: "14px 16px", marginBottom: "1rem", background: "rgba(229,115,115,0.06)", maxWidth: 720 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🐛 Reportes de bugs del equipo</div>
+          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>Lo que el equipo marcó como raro desde cada caso. Revisalo y marcá cuando lo hayas visto.</div>
+          {reportes.length === 0 && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.4)" }}>No hay reportes todavía.</div>}
+          <div style={{ display: "grid", gap: 8 }}>
+            {reportes.map(r => (
+              <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap", padding: "8px 10px", borderRadius: 8, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(255,255,255,0.08)", opacity: r.estado === "revisado" ? 0.55 : 1 }}>
+                <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: "#fff" }}>{r.texto}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{r.caso_id ? `caso #${r.caso_id}` : "general"} · {r.reporta || "\u2014"} · {fmtFecha(r.created_at)}</div>
+                </div>
+                {r.estado === "revisado"
+                  ? <span style={{ fontSize: 11, color: "#39d98a" }}>✓ revisado</span>
+                  : <button style={btn(false)} onClick={() => marcarRevisado(r.id)}>✓ Revisado</button>}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button style={btn(false)} onClick={() => setBugsOpen(false)}>Cerrar</button>
+            <button style={btn(false)} onClick={cargarReportes}>↻ Actualizar</button>
           </div>
         </div>
       )}
@@ -628,7 +686,18 @@ export default function Tiquetera() {
                         onClick={() => patch(c.id, { estado: "resuelto", resuelto_por: operador, resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false })}>
                         Resolver
                       </button>
+                      <button style={{ ...btn(false), borderColor: "rgba(229,115,115,0.45)", color: "#E57373" }} title="Reportar algo raro de este caso para revisarlo despues"
+                        onClick={() => { setBugPara(bugPara === c.id ? null : c.id); setBugTxt(""); }}>🐛 Reportar</button>
                     </div>
+                    {bugPara === c.id && (
+                      <div style={{ display: "flex", gap: 8, maxWidth: 640, marginTop: 10 }}>
+                        <input value={bugTxt} onChange={e => setBugTxt(e.target.value)} autoFocus placeholder="¿Qué viste raro en este caso?"
+                          onKeyDown={e => { if (e.key === "Enter") reportarBug(c); }}
+                          style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(229,115,115,0.45)", background: "rgba(229,115,115,0.06)", color: "#fff", fontSize: 13 }} />
+                        <button style={btn(true)} onClick={() => reportarBug(c)}>Guardar reporte</button>
+                      </div>
+                    )}
+                    {bugMsg === c.id && <div style={{ marginTop: 8, fontSize: 12.5, color: "#39d98a" }}>✓ ¡Gracias! Reporte guardado para revisar.</div>}
                   </>)}
                 </div>
               )}
