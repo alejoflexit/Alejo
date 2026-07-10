@@ -615,7 +615,7 @@ export default function Tiquetera() {
                 <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
                 <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color }}>{eb.txt}</span>}
-                <button onClick={() => setAbierto(null)} title="Cerrar" style={{ marginLeft: "auto", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>\u00d7</button>
+                <button onClick={() => setAbierto(null)} title="Cerrar" style={{ marginLeft: "auto", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
               </div>
               <div style={{ padding: "16px 18px" }}>
                   <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", maxWidth: 640, fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
@@ -670,12 +670,12 @@ export default function Tiquetera() {
                       <button style={btn(false)} onClick={() => { if (!notaTxt.trim()) return; patch(c.id, { notas: [...(c.notas || []), { quien: operador, texto: notaTxt.trim(), at: new Date().toISOString() }] }); setNotaTxt(""); }}>+ Nota</button>
                     </div>
                     <div style={{ display: "flex", gap: 8, maxWidth: 640, flexWrap: "wrap" }}>
-                      <button style={btn(true)} title="Copiar la respuesta al portapapeles" onClick={(e) => {
+                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15 }} title="Copiar la respuesta" onClick={(e) => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("No hay respuesta para copiar."); return; }
                         navigator.clipboard.writeText(txt);
-                        const b = e.currentTarget; const o = b.textContent; b.textContent = "✓ Copiado"; setTimeout(() => { b.textContent = o; }, 1500);
-                      }}>📋 Copiar</button>
+                        const b = e.currentTarget; const o = b.textContent; b.textContent = "✓"; setTimeout(() => { b.textContent = o; }, 1200);
+                      }}>📋</button>
                       <button style={btn(false)} onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
@@ -691,8 +691,8 @@ export default function Tiquetera() {
                       <button style={btn(false)} title="Fijar arriba" onClick={() => patch(c.id, { fijado: !c.fijado })}>📌</button>
                       <select defaultValue="" title="Posponer este caso (la alarma lo despierta)"
                         onChange={e => { const v = e.target.value; if (!v) return; let d; if (v === "manana") { d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); } else { d = new Date(Date.now() + Number(v) * 3600000); } patch(c.id, { snooze_hasta: d.toISOString() }); e.target.value = ""; }}
-                        style={{ ...btn(false), background: "#12123A", color: "rgba(255,255,255,0.7)" }}>
-                        <option value="" disabled>⏰ Posponer…</option>
+                        style={{ ...btn(false), padding: "8px 10px", background: "#12123A", color: "rgba(255,255,255,0.7)" }} title="Posponer (la alarma lo despierta)">
+                        <option value="" disabled>⏰</option>
                         <option value="0.5">30 min</option>
                         <option value="1">1 hora</option>
                         <option value="2">2 horas</option>
@@ -705,8 +705,8 @@ export default function Tiquetera() {
                         onClick={() => patch(c.id, { estado: "resuelto", resuelto_por: operador, resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false })}>
                         Resolver
                       </button>
-                      <button style={{ ...btn(false), borderColor: "rgba(229,115,115,0.45)", color: "#E57373" }} title="Reportar algo raro de este caso para revisarlo despues"
-                        onClick={() => { setBugPara(bugPara === c.id ? null : c.id); setBugTxt(""); }}>🐛 Reportar</button>
+                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, borderColor: "rgba(229,115,115,0.45)", color: "#E57373" }} title="Reportar algo raro de este caso"
+                        onClick={() => { setBugPara(bugPara === c.id ? null : c.id); setBugTxt(""); }}>🐛</button>
                     </div>
                     {bugPara === c.id && (
                       <div style={{ display: "flex", gap: 8, maxWidth: 640, marginTop: 10 }}>
