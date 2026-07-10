@@ -276,6 +276,8 @@ export default function Tiquetera() {
     return () => { document.title = "Métricas Flexit"; };
   }, [casos]);
 
+  useEffect(() => { setNotaTxt(""); setBugPara(null); setBugTxt(""); }, [abierto]);
+
   useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
   useEffect(() => { (async () => { try { const gs = await sb("agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo"); const m = {}; (gs || []).forEach(g => { if (g.chat_id) m[g.chat_id] = g.nombre_grupo; }); setMapaGrupos(m); } catch (e) {} })(); }, []);
 
@@ -352,7 +354,7 @@ export default function Tiquetera() {
         if (!blob.includes(q)) return false;
       }
       if (chip === "abiertos") return c.estado !== "resuelto";
-      if (chip === "sin_contestar") return c.estado === "abierto";
+      if (chip === "sin_contestar") return c.estado === "abierto" && !dormido(c);
       if (chip === "cadete") return c.estado === "esperando_cadete";
       if (chip === "deposito") return c.estado === "esperando_deposito";
       if (chip === "resueltos") return c.estado === "resuelto";
@@ -363,7 +365,7 @@ export default function Tiquetera() {
   useEffect(() => {
     if (abierto == null) return;
     const onKey = (e) => {
-      if (e.key === "Escape") { setAbierto(null); return; }
+      if (e.key === "Escape") { setError(""); setAbierto(null); return; }
       if (["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].indexOf(e.key) === -1) return;
       const tag = (e.target.tagName || "").toLowerCase();
       if (tag === "textarea" || tag === "input" || tag === "select") return;
@@ -628,7 +630,7 @@ export default function Tiquetera() {
         const eb = ESTADO_BADGES[c.estado] || ESTADO_BADGES.abierto;
         const dorm = dormido(c);
         return (
-          <div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.30)", backdropFilter: "blur(1.5px)", WebkitBackdropFilter: "blur(1.5px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
+          <div onClick={() => { setError(""); setAbierto(null); }} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.30)", backdropFilter: "blur(1.5px)", WebkitBackdropFilter: "blur(1.5px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
             <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, margin: "auto", background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
                 {c.estado === "abierto" && !dorm && (
@@ -641,9 +643,10 @@ export default function Tiquetera() {
                 <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
                 <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color }}>{eb.txt}</span>}
-                <button onClick={() => setAbierto(null)} title="Cerrar" style={{ marginLeft: "auto", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+                <button onClick={() => { setError(""); setAbierto(null); }} title="Cerrar" style={{ marginLeft: "auto", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
               </div>
               <div style={{ padding: "16px 18px" }}>
+                {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: 10 }}>{error}</div>}
                   <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", maxWidth: 640, fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
                     {c.mensaje}
@@ -711,6 +714,9 @@ export default function Tiquetera() {
                       }}>✓✓ Contestado</button>
                       <button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_cadete" ? "abierto" : "esperando_cadete" })}>
                         {c.estado === "esperando_cadete" ? "Volver a abierto" : "Esperando cadete"}
+                      </button>
+                      <button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_deposito" ? "abierto" : "esperando_deposito" })}>
+                        {c.estado === "esperando_deposito" ? "Volver a abierto" : "Esperando depósito"}
                       </button>
                       <button style={btn(false)} title="Fijar arriba" onClick={() => patch(c.id, { fijado: !c.fijado })}>📌</button>
                       <select defaultValue="" title="Posponer este caso (la alarma lo despierta)"
