@@ -609,7 +609,7 @@ export default function Tiquetera() {
         const tc = TIPO_COLORES[c.tipo] || TIPO_COLORES.otro;
         const eb = ESTADO_BADGES[c.estado] || ESTADO_BADGES.abierto;
         return (
-          <div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.55)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
+          <div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.30)", backdropFilter: "blur(1.5px)", WebkitBackdropFilter: "blur(1.5px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
             <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, margin: "auto", background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
@@ -701,7 +701,7 @@ export default function Tiquetera() {
                       </select>
                       {c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(255,176,32,0.5)", color: "#FFB020" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
                       <button style={{ ...btn(false), borderColor: "rgba(46,207,170,0.4)", color: "#2ECFAA" }}
-                        onClick={() => patch(c.id, { estado: "resuelto", resuelto_por: operador, resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false })}>
+                        onClick={() => { if (!window.confirm("¿Marcar este caso como RESUELTO?")) return; patch(c.id, { estado: "resuelto", resuelto_por: operador, resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false }); }}>
                         Resolver
                       </button>
                       <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, borderColor: "rgba(229,115,115,0.45)", color: "#E57373" }} title="Reportar algo raro de este caso"
