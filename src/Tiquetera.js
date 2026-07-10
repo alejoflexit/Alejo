@@ -222,6 +222,7 @@ export default function Tiquetera() {
   const [admDuplas, setAdmDuplas] = useState("");
   const [gruposOpen, setGruposOpen] = useState(false);
   const [grupos, setGrupos] = useState([]);
+  const [mapaGrupos, setMapaGrupos] = useState({});
   const [viendo, setViendo] = useState({}); // casoId -> [operadores que lo estan viendo]
   const [bugPara, setBugPara] = useState(null);
   const [bugTxt, setBugTxt] = useState("");
@@ -275,6 +276,7 @@ export default function Tiquetera() {
   }, [casos]);
 
   useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
+  useEffect(() => { (async () => { try { const gs = await sb("agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo"); const m = {}; (gs || []).forEach(g => { if (g.chat_id) m[g.chat_id] = g.nombre_grupo; }); setMapaGrupos(m); } catch (e) {} })(); }, []);
 
   async function guardarAdmin() {
     const nuevo = {
@@ -579,7 +581,7 @@ export default function Tiquetera() {
                 </span>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120, display: "flex", alignItems: "center" }}>
-                  {nombreCliente(c.grupo || c.autor) || c.chat_id || "—"}
+                  {nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "—"}
                 </span>
                 <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
