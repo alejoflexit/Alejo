@@ -1,0 +1,30 @@
+name: Pagos - Backfill one-shot (29/06-04/07)
+
+# Workflow temporal: se dispara solo al pushearlo (trigger sobre su propio
+# archivo) y corre el backfill de la semana 29/06-04/07 por fecha de entrega.
+# Se borra apenas termina. NO tocar pagos_semana.yml (ese es el de producción).
+
+on:
+  push:
+    paths:
+      - '.github/workflows/pagos_backfill_oneshot.yml'
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias
+        run: cd automation && npm install
+      - name: Backfill 29/06-04/07
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          FECHA_DESDE: '29/06/2026'
+          FECHA_HASTA: '04/07/2026'
+        run: cd automation && node sync_pagos_semana.js
+        timeout-minutes: 15
