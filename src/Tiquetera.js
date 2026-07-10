@@ -571,7 +571,7 @@ export default function Tiquetera() {
               boxShadow: desp ? "0 0 12px rgba(255,176,32,0.35)" : "none",
               animation: desp ? "temblarTk 1.6s ease-in-out infinite" : "none",
             }}>
-              <div onClick={() => setAbierto(exp ? null : c.id)}
+              <div onClick={() => setAbierto(c.id)}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", flexWrap: "wrap" }}>
                 <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : undefined} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
                   {c.estado === "abierto" && !dorm && (<>
@@ -599,8 +599,27 @@ export default function Tiquetera() {
                 <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, transform: exp ? "rotate(90deg)" : "none", transition: "transform .2s" }}>▶</span>
               </div>
 
-              {exp && (
-                <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "14px 16px" }}>
+
+            </div>
+          );
+        })}
+      </div>
+      {abierto != null && (() => {
+        const c = casos.find(x => x.id === abierto);
+        if (!c) return null;
+        const tc = TIPO_COLORES[c.tipo] || TIPO_COLORES.otro;
+        const eb = ESTADO_BADGES[c.estado] || ESTADO_BADGES.abierto;
+        return (
+          <div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.55)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
+                <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
+                <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
+                {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color }}>{eb.txt}</span>}
+                <button onClick={() => setAbierto(null)} title="Cerrar" style={{ marginLeft: "auto", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>\u00d7</button>
+              </div>
+              <div style={{ padding: "16px 18px" }}>
                   <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", maxWidth: 640, fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
                     {c.mensaje}
@@ -701,12 +720,11 @@ export default function Tiquetera() {
                     )}
                     {bugMsg === c.id && <div style={{ marginTop: 8, fontSize: 12.5, color: "#39d98a" }}>✓ ¡Gracias! Reporte guardado para revisar.</div>}
                   </>)}
-                </div>
-              )}
+              </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
