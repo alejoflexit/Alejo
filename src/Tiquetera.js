@@ -229,6 +229,7 @@ export default function Tiquetera() {
   const [bugMsg, setBugMsg] = useState(null);
   const [bugsOpen, setBugsOpen] = useState(false);
   const [reportes, setReportes] = useState([]);
+  const [copiado, setCopiado] = useState(null);
   const presCh = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -608,8 +609,8 @@ export default function Tiquetera() {
         const tc = TIPO_COLORES[c.tipo] || TIPO_COLORES.otro;
         const eb = ESTADO_BADGES[c.estado] || ESTADO_BADGES.abierto;
         return (
-          <div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.55)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
+          <div onClick={() => setAbierto(null)} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.55)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, margin: "auto", background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
@@ -670,12 +671,11 @@ export default function Tiquetera() {
                       <button style={btn(false)} onClick={() => { if (!notaTxt.trim()) return; patch(c.id, { notas: [...(c.notas || []), { quien: operador, texto: notaTxt.trim(), at: new Date().toISOString() }] }); setNotaTxt(""); }}>+ Nota</button>
                     </div>
                     <div style={{ display: "flex", gap: 8, maxWidth: 640, flexWrap: "wrap" }}>
-                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15 }} title="Copiar la respuesta" onClick={(e) => {
+                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, ...(copiado === c.id ? { borderColor: "rgba(57,217,138,0.6)", color: "#39d98a" } : {}) }} title="Copiar la respuesta" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("No hay respuesta para copiar."); return; }
-                        navigator.clipboard.writeText(txt);
-                        const b = e.currentTarget; const o = b.textContent; b.textContent = "✓"; setTimeout(() => { b.textContent = o; }, 1200);
-                      }}>📋</button>
+                        navigator.clipboard.writeText(txt); setCopiado(c.id); setTimeout(() => setCopiado(m => (m === c.id ? null : m)), 1200);
+                      }}>{copiado === c.id ? "✓" : "📋"}</button>
                       <button style={btn(false)} onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
@@ -684,14 +684,14 @@ export default function Tiquetera() {
                       <button style={btn(false)} title="Si copiaste el mensaje y lo pegaste vos en WhatsApp, marcá el caso como respondido con esto" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual", enviado_por: operador });
-                      }}>✓✓ Enviado</button>
+                      }}>✓✓ Contestado</button>
                       <button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_cadete" ? "abierto" : "esperando_cadete" })}>
                         {c.estado === "esperando_cadete" ? "Volver a abierto" : "Esperando cadete"}
                       </button>
                       <button style={btn(false)} title="Fijar arriba" onClick={() => patch(c.id, { fijado: !c.fijado })}>📌</button>
                       <select defaultValue="" title="Posponer este caso (la alarma lo despierta)"
                         onChange={e => { const v = e.target.value; if (!v) return; let d; if (v === "manana") { d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); } else { d = new Date(Date.now() + Number(v) * 3600000); } patch(c.id, { snooze_hasta: d.toISOString() }); e.target.value = ""; }}
-                        style={{ ...btn(false), padding: "8px 10px", background: "#12123A", color: "rgba(255,255,255,0.7)" }} title="Posponer (la alarma lo despierta)">
+                        style={{ ...btn(false), padding: "8px 10px", background: "#12123A", color: "rgba(255,255,255,0.7)", appearance: "none", WebkitAppearance: "none", MozAppearance: "none", textAlign: "center" }} title="Posponer (la alarma lo despierta)">
                         <option value="" disabled>⏰</option>
                         <option value="0.5">30 min</option>
                         <option value="1">1 hora</option>
