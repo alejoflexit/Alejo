@@ -337,12 +337,14 @@ export default function Tiquetera() {
   }
 
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const miDupla = cfg ? (cfg.duplas || []).find(d => d.split("/").map(x => x.trim().toLowerCase()).includes((operador || "").toLowerCase())) : null;
   const counts = {
     abiertos: casos.filter(c => c.estado !== "resuelto").length,
     sinContestar: casos.filter(c => c.estado === "abierto" && !dormido(c)).length,
     cadete: casos.filter(c => c.estado === "esperando_cadete").length,
     deposito: casos.filter(c => c.estado === "esperando_deposito").length,
     resueltos: casos.filter(c => c.estado === "resuelto" && c.resuelto_at && new Date(c.resuelto_at) >= hoy).length,
+    mios: casos.filter(c => c.estado !== "resuelto" && miDupla && c.asignado === miDupla).length,
   };
   const abiertosViejos = casos.filter(c => c.estado !== "resuelto" && edadMin(c) > 480).length;
 
@@ -358,6 +360,7 @@ export default function Tiquetera() {
       if (chip === "cadete") return c.estado === "esperando_cadete";
       if (chip === "deposito") return c.estado === "esperando_deposito";
       if (chip === "resueltos") return c.estado === "resuelto";
+      if (chip === "mios") return c.estado !== "resuelto" && c.asignado === miDupla;
       return true;
     })
     .sort((a, b) => ordenGrupo(a) - ordenGrupo(b) || (orden === "antiguos" ? new Date(a.created_at) - new Date(b.created_at) : new Date(b.created_at) - new Date(a.created_at)));
@@ -451,6 +454,7 @@ export default function Tiquetera() {
         <div onClick={() => setChip("cadete")} style={chipStyle(chip === "cadete")}>Esp. cadete <b>{counts.cadete}</b></div>
         <div onClick={() => setChip("deposito")} style={chipStyle(chip === "deposito")}>Esp. depósito <b>{counts.deposito}</b></div>
         <div onClick={() => setChip("resueltos")} style={chipStyle(chip === "resueltos")}>Resueltos hoy <b>{counts.resueltos}</b></div>
+        {miDupla && <div onClick={() => setChip("mios")} style={chipStyle(chip === "mios")}>Mis casos <b>{counts.mios}</b></div>}
         <select value={orden} onChange={e => setOrden(e.target.value)} title="Orden de la lista"
           style={{ padding: "6px 10px", borderRadius: 20, fontSize: 12.5, cursor: "pointer", border: "1px solid rgba(255,255,255,0.12)", background: "#12123A", color: "rgba(255,255,255,0.6)" }}>
           <option value="antiguos">⇅ Antiguos primero</option>
