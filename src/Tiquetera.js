@@ -513,15 +513,15 @@ export default function Tiquetera() {
             }}>
               <div onClick={() => setAbierto(exp ? null : c.id)}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", flexWrap: "wrap" }}>
+                <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : undefined} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
+                  {c.estado === "abierto" && !dorm && (<>
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
+                  </>)}
+                </span>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 14, minWidth: 120, display: "flex", alignItems: "center" }}>
                   {nombreCliente(c.grupo || c.autor) || c.chat_id || "—"}
-                  {c.estado === "abierto" && !dorm && (
-                    <span title="Caso nuevo, sin contestar" style={{ position: "relative", width: 10, height: 10, flexShrink: 0, margin: "0 auto" }}>
-                      <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
-                      <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
-                    </span>
-                  )}
                 </span>
                 <span style={{ padding: "2px 9px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
