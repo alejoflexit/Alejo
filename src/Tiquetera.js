@@ -360,6 +360,24 @@ export default function Tiquetera() {
     })
     .sort((a, b) => ordenGrupo(a) - ordenGrupo(b) || (orden === "antiguos" ? new Date(a.created_at) - new Date(b.created_at) : new Date(b.created_at) - new Date(a.created_at)));
 
+  useEffect(() => {
+    if (abierto == null) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") { setAbierto(null); return; }
+      if (["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].indexOf(e.key) === -1) return;
+      const tag = (e.target.tagName || "").toLowerCase();
+      if (tag === "textarea" || tag === "input" || tag === "select") return;
+      const idx = visibles.findIndex(x => x.id === abierto);
+      if (idx === -1) return;
+      e.preventDefault();
+      const delta = (e.key === "ArrowDown" || e.key === "ArrowRight") ? 1 : -1;
+      const nx = visibles[idx + delta];
+      if (nx) setAbierto(nx.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [abierto, visibles]);
+
   const chipStyle = (activo) => ({
     padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", border: "1px solid",
     borderColor: activo ? "#2ECFAA" : "rgba(255,255,255,0.12)",
@@ -573,11 +591,13 @@ export default function Tiquetera() {
             }}>
               <div onClick={() => setAbierto(c.id)}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", cursor: "pointer", flexWrap: "wrap" }}>
-                <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : undefined} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
-                  {c.estado === "abierto" && !dorm && (<>
+                <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : (eb.txt || c.estado)} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
+                  {c.estado === "abierto" && !dorm ? (<>
                     <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
                     <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
-                  </>)}
+                  </>) : (
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(255,255,255,0.25)" }} />
+                  )}
                 </span>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.32)" }}>#{c.id}</span>
                 <span style={{ fontWeight: 600, fontSize: 14, minWidth: 120, display: "flex", alignItems: "center" }}>
