@@ -650,7 +650,7 @@ function ColectasInner() {
                                 style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(46,207,170,0.5)'}`, color:'#2ECFAA', background:copiedChofer===chofer?'rgba(46,207,170,0.2)':'rgba(46,207,170,0.1)', fontSize:14, cursor:'pointer', transition:'all 0.2s' }}>
                                 {copiedChofer===chofer ? '✓' : '📱'}
                               </button>
-                              <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', left:'50%', transform:'translateX(-50%)', whiteSpace:'nowrap', background:'#1a2e3a', color:'#2ECFAA', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,207,170,0.3)', pointerEvents:'none' }}>
+                              <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', right:0, whiteSpace:'nowrap', background:'#1a2e3a', color:'#2ECFAA', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,207,170,0.3)', pointerEvents:'none', zIndex:400 }}>
                                 Copiar {chofer}
                               </div>
                             </div>
