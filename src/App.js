@@ -761,6 +761,11 @@ export default function App() {
                 <i className="ti ti-package" style={{ fontSize:18 }} />
                 Colectas
               </button>
+              <button onClick={() => { setSeccion("arribos"); setSidebarOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="arribos"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="arribos"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="arribos"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
+                <i className="ti ti-truck-delivery" style={{ fontSize:18 }} />
+                Arribos
+              </button>
               <button onClick={() => { setSeccion("tiquetera"); setSidebarOpen(false); }}
                 style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="tiquetera"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="tiquetera"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="tiquetera"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
                 <i className="ti ti-ticket" style={{ fontSize:18 }} />
@@ -792,8 +797,8 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "tiquetera" ? "Tiquetera Flexit" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "tiquetera" ? "Tiquetera Flexit" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
@@ -812,6 +817,8 @@ export default function App() {
 
 
       {seccion === "colectas" && <Colectas />}
+
+      {seccion === "arribos" && <Colectas soloArribos />}
 
       {seccion === "tiquetera" && <Tiquetera />}
 

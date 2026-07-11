@@ -183,8 +183,8 @@ function LoginColectas({ onOk }) {
   );
 }
 
-function ColectasInner() {
-  const [navView, setNavView] = useState('colectas'); // 'colectas' | 'pagos' | 'clientes' | 'choferes'
+function ColectasInner({ soloArribos = false }) {
+  const [navView, setNavView] = useState(soloArribos ? 'arribos' : 'colectas'); // 'colectas' | 'arribos' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
   const [fecha, setFecha] = useState(todayStr);
   const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
@@ -1167,19 +1167,17 @@ function ColectasInner() {
                 const hora = llego?.llego_at ? new Date(llego.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
                 return (
                   <button key={c.cadete} onClick={() => toggleArribo(c.cadete)}
-                    style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:12, cursor:'pointer', textAlign:'left', width:'100%',
+                    style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:12, cursor:'pointer', textAlign:'left', width:'100%',
                       border:`1px solid ${llego ? 'rgba(46,207,170,0.4)' : BRAND.border}`, background: llego ? 'rgba(46,207,170,0.08)' : BRAND.faint, transition:'all 0.15s' }}>
-                    <div style={{ width:30, height:30, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
-                      border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.25)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:16 }}>
+                    <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
+                      border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17 }}>
                       {llego ? '✓' : ''}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.85)' }}>{c.cadete}</div>
-                      <div style={{ fontSize:12, color:BRAND.muted }}>{c.confirmadas} colecta{c.confirmadas>1?'s':''} confirmada{c.confirmadas>1?'s':''}</div>
+                      <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.cadete}</div>
+                      <div style={{ fontSize:12, color:BRAND.muted }}>{c.confirmadas} colecta{c.confirmadas>1?'s':''}</div>
                     </div>
-                    {llego
-                      ? <span style={{ fontSize:13, fontWeight:600, color:'#2ECFAA', whiteSpace:'nowrap' }}>🕐 {hora}</span>
-                      : <span style={{ fontSize:12, color:BRAND.muted, whiteSpace:'nowrap' }}>Tocar para marcar</span>}
+                    {llego && <span style={{ fontSize:14, fontWeight:700, color:'#2ECFAA', whiteSpace:'nowrap', flexShrink:0 }}>{hora}</span>}
                   </button>
                 );
               })}
@@ -1231,6 +1229,19 @@ function ColectasInner() {
   };
 
   // ── MAIN RENDER ──
+  if (soloArribos) {
+    return (
+      <div>
+        {error && (
+          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            {error}
+            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
+          </div>
+        )}
+        {renderArribos()}
+      </div>
+    );
+  }
   return (
     <div style={{ display:'flex', gap:0, minHeight:'60vh', borderRadius:14, overflow:'hidden', border:`1px solid ${BRAND.border}` }}>
 
@@ -1294,8 +1305,8 @@ function ColectasInner() {
   );
 }
 
-export default function Colectas() {
+export default function Colectas({ soloArribos = false }) {
   const [usuario, setUsuario] = useState(() => (getSession() || {}).nombre || '');
   if (!usuario) return <LoginColectas onOk={setUsuario} />;
-  return <ColectasInner />;
+  return <ColectasInner soloArribos={soloArribos} />;
 }
