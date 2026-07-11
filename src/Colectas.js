@@ -204,7 +204,7 @@ function ColectasInner() {
   const [loadingPagos, setLoadingPagos] = useState(false);
 
   // Clientes ABM
-  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'' };
+  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false };
   const [gruposWA, setGruposWA] = useState([]); // grupos de WhatsApp que conoce el bot (agente_config)
   const [avisoBot, setAvisoBot] = useState('');
   const [clienteForm, setClienteForm] = useState(emptyForm);
@@ -421,6 +421,7 @@ function ColectasInner() {
       horario: clienteForm.horario || null,
       monto: clienteForm.monto !== '' ? Number(clienteForm.monto) : null,
       chat_id: clienteForm.chat_id || null,
+      opera_sabados: !!clienteForm.opera_sabados,
     };
     try {
       if (editId) {
@@ -440,7 +441,7 @@ function ColectasInner() {
 
   const editCliente = c => {
     setEditId(c.id);
-    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'' });
+    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -460,7 +461,7 @@ function ColectasInner() {
   };
 
   // Helpers
-  const seccionClientes = clientes.filter(c => c.seccion === tab && c.activo);
+  const seccionClientes = clientes.filter(c => c.activo && (tab === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === tab));
 
   function getGroups(list) {
     const groups = {}, order = [];
@@ -835,7 +836,7 @@ function ColectasInner() {
 
   // ── CLIENTES RENDER ──
   function renderClientes() {
-    const filtrados = clienteFiltroSec === 'todos' ? clientes : clientes.filter(c => c.seccion === clienteFiltroSec);
+    const filtrados = clienteFiltroSec === 'todos' ? clientes : clienteFiltroSec === 'SABADOS' ? clientes.filter(c => c.opera_sabados || c.seccion === 'SABADOS') : clientes.filter(c => c.seccion === clienteFiltroSec);
 
     const tabBtn = active => ({
       padding:'4px 12px', fontSize:12, fontWeight:600, borderRadius:20, cursor:'pointer',
@@ -879,6 +880,15 @@ function ColectasInner() {
                 </select>
               </div>
               <div>
+                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Sábados</div>
+                <label style={{ ...inpSt, width:'100%', display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+                  <input type="checkbox" checked={!!clienteForm.opera_sabados}
+                    onChange={e => setClienteForm(p => ({...p, opera_sabados: e.target.checked}))}
+                    style={{ width:16, height:16, accentColor:'#2ECFAA', cursor:'pointer' }} />
+                  <span style={{ fontSize:13, color: clienteForm.opera_sabados ? BRAND.white : BRAND.muted }}>Opera sábados</span>
+                </label>
+              </div>
+              <div>
                 <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Grupo WhatsApp (avisos del bot)</div>
                 <select value={clienteForm.chat_id} onChange={e => setClienteForm(p => ({...p,chat_id:e.target.value}))}
                   style={{ ...inpSt, width:'100%' }}>
@@ -918,6 +928,7 @@ function ColectasInner() {
                   </td>
                   <td style={{ padding:'8px 12px' }}>
                     <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(58,143,212,0.15)', color:'#3A8FD4' }}>{c.seccion}</span>
+                    {c.opera_sabados && <span style={{ marginLeft:4, fontSize:10, padding:'2px 6px', borderRadius:20, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>🗓️ Sáb</span>}
                   </td>
                   <td style={{ padding:'8px 12px', fontSize:12, color:BRAND.muted }}>{c.zona_barrio||'—'}</td>
                   <td style={{ padding:'8px 12px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>{fmtMonto(c.monto)}</td>
