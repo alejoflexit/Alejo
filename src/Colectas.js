@@ -196,6 +196,7 @@ function ColectasInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copiedChofer, setCopiedChofer] = useState(null);
+  const [hoverChofer, setHoverChofer] = useState(null); // resalta el grupo del cadete al pasar el mouse
 
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
@@ -623,10 +624,12 @@ function ColectasInner() {
               {order.map(chofer => {
                 const isWarn = chofer === 'A coordinar';
                 const rows = groups[chofer];
+                const isActive = hoverChofer === chofer || copiedChofer === chofer;
                 return (
                   <React.Fragment key={chofer}>
                     {/* Group header */}
-                    <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)' }}>
+                    <tr onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
+                      style={{ background: isActive ? 'rgba(46,207,170,0.12)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
                       <td colSpan={7} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${BRAND.teal}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
@@ -700,7 +703,9 @@ function ColectasInner() {
                       };
 
                       return (
-                        <tr key={c.id} style={{ background: rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1 }}>
+                        <tr key={c.id}
+                          onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
+                          style={{ background: isActive ? 'rgba(46,207,170,0.07)' : rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1, boxShadow: isActive ? 'inset 3px 0 0 #2ECFAA' : 'none', transition:'background 0.15s' }}>
                           {/* Estado */}
                           <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
                             <button
