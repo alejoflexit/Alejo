@@ -719,6 +719,12 @@ function ColectasInner() {
                           {/* Nombre */}
                           <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none' }}>
                             {c.nombre}
+                            {tab === 'SABADOS' && (
+                              <span title={c.seccion==='SABADOS' ? 'Sin zona de semana asignada — editá el cliente para ponerle CABA/SUR/NOROESTE' : `Zona: ${c.seccion}`}
+                                style={{ marginLeft:6, fontSize:10, padding:'1px 7px', borderRadius:10, background: c.seccion==='SABADOS' ? 'rgba(251,191,36,0.15)' : 'rgba(58,143,212,0.15)', color: c.seccion==='SABADOS' ? '#FBBF24' : '#3A8FD4' }}>
+                                {c.seccion==='SABADOS' ? 'sin zona' : c.seccion}
+                              </span>
+                            )}
                             {isDividida && (
                               <span style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>dividida</span>
                             )}
