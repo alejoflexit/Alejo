@@ -170,7 +170,9 @@ function calcularDia(rows, fecha, noEsDemora) {
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
       map[cadete].demorados++;
-      const dir = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
+      const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
+      const loc = String(row["Localidad"] || "").trim();
+      const dir = [dirBase, loc].filter(Boolean).join(", ");
       map[cadete].demoradosDetalle.push({ id: idInterno, dir, estado });
     }
     if (esML)        map[cadete].envios_ml++;

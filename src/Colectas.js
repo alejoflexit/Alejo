@@ -253,7 +253,7 @@ function ColectasInner() {
           const row = payload.new;
           if (!row || !row.cliente_id) return;
           if (pendingSavesRef.current.has(row.cliente_id)) return; // no pisar una edicion local en curso
-          setRegistros(prev => ({ ...prev, [row.cliente_id]: { ...prev[row.cliente_id], ...row } }));
+          setRegistros(prev => ({ ...prev, [row.cliente_id]: { ...prev[row.cliente_id], ...row, hora: row.hora_llegada ? String(row.hora_llegada).slice(0,5) : '' } }));
         })
         .subscribe(status => {
           // token vencido o corte de red: reconectar con token fresco
@@ -304,6 +304,7 @@ function ColectasInner() {
             choferes: r.choferes?.length ? r.choferes : ['A coordinar'],
             estado: r.estado || (r.confirmado ? 'verde' : null),
             confirmado_por: r.confirmado_por || [],
+            hora: r.hora_llegada ? String(r.hora_llegada).slice(0,5) : '',
           };
         });
         // Carry-forward: pre-cargar choferes del último día anterior para clientes sin registro hoy
@@ -333,12 +334,12 @@ function ColectasInner() {
           await sbFetch(`colectas_registros?id=eq.${existing.id}`, {
             method: 'PATCH',
             headers: { 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}) }),
+            body: JSON.stringify({ choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}), ...('hora' in data ? { hora_llegada: data.hora || null } : {}) }),
           });
         } else {
           const result = await sbFetch('colectas_registros', {
             method: 'POST',
-            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}) }),
+            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}), ...('hora' in data ? { hora_llegada: data.hora || null } : {}) }),
           });
           const row = Array.isArray(result) ? result[0] : result;
           if (row?.id) {
@@ -484,7 +485,9 @@ function ColectasInner() {
       msg += `• *${c.nombre}*`;
       if (c.zona_barrio) msg += ` (${c.zona_barrio})`;
       msg += `\n  📍 ${c.direccion}`;
-      if (c.hora_habitual) msg += ` · ${c.hora_habitual}hs`;
+      const horaDia = registros[c.id]?.hora;
+      if (horaDia) msg += ` · ${horaDia}hs`;
+      else if (c.hora_habitual) msg += ` · ${c.hora_habitual}hs`;
       const montoDia = registros[c.id]?.monto ?? c.monto;
       if (montoDia) msg += ` · $${Number(montoDia).toLocaleString('es-AR')}`;
       msg += '\n';
@@ -613,7 +616,7 @@ function ColectasInner() {
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580 }}>
             <thead>
               <tr style={{ background:'#252932' }}>
-                {['','Cliente','Chofer(es)','Dirección','Zona','$$$'].map((h,i) => (
+                {['','Cliente','Chofer(es)','Dirección','Zona','Hora','$$$'].map((h,i) => (
                   <th key={i} style={{ ...thSt, width:i===0?36:undefined }}>{h}</th>
                 ))}
               </tr>
@@ -626,7 +629,7 @@ function ColectasInner() {
                   <React.Fragment key={chofer}>
                     {/* Group header */}
                     <tr style={{ background: isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)' }}>
-                      <td colSpan={6} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${BRAND.teal}` }}>
+                      <td colSpan={7} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${BRAND.teal}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
                             <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#FBBF24':'rgba(255,255,255,0.85)' }}>
@@ -742,6 +745,13 @@ function ColectasInner() {
                                 {c.zona_barrio}
                               </span>
                             )}
+                          </td>
+                          {/* Hora de la colecta — se guarda por día en el registro */}
+                          <td style={{ padding:'8px 8px', whiteSpace:'nowrap' }}>
+                            <input type="time" value={reg.hora || ''}
+                              onChange={e => updateRegistro(c.id, { hora: e.target.value })}
+                              title={c.hora_habitual ? `Hora habitual del cliente: ${c.hora_habitual}hs` : 'Hora de la colecta'}
+                              style={{ background:'#14171c', border:`1px solid ${reg.hora ? '#2ECFAA' : BRAND.border}`, borderRadius:6, color: reg.hora ? '#fff' : BRAND.muted, fontSize:12, padding:'3px 6px', width:96, colorScheme:'dark' }} />
                           </td>
                           {/* Monto — click para editar el precio del día (default: monto del cliente) */}
                           <td style={{ padding:'8px 10px 8px 8px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>
