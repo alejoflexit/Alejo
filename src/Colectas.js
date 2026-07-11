@@ -706,7 +706,7 @@ function ColectasInner() {
                       return (
                         <tr key={c.id}
                           onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
-                          style={{ background: isActive ? 'rgba(46,207,170,0.07)' : rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1, boxShadow: isActive ? 'inset 3px 0 0 #2ECFAA' : 'none', transition:'background 0.15s' }}>
+                          style={{ background: isActive ? 'rgba(46,207,170,0.09)' : rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1, transition:'background 0.15s' }}>
                           {/* Estado */}
                           <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
                             <button
