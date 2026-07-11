@@ -197,6 +197,7 @@ function ColectasInner() {
   const [error, setError] = useState('');
   const [copiedChofer, setCopiedChofer] = useState(null);
   const [hoverChofer, setHoverChofer] = useState(null); // resalta el grupo del cadete al pasar el mouse
+  const [arribos, setArribos] = useState({}); // Arribos: cadete -> { id, llego_at }
 
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
@@ -413,6 +414,57 @@ function ColectasInner() {
       .catch(e => setError(e.message))
       .finally(() => setLoadingPagos(false));
   }, [navView, semanaFecha]);
+
+  // Arribos — cargar cuando navView === 'arribos'
+  useEffect(() => {
+    if (navView !== 'arribos' || !fecha) return;
+    sbFetch(`colectas_arribos?select=*&fecha=eq.${fecha}`)
+      .then(rows => {
+        const m = {};
+        rows.forEach(r => { m[r.cadete] = { id: r.id, llego_at: r.llego_at }; });
+        setArribos(m);
+      })
+      .catch(e => setError('Error cargando arribos: ' + e.message));
+  }, [navView, fecha]);
+
+  // Arribos — tiempo real
+  useEffect(() => {
+    if (navView !== 'arribos' || !fecha || !window.supabase) return;
+    let client = null, channel = null, cancelled = false, retryTimer = null;
+    const cleanup = () => {
+      try { if (channel && client) client.removeChannel(channel); } catch {}
+      try { if (client) client.realtime.disconnect(); } catch {}
+      channel = null; client = null;
+    };
+    const connect = async () => {
+      const token = await getToken().catch(() => null);
+      if (!token || cancelled) return;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      client.realtime.setAuth(token);
+      channel = client.channel('arribos-rt-' + fecha)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'colectas_arribos', filter: `fecha=eq.${fecha}` }, payload => {
+          if (payload.eventType === 'DELETE') {
+            const oldId = payload.old?.id;
+            setArribos(prev => {
+              const n = {}; let removed = false;
+              for (const [cad, v] of Object.entries(prev)) { if (oldId && v.id === oldId) { removed = true; continue; } n[cad] = v; }
+              return removed ? n : prev;
+            });
+          } else {
+            const r = payload.new;
+            if (r?.cadete) setArribos(prev => ({ ...prev, [r.cadete]: { id: r.id, llego_at: r.llego_at } }));
+          }
+        })
+        .subscribe(status => {
+          if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) {
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => { cleanup(); connect(); }, 5000);
+          }
+        });
+    };
+    connect();
+    return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
+  }, [navView, fecha]);
 
   // Save cliente
   const saveCliente = async () => {
@@ -1022,10 +1074,127 @@ function ColectasInner() {
     );
   }
 
+  // ── ARRIBOS ──
+  const toggleArribo = async (cadete) => {
+    const existing = arribos[cadete];
+    setSaveStatus('saving');
+    if (existing) {
+      setArribos(prev => { const n = { ...prev }; delete n[cadete]; return n; });
+      try {
+        await sbFetch(`colectas_arribos?fecha=eq.${fecha}&cadete=eq.${encodeURIComponent(cadete)}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+        setSaveStatus('saved');
+      } catch (e) { setSaveStatus('error'); setArribos(prev => ({ ...prev, [cadete]: existing })); }
+    } else {
+      setArribos(prev => ({ ...prev, [cadete]: { llego_at: new Date().toISOString() } }));
+      try {
+        const res = await sbFetch('colectas_arribos', { method: 'POST', body: JSON.stringify({ fecha, cadete }) });
+        const row = Array.isArray(res) ? res[0] : res;
+        if (row?.id) setArribos(prev => ({ ...prev, [cadete]: { id: row.id, llego_at: row.llego_at } }));
+        setSaveStatus('saved');
+      } catch (e) { setSaveStatus('error'); setArribos(prev => { const n = { ...prev }; delete n[cadete]; return n; }); }
+    }
+  };
+
+  function renderArribos() {
+    if (loading) return <div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>Cargando...</div>;
+    // Cadetes con al menos una colecta CONFIRMADA hoy
+    const map = {};
+    Object.values(registros).forEach(r => {
+      (r.choferes || []).forEach(ch => {
+        if (!ch || ch === 'A coordinar') return;
+        const confirmedForCh = r.estado === 'verde' || (r.confirmado_por || []).includes(ch);
+        if (!confirmedForCh) return;
+        if (!map[ch]) map[ch] = { cadete: ch, confirmadas: 0 };
+        map[ch].confirmadas++;
+      });
+    });
+    let lista = Object.values(map);
+    const total = lista.length;
+    const llegados = lista.filter(c => arribos[c.cadete]).length;
+    const pct = total ? Math.round(llegados / total * 100) : 0;
+    lista.sort((a, b) => {
+      const la = !!arribos[a.cadete], lb = !!arribos[b.cadete];
+      if (la !== lb) return la ? 1 : -1;
+      return a.cadete.localeCompare(b.cadete, 'es');
+    });
+    const d = new Date(fecha + 'T12:00:00');
+    const fechaFmt = d.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+    const faltan = lista.filter(c => !arribos[c.cadete]);
+
+    return (
+      <div style={{ maxWidth:560 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
+            <span>📅</span>
+            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSt, padding:'5px 10px' }} />
+          </div>
+          <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
+            {saveStatus==='saving' && '💾 Guardando...'}
+            {saveStatus==='saved'  && '✓ Guardado'}
+            {saveStatus==='error'  && '✗ Error al guardar'}
+          </div>
+        </div>
+
+        {total === 0 ? (
+          <div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>🚚</div>
+            <div>No hay cadetes con colectas confirmadas para {fechaFmt}.</div>
+            <div style={{ fontSize:12, marginTop:6 }}>Confirmá colectas (círculo verde) en Colectas y aparecen acá para marcar su llegada.</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'16px 18px', marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+                <span style={{ fontSize:14, fontWeight:600, color:BRAND.white }}>{llegados} de {total} cadetes llegaron</span>
+                <span style={{ fontSize:24, fontWeight:800, color: pct===100 ? '#2ECFAA' : '#FBBF24' }}>{pct}%</span>
+              </div>
+              <div style={{ height:12, borderRadius:20, background:'rgba(255,255,255,0.08)', overflow:'hidden' }}>
+                <div style={{ width:`${pct}%`, height:'100%', borderRadius:20, background: pct===100 ? '#2ECFAA' : 'linear-gradient(90deg,#FBBF24,#2ECFAA)', transition:'width 0.3s' }} />
+              </div>
+              {faltan.length > 0 && (
+                <div style={{ fontSize:12, color:BRAND.muted, marginTop:10 }}>
+                  <b style={{ color:'#FBBF24' }}>Faltan {faltan.length}:</b> {faltan.map(c => c.cadete).join(', ')}
+                </div>
+              )}
+              {faltan.length === 0 && (
+                <div style={{ fontSize:12, color:'#2ECFAA', marginTop:10, fontWeight:600 }}>✓ Llegaron todos 🎉</div>
+              )}
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {lista.map(c => {
+                const llego = arribos[c.cadete];
+                const hora = llego?.llego_at ? new Date(llego.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
+                return (
+                  <button key={c.cadete} onClick={() => toggleArribo(c.cadete)}
+                    style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:12, cursor:'pointer', textAlign:'left', width:'100%',
+                      border:`1px solid ${llego ? 'rgba(46,207,170,0.4)' : BRAND.border}`, background: llego ? 'rgba(46,207,170,0.08)' : BRAND.faint, transition:'all 0.15s' }}>
+                    <div style={{ width:30, height:30, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
+                      border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.25)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:16 }}>
+                      {llego ? '✓' : ''}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.85)' }}>{c.cadete}</div>
+                      <div style={{ fontSize:12, color:BRAND.muted }}>{c.confirmadas} colecta{c.confirmadas>1?'s':''} confirmada{c.confirmadas>1?'s':''}</div>
+                    </div>
+                    {llego
+                      ? <span style={{ fontSize:13, fontWeight:600, color:'#2ECFAA', whiteSpace:'nowrap' }}>🕐 {hora}</span>
+                      : <span style={{ fontSize:12, color:BRAND.muted, whiteSpace:'nowrap' }}>Tocar para marcar</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   // ── SIDEBAR CONFIG ──
   const sidebarItems = [
     { section: 'OPERACIÓN', items: [
       { id: 'colectas', icon: '📦', label: 'Colectas' },
+      { id: 'arribos',  icon: '🚚', label: 'Arribos' },
       { id: 'pagos',    icon: '💰', label: 'Pagos' },
     ]},
     { section: 'CONFIG', items: [
@@ -1055,6 +1224,7 @@ function ColectasInner() {
 
   const viewTitles = {
     colectas: 'Colectas',
+    arribos: 'Arribos de cadetes',
     pagos: 'Pagos a cadetes',
     clientes: 'Clientes',
     choferes: 'Choferes',
@@ -1115,6 +1285,7 @@ function ColectasInner() {
         )}
 
         {navView === 'colectas' && <>{zoneTabs}{renderZona()}</>}
+        {navView === 'arribos'  && renderArribos()}
         {navView === 'pagos'    && renderPagos()}
         {navView === 'clientes' && renderClientes()}
         {navView === 'choferes' && renderChoferes()}
