@@ -421,7 +421,7 @@ function ColectasInner({ soloArribos = false }) {
     sbFetch(`colectas_arribos?select=*&fecha=eq.${fecha}`)
       .then(rows => {
         const m = {};
-        rows.forEach(r => { m[r.cadete] = { id: r.id, llego_at: r.llego_at }; });
+        rows.forEach(r => { m[r.cadete] = { id: r.id, llego_at: r.llego_at, eta: r.eta }; });
         setArribos(m);
       })
       .catch(e => setError('Error cargando arribos: ' + e.message));
@@ -452,7 +452,7 @@ function ColectasInner({ soloArribos = false }) {
             });
           } else {
             const r = payload.new;
-            if (r?.cadete) setArribos(prev => ({ ...prev, [r.cadete]: { id: r.id, llego_at: r.llego_at } }));
+            if (r?.cadete) setArribos(prev => ({ ...prev, [r.cadete]: { id: r.id, llego_at: r.llego_at, eta: r.eta } }));
           }
         })
         .subscribe(status => {
@@ -1075,24 +1075,30 @@ function ColectasInner({ soloArribos = false }) {
   }
 
   // ── ARRIBOS ──
-  const toggleArribo = async (cadete) => {
-    const existing = arribos[cadete];
+  // Upsert de un campo del arribo (llego_at o eta). PATCH si ya hay fila, POST si no.
+  const upsertArribo = async (cadete, patch) => {
     setSaveStatus('saving');
-    if (existing) {
-      setArribos(prev => { const n = { ...prev }; delete n[cadete]; return n; });
-      try {
-        await sbFetch(`colectas_arribos?fecha=eq.${fecha}&cadete=eq.${encodeURIComponent(cadete)}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
-        setSaveStatus('saved');
-      } catch (e) { setSaveStatus('error'); setArribos(prev => ({ ...prev, [cadete]: existing })); }
-    } else {
-      setArribos(prev => ({ ...prev, [cadete]: { llego_at: new Date().toISOString() } }));
-      try {
-        const res = await sbFetch('colectas_arribos', { method: 'POST', body: JSON.stringify({ fecha, cadete }) });
+    const existing = arribos[cadete];
+    setArribos(prev => ({ ...prev, [cadete]: { ...(prev[cadete] || {}), ...patch } }));
+    try {
+      if (existing?.id) {
+        await sbFetch(`colectas_arribos?id=eq.${existing.id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify(patch) });
+      } else {
+        const res = await sbFetch('colectas_arribos', { method: 'POST', body: JSON.stringify({ fecha, cadete, ...patch }) });
         const row = Array.isArray(res) ? res[0] : res;
-        if (row?.id) setArribos(prev => ({ ...prev, [cadete]: { id: row.id, llego_at: row.llego_at } }));
-        setSaveStatus('saved');
-      } catch (e) { setSaveStatus('error'); setArribos(prev => { const n = { ...prev }; delete n[cadete]; return n; }); }
-    }
+        if (row?.id) setArribos(prev => ({ ...prev, [cadete]: { ...(prev[cadete] || {}), id: row.id } }));
+      }
+      setSaveStatus('saved');
+    } catch (e) { setSaveStatus('error'); }
+  };
+
+  const toggleLlego = (cadete) => {
+    const llego = arribos[cadete]?.llego_at;
+    upsertArribo(cadete, { llego_at: llego ? null : new Date().toISOString() });
+  };
+
+  const setEta = (cadete, valor) => {
+    upsertArribo(cadete, { eta: valor || null });
   };
 
   function renderArribos() {
@@ -1110,16 +1116,16 @@ function ColectasInner({ soloArribos = false }) {
     });
     let lista = Object.values(map);
     const total = lista.length;
-    const llegados = lista.filter(c => arribos[c.cadete]).length;
+    const llegados = lista.filter(c => arribos[c.cadete]?.llego_at).length;
     const pct = total ? Math.round(llegados / total * 100) : 0;
     lista.sort((a, b) => {
-      const la = !!arribos[a.cadete], lb = !!arribos[b.cadete];
+      const la = !!arribos[a.cadete]?.llego_at, lb = !!arribos[b.cadete]?.llego_at;
       if (la !== lb) return la ? 1 : -1;
       return a.cadete.localeCompare(b.cadete, 'es');
     });
     const d = new Date(fecha + 'T12:00:00');
     const fechaFmt = d.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
-    const faltan = lista.filter(c => !arribos[c.cadete]);
+    const faltan = lista.filter(c => !arribos[c.cadete]?.llego_at);
 
     return (
       <div style={{ maxWidth:560 }}>
@@ -1163,22 +1169,33 @@ function ColectasInner({ soloArribos = false }) {
 
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {lista.map(c => {
-                const llego = arribos[c.cadete];
-                const hora = llego?.llego_at ? new Date(llego.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
+                const ar = arribos[c.cadete] || {};
+                const llego = !!ar.llego_at;
+                const hora = ar.llego_at ? new Date(ar.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
+                const eta = ar.eta ? String(ar.eta).slice(0,5) : '';
                 return (
-                  <button key={c.cadete} onClick={() => toggleArribo(c.cadete)}
-                    style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:12, cursor:'pointer', textAlign:'left', width:'100%',
+                  <div key={c.cadete}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:12, width:'100%',
                       border:`1px solid ${llego ? 'rgba(46,207,170,0.4)' : BRAND.border}`, background: llego ? 'rgba(46,207,170,0.08)' : BRAND.faint, transition:'all 0.15s' }}>
-                    <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
-                      border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17 }}>
-                      {llego ? '✓' : ''}
+                    <div onClick={() => toggleLlego(c.cadete)} style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0, cursor:'pointer' }}>
+                      <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
+                        border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17 }}>
+                        {llego ? '✓' : ''}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.cadete}</div>
+                        <div style={{ fontSize:12, color: llego ? '#2ECFAA' : BRAND.muted }}>
+                          {llego ? `llegó ${hora}` : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.cadete}</div>
-                      <div style={{ fontSize:12, color:BRAND.muted }}>{c.confirmadas} colecta{c.confirmadas>1?'s':''}</div>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, flexShrink:0 }}>
+                      <span style={{ fontSize:9, color:BRAND.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>🕐 Llega</span>
+                      <input type="time" value={eta} onChange={e => setEta(c.cadete, e.target.value)}
+                        title="Hora estimada de llegada"
+                        style={{ background:'#14171c', border:`1px solid ${eta ? '#3A8FD4' : BRAND.border}`, borderRadius:8, color: eta ? '#fff' : BRAND.muted, fontSize:13, padding:'4px 6px', width:94, colorScheme:'dark' }} />
                     </div>
-                    {llego && <span style={{ fontSize:14, fontWeight:700, color:'#2ECFAA', whiteSpace:'nowrap', flexShrink:0 }}>{hora}</span>}
-                  </button>
+                  </div>
                 );
               })}
             </div>
