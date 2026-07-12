@@ -1199,7 +1199,7 @@ function ColectasInner({ soloArribos = false }) {
                         ) : (
                           <div style={{ width:34, height:34, borderRadius:'50%', border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>🕐</div>
                         )}
-                        <input type="time" value={eta} onChange={e => setEta(c.cadete, e.target.value)}
+                        <input type="time" value={eta || '15:00'} onChange={e => setEta(c.cadete, e.target.value)}
                           title="Hora estimada de llegada"
                           style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, margin:0, padding:0, border:'none', background:'transparent', cursor:'pointer', colorScheme:'dark' }} />
                       </div>
