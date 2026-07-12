@@ -775,7 +775,7 @@ export default function App() {
               <button onClick={() => { setSeccion("pagos"); setSidebarOpen(false); }}
                 style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="pagos"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="pagos"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="pagos"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
                 <i className="ti ti-cash" style={{ fontSize:18 }} />
-                Pagos
+                Liquidaciones
               </button>
               <a href="/choferes.html"
                 style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.75)", fontSize:14, fontWeight:500, cursor:"pointer", textDecoration:"none" }}>
@@ -803,7 +803,7 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pagos" ? "Pagos Flexit" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pagos" ? "Liquidaciones" : "Métricas Flexit"}</div>
           <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>

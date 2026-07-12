@@ -298,7 +298,7 @@ function LoginPagos({ onOk }) {
     <div style={{ minHeight: '62vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 400, maxWidth: '94vw', padding: '36px 32px', borderRadius: 22, border: '1px solid rgba(46,207,170,0.22)', background: 'linear-gradient(165deg, rgba(46,207,170,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))', textAlign: 'center' }}>
         <div style={{ fontSize: 30, marginBottom: 10 }}>💰</div>
-        <div style={{ fontSize: 20, fontWeight: 800 }}>Pagos Flexit</div>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>Liquidaciones</div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4, marginBottom: 22 }}>Ingresá con tu usuario del equipo</div>
         <form onSubmit={async e => {
           e.preventDefault(); if (busy) return; setBusy(true); setErr('');
@@ -329,7 +329,7 @@ function exportarExcel({ filas, aparte, sinResolver, semanaLunes, subtotales }) 
   ]);
 
   const aoa = [
-    [`Pagos Flexit — Semana ${label}`],
+    [`Liquidaciones — Semana ${label}`],
     [],
     header,
     ...rows,
@@ -360,7 +360,7 @@ function exportarExcel({ filas, aparte, sinResolver, semanaLunes, subtotales }) 
   const wb = window.XLSX.utils.book_new();
   const ws = window.XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
-  window.XLSX.utils.book_append_sheet(wb, ws, 'Pagos');
+  window.XLSX.utils.book_append_sheet(wb, ws, 'Liquidaciones');
   window.XLSX.writeFile(wb, `pagos_semana_${semanaLunes}.xlsx`);
 }
 
