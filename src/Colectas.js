@@ -1189,24 +1189,23 @@ function ColectasInner({ soloArribos = false }) {
                         </div>
                       </div>
                     </div>
-                    <div style={{ position:'relative', flexShrink:0 }}>
-                      {/* input nativo oculto: el reloj/chip dispara su selector */}
-                      <input type="time" value={eta} onChange={e => setEta(c.cadete, e.target.value)} tabIndex={-1}
-                        style={{ position:'absolute', right:0, bottom:0, width:1, height:1, opacity:0, pointerEvents:'none', colorScheme:'dark' }} />
-                      {eta ? (
-                        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                          <button onClick={e => { const i = e.currentTarget.parentElement.parentElement.querySelector('input'); if (i) { if (i.showPicker) { try { i.showPicker(); } catch(_) { i.focus(); } } else i.focus(); } }}
-                            title="Editar hora de llegada"
-                            style={{ display:'flex', alignItems:'center', gap:5, height:30, padding:'0 10px', borderRadius:16, border:'1px solid rgba(58,143,212,0.5)', background:'rgba(58,143,212,0.12)', color:'#8EC5FF', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                      {/* el input nativo va transparente ENCIMA del reloj: el tap abre el selector de iOS */}
+                      <div style={{ position:'relative', display:'inline-flex' }}>
+                        {eta ? (
+                          <div style={{ display:'flex', alignItems:'center', gap:5, height:30, padding:'0 10px', borderRadius:16, border:'1px solid rgba(58,143,212,0.5)', background:'rgba(58,143,212,0.12)', color:'#8EC5FF', fontSize:13, fontWeight:600 }}>
                             <span style={{ fontSize:12 }}>🕐</span>{eta}
-                          </button>
-                          <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
-                            style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-                        </div>
-                      ) : (
-                        <button onClick={e => { const i = e.currentTarget.parentElement.querySelector('input'); if (i) { if (i.showPicker) { try { i.showPicker(); } catch(_) { i.focus(); } } else i.focus(); } }}
-                          title="Agregar hora estimada de llegada"
-                          style={{ width:34, height:34, borderRadius:'50%', border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>🕐</button>
+                          </div>
+                        ) : (
+                          <div style={{ width:34, height:34, borderRadius:'50%', border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>🕐</div>
+                        )}
+                        <input type="time" value={eta} onChange={e => setEta(c.cadete, e.target.value)}
+                          title="Hora estimada de llegada"
+                          style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, margin:0, padding:0, border:'none', background:'transparent', cursor:'pointer', colorScheme:'dark' }} />
+                      </div>
+                      {eta && (
+                        <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
+                          style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
                       )}
                     </div>
                   </div>
