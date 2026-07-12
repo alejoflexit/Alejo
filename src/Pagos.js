@@ -935,8 +935,20 @@ function PagosInner({ session }) {
   );
 }
 
+function SoloAdmin() {
+  return (
+    <div style={{ maxWidth: 440, margin: '80px auto', textAlign: 'center', color: 'rgba(255,255,255,0.85)' }}>
+      <div style={{ fontSize: 42, marginBottom: 12 }}>🔒</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Sección solo para administradores</div>
+      <div style={{ fontSize: 14, marginBottom: 18, color: 'rgba(255,255,255,0.6)' }}>Las liquidaciones son confidenciales. Ingresá con la cuenta de administrador.</div>
+      <button onClick={() => { logout(); window.location.reload(); }} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: '#fff', cursor: 'pointer' }}>Cambiar de cuenta</button>
+    </div>
+  );
+}
+
 export default function Pagos() {
   const [session, setSession] = useState(() => getSession());
   if (!session) return <LoginPagos onOk={setSession} />;
+  if (session.email !== ADMIN_EMAIL) return <SoloAdmin />;
   return <PagosInner session={session} />;
 }

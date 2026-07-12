@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from "react"; // buil
 import Colectas from "./Colectas";
 import Tiquetera from "./Tiquetera";
 import Pagos from "./Pagos";
+import { getSession } from "./auth";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -772,11 +773,11 @@ export default function App() {
                 <i className="ti ti-ticket" style={{ fontSize:18 }} />
                 Tiquetera
               </button>
-              <button onClick={() => { setSeccion("pagos"); setSidebarOpen(false); }}
+              {getSession()?.email === "admin@flexit.app" && <button onClick={() => { setSeccion("pagos"); setSidebarOpen(false); }}
                 style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="pagos"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="pagos"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="pagos"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
                 <i className="ti ti-cash" style={{ fontSize:18 }} />
                 Liquidaciones
-              </button>
+              </button>}
               <a href="/choferes.html"
                 style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.75)", fontSize:14, fontWeight:500, cursor:"pointer", textDecoration:"none" }}>
                 <i className="ti ti-user-plus" style={{ fontSize:18 }} />
