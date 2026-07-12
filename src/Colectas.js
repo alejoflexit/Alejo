@@ -1189,11 +1189,25 @@ function ColectasInner({ soloArribos = false }) {
                         </div>
                       </div>
                     </div>
-                    <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, flexShrink:0 }}>
-                      <span style={{ fontSize:9, color:BRAND.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>🕐 Llega</span>
-                      <input type="time" value={eta} onChange={e => setEta(c.cadete, e.target.value)}
-                        title="Hora estimada de llegada"
-                        style={{ background:'#14171c', border:`1px solid ${eta ? '#3A8FD4' : BRAND.border}`, borderRadius:8, color: eta ? '#fff' : BRAND.muted, fontSize:13, padding:'4px 6px', width:94, colorScheme:'dark' }} />
+                    <div style={{ position:'relative', flexShrink:0 }}>
+                      {/* input nativo oculto: el reloj/chip dispara su selector */}
+                      <input type="time" value={eta} onChange={e => setEta(c.cadete, e.target.value)} tabIndex={-1}
+                        style={{ position:'absolute', right:0, bottom:0, width:1, height:1, opacity:0, pointerEvents:'none', colorScheme:'dark' }} />
+                      {eta ? (
+                        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                          <button onClick={e => { const i = e.currentTarget.parentElement.parentElement.querySelector('input'); if (i) { if (i.showPicker) { try { i.showPicker(); } catch(_) { i.focus(); } } else i.focus(); } }}
+                            title="Editar hora de llegada"
+                            style={{ display:'flex', alignItems:'center', gap:5, height:30, padding:'0 10px', borderRadius:16, border:'1px solid rgba(58,143,212,0.5)', background:'rgba(58,143,212,0.12)', color:'#8EC5FF', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                            <span style={{ fontSize:12 }}>🕐</span>{eta}
+                          </button>
+                          <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
+                            style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={e => { const i = e.currentTarget.parentElement.querySelector('input'); if (i) { if (i.showPicker) { try { i.showPicker(); } catch(_) { i.focus(); } } else i.focus(); } }}
+                          title="Agregar hora estimada de llegada"
+                          style={{ width:34, height:34, borderRadius:'50%', border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>🕐</button>
+                      )}
                     </div>
                   </div>
                 );
