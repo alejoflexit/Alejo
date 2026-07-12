@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from "react"; // buil
 import Colectas from "./Colectas";
 import Tiquetera from "./Tiquetera";
 import Pagos from "./Pagos";
+import Home from "./Home";
 import { getSession } from "./auth";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
@@ -518,7 +519,7 @@ export default function App() {
     return () => window.removeEventListener('resize', handler);
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [seccion, setSeccion] = useState("metricas");
+  const [seccion, setSeccion] = useState("home");
   const fileRef = useRef();
 
   // Cargar desde Supabase al inicio
@@ -753,6 +754,11 @@ export default function App() {
             {/* Nav items */}
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <div style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6, paddingLeft:10 }}>Navegación</div>
+              <button onClick={() => { setSeccion("home"); setSidebarOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="home"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="home"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="home"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
+                <i className="ti ti-home" style={{ fontSize:18 }} />
+                Inicio
+              </button>
               <button onClick={() => { setSeccion("metricas"); setSidebarOpen(false); }}
                 style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="metricas"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="metricas"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="metricas"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
                 <i className="ti ti-chart-bar" style={{ fontSize:18 }} />
@@ -794,7 +800,7 @@ export default function App() {
       )}
 
       {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
+      {seccion !== "home" && (<div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
         <button onClick={() => setSidebarOpen(true)}
           style={{ width:36, height:36, borderRadius:9, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -822,6 +828,10 @@ export default function App() {
       </div>
 
 
+
+      )}
+
+      {seccion === "home" && <Home onNav={setSeccion} onMenu={() => setSidebarOpen(true)} isMobile={isMobile} logo={FLEXIT_LOGO} />}
 
       {seccion === "colectas" && <Colectas />}
 
