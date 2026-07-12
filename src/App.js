@@ -747,18 +747,13 @@ export default function App() {
           <div onClick={e => e.stopPropagation()}
             style={{ position:"absolute", top:0, left:0, bottom:0, width:240, background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem" }}>
             {/* Sidebar header */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:"2rem", paddingBottom:"1rem", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
+            <div onClick={() => { setSeccion("home"); setSidebarOpen(false); }} title="Ir al inicio" style={{ display:"flex", alignItems:"center", gap:10, marginBottom:"2rem", paddingBottom:"1rem", borderBottom:"1px solid rgba(255,255,255,0.08)", cursor:"pointer" }}>
               <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:32, height:32, objectFit:"cover", borderRadius:8 }} />
               <span style={{ fontSize:15, fontWeight:700, color:"#fff" }}>Flexit</span>
             </div>
             {/* Nav items */}
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               <div style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6, paddingLeft:10 }}>Navegación</div>
-              <button onClick={() => { setSeccion("home"); setSidebarOpen(false); }}
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="home"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="home"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="home"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
-                <i className="ti ti-home" style={{ fontSize:18 }} />
-                Inicio
-              </button>
               <button onClick={() => { setSeccion("metricas"); setSidebarOpen(false); }}
                 style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="metricas"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="metricas"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="metricas"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
                 <i className="ti ti-chart-bar" style={{ fontSize:18 }} />
