@@ -705,7 +705,7 @@ export default function App() {
   const card = { background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:"1.25rem" };
   const btn  = (active) => ({ padding:"5px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${active?"#2ECFAA":BRAND.border}`, background:active?"rgba(46,207,170,0.15)":BRAND.faint, color:active?"#2ECFAA":BRAND.muted });
 
-  if (loadingDB) return (
+  if (loadingDB && seccion !== "home") return (
     <div style={{ background:BRAND.navy, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", color:BRAND.teal, fontSize:16, fontFamily:"sans-serif" }}>
       <div style={{ textAlign:"center" }}>
         <div style={{ fontSize:40, marginBottom:12 }}>🚚</div>
