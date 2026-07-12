@@ -447,7 +447,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
             {filtrados.map(t => {
               const isDirty = !!drafts[t.id];
               return (
-                <tr key={t.id} style={{ borderTop: `1px solid ${BRAND.border}` }}>
+                <tr key={t.id} style={{ borderTop: `1px solid ${BRAND.border}`, background: isDirty ? 'rgba(255,176,32,0.10)' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', fontWeight: 600 }}>{t.nombre_lightdata || <span style={{ color: BRAND.amber }}>{t.nombre} (sin nombre_lightdata)</span>}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <input type="checkbox" checked={!!draftVal(t, 'activo')} onChange={e => setDraft(t.id, 'activo', e.target.checked)} />
@@ -462,7 +462,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                     </select>
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    <input style={{ ...inp, width: 90 }} type="number" value={draftVal(t, 'precio_fijo') ?? ''} onChange={e => setDraft(t.id, 'precio_fijo', e.target.value === '' ? null : Number(e.target.value))} />
+                    <input style={{ ...inp, width: 90 }} type="number" placeholder={t.precio_fijo == null ? 'sin fijar' : ''} value={draftVal(t, 'precio_fijo') ?? ''} onChange={e => setDraft(t.id, 'precio_fijo', e.target.value === '' ? null : Number(e.target.value))} />
+                    <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 3 }}>actual: {[['CABA', t.tarifa_caba], ['G1', t.tarifa_gba1], ['G2', t.tarifa_gba2], ['G3', t.tarifa_gba3]].filter(x => x[1] != null).map(x => x[0] + ' ' + money(x[1])).join(' · ') || '—'}</div>
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     {isDirty && (
@@ -470,6 +471,12 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                         await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(drafts[t.id]) });
                         setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; });
                       })}>Guardar</button>
+                    )}
+                    {t.modo === 'cp' && (
+                      <button style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.white, background: BRAND.faint }} onClick={() => { setCpSel(t.nombre_lightdata); const el = document.getElementById('cp-editor'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>CPs ({cpOverrides.filter(o => o.nombre_lightdata === t.nombre_lightdata).length})</button>
+                    )}
+                    {draftVal(t, 'modo') === 'cp' && t.modo !== 'cp' && (
+                      <span style={{ fontSize: 10, color: BRAND.amber, marginLeft: 6 }}>guardá y volvé para cargar los CP</span>
                     )}
                   </td>
                 </tr>
@@ -480,8 +487,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
       </div>
 
       {/* Overrides por CP */}
-      <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: BRAND.teal }}>Precios por CP (cadetes en modo "cp")</div>
+      <div id="cp-editor" style={{ background: BRAND.navyCard, border: `1px solid ${cpSel ? BRAND.teal : BRAND.border}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: BRAND.teal }}>Precios por CP {cpSel ? <span style={{ color: BRAND.white }}>· editando {cpSel}</span> : <span style={{ color: BRAND.muted, fontWeight: 400 }}>(elegí un cadete en modo cp)</span>}</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           <select style={inp} value={cpSel} onChange={e => setCpSel(e.target.value)}>
             <option value="">— elegir cadete modo cp —</option>
@@ -803,7 +810,7 @@ function PagosInner({ session }) {
                       const open = expandido === f.key;
                       return (
                         <React.Fragment key={f.key}>
-                          <tr style={{ borderTop: `1px solid ${BRAND.border}`, background: f.faltaPrecio ? 'rgba(226,75,74,0.06)' : 'transparent' }}>
+                          <tr style={{ borderTop: `1px solid ${BRAND.border}`, background: f.editado ? 'rgba(255,176,32,0.12)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : 'transparent' }}>
                             <td style={{ padding: '8px 12px', fontWeight: 600 }}>
                               {f.nombre}
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
@@ -816,8 +823,8 @@ function PagosInner({ session }) {
                             <td style={{ padding: '8px 12px' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
                             <td style={{ padding: '8px 12px' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
                             <td style={{ padding: '8px 12px' }}>{money(f.colecta)}</td>
-                            <td style={{ padding: '8px 12px', cursor: 'pointer', textDecoration: 'underline dotted' }} onClick={() => setExpandido(open ? null : f.key)}>
-                              {f.ajusteTotal ? money(-f.ajusteTotal) : '—'}
+                            <td style={{ padding: '8px 12px', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
+                              {f.ajusteTotal ? <span style={{ color: BRAND.red, textDecoration: 'underline dotted' }}>{money(-f.ajusteTotal)}</span> : <span style={{ fontSize: 11, color: BRAND.muted, textDecoration: 'underline dotted' }}>+ descuento</span>}
                             </td>
                             <td style={{ padding: '8px 12px', fontWeight: 700 }}>{money(f.total)}</td>
                             <td style={{ padding: '8px 12px' }}>
