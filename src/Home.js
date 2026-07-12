@@ -5,10 +5,10 @@ import React from "react";
 // secciones de App.js: cada tarjeta llama onNav(seccion) -> setSeccion(...).
 export default function Home({ onNav, onMenu, isMobile, logo }) {
   const cards = [
-    { id: "metricas",  icon: "ti-chart-bar",       title: "Métricas",  desc: "SLA, demorados, pendientes y performance por cadete.", accent: "#2ECFAA" },
-    { id: "colectas",  icon: "ti-package",         title: "Colectas",  desc: "Retiros del día por cliente, horarios y choferes.",     accent: "#4ADE80" },
-    { id: "arribos",   icon: "ti-truck-delivery",  title: "Arribos",   desc: "Quién va llegando al depósito, ETA y avance en vivo.",   accent: "#3A8FD4" },
-    { id: "tiquetera", icon: "ti-ticket",          title: "Tiquetera", desc: "Casos de clientes, respuestas del agente y aprobación.", accent: "#A986FF" },
+    { id: "metricas",  emoji: "📊", title: "Métricas",  desc: "SLA, demorados, pendientes y performance por cadete.", accent: "#2ECFAA" },
+    { id: "colectas",  emoji: "📦", title: "Colectas",  desc: "Retiros del día por cliente, horarios y choferes.",     accent: "#4ADE80" },
+    { id: "arribos",   emoji: "🚚", title: "Arribos",   desc: "Quién va llegando al depósito, ETA y avance en vivo.",   accent: "#3A8FD4" },
+    { id: "tiquetera", emoji: "🎫", title: "Tiquetera", desc: "Casos de clientes, respuestas del agente y aprobación.", accent: "#A986FF" },
   ];
 
   return (
@@ -48,7 +48,7 @@ export default function Home({ onNav, onMenu, isMobile, logo }) {
             onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.borderColor = c.accent + "70"; e.currentTarget.style.boxShadow = "0 16px 34px rgba(0,0,0,0.4)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.boxShadow = "none"; }}>
             <div style={{ width: isMobile ? 38 : 46, height: isMobile ? 38 : 46, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: c.accent + "1f", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "auto" }}>
-              <i className={"ti " + c.icon} style={{ fontSize: isMobile ? 20 : 24, color: c.accent }} />
+              <span style={{ fontSize: isMobile ? 20 : 24, lineHeight: 1 }}>{c.emoji}</span>
             </div>
             <span style={{ position: "absolute", top: isMobile ? 14 : 22, right: isMobile ? 13 : 20, color: "rgba(255,255,255,0.5)", fontSize: 18 }}>↗</span>
             <h2 style={{ fontSize: isMobile ? 15 : 19, fontWeight: 700, margin: 0, marginTop: isMobile ? 11 : 16 }}>{c.title}</h2>
