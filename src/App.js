@@ -893,8 +893,9 @@ export default function App() {
             {semana && semana.dias.length > 0 && (
               <div style={{ display:"flex", gap:6, alignItems:"center", borderLeft:`1px solid ${BRAND.border}`, paddingLeft:16, overflowX:"auto", flexShrink:1, minWidth:0, scrollbarWidth:"none" }}>
                 <span style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.06em" }}>Día:</span>
+                <span style={{ position:"relative", display:"inline-flex", alignItems:"center", flexShrink:0 }}>
                 <select value={diaActivo || ""} onChange={e=>setDiaActivo(e.target.value || null)}
-                  style={{ padding:"4px 10px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:"1px solid #2ECFAA", background:"rgba(46,207,170,0.15)", color:"#2ECFAA", outline:"none", flexShrink:0 }}>
+                  style={{ appearance:"none", WebkitAppearance:"none", MozAppearance:"none", padding:"4px 24px 4px 10px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:"1px solid #2ECFAA", background:"rgba(46,207,170,0.15)", color:"#2ECFAA", outline:"none" }}>
                   <option value="" style={{background:"#141a2e",color:"#fff"}}>Todos los días</option>
                   {semana.dias.map(d => {
                     const p = d.fecha.split("-");
@@ -903,6 +904,8 @@ export default function App() {
                     return <option key={d.fecha} value={d.fecha} style={{background:"#141a2e",color:"#fff"}}>{dia} {p[2]}/{p[1]}</option>;
                   })}
                 </select>
+                <span style={{ position:"absolute", right:11, pointerEvents:"none", color:"#2ECFAA", fontSize:9 }}>▼</span>
+                </span>
               </div>
             )}
           </div>
@@ -1252,9 +1255,10 @@ export default function App() {
 
               <div style={{ display:"flex", gap:8, marginBottom:"1rem", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between" }}>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                  {[["todos","Todos"],["critico","🔴 Críticos <95%"],["riesgo","🟡 En riesgo 95-98%"],["ok","🟢 OK ≥98%"]].map(([key,label]) => (
-                    <button key={key} onClick={()=>setFiltro(key)} style={{ padding:"5px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${filtro===key?"#2ECFAA":BRAND.border}`, background:filtro===key?"rgba(46,207,170,0.15)":BRAND.faint, color:filtro===key?"#2ECFAA":BRAND.muted }}>
-                      {label}
+                  {[["todos","Todos",null],["critico","Críticos <95%","#E24B4A"],["riesgo","En riesgo 95-98%","#EF9F27"],["ok","OK ≥98%","#2ECFAA"]].map(([key,label,color]) => (
+                    <button key={key} onClick={()=>setFiltro(key)} title={label}
+                      style={{ display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:600, cursor:"pointer", border:`1px solid ${filtro===key?"#2ECFAA":BRAND.border}`, background:filtro===key?"rgba(46,207,170,0.15)":BRAND.faint, color:filtro===key?"#2ECFAA":BRAND.muted, ...(color ? { width:32, height:32, borderRadius:"50%", padding:0 } : { padding:"5px 14px", borderRadius:20 }) }}>
+                      {color ? <span style={{ width:13, height:13, borderRadius:"50%", background:color, display:"block" }} /> : label}
                     </button>
                   ))}
                 </div>
