@@ -189,6 +189,7 @@ function ColectasInner({ soloArribos = false }) {
   const [fecha, setFecha] = useState(todayStr);
   const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
   const [dirEdit, setDirEdit] = useState(null); // { id, valor } — dirección puntual del día
+  const [zonaEdit, setZonaEdit] = useState(null); // { id, valor } — zona puntual del día
   const [filtroEstado, setFiltroEstado] = useState(null); // null = todos | verde/amarillo/blanco/rojo
   const [busqueda, setBusqueda] = useState(''); // buscador de cliente o chofer
   const [clientes, setClientes] = useState([]);
@@ -308,6 +309,7 @@ function ColectasInner({ soloArribos = false }) {
             estado: r.estado || (r.confirmado ? 'verde' : null),
             confirmado_por: r.confirmado_por || [],
             direccion: r.direccion ?? null,
+            zona_barrio: r.zona_barrio ?? null,
           };
         });
         // Carry-forward: pre-cargar choferes del último día anterior para clientes sin registro hoy
@@ -337,12 +339,12 @@ function ColectasInner({ soloArribos = false }) {
           await sbFetch(`colectas_registros?id=eq.${existing.id}`, {
             method: 'PATCH',
             headers: { 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}), ...('direccion' in data ? { direccion: data.direccion } : {}) }),
+            body: JSON.stringify({ choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}), ...('direccion' in data ? { direccion: data.direccion } : {}), ...('zona_barrio' in data ? { zona_barrio: data.zona_barrio } : {}) }),
           });
         } else {
           const result = await sbFetch('colectas_registros', {
             method: 'POST',
-            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}), ...('direccion' in data ? { direccion: data.direccion } : {}) }),
+            body: JSON.stringify({ fecha, cliente_id: clienteId, choferes: data.choferes, estado: data.estado, confirmado_por: data.confirmado_por, ...('monto' in data ? { monto: data.monto } : {}), ...('direccion' in data ? { direccion: data.direccion } : {}), ...('zona_barrio' in data ? { zona_barrio: data.zona_barrio } : {}) }),
           });
           const row = Array.isArray(result) ? result[0] : result;
           if (row?.id) {
@@ -545,7 +547,8 @@ function ColectasInner({ soloArribos = false }) {
     let msg = `🚚 *Colectas ${tab} – ${fechaFmt}*\n\n`;
     rows.forEach(c => {
       msg += `• *${c.nombre}*`;
-      if (c.zona_barrio) msg += ` (${c.zona_barrio})`;
+      const zona = registros[c.id]?.zona_barrio || c.zona_barrio;
+      if (zona) msg += ` (${zona})`;
       const dir = registros[c.id]?.direccion || c.direccion;
       msg += `\n  📍 ${dir}`;
       const horaCli = c.horario || (c.hora_habitual ? `${c.hora_habitual}:00` : '');
@@ -865,11 +868,24 @@ function ColectasInner({ soloArribos = false }) {
                               </span>
                             )}
                           </td>
-                          {/* Zona */}
-                          <td style={{ padding:'8px 8px' }}>
-                            {c.zona_barrio && (
-                              <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(58,143,212,0.15)', color:'#3A8FD4' }}>
-                                {c.zona_barrio}
+                          {/* Zona — editable por día (override) */}
+                          <td style={{ padding:'8px 8px', maxWidth:150 }}>
+                            {zonaEdit?.id === c.id ? (
+                              <input autoFocus value={zonaEdit.valor}
+                                onChange={ev => setZonaEdit({ id:c.id, valor:ev.target.value })}
+                                onKeyDown={ev => { if (ev.key==='Enter') ev.currentTarget.blur(); if (ev.key==='Escape') setZonaEdit(null); }}
+                                onBlur={() => { const v = zonaEdit.valor.trim(); updateRegistro(c.id, { zona_barrio: (v==='' || v===(c.zona_barrio||'')) ? null : v }); setZonaEdit(null); }}
+                                style={{ width:120, background:'#14171c', border:'1px solid #2ECFAA', borderRadius:6, color:'#fff', fontSize:12, padding:'3px 6px' }} />
+                            ) : (
+                              <span onClick={() => setZonaEdit({ id:c.id, valor: reg.zona_barrio || c.zona_barrio || '' })}
+                                title={reg.zona_barrio ? `Zona de hoy · la fija es: ${c.zona_barrio||'—'}` : 'Click para una zona puntual de hoy'}
+                                style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
+                                {(reg.zona_barrio || c.zona_barrio)
+                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(58,143,212,0.15)', color: reg.zona_barrio ? '#FBBF24' : '#3A8FD4' }}>{reg.zona_barrio || c.zona_barrio}</span>
+                                  : <span style={{ fontSize:11, color:BRAND.muted }}>+ zona</span>}
+                                {reg.zona_barrio
+                                  ? <button onClick={ev => { ev.stopPropagation(); updateRegistro(c.id, { zona_barrio: null }); }} title="Volver a la zona fija" style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:0 }}>↩</button>
+                                  : <i className="ti ti-pencil" style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }} />}
                               </span>
                             )}
                           </td>
