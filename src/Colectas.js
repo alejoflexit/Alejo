@@ -563,6 +563,29 @@ function ColectasInner({ soloArribos = false }) {
     });
   }
 
+  // Confirma (pasa a verde) todas las colectas CON ENVÍOS (amarillo) de un cadete.
+  // Respeta divididas: suma este chofer a confirmado_por y solo pone verde si ya confirmaron todos.
+  function confirmarTodos(chofer) {
+    seccionClientes.forEach(c => {
+      const reg = registros[c.id];
+      const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
+      if (!chs.includes(chofer)) return;
+      const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
+      if (estEf !== 'amarillo') return;
+      const confirmadoPor = reg?.confirmado_por || [];
+      const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
+      if (isDividida) {
+        if (confirmadoPor.includes(chofer)) return;
+        const nuevos = [...confirmadoPor, chofer];
+        const activos = chs.filter(x => x !== 'A coordinar');
+        const todosOk = activos.length > 0 && activos.every(x => nuevos.includes(x));
+        updateRegistro(c.id, { confirmado_por: nuevos, estado: todosOk ? 'verde' : 'amarillo' });
+      } else {
+        updateRegistro(c.id, { estado: 'verde' });
+      }
+    });
+  }
+
   const inpSt = {
     padding:'7px 10px', fontSize:12, border:`1px solid ${BRAND.border}`,
     borderRadius:8, background:BRAND.faint, color:BRAND.white, outline:'none',
@@ -684,6 +707,15 @@ function ColectasInner({ soloArribos = false }) {
               {order.map(chofer => {
                 const isWarn = chofer === 'A coordinar';
                 const rows = groups[chofer];
+                const amarillosConf = isWarn ? 0 : seccionClientes.filter(c => {
+                  const reg = registros[c.id];
+                  const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
+                  if (!chs.includes(chofer)) return false;
+                  const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
+                  if (estEf !== 'amarillo') return false;
+                  const isDiv = chs.length > 1 && !chs.every(x => x === 'A coordinar');
+                  return !(isDiv && (reg?.confirmado_por || []).includes(chofer));
+                }).length;
                 const isActive = hoverChofer === chofer || copiedChofer === chofer;
                 return (
                   <React.Fragment key={chofer}>
@@ -701,6 +733,13 @@ function ColectasInner({ soloArribos = false }) {
                             </span>
                           </span>
                           {!isWarn && (
+                            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              {amarillosConf > 0 && (
+                                <button onClick={() => confirmarTodos(chofer)} title={`Confirmar las ${amarillosConf} colectas con envíos de ${chofer}`}
+                                  style={{ display:'flex', alignItems:'center', gap:4, height:28, padding:'0 10px', borderRadius:8, border:'1px solid rgba(46,207,170,0.5)', color:'#2ECFAA', background:'rgba(46,207,170,0.1)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+                                  ✓ Todos
+                                </button>
+                              )}
                             <div style={{ position:'relative', display:'inline-block' }}>
                               <button
                                 onClick={() => copyMsg(chofer)}
@@ -712,6 +751,7 @@ function ColectasInner({ soloArribos = false }) {
                               <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', right:0, whiteSpace:'nowrap', background:'#1a2e3a', color:'#2ECFAA', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,207,170,0.3)', pointerEvents:'none', zIndex:400 }}>
                                 Copiar {chofer}
                               </div>
+                            </div>
                             </div>
                           )}
                         </div>
