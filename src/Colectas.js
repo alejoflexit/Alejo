@@ -571,7 +571,7 @@ function ColectasInner({ soloArribos = false }) {
       const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
       if (!chs.includes(chofer)) return;
       const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
-      if (estEf !== 'amarillo') return;
+      if (estEf === 'rojo' || estEf === 'verde') return; // sin envíos o ya confirmado
       const confirmadoPor = reg?.confirmado_por || [];
       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
       if (isDividida) {
@@ -712,7 +712,7 @@ function ColectasInner({ soloArribos = false }) {
                   const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
                   if (!chs.includes(chofer)) return false;
                   const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
-                  if (estEf !== 'amarillo') return false;
+                  if (estEf === 'rojo' || estEf === 'verde') return false;
                   const isDiv = chs.length > 1 && !chs.every(x => x === 'A coordinar');
                   return !(isDiv && (reg?.confirmado_por || []).includes(chofer));
                 }).length;
@@ -735,7 +735,7 @@ function ColectasInner({ soloArribos = false }) {
                           {!isWarn && (
                             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                               {amarillosConf > 0 && (
-                                <button onClick={() => confirmarTodos(chofer)} title={`Confirmar las ${amarillosConf} colectas con envíos de ${chofer}`}
+                                <button onClick={() => confirmarTodos(chofer)} title={`Confirmar las ${amarillosConf} colectas de ${chofer} (pasan a verde; no toca las 'sin envíos')`}
                                   style={{ display:'flex', alignItems:'center', gap:4, height:28, padding:'0 10px', borderRadius:8, border:'1px solid rgba(46,207,170,0.5)', color:'#2ECFAA', background:'rgba(46,207,170,0.1)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
                                   ✓ Todos
                                 </button>
