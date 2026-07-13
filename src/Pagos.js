@@ -628,6 +628,22 @@ function CantidadInput({ value, original, editado, onCommit, onRestore }) {
   );
 }
 
+// ───────────────────────── tarjeta del panel "A revisar" (Tarea 4) ─────────────────────────
+function TarjetaRevisar({ icon, titulo, count, color, right, onToggle, expanded, children }) {
+  const collapsible = typeof onToggle === 'function';
+  const showBody = !collapsible || expanded;
+  return (
+    <div style={{ background: BRAND.faint, border: `1px solid ${BRAND.border}`, borderLeft: `3px solid ${color}`, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+      <div onClick={collapsible ? onToggle : undefined} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: collapsible ? 'pointer' : 'default', marginBottom: showBody && children ? 8 : 0 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: BRAND.white }}>{icon} {titulo}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color, background: 'rgba(255,255,255,0.06)', borderRadius: 20, padding: '1px 8px' }}>{count}</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>{right}{collapsible && <span style={{ fontSize: 11, color: BRAND.muted }}>{expanded ? '▲' : '▾'}</span>}</span>
+      </div>
+      {showBody && children}
+    </div>
+  );
+}
+
 // ───────────────────────── componente principal ─────────────────────────
 
 function PagosInner({ session }) {
@@ -659,6 +675,7 @@ function PagosInner({ session }) {
   const [busyAccion, setBusyAccion] = useState(false);
   const [menuEdiciones, setMenuEdiciones] = useState(false); // Tarea 2: menú del chip de ediciones
   const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
+  const [revExpand, setRevExpand] = useState({}); // Tarea 4: tarjetas expandibles de 'A revisar'
 
   // config global (no depende de semana) — se busca al montar
   const refreshConfig = useCallback(async () => {
@@ -1020,72 +1037,89 @@ function PagosInner({ session }) {
                 </table>
               </div>
 
-              {/* Panel A revisar */}
+              {/* Panel A revisar (Tarea 4) */}
+              {(() => {
+                const nRevisar = (sinResolver.length > 0 ? 1 : 0) + ((calc.sinCadete && calc.sinCadete.length) ? 1 : 0) + (calc.configErrors.length > 0 ? 1 : 0) + (calc.aparte.length > 0 ? 1 : 0) + (calc.colectasSinMatch.length > 0 ? 1 : 0);
+                return (
               <div style={{ ...cardSt, marginBottom: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: BRAND.amber }}>⚠ A revisar</div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: BRAND.amber }}>⚠ A revisar{nRevisar > 0 ? ` (${nRevisar})` : ''}</div>
+
+                {sinResolver.length > 0 && (
+                  <TarjetaRevisar icon="🆕" titulo="Choferes nuevos (sin dar de alta)" count={sinResolver.length} color={BRAND.amber}>
+                    {sinResolver.map(sc => (
+                      <div key={sc.cadete} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 0', fontSize: 12.5, borderTop: `1px solid ${BRAND.border}` }}>
+                        <span style={{ flex: 1, fontWeight: 600 }}>{sc.cadete}</span>
+                        <span style={{ color: BRAND.muted }}>{sc.entregas} entregas</span>
+                        <button onClick={() => altaRapida(sc.cadete)} disabled={busyAccion} style={{ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal }}>Dar de alta</button>
+                      </div>
+                    ))}
+                  </TarjetaRevisar>
+                )}
 
                 {calc.sinCadete && calc.sinCadete.length > 0 && (() => {
                   const fechas = calc.sinCadete.map(e => String(e.fecha_estado || '').slice(0, 10)).filter(Boolean).sort();
                   const rango = fechas.length ? (fechas[0] === fechas[fechas.length - 1] ? fechas[0] : `${fechas[0]} → ${fechas[fechas.length - 1]}`) : 'sin fecha';
+                  const porFecha = {};
+                  calc.sinCadete.forEach(e => { const d = String(e.fecha_estado || '').slice(0, 10) || 'sin fecha'; porFecha[d] = (porFecha[d] || 0) + 1; });
                   return (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.red, marginBottom: 4 }}>⚠ {calc.sinCadete.length} entregas sin cadete asignado en LightData</div>
-                      <div style={{ fontSize: 11.5, color: BRAND.muted }}>Envíos repartidos que nadie cobra. Fechas: {rango}. Rastrealas en LightData para asignarles cadete.</div>
-                    </div>
+                    <TarjetaRevisar icon="🕳" titulo="Entregas sin cadete en LightData" count={calc.sinCadete.length} color={BRAND.red}
+                      right={<span style={{ fontSize: 11, color: BRAND.muted }}>{rango}</span>}
+                      onToggle={() => setRevExpand(r => ({ ...r, sinCadete: !r.sinCadete }))} expanded={!!revExpand.sinCadete}>
+                      <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Envíos repartidos que nadie cobra. Rastrealas en LightData para asignarles cadete.</div>
+                      {Object.entries(porFecha).sort().map(([d, n]) => (
+                        <div key={d} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
+                          <span>{d}</span><span style={{ color: BRAND.muted }}>{n} entrega{n === 1 ? '' : 's'}</span>
+                        </div>
+                      ))}
+                    </TarjetaRevisar>
                   );
                 })()}
 
-                {sinResolver.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 6 }}>Choferes nuevos (sin dar de alta)</div>
-                    {sinResolver.map(s => (
-                      <div key={s.cadete} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 0', fontSize: 12.5, borderTop: `1px solid ${BRAND.border}` }}>
-                        <span style={{ flex: 1, fontWeight: 600 }}>{s.cadete}</span>
-                        <span style={{ color: BRAND.muted }}>{s.entregas} entregas</span>
-                        <button onClick={() => altaRapida(s.cadete)} disabled={busyAccion} style={{ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal }}>Dar de alta</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 {calc.configErrors.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 6 }}>Errores de configuración (alias apunta a un cadete que no existe)</div>
+                  <TarjetaRevisar icon="⚠" titulo="Errores de config (alias apunta a cadete inexistente)" count={calc.configErrors.length} color={BRAND.red}
+                    right={isAdmin && <button onClick={() => setVista('config')} style={{ fontSize: 11, color: BRAND.teal, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>ir a Config</button>}>
                     {calc.configErrors.map((c, i) => (
-                      <div key={i} style={{ fontSize: 12.5, padding: '4px 0', color: BRAND.red }}>{c.nombre} — {c.cantidad} entregas — {c.motivo}</div>
+                      <div key={i} style={{ fontSize: 12.5, padding: '4px 0', color: BRAND.red, borderTop: `1px solid ${BRAND.border}` }}>{c.nombre} — {c.cantidad} entregas — {c.motivo}</div>
                     ))}
-                  </div>
+                  </TarjetaRevisar>
                 )}
 
                 {calc.colectasSinMatch.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 6 }}>Colectas sin cadete resuelto ({calc.colectasSinMatch.length})</div>
-                    <div style={{ fontSize: 12, color: BRAND.muted }}>{[...new Set(calc.colectasSinMatch.map(c => c.chofer))].join(', ')}</div>
-                  </div>
+                  <TarjetaRevisar icon="📦" titulo="Colectas sin chofer resuelto" count={calc.colectasSinMatch.length} color={BRAND.amber}
+                    onToggle={() => setRevExpand(r => ({ ...r, colectas: !r.colectas }))} expanded={!!revExpand.colectas}>
+                    {calc.colectasSinMatch.map((c, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
+                        <span style={{ flex: 1 }}>{c.chofer}</span>
+                        <span style={{ color: BRAND.muted, marginRight: 10 }}>{String(c.fecha || '').slice(0, 10)}</span>
+                        <span>{money(c.monto)}</span>
+                      </div>
+                    ))}
+                  </TarjetaRevisar>
                 )}
 
                 {calc.aparte.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 6 }}>PAGOS APARTE (fleteros — no suman al total)</div>
+                  <TarjetaRevisar icon="💰" titulo="Pagos aparte (fleteros — no suman al total)" count={calc.aparte.length} color={BRAND.muted}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                      <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>Cadete</th><th style={{ padding: '4px 6px' }}>Cant.</th><th style={{ padding: '4px 6px' }}>Monto</th></tr></thead>
+                      <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>Cadete</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Cant.</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Monto</th></tr></thead>
                       <tbody>
                         {calc.aparte.map(f => (
                           <tr key={f.key} style={{ borderTop: `1px solid ${BRAND.border}` }}>
                             <td style={{ padding: '5px 6px' }}>{f.nombre}</td>
-                            <td style={{ padding: '5px 6px' }}>{f.cantidad}</td>
-                            <td style={{ padding: '5px 6px' }}>{f.monto != null ? money(f.monto) : <span style={{ color: BRAND.red }}>FALTA PRECIO</span>}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right' }}>{f.cantidad}</td>
+                            <td style={{ padding: '5px 6px', textAlign: 'right' }}>{f.monto != null ? money(f.monto) : <span style={{ color: BRAND.red }}>FALTA PRECIO</span>}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </TarjetaRevisar>
                 )}
 
-                {sinResolver.length === 0 && calc.configErrors.length === 0 && calc.colectasSinMatch.length === 0 && calc.aparte.length === 0 && (!calc.sinCadete || calc.sinCadete.length === 0) && (
+                {nRevisar === 0 && (
                   <div style={{ fontSize: 12.5, color: BRAND.muted }}>Nada para revisar esta semana.</div>
                 )}
               </div>
+                );
+              })()}
             </>
           )}
         </>
