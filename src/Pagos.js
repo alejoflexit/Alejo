@@ -513,7 +513,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                       })}>Guardar</button>
                     )}
                     {t.modo === 'cp' && (
-                      <button style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.white, background: BRAND.faint }} onClick={() => { setCpSel(t.nombre_lightdata); const el = document.getElementById('cp-editor'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}>CPs ({cpOverrides.filter(o => o.nombre_lightdata === t.nombre_lightdata).length})</button>
+                      <button style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.white, background: BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>CPs ({cpOverrides.filter(o => o.nombre_lightdata === t.nombre_lightdata).length})</button>
                     )}
                     {draftVal(t, 'modo') === 'cp' && t.modo !== 'cp' && (
                       <span style={{ fontSize: 10, color: BRAND.amber, marginLeft: 6 }}>guardá y volvé para cargar los CP</span>
@@ -527,44 +527,50 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
         </table>
       </div>
 
-      {/* Overrides por CP */}
-      <div id="cp-editor" style={{ background: BRAND.navyCard, border: `1px solid ${cpSel ? BRAND.teal : BRAND.border}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: BRAND.teal }}>Precios por CP {cpSel ? <span style={{ color: BRAND.white }}>· editando {cpSel}</span> : <span style={{ color: BRAND.muted, fontWeight: 400 }}>(elegí un cadete en modo cp)</span>}</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-          <select style={inp} value={cpSel} onChange={e => setCpSel(e.target.value)}>
-            <option value="">— elegir cadete modo cp —</option>
-            {cadetesCp.map(c => <option key={c.id} value={c.nombre_lightdata}>{c.nombre_lightdata}</option>)}
-          </select>
-        </div>
-        {cpSel && (
-          <>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 10 }}>
-              <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px' }}>Precio</th><th></th></tr></thead>
-              <tbody>
-                {overridesDeSel.map(o => (
-                  <tr key={o.cp} style={{ borderTop: `1px solid ${BRAND.border}` }}>
-                    <td style={{ padding: '5px 6px' }}>{o.cp}</td>
-                    <td style={{ padding: '5px 6px' }}>{money(o.precio)}</td>
-                    <td style={{ padding: '5px 6px' }}>
-                      <button style={{ ...btn, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => doAction(async () => {
-                        await sb(`cadete_precio_cp?nombre_lightdata=eq.${encodeURIComponent(o.nombre_lightdata)}&cp=eq.${encodeURIComponent(o.cp)}`, { method: 'DELETE' });
-                      })}>Borrar</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input style={{ ...inp, width: 100 }} placeholder="CP" value={nuevoCp.cp} onChange={e => setNuevoCp(s => ({ ...s, cp: e.target.value }))} />
-              <input style={{ ...inp, width: 100 }} type="number" placeholder="Precio" value={nuevoCp.precio} onChange={e => setNuevoCp(s => ({ ...s, precio: e.target.value }))} />
+      {/* Precios por CP — modal (Tarea post-review) */}
+      {cpSel && (
+        <div onClick={() => setCpSel('')} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 480, maxWidth: '94vw', maxHeight: '86vh', overflowY: 'auto', background: BRAND.navyCard, border: `1px solid ${BRAND.teal}`, borderRadius: 14, padding: 18, boxShadow: '0 14px 44px rgba(0,0,0,0.55)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.teal }}>Precios por CP · <span style={{ color: BRAND.white }}>{cpSel}</span></div>
+              <button onClick={() => setCpSel('')} title="cerrar" style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+            {cadetesCp.length > 1 && (
+              <select style={{ ...inp, width: '100%', marginBottom: 12 }} value={cpSel} onChange={e => setCpSel(e.target.value)}>
+                {cadetesCp.map(c => <option key={c.id} value={c.nombre_lightdata}>{c.nombre_lightdata}</option>)}
+              </select>
+            )}
+            {overridesDeSel.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
+                <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Precio</th><th></th></tr></thead>
+                <tbody>
+                  {overridesDeSel.map(o => (
+                    <tr key={o.cp} style={{ borderTop: `1px solid ${BRAND.border}` }}>
+                      <td style={{ padding: '5px 6px' }}>{o.cp}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'right' }}>{money(o.precio)}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'right' }}>
+                        <button style={{ ...btn, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => doAction(async () => {
+                          await sb(`cadete_precio_cp?nombre_lightdata=eq.${encodeURIComponent(o.nombre_lightdata)}&cp=eq.${encodeURIComponent(o.cp)}`, { method: 'DELETE' });
+                        })}>Borrar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ fontSize: 12, color: BRAND.muted, padding: '6px 0 14px' }}>Todavía no hay CPs cargados para este cadete. Agregá el primero abajo.</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${BRAND.border}`, paddingTop: 12 }}>
+              <input className="no-spin" style={{ ...inp, flex: 1 }} placeholder="CP" value={nuevoCp.cp} onChange={e => setNuevoCp(s => ({ ...s, cp: e.target.value }))} />
+              <input className="no-spin" style={{ ...inp, width: 120 }} type="number" placeholder="Precio" value={nuevoCp.precio} onChange={e => setNuevoCp(s => ({ ...s, precio: e.target.value }))} />
               <button style={btn} disabled={busy || !nuevoCp.cp || !nuevoCp.precio} onClick={() => doAction(async () => {
                 await sb('cadete_precio_cp', { method: 'POST', body: JSON.stringify([{ nombre_lightdata: cpSel, cp: nuevoCp.cp.trim(), precio: Number(nuevoCp.precio) }]) });
                 setNuevoCp({ cp: '', precio: '' });
               })}>+ Agregar</button>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
       {/* Reglas de alias */}
       <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14 }}>
