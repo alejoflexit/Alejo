@@ -404,6 +404,25 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
     finally { setBusy(false); }
   }, [onRefresh]);
 
+  // Tarea 5: baja de cadete con red de seguridad. Si tiene cierres en el histórico,
+  // no se borra (se ofrece desactivar); si no, se elimina tarifa + precios por CP.
+  const borrarCadete = useCallback((t) => {
+    const nombrePago = t.nombre_lightdata || t.nombre;
+    const display = t.nombre || nombrePago;
+    doAction(async () => {
+      const hist = await sb(`pagos_cierres?cadete=eq.${encodeURIComponent(nombrePago)}&select=id&limit=1`);
+      if (hist && hist.length > 0) {
+        if (window.confirm(`"${display}" tiene semanas pagadas en el histórico — se desactiva para no romper el histórico.\n\n¿Desactivarlo? Deja de aparecer en la liquidación pero se conservan los cierres.`)) {
+          await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify({ activo: false }) });
+        }
+        return;
+      }
+      if (!window.confirm(`¿Borrar a "${display}" definitivamente? No tiene semanas pagadas. Se eliminan su tarifa y sus precios por CP.`)) return;
+      if (t.nombre_lightdata) await sb(`cadete_precio_cp?nombre_lightdata=eq.${encodeURIComponent(t.nombre_lightdata)}`, { method: 'DELETE' });
+      await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'DELETE' });
+    });
+  }, [doAction]);
+
   const filtrados = tarifas.filter(t => !filtro || norm(t.nombre_lightdata || t.nombre).includes(norm(filtro)));
   const cadetesCp = tarifas.filter(t => t.modo === 'cp');
   const overridesDeSel = cpOverrides.filter(o => norm(o.nombre_lightdata) === norm(cpSel));
@@ -496,6 +515,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                     {draftVal(t, 'modo') === 'cp' && t.modo !== 'cp' && (
                       <span style={{ fontSize: 10, color: BRAND.amber, marginLeft: 6 }}>guardá y volvé para cargar los CP</span>
                     )}
+                    <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 6, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
                   </td>
                 </tr>
               );
