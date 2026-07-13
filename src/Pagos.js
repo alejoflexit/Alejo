@@ -658,6 +658,7 @@ function PagosInner({ session }) {
   const [ajusteForm, setAjusteForm] = useState({ concepto: '', monto: '' });
   const [busyAccion, setBusyAccion] = useState(false);
   const [menuEdiciones, setMenuEdiciones] = useState(false); // Tarea 2: menú del chip de ediciones
+  const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
 
   // config global (no depende de semana) — se busca al montar
   const refreshConfig = useCallback(async () => {
@@ -921,11 +922,15 @@ function PagosInner({ session }) {
                       const open = expandido === f.key;
                       return (
                         <React.Fragment key={f.key}>
-                          <tr style={{ borderTop: `1px solid ${BRAND.border}`, background: f.faltaPrecio ? 'rgba(226,75,74,0.06)' : 'transparent' }}>
-                            <td style={{ padding: '8px 12px', fontWeight: 600 }}>
-                              {f.nombre}
+                          <tr
+                            onMouseEnter={() => setHoverKey(f.key)}
+                            onMouseLeave={() => setHoverKey(h => (h === f.key ? null : h))}
+                            style={{ borderTop: `1px solid ${BRAND.border}`, background: open ? 'rgba(46,207,170,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : 'transparent' }}>
+                            <td onClick={() => setExpandido(open ? null : f.key)} title="ver / ocultar detalle" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}` }}>
+                              <span style={{ borderBottom: `1px dotted ${BRAND.muted}` }}>{f.nombre}</span>
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
+                              <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>{open ? '▲' : '▾'}</span>
                             </td>
                             <td style={{ padding: '8px 12px', background: f.editado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
                               <CantidadInput
@@ -968,7 +973,13 @@ function PagosInner({ session }) {
                           </tr>
                           {open && (
                             <tr>
-                              <td colSpan={nCols} style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.02)' }}>
+                              <td colSpan={nCols} style={{ padding: '10px 16px', background: 'rgba(46,207,170,0.05)', borderLeft: `3px solid ${BRAND.teal}` }}>
+                                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: BRAND.muted, marginBottom: 10 }}>
+                                  <span>Precio unit.: <b style={{ color: BRAND.white }}>{money(precioUnit)}</b>{f.modo === 'cp' ? ' (por CP)' : ''}</span>
+                                  <span>Método: <b style={{ color: f.factura ? BRAND.teal : BRAND.amber }}>{f.factura ? 'Transferencia' : 'Efectivo'}</b></span>
+                                  <span>Entregas LightData: <b style={{ color: BRAND.white }}>{f.cantidadOriginal}</b></span>
+                                  {!f.activo && <span style={{ color: BRAND.amber }}>inactivo</span>}
+                                </div>
                                 {f.modo === 'cp' && f.cpBreakdown && (
                                   <div style={{ marginBottom: 10 }}>
                                     <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 4 }}>Desglose por CP</div>
