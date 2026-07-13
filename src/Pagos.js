@@ -772,6 +772,12 @@ function PagosInner({ session }) {
 
   const nEdiciones = useMemo(() => filasEfectivas.filter(f => f.editado).length, [filasEfectivas]);
 
+  // Tarea 6: totales de las filas visibles (respeta el filtro de método) para la fila de pie
+  const totalesVisibles = useMemo(() => filasVisibles.reduce((a, f) => ({
+    monto: a.monto + (f.monto || 0), colecta: a.colecta + (f.colecta || 0),
+    ajuste: a.ajuste + (f.ajusteTotal || 0), total: a.total + (f.total || 0),
+  }), { monto: 0, colecta: 0, ajuste: 0, total: 0 }), [filasVisibles]);
+
   const subtotales = useMemo(() => {
     const base = filasEfectivas;
     const total = base.reduce((s, f) => s + (f.total || 0), 0);
@@ -783,6 +789,8 @@ function PagosInner({ session }) {
   const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '1rem 1.1rem' };
   const inpSt = { padding: '6px 10px', fontSize: 13, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none' };
   const btnPill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.teal : BRAND.border}`, background: active ? 'rgba(46,207,170,0.15)' : BRAND.faint, color: active ? BRAND.teal : BRAND.muted });
+  const thSt = { padding: '10px 12px', position: 'sticky', top: 0, zIndex: 3, background: BRAND.navyCard }; // Tarea 6: header sticky
+  const thNum = { ...thSt, textAlign: 'right' };
 
   const yaCerrada = cierres.length > 0;
   const cierreByKey = useMemo(() => {
@@ -853,6 +861,7 @@ function PagosInner({ session }) {
 
   return (
     <div>
+      <style>{`@keyframes pagos-spin{to{transform:rotate(360deg)}}`}</style>
       {/* Header interno + navegación tabla/config */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -916,7 +925,12 @@ function PagosInner({ session }) {
             </div>
           </div>
 
-          {cargando && <div style={{ color: BRAND.muted, padding: '2rem', textAlign: 'center' }}>Calculando…</div>}
+          {cargando && (
+            <div style={{ padding: '3rem', textAlign: 'center' }}>
+              <div style={{ width: 32, height: 32, margin: '0 auto 12px', border: `3px solid ${BRAND.faint}`, borderTopColor: BRAND.teal, borderRadius: '50%', animation: 'pagos-spin 0.8s linear infinite' }} />
+              <div style={{ color: BRAND.muted, fontSize: 13 }}>Calculando liquidación…</div>
+            </div>
+          )}
 
           {!cargando && (
             <>
@@ -938,19 +952,19 @@ function PagosInner({ session }) {
               </div>
 
               {/* Tabla principal */}
-              <div style={{ ...cardSt, padding: 0, overflowX: 'auto', marginBottom: 20 }}>
+              <div style={{ ...cardSt, padding: 0, overflow: 'auto', maxHeight: '72vh', marginBottom: 20 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720, fontSize: 13 }}>
                   <thead>
                     <tr style={{ color: BRAND.muted, textAlign: 'left', borderBottom: `1px solid ${BRAND.border}` }}>
-                      <th style={{ padding: '10px 12px' }}>Cadete</th>
-                      <th style={{ padding: '10px 12px' }}>Cant.</th>
-                      <th style={{ padding: '10px 12px' }}>Precio</th>
-                      <th style={{ padding: '10px 12px' }}>Monto</th>
-                      <th style={{ padding: '10px 12px' }}>Colecta</th>
-                      <th style={{ padding: '10px 12px' }}>Ajuste</th>
-                      <th style={{ padding: '10px 12px' }}>TOTAL</th>
-                      <th style={{ padding: '10px 12px' }}>Método</th>
-                      {yaCerrada && <th style={{ padding: '10px 12px' }}>Pagado</th>}
+                      <th style={thSt}>Cadete</th>
+                      <th style={thSt}>Cant.</th>
+                      <th style={thNum}>Precio</th>
+                      <th style={thNum}>Monto</th>
+                      <th style={thNum}>Colecta</th>
+                      <th style={thNum}>Ajuste</th>
+                      <th style={thNum}>TOTAL</th>
+                      <th style={thSt}>Método</th>
+                      {yaCerrada && <th style={thSt}>Pagado</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -978,13 +992,13 @@ function PagosInner({ session }) {
                                 onRestore={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
                               />
                             </td>
-                            <td style={{ padding: '8px 12px' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
-                            <td style={{ padding: '8px 12px' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
-                            <td style={{ padding: '8px 12px' }}>{money(f.colecta)}</td>
-                            <td style={{ padding: '8px 12px', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
+                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{money(f.colecta)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
                               {f.ajusteTotal ? <span style={{ color: BRAND.red, textDecoration: 'underline dotted' }}>{money(-f.ajusteTotal)}</span> : <span style={{ fontSize: 11, color: BRAND.muted, textDecoration: 'underline dotted' }}>+ descuento</span>}
                             </td>
-                            <td style={{ padding: '8px 12px', fontWeight: 700 }}>{money(f.total)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{money(f.total)}</td>
                             <td style={{ padding: '8px 12px' }}>
                               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, color: f.factura ? BRAND.teal : BRAND.amber, background: f.factura ? 'rgba(46,207,170,0.12)' : 'rgba(255,176,32,0.12)' }}>
                                 {f.factura ? 'Transferencia' : 'Efectivo'}
@@ -1054,6 +1068,21 @@ function PagosInner({ session }) {
                       <tr><td colSpan={nCols} style={{ padding: '2rem', textAlign: 'center', color: BRAND.muted }}>Sin datos para esta semana / filtro.</td></tr>
                     )}
                   </tbody>
+                  {filasVisibles.length > 0 && (
+                    <tfoot>
+                      <tr style={{ borderTop: `2px solid ${BRAND.border}`, fontWeight: 700, background: BRAND.navyCard, position: 'sticky', bottom: 0 }}>
+                        <td style={{ padding: '10px 12px', borderLeft: '3px solid transparent' }}>Totales ({filasVisibles.length})</td>
+                        <td></td>
+                        <td></td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.monto)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.colecta)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.red }}>{totalesVisibles.ajuste ? money(-totalesVisibles.ajuste) : '—'}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.teal }}>{money(totalesVisibles.total)}</td>
+                        <td></td>
+                        {yaCerrada && <td></td>}
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
 
