@@ -595,6 +595,39 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
   );
 }
 
+// ───────────────────────── input de cantidad (Tarea 1) ─────────────────────────
+// Editable sin spinners: se tipea directo, Enter/blur confirma, inválido/negativo vuelve
+// al valor actual. El ↺ restaura al valor original de LightData (borra el override).
+function CantidadInput({ value, original, editado, onCommit, onRestore }) {
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(String(value)); }, [value, focused]);
+  const inpSt = { padding: '4px 8px', width: 80, fontSize: 13, textAlign: 'right', border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield' };
+  const commit = () => {
+    const t = text.trim();
+    const n = Number(t);
+    if (t === '' || !Number.isFinite(n) || n < 0 || !Number.isInteger(n)) { setText(String(value)); return; }
+    onCommit(n);
+  };
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <input
+        type="text" inputMode="numeric"
+        value={text}
+        onFocus={e => { setFocused(true); e.target.select(); }}
+        onBlur={() => { setFocused(false); commit(); }}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+        style={inpSt}
+      />
+      {editado && (
+        <button title={`volver a ${original}`} onClick={onRestore}
+          style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}>↺</button>
+      )}
+    </div>
+  );
+}
+
 // ───────────────────────── componente principal ─────────────────────────
 
 function PagosInner({ session }) {
@@ -872,8 +905,13 @@ function PagosInner({ session }) {
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
                             </td>
                             <td style={{ padding: '8px 12px' }}>
-                              <input type="number" value={f.cantidad} style={{ ...inpSt, width: 68, padding: '4px 6px' }}
-                                onChange={e => setOverridesPersist(o => ({ ...o, [f.key]: e.target.value === '' ? f.cantidadOriginal : Number(e.target.value) }))} />
+                              <CantidadInput
+                                value={f.cantidad}
+                                original={f.cantidadOriginal}
+                                editado={f.editado}
+                                onCommit={n => setOverridesPersist(o => { const nn = { ...o }; if (n === f.cantidadOriginal) delete nn[f.key]; else nn[f.key] = n; return nn; })}
+                                onRestore={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
+                              />
                             </td>
                             <td style={{ padding: '8px 12px' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
                             <td style={{ padding: '8px 12px' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
