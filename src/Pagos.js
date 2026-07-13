@@ -191,9 +191,10 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
 
   // 1. agrupar crudo por nombre LightData tal cual viene
   const rawGroups = new Map();
+  const sinCadete = []; // entregas sin cadete asignado en LightData: plata repartida que nadie cobra
   entregados.forEach(e => {
     const raw = (e.cadete || '').trim();
-    if (!raw) return; // sin asignar: no se paga, no entra a "nuevos" (es un hueco de dato, no un cadete)
+    if (!raw) { sinCadete.push(e); return; } // hueco de dato: se contabiliza y se muestra en "A revisar"
     const key = norm(raw);
     if (!rawGroups.has(key)) rawGroups.set(key, { raw, rows: [] });
     rawGroups.get(key).rows.push(e);
@@ -272,7 +273,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     }
   }
 
-  return { filas, aparte, ignorados, configErrors, colectasSinMatch };
+  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete };
 }
 
 // aplica el override de cantidad (editable en la UI) a una fila calculada
@@ -284,6 +285,21 @@ function filaConOverride(fila, overrideCantidad) {
   const montoNuevo = precioUnit * overrideCantidad;
   const total = montoNuevo + fila.colecta - fila.ajusteTotal;
   return { ...fila, cantidad: overrideCantidad, monto: montoNuevo, total, editado: true };
+}
+
+// overrides de cantidad persistidos por semana (sobreviven al F5 hasta cerrar la semana)
+function overridesKey(lunes) { return `pagos_overrides_${lunes}`; }
+function loadOverrides(lunes) {
+  if (!lunes) return {};
+  try { const raw = localStorage.getItem(overridesKey(lunes)); return raw ? JSON.parse(raw) : {}; }
+  catch { return {}; }
+}
+function saveOverrides(lunes, obj) {
+  if (!lunes) return;
+  try {
+    if (obj && Object.keys(obj).length) localStorage.setItem(overridesKey(lunes), JSON.stringify(obj));
+    else localStorage.removeItem(overridesKey(lunes));
+  } catch { /* localStorage no disponible: seguimos en memoria */ }
 }
 
 // ───────────────────────── login ─────────────────────────
@@ -633,11 +649,11 @@ function PagosInner({ session }) {
 
   const refreshSemana = useCallback(async (lunes) => {
     if (!lunes) return;
-    setLoadingSemana(true); setError(''); setOverrides({});
+    setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes));
     try {
       const sabado = addDays(lunes, 5);
       const [ent, col, aj, sr, ci] = await Promise.all([
-        sbAll(`pagos_entregados?select=cadete,localidad,cp&semana_lunes=eq.${lunes}`),
+        sbAll(`pagos_entregados?select=cadete,localidad,cp,fecha_estado&semana_lunes=eq.${lunes}`),
         sbAll(`colectas_registros?select=fecha,choferes,monto&fecha=gte.${lunes}&fecha=lte.${sabado}`),
         sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
         sb(`pagos_cadetes_sin_resolver?semana_lunes=eq.${lunes}`),
@@ -652,20 +668,35 @@ function PagosInner({ session }) {
   useEffect(() => { if (semanaLunes) refreshSemana(semanaLunes); }, [semanaLunes, refreshSemana]);
 
   const calc = useMemo(() => {
-    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [] };
+    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [] };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
   const filasEfectivas = useMemo(() => calc.filas.map(f => filaConOverride(f, overrides[f.key])), [calc.filas, overrides]);
 
-  const filasVisibles = useMemo(() => {
-    let arr = filasEfectivas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura);
-    arr = [...arr].sort((a, b) => {
+  // orden canónico (Factura primero, luego A-Z) — lo usa la vista y el Excel
+  const filasOrdenadas = useMemo(() => {
+    return [...filasEfectivas].sort((a, b) => {
       if (a.factura !== b.factura) return a.factura ? -1 : 1;
       return a.nombre.localeCompare(b.nombre, 'es');
     });
-    return arr;
-  }, [filasEfectivas, filtroMetodo]);
+  }, [filasEfectivas]);
+
+  // la vista filtra por método; el Excel exporta SIEMPRE todas (Tarea 1)
+  const filasVisibles = useMemo(() =>
+    filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura),
+    [filasOrdenadas, filtroMetodo]);
+
+  // Tarea 2: setter que persiste las ediciones de cantidad de la semana en localStorage
+  const setOverridesPersist = useCallback((updater) => {
+    setOverrides(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveOverrides(semanaLunes, next);
+      return next;
+    });
+  }, [semanaLunes]);
+
+  const nEdiciones = useMemo(() => filasEfectivas.filter(f => f.editado).length, [filasEfectivas]);
 
   const subtotales = useMemo(() => {
     const base = filasEfectivas;
@@ -680,18 +711,38 @@ function PagosInner({ session }) {
   const btnPill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.teal : BRAND.border}`, background: active ? 'rgba(46,207,170,0.15)' : BRAND.faint, color: active ? BRAND.teal : BRAND.muted });
 
   const yaCerrada = cierres.length > 0;
+  const cierreByKey = useMemo(() => {
+    const m = new Map();
+    cierres.forEach(c => m.set(norm(c.cadete), c));
+    return m;
+  }, [cierres]);
+  const nCols = yaCerrada ? 9 : 8; // la columna "Pagado" solo aparece con la semana cerrada
 
   async function cerrarSemana() {
     if (!window.confirm(`¿Cerrar la semana ${fmtSemanaLabel(semanaLunes)}? Esto congela los montos actuales en pagos_cierres (se puede volver a cerrar y se pisa).`)) return;
     setBusyAccion(true); setError('');
     try {
+      // Tarea 3: preservar los pagos ya marcados al re-cerrar (matchear por cadete antes del delete+insert)
+      const pagadoPrev = new Set(cierres.filter(c => c.pagado).map(c => norm(c.cadete)));
       await sb(`pagos_cierres?semana_label=eq.${semanaLunes}`, { method: 'DELETE' });
       const rows = filasEfectivas.map(f => ({
         semana_label: semanaLunes, cadete: f.nombre,
         detalle: { cantidad: f.cantidad, monto: f.monto, colecta: f.colecta, ajuste: f.ajusteTotal, modo: f.modo, falta_precio: f.faltaPrecio },
-        total: f.total, metodo: f.factura ? 'transferencia' : 'efectivo', pagado: false,
+        total: f.total, metodo: f.factura ? 'transferencia' : 'efectivo', pagado: pagadoPrev.has(norm(f.nombre)),
       }));
       if (rows.length) await sb('pagos_cierres', { method: 'POST', body: JSON.stringify(rows) });
+      // Tarea 2: al cerrar, las ediciones quedan congeladas en el cierre -> limpiar el borrador
+      saveOverrides(semanaLunes, {}); setOverrides({});
+      await refreshSemana(semanaLunes);
+    } catch (e) { setError(e.message); }
+    finally { setBusyAccion(false); }
+  }
+
+  // Tarea 3: alternar el check "Pagado" de una fila del cierre
+  async function togglePagado(cierreId, valor) {
+    setBusyAccion(true); setError('');
+    try {
+      await sb(`pagos_cierres?id=eq.${cierreId}`, { method: 'PATCH', body: JSON.stringify({ pagado: valor }) });
       await refreshSemana(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -753,10 +804,11 @@ function PagosInner({ session }) {
             <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
             <span style={{ fontSize: 13, color: BRAND.teal, fontWeight: 600 }}>{fmtSemanaLabel(semanaLunes)}</span>
             {yaCerrada && <span style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px' }}>Semana cerrada</span>}
+            {nEdiciones > 0 && <span title="cantidades editadas a mano; se guardan en este navegador hasta que cierres la semana" style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px' }}>&#9999;&#65039; {nEdiciones} {nEdiciones === 1 ? 'edición' : 'ediciones'} sin cerrar</span>}
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               {xlsxReady && (
-                <button onClick={() => exportarExcel({ filas: filasVisibles, aparte: calc.aparte, sinResolver, semanaLunes, subtotales })}
+                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, sinResolver, semanaLunes, subtotales })}
                   style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 8, cursor: 'pointer', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} /> Exportar Excel
                 </button>
@@ -802,6 +854,7 @@ function PagosInner({ session }) {
                       <th style={{ padding: '10px 12px' }}>Ajuste</th>
                       <th style={{ padding: '10px 12px' }}>TOTAL</th>
                       <th style={{ padding: '10px 12px' }}>Método</th>
+                      {yaCerrada && <th style={{ padding: '10px 12px' }}>Pagado</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -818,7 +871,7 @@ function PagosInner({ session }) {
                             </td>
                             <td style={{ padding: '8px 12px' }}>
                               <input type="number" value={f.cantidad} style={{ ...inpSt, width: 68, padding: '4px 6px' }}
-                                onChange={e => setOverrides(o => ({ ...o, [f.key]: e.target.value === '' ? f.cantidadOriginal : Number(e.target.value) }))} />
+                                onChange={e => setOverridesPersist(o => ({ ...o, [f.key]: e.target.value === '' ? f.cantidadOriginal : Number(e.target.value) }))} />
                             </td>
                             <td style={{ padding: '8px 12px' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
                             <td style={{ padding: '8px 12px' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
@@ -835,10 +888,24 @@ function PagosInner({ session }) {
                                 <button onClick={() => setExpandido(open ? null : f.key)} style={{ marginLeft: 8, fontSize: 11, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>detalle</button>
                               )}
                             </td>
+                            {yaCerrada && (
+                              <td style={{ padding: '8px 12px' }}>
+                                {(() => {
+                                  const ci = cierreByKey.get(f.key);
+                                  if (!ci) return <span style={{ fontSize: 11, color: BRAND.muted }}>&mdash;</span>;
+                                  return (
+                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: busyAccion ? 'default' : 'pointer', fontSize: 11 }}>
+                                      <input type="checkbox" checked={!!ci.pagado} disabled={busyAccion} onChange={() => togglePagado(ci.id, !ci.pagado)} />
+                                      {ci.pagado ? <span style={{ color: BRAND.teal, fontWeight: 700 }}>&#10003; Pagado</span> : <span style={{ color: BRAND.muted }}>marcar</span>}
+                                    </label>
+                                  );
+                                })()}
+                              </td>
+                            )}
                           </tr>
                           {open && (
                             <tr>
-                              <td colSpan={8} style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.02)' }}>
+                              <td colSpan={nCols} style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.02)' }}>
                                 {f.modo === 'cp' && f.cpBreakdown && (
                                   <div style={{ marginBottom: 10 }}>
                                     <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 4 }}>Desglose por CP</div>
@@ -873,7 +940,7 @@ function PagosInner({ session }) {
                       );
                     })}
                     {filasVisibles.length === 0 && (
-                      <tr><td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: BRAND.muted }}>Sin datos para esta semana / filtro.</td></tr>
+                      <tr><td colSpan={nCols} style={{ padding: '2rem', textAlign: 'center', color: BRAND.muted }}>Sin datos para esta semana / filtro.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -882,6 +949,17 @@ function PagosInner({ session }) {
               {/* Panel A revisar */}
               <div style={{ ...cardSt, marginBottom: 20 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, color: BRAND.amber }}>⚠ A revisar</div>
+
+                {calc.sinCadete && calc.sinCadete.length > 0 && (() => {
+                  const fechas = calc.sinCadete.map(e => String(e.fecha_estado || '').slice(0, 10)).filter(Boolean).sort();
+                  const rango = fechas.length ? (fechas[0] === fechas[fechas.length - 1] ? fechas[0] : `${fechas[0]} → ${fechas[fechas.length - 1]}`) : 'sin fecha';
+                  return (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.red, marginBottom: 4 }}>⚠ {calc.sinCadete.length} entregas sin cadete asignado en LightData</div>
+                      <div style={{ fontSize: 11.5, color: BRAND.muted }}>Envíos repartidos que nadie cobra. Fechas: {rango}. Rastrealas en LightData para asignarles cadete.</div>
+                    </div>
+                  );
+                })()}
 
                 {sinResolver.length > 0 && (
                   <div style={{ marginBottom: 14 }}>
@@ -930,7 +1008,7 @@ function PagosInner({ session }) {
                   </div>
                 )}
 
-                {sinResolver.length === 0 && calc.configErrors.length === 0 && calc.colectasSinMatch.length === 0 && calc.aparte.length === 0 && (
+                {sinResolver.length === 0 && calc.configErrors.length === 0 && calc.colectasSinMatch.length === 0 && calc.aparte.length === 0 && (!calc.sinCadete || calc.sinCadete.length === 0) && (
                   <div style={{ fontSize: 12.5, color: BRAND.muted }}>Nada para revisar esta semana.</div>
                 )}
               </div>
