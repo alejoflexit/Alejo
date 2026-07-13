@@ -389,6 +389,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
   const [err, setErr] = useState('');
   const [filtro, setFiltro] = useState('');
   const [cpSel, setCpSel] = useState('');
+  const [hoverId, setHoverId] = useState(null); // fila de Config bajo el mouse
   const [nuevoCp, setNuevoCp] = useState({ cp: '', precio: '' });
   const [nuevoAlias, setNuevoAlias] = useState({ nombre_lightdata: '', regla: 'merge', paga_como: '', detalle: '' });
   const [nuevoCadete, setNuevoCadete] = useState({ nombre_lightdata: '', nombre: '', factura: false, precio_fijo: '' });
@@ -444,7 +445,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={inp} placeholder="Nombre LightData (exacto)" value={nuevoCadete.nombre_lightdata} onChange={e => setNuevoCadete(s => ({ ...s, nombre_lightdata: e.target.value, nombre: s.nombre || e.target.value }))} />
           <input style={inp} placeholder="Nombre para mostrar" value={nuevoCadete.nombre} onChange={e => setNuevoCadete(s => ({ ...s, nombre: e.target.value }))} />
-          <input style={{ ...inp, width: 100 }} type="number" placeholder="Precio fijo" value={nuevoCadete.precio_fijo} onChange={e => setNuevoCadete(s => ({ ...s, precio_fijo: e.target.value }))} />
+          <input className="no-spin" style={{ ...inp, width: 100 }} type="number" placeholder="Precio fijo" value={nuevoCadete.precio_fijo} onChange={e => setNuevoCadete(s => ({ ...s, precio_fijo: e.target.value }))} />
           <label style={{ fontSize: 12, color: BRAND.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
             <input type="checkbox" checked={nuevoCadete.factura} onChange={e => setNuevoCadete(s => ({ ...s, factura: e.target.checked }))} /> Factura
           </label>
@@ -483,9 +484,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
           <tbody>
             {filtrados.map(t => {
               const isDirty = !!drafts[t.id];
+              const isSel = cpSel && t.nombre_lightdata === cpSel;
               return (
-                <tr key={t.id} style={{ borderTop: `1px solid ${BRAND.border}`, background: isDirty ? 'rgba(255,176,32,0.10)' : 'transparent' }}>
-                  <td style={{ padding: '5px 6px', fontWeight: 600 }}>{t.nombre_lightdata || <span style={{ color: BRAND.amber }}>{t.nombre} (sin nombre_lightdata)</span>}</td>
+                <tr key={t.id}
+                  onMouseEnter={() => setHoverId(t.id)}
+                  onMouseLeave={() => setHoverId(h => (h === t.id ? null : h))}
+                  style={{ borderTop: `1px solid ${BRAND.border}`, background: isDirty ? 'rgba(255,176,32,0.10)' : isSel ? 'rgba(46,207,170,0.10)' : hoverId === t.id ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
+                  <td style={{ padding: '5px 6px', fontWeight: 600, borderLeft: `3px solid ${isSel ? BRAND.teal : 'transparent'}` }}>{t.nombre_lightdata || <span style={{ color: BRAND.amber }}>{t.nombre} (sin nombre_lightdata)</span>}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <input type="checkbox" checked={!!draftVal(t, 'activo')} onChange={e => setDraft(t.id, 'activo', e.target.checked)} />
                   </td>
@@ -499,7 +504,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                     </select>
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    <input style={{ ...inp, width: 90 }} type="number" placeholder={t.precio_fijo == null ? 'sin fijar' : ''} value={draftVal(t, 'precio_fijo') ?? ''} onChange={e => setDraft(t.id, 'precio_fijo', e.target.value === '' ? null : Number(e.target.value))} />
+                    <input className="no-spin" style={{ ...inp, width: 90 }} type="number" placeholder={t.precio_fijo == null ? 'sin fijar' : ''} value={draftVal(t, 'precio_fijo') ?? ''} onChange={e => setDraft(t.id, 'precio_fijo', e.target.value === '' ? null : Number(e.target.value))} />
                     {draftVal(t, 'precio_fijo') == null && (() => {
                       const zonas = [['CABA', t.tarifa_caba], ['G1', t.tarifa_gba1], ['G2', t.tarifa_gba2], ['G3', t.tarifa_gba3]].filter(x => x[1] != null);
                       return zonas.length ? <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 3 }}>sin precio fijo — usa zona: {zonas.map(x => x[0] + ' ' + money(x[1])).join(' · ')}</div> : null;
@@ -507,10 +512,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     {isDirty && (
-                      <button style={{ ...btn, padding: '3px 10px' }} disabled={busy} onClick={() => doAction(async () => {
-                        await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(drafts[t.id]) });
-                        setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; });
-                      })}>Guardar</button>
+                      <>
+                        <button style={{ ...btn, padding: '3px 10px' }} disabled={busy} onClick={() => doAction(async () => {
+                          await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(drafts[t.id]) });
+                          setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; });
+                        })}>Guardar</button>
+                        <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺ deshacer</button>
+                      </>
                     )}
                     {t.modo === 'cp' && (
                       <button style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.white, background: BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>CPs ({cpOverrides.filter(o => o.nombre_lightdata === t.nombre_lightdata).length})</button>
@@ -870,7 +878,7 @@ function PagosInner({ session }) {
 
   return (
     <div>
-      <style>{`@keyframes pagos-spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`@keyframes pagos-spin{to{transform:rotate(360deg)}} .no-spin::-webkit-inner-spin-button,.no-spin::-webkit-outer-spin-button{-webkit-appearance:none;margin:0} .no-spin{-moz-appearance:textfield}`}</style>
       {/* Header interno + navegación tabla/config */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 6 }}>
