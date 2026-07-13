@@ -657,6 +657,7 @@ function PagosInner({ session }) {
   const [expandido, setExpandido] = useState(null); // key de la fila con detalle abierto
   const [ajusteForm, setAjusteForm] = useState({ concepto: '', monto: '' });
   const [busyAccion, setBusyAccion] = useState(false);
+  const [menuEdiciones, setMenuEdiciones] = useState(false); // Tarea 2: menú del chip de ediciones
 
   // config global (no depende de semana) — se busca al montar
   const refreshConfig = useCallback(async () => {
@@ -839,7 +840,29 @@ function PagosInner({ session }) {
             <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
             <span style={{ fontSize: 13, color: BRAND.teal, fontWeight: 600 }}>{fmtSemanaLabel(semanaLunes)}</span>
             {yaCerrada && <span style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px' }}>Semana cerrada</span>}
-            {nEdiciones > 0 && <span title="cantidades editadas a mano; se guardan en este navegador hasta que cierres la semana" style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px' }}>&#9999;&#65039; {nEdiciones} {nEdiciones === 1 ? 'edición' : 'ediciones'} sin cerrar</span>}
+            {nEdiciones > 0 && (
+              <span style={{ position: 'relative' }}>
+                <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades editadas a mano; se guardan en este navegador hasta que cierres la semana"
+                  style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}>
+                  &#9999;&#65039; {nEdiciones} {nEdiciones === 1 ? 'edición' : 'ediciones'} sin cerrar &#9662;
+                </button>
+                {menuEdiciones && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 10, minWidth: 270, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: BRAND.white }}>Ediciones sin cerrar</span>
+                      <button onClick={() => { setOverridesPersist({}); setMenuEdiciones(false); }} style={{ fontSize: 11, color: BRAND.amber, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>restaurar todo</button>
+                    </div>
+                    {filasEfectivas.filter(f => f.editado).map(f => (
+                      <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 0', borderTop: `1px solid ${BRAND.border}` }}>
+                        <span style={{ flex: 1, fontWeight: 600 }}>{f.nombre}</span>
+                        <span style={{ color: BRAND.muted }}>{f.cantidadOriginal} &#8594; <span style={{ color: BRAND.amber, fontWeight: 700 }}>{f.cantidad}</span></span>
+                        <button title={`volver a ${f.cantidadOriginal}`} onClick={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })} style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 14, padding: 0 }}>↺</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </span>
+            )}
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               {xlsxReady && (
@@ -898,13 +921,13 @@ function PagosInner({ session }) {
                       const open = expandido === f.key;
                       return (
                         <React.Fragment key={f.key}>
-                          <tr style={{ borderTop: `1px solid ${BRAND.border}`, background: f.editado ? 'rgba(255,176,32,0.12)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : 'transparent' }}>
+                          <tr style={{ borderTop: `1px solid ${BRAND.border}`, background: f.faltaPrecio ? 'rgba(226,75,74,0.06)' : 'transparent' }}>
                             <td style={{ padding: '8px 12px', fontWeight: 600 }}>
                               {f.nombre}
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
                             </td>
-                            <td style={{ padding: '8px 12px' }}>
+                            <td style={{ padding: '8px 12px', background: f.editado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
                               <CantidadInput
                                 value={f.cantidad}
                                 original={f.cantidadOriginal}
