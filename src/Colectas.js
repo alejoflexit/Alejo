@@ -1269,7 +1269,6 @@ function ColectasInner({ soloArribos = false }) {
   const sidebarItems = [
     { section: 'OPERACIÓN', items: [
       { id: 'colectas', icon: '📦', label: 'Colectas' },
-      { id: 'arribos',  icon: '🚚', label: 'Arribos' },
       { id: 'pagos',    icon: '💰', label: 'Pagos' },
     ]},
     { section: 'CONFIG', items: [
