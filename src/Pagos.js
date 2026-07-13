@@ -224,6 +224,8 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
   const colectaByKey = new Map();
   const colectasSinMatch = [];
   colectas.forEach(c => {
+    const confirmada = c.estado === 'verde' || (Array.isArray(c.confirmado_por) && c.confirmado_por.length > 0);
+    if (!confirmada) return; // solo se paga la colecta confirmada (no 'sin envíos'/rojo ni pendientes)
     const monto = Number(c.monto ?? c.colectas_clientes?.monto ?? 0) || 0; // fallback al precio del cliente (el monto por colecta casi nunca se guarda)
     (c.choferes || []).forEach(ch => {
       const raw = (ch || '').trim();
@@ -654,7 +656,7 @@ function PagosInner({ session }) {
       const sabado = addDays(lunes, 5);
       const [ent, col, aj, sr, ci] = await Promise.all([
         sbAll(`pagos_entregados?select=cadete,localidad,cp,fecha_estado&semana_lunes=eq.${lunes}`),
-        sbAll(`colectas_registros?select=fecha,choferes,monto,colectas_clientes(monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
+        sbAll(`colectas_registros?select=fecha,choferes,monto,estado,confirmado_por,colectas_clientes(monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
         sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
         sb(`pagos_cadetes_sin_resolver?semana_lunes=eq.${lunes}`),
         sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`),
