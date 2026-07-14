@@ -125,34 +125,40 @@ function calcularFila(canonName, rows, tarifa, ctx) {
   const { cpPriceMap, zonaByLoc, colectaByKey, ajusteRowsByKey } = ctx;
   const key = norm(canonName);
   const cantidad = rows.length;
-  let monto = 0, faltaPrecio = false, fallbackInfo = null, cpBreakdown = null;
+  const base = tarifa.precio_fijo != null ? Number(tarifa.precio_fijo) : null;
+  let monto = 0, faltaPrecio = false, fallbackInfo = null, cpBreakdown = null, modoEfectivo = 'fijo';
 
-  if (tarifa.modo === 'cp') {
+  if (base != null) {
+    // Modelo unificado: precio base para TODO + overrides por CP (excepciones, ej. sábados de Javier).
+    // Un cadete sin overrides cobra todo al precio base (idéntico al viejo "fijo").
     const porCp = new Map();
     rows.forEach(r => {
       const cp = String(r.cp || '').trim() || '(sin CP)';
-      porCp.set(cp, (porCp.get(cp) || 0) + 1);
+      const ov = cpPriceMap.get(`${key}|${cp}`);
+      const prev = porCp.get(cp);
+      if (prev) prev.cantidad += 1;
+      else porCp.set(cp, { cp, cantidad: 1, precio: ov != null ? Number(ov) : base, conOverride: ov != null });
     });
-    cpBreakdown = [];
-    let faltantes = 0;
+    const bd = [...porCp.values()].sort((a, b) => b.cantidad - a.cantidad);
+    bd.forEach(b => { monto += b.precio * b.cantidad; });
+    if (bd.some(b => b.conOverride)) { cpBreakdown = bd; modoEfectivo = 'cp'; } // solo se muestra desglose si hay excepciones
+  } else if (tarifa.modo === 'cp') {
+    // Legacy: cadete en modo cp sin precio base (solo overrides). Sin base, lo que no tenga override queda sin precio.
+    const porCp = new Map();
+    rows.forEach(r => { const cp = String(r.cp || '').trim() || '(sin CP)'; porCp.set(cp, (porCp.get(cp) || 0) + 1); });
+    cpBreakdown = []; let faltantes = 0; modoEfectivo = 'cp';
     porCp.forEach((n, cp) => {
-      let precio = cpPriceMap.get(`${key}|${cp}`);
-      if (precio == null) precio = tarifa.precio_fijo != null ? Number(tarifa.precio_fijo) : null;
-      if (precio == null) { faltantes += n; }
-      else monto += precio * n;
-      cpBreakdown.push({ cp, cantidad: n, precio });
+      const ov = cpPriceMap.get(`${key}|${cp}`);
+      if (ov == null) faltantes += n; else monto += Number(ov) * n;
+      cpBreakdown.push({ cp, cantidad: n, precio: ov != null ? Number(ov) : null, conOverride: ov != null });
     });
     cpBreakdown.sort((a, b) => b.cantidad - a.cantidad);
-    if (faltantes > 0) { faltaPrecio = true; fallbackInfo = `${faltantes} entrega(s) sin precio de CP ni precio base`; }
+    if (faltantes > 0) { faltaPrecio = true; fallbackInfo = `${faltantes} entrega(s) sin precio — ponele un precio fijo (base)`; }
   } else {
-    let precio = tarifa.precio_fijo != null ? Number(tarifa.precio_fijo) : null;
-    if (precio == null) {
-      const fb = precioZonaDominante(rows, tarifa, zonaByLoc);
-      precio = fb.precio;
-      fallbackInfo = fb.zona
-        ? `sin precio fijo — fallback tarifa zona "${fb.zona}"`
-        : 'sin precio fijo y sin zona detectada';
-    }
+    // Sin precio base: fallback a la tarifa por zona dominante (comportamiento legacy).
+    const fb = precioZonaDominante(rows, tarifa, zonaByLoc);
+    const precio = fb.precio;
+    fallbackInfo = fb.zona ? `sin precio fijo — tarifa zona "${fb.zona}"` : 'sin precio fijo y sin zona detectada';
     if (precio == null) faltaPrecio = true;
     else monto = precio * cantidad;
   }
@@ -170,8 +176,8 @@ function calcularFila(canonName, rows, tarifa, ctx) {
     colecta, ajusteRows, ajusteTotal, total,
     factura: !!tarifa.factura,
     activo: tarifa.activo !== false,
-    modo: tarifa.modo || 'fijo',
-    precioFijo: tarifa.precio_fijo != null ? Number(tarifa.precio_fijo) : null,
+    modo: modoEfectivo,
+    precioFijo: base,
     tarifaId: tarifa.id,
   };
 }
