@@ -505,7 +505,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     <input className="no-spin" style={{ ...inp, width: 90 }} type="number" placeholder={t.precio_fijo == null ? 'sin fijar' : ''} value={draftVal(t, 'precio_fijo') ?? ''} onChange={e => setDraft(t.id, 'precio_fijo', e.target.value === '' ? null : Number(e.target.value))} />
-                    {draftVal(t, 'precio_fijo') == null && (() => {
+                    {draftVal(t, 'precio_fijo') == null && draftVal(t, 'modo') !== 'cp' && (() => {
                       const zonas = [['CABA', t.tarifa_caba], ['G1', t.tarifa_gba1], ['G2', t.tarifa_gba2], ['G3', t.tarifa_gba3]].filter(x => x[1] != null);
                       return zonas.length ? <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 3 }}>sin precio fijo — usa zona: {zonas.map(x => x[0] + ' ' + money(x[1])).join(' · ')}</div> : null;
                     })()}
@@ -517,7 +517,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                           await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(drafts[t.id]) });
                           setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; });
                         })}>Guardar</button>
-                        <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺ deshacer</button>
+                        <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺</button>
                       </>
                     )}
                     {t.modo === 'cp' && (
