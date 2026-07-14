@@ -431,7 +431,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
   }, [doAction]);
 
   const filtrados = tarifas.filter(t => !filtro || norm(t.nombre_lightdata || t.nombre).includes(norm(filtro)));
-  const cadetesCp = tarifas.filter(t => t.modo === 'cp');
+  const cadetesCp = tarifas.filter(t => t.nombre_lightdata); // todos los cadetes con nombre (el modal de CPs sirve para cualquiera)
   const overridesDeSel = cpOverrides.filter(o => norm(o.nombre_lightdata) === norm(cpSel));
 
   function setDraft(id, field, value) {
@@ -480,9 +480,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
           <thead>
             <tr style={{ color: BRAND.muted, textAlign: 'left' }}>
               <th style={{ padding: '4px 6px' }}>Nombre LightData</th>
-              <th style={{ padding: '4px 6px' }}>Activo</th>
               <th style={{ padding: '4px 6px' }}>Factura</th>
-              <th style={{ padding: '4px 6px' }}>Modo</th>
               <th style={{ padding: '4px 6px' }}>Precio fijo</th>
               <th style={{ padding: '4px 6px' }}></th>
             </tr>
@@ -498,20 +496,11 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                   style={{ borderTop: `1px solid ${BRAND.border}`, background: isDirty ? 'rgba(255,176,32,0.10)' : isSel ? 'rgba(46,207,170,0.10)' : hoverId === t.id ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', fontWeight: 600, borderLeft: `3px solid ${isSel ? BRAND.teal : 'transparent'}` }}>{t.nombre_lightdata || <span style={{ color: BRAND.amber }}>{t.nombre} (sin nombre_lightdata)</span>}</td>
                   <td style={{ padding: '5px 6px' }}>
-                    <input type="checkbox" checked={!!draftVal(t, 'activo')} onChange={e => setDraft(t.id, 'activo', e.target.checked)} />
-                  </td>
-                  <td style={{ padding: '5px 6px' }}>
                     <input type="checkbox" checked={!!draftVal(t, 'factura')} onChange={e => setDraft(t.id, 'factura', e.target.checked)} />
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    <select style={inp} value={draftVal(t, 'modo') || 'fijo'} onChange={e => setDraft(t.id, 'modo', e.target.value)}>
-                      <option value="fijo">fijo</option>
-                      <option value="cp">cp</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: '5px 6px' }}>
                     <input className="no-spin" style={{ ...inp, width: 90 }} type="number" placeholder={t.precio_fijo == null ? 'sin fijar' : ''} value={draftVal(t, 'precio_fijo') ?? ''} onChange={e => setDraft(t.id, 'precio_fijo', e.target.value === '' ? null : Number(e.target.value))} />
-                    {draftVal(t, 'precio_fijo') == null && draftVal(t, 'modo') !== 'cp' && (() => {
+                    {draftVal(t, 'precio_fijo') == null && (t.modo !== 'cp') && (() => {
                       const zonas = [['CABA', t.tarifa_caba], ['G1', t.tarifa_gba1], ['G2', t.tarifa_gba2], ['G3', t.tarifa_gba3]].filter(x => x[1] != null);
                       return zonas.length ? <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 3 }}>sin precio fijo — usa zona: {zonas.map(x => x[0] + ' ' + money(x[1])).join(' · ')}</div> : null;
                     })()}
@@ -526,12 +515,10 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                         <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺</button>
                       </>
                     )}
-                    {t.modo === 'cp' && (
-                      <button style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.white, background: BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>CPs ({cpOverrides.filter(o => o.nombre_lightdata === t.nombre_lightdata).length})</button>
-                    )}
-                    {draftVal(t, 'modo') === 'cp' && t.modo !== 'cp' && (
-                      <span style={{ fontSize: 10, color: BRAND.amber, marginLeft: 6 }}>guardá y volvé para cargar los CP</span>
-                    )}
+                    {t.nombre_lightdata && (() => {
+                      const nCp = cpOverrides.filter(o => o.nombre_lightdata === t.nombre_lightdata).length;
+                      return <button title="agregar precios especiales por CP (excepciones sobre el precio base)" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: nCp ? BRAND.teal : BRAND.border, color: nCp ? BRAND.teal : BRAND.white, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>CPs extra{nCp ? ` (${nCp})` : ''}</button>;
+                    })()}
                     <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 6, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
                   </td>
                 </tr>
