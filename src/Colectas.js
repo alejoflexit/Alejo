@@ -293,6 +293,7 @@ function ColectasInner({ soloArribos = false }) {
   const [arribos, setArribos] = useState({}); // Arribos: cadete -> { id, llego_at }
   const [colectaLD, setColectaLD] = useState({ porChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
+  const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
 
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
@@ -1320,8 +1321,6 @@ function ColectasInner({ soloArribos = false }) {
     let lista = Object.values(map);
     const total = lista.length;
     const canon = buildCanonAlias(aliasCadetes);
-    const colectaLDTotal = Object.values(colectaLD.porChofer).reduce((a, b) => a + b, 0);
-    const colectaLDHora = colectaLD.actualizado ? new Date(colectaLD.actualizado).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
     const llegados = lista.filter(c => arribos[c.cadete]?.llego_at).length;
     const pct = total ? Math.round(llegados / total * 100) : 0;
     lista.sort((a, b) => {
@@ -1329,6 +1328,8 @@ function ColectasInner({ soloArribos = false }) {
       if (la !== lb) return la ? 1 : -1;
       return a.cadete.localeCompare(b.cadete, 'es');
     });
+    const q = normNombre(busquedaArribos);
+    const listaFiltrada = q ? lista.filter(c => normNombre(c.cadete).includes(q)) : lista;
     const d = new Date(fecha + 'T12:00:00');
     const fechaFmt = d.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
     const faltan = lista.filter(c => !arribos[c.cadete]?.llego_at);
@@ -1340,14 +1341,8 @@ function ColectasInner({ soloArribos = false }) {
             <span>📅</span>
             <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSt, padding:'5px 10px' }} />
           </div>
-          {colectaLD.ok ? (
-            <div title="Datos de Informes → Colecta de LightData, vía bridge (cache 60s)"
-              style={{ fontSize:11, color:BRAND.muted, background:BRAND.faint, border:`1px solid ${BRAND.border}`, borderRadius:20, padding:'4px 10px' }}>
-              📦 colecta LightData{colectaLDHora ? ` · ${colectaLDHora}` : ''}{colectaLDTotal > 0 ? ` · ${colectaLDTotal} hoy` : ''}
-            </div>
-          ) : (
-            <div style={{ fontSize:11, color:'#FBBF24' }}>colecta en vivo no disponible</div>
-          )}
+          <input type="text" value={busquedaArribos} onChange={e => setBusquedaArribos(e.target.value)}
+            placeholder="🔍 Buscar cadete..." style={{ ...inpSt, padding:'5px 10px', width:180 }} />
           <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
             {saveStatus==='saving' && '💾 Guardando...'}
             {saveStatus==='saved'  && '✓ Guardado'}
@@ -1381,8 +1376,13 @@ function ColectasInner({ soloArribos = false }) {
               )}
             </div>
 
+            {listaFiltrada.length === 0 && (
+              <div style={{ color:BRAND.muted, padding:'2rem', textAlign:'center', fontSize:13 }}>
+                Ningún cadete coincide con "{busquedaArribos}".
+              </div>
+            )}
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {lista.map(c => {
+              {listaFiltrada.map(c => {
                 const ar = arribos[c.cadete] || {};
                 const llego = !!ar.llego_at;
                 const hora = ar.llego_at ? new Date(ar.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
