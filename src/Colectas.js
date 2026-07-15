@@ -1343,7 +1343,7 @@ function ColectasInner({ soloArribos = false }) {
           </div>
           <input type="text" value={busquedaArribos} onChange={e => setBusquedaArribos(e.target.value)}
             placeholder="🔍 Buscar cadete..." style={{ ...inpSt, padding:'5px 10px', width:180 }} />
-          <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
+          <div style={{ fontSize:12, marginTop:2, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
             {saveStatus==='saving' && '💾 Guardando...'}
             {saveStatus==='saved'  && '✓ Guardado'}
             {saveStatus==='error'  && '✗ Error al guardar'}
