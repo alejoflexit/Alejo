@@ -6,7 +6,7 @@ const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
 // Bridge LightData (VPS) — solo lectura, riesgo aceptado de exponer la key en el bundle (ver spec-lightdata-bridge)
 const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
-const BRIDGE_KEY = "PENDIENTE_ALEJO"; // pegar la clave real de /root/flexit/bridge.key en el VPS — hasta entonces el badge no aparece (fallback normal, no rompe la vista)
+const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // clave del bridge (/root/flexit/bridge.key en el VPS) — visible en el bundle, riesgo aceptado (ver spec-lightdata-bridge)
 
 const BRAND = {
   navy:    "#0d1b2a",
