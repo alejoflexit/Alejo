@@ -1320,14 +1320,25 @@ function ColectasInner({ soloArribos = false }) {
     <div style={{ display:'flex', gap:0, marginBottom:20, borderBottom:`1px solid ${BRAND.border}` }}>
       {SECCIONES.map(s => {
         const active = tab === s;
+        const sinConfirmar = clientes.filter(c => c.activo && (s === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === s)).filter(c => {
+          const reg = registros[c.id];
+          const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
+          return estEf === 'amarillo';
+        }).length;
         return (
           <button key={s} onClick={() => setTab(s)} style={{
             padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', border:'none',
             background:'transparent', color: active ? BRAND.teal : BRAND.muted,
             borderBottom: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
-            marginBottom:-1, transition:'color 0.15s',
+            marginBottom:-1, transition:'color 0.15s', display:'inline-flex', alignItems:'center', gap:6,
           }}>
             {s}
+            {sinConfirmar > 0 && (
+              <span title={`${sinConfirmar} con envíos sin confirmar`}
+                style={{ fontSize:10, fontWeight:700, minWidth:16, height:16, padding:'0 5px', borderRadius:10, background:'rgba(251,191,36,0.18)', color:'#FBBF24', border:'1px solid rgba(251,191,36,0.4)', display:'inline-flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
+                {sinConfirmar}
+              </span>
+            )}
           </button>
         );
       })}
