@@ -183,13 +183,20 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
 // (sin ocupar lugar); al tocarlo se expande a un input HH:MM con máscara manual (solo
 // dígitos, valida 00:00–23:59 al confirmar) — reemplaza el <input type="time"> nativo,
 // que en Firefox y algunos móviles se veía mal o no abría el selector.
+const ETA_DEFAULT = '15:00';
+
 function EtaInput({ value, onChange }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value || '');
   const inputRef = useRef(null);
 
-  useEffect(() => { setText(value || ''); }, [value]);
+  useEffect(() => { if (!editing) setText(value || ''); }, [value, editing]);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [editing]);
+
+  const startEditing = () => {
+    setText(value || ETA_DEFAULT); // sin hora cargada, arranca en 15:00 (horario habitual) para no tipear las 4 cifras
+    setEditing(true);
+  };
 
   const handleChange = e => {
     const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 4);
@@ -199,8 +206,10 @@ function EtaInput({ value, onChange }) {
   const commit = () => {
     setEditing(false);
     if (text === '') { onChange(''); return; }
-    const m = text.match(/^(\d{2}):(\d{2})$/);
-    if (m && Number(m[1]) <= 23 && Number(m[2]) <= 59) onChange(text);
+    // si solo cargó la hora (2 cifras, sin ':'), completa los minutos en 00
+    const candidate = /^\d{2}$/.test(text) ? `${text}:00` : text;
+    const m = candidate.match(/^(\d{2}):(\d{2})$/);
+    if (m && Number(m[1]) <= 23 && Number(m[2]) <= 59) onChange(candidate);
     else setText(value || '');
   };
 
@@ -225,7 +234,7 @@ function EtaInput({ value, onChange }) {
   }
 
   return (
-    <button type="button" onClick={() => setEditing(true)}
+    <button type="button" onClick={startEditing}
       title={value ? `Hora estimada ${value} · tocar para editar` : 'Poner hora estimada'}
       style={{ display:'flex', alignItems:'center', gap:4, height:28, minWidth:28, padding: value ? '0 8px' : 0,
         justifyContent:'center', borderRadius:14, border:'none', cursor:'pointer',
