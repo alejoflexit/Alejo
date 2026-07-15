@@ -471,9 +471,9 @@ function ColectasInner({ soloArribos = false }) {
       .then(r => { if (!r.ok) throw new Error('bridge ' + r.status); return r.json(); })
       .then(json => {
         const porChofer = {};
-        (json.datos || []).forEach(row => {
+        (json.choferes || []).forEach(row => {
           const key = normNombre(row.chofer);
-          porChofer[key] = (porChofer[key] || 0) + Number(row.valorColecta || 0);
+          porChofer[key] = (porChofer[key] || 0) + Number(row.cantidad || 0);
         });
         setColectaLD({ porChofer, actualizado: json.actualizado || new Date().toISOString(), ok: true });
       })
