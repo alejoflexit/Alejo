@@ -179,11 +179,17 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
   );
 }
 
-// Input de hora HH:MM con máscara manual — reemplaza <input type="time">, que en Firefox
-// y algunos móviles se ve mal o no abre el selector. Solo dígitos, valida 00:00–23:59 al confirmar.
+// Hora de llegada: opcional y discreta. Por defecto es solo un ícono de reloj chico
+// (sin ocupar lugar); al tocarlo se expande a un input HH:MM con máscara manual (solo
+// dígitos, valida 00:00–23:59 al confirmar) — reemplaza el <input type="time"> nativo,
+// que en Firefox y algunos móviles se veía mal o no abría el selector.
 function EtaInput({ value, onChange }) {
+  const [editing, setEditing] = useState(false);
   const [text, setText] = useState(value || '');
+  const inputRef = useRef(null);
+
   useEffect(() => { setText(value || ''); }, [value]);
+  useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [editing]);
 
   const handleChange = e => {
     const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 4);
@@ -191,26 +197,43 @@ function EtaInput({ value, onChange }) {
   };
 
   const commit = () => {
+    setEditing(false);
     if (text === '') { onChange(''); return; }
     const m = text.match(/^(\d{2}):(\d{2})$/);
     if (m && Number(m[1]) <= 23 && Number(m[2]) <= 59) onChange(text);
     else setText(value || '');
   };
 
-  const filled = /^\d{2}:\d{2}$/.test(text);
+  if (editing) {
+    return (
+      <div style={{ display:'flex', alignItems:'center', gap:5, height:28, padding:'0 8px', borderRadius:14,
+        border:'1px solid rgba(58,143,212,0.5)', background:'rgba(58,143,212,0.12)' }}>
+        <span style={{ fontSize:12 }}>🕐</span>
+        <input
+          ref={inputRef}
+          type="text" inputMode="numeric" placeholder="HH:MM" maxLength={5}
+          value={text} onChange={handleChange} onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') e.target.blur();
+            if (e.key === 'Escape') { setText(value || ''); setEditing(false); }
+          }}
+          title="Hora estimada de llegada (HH:MM)"
+          style={{ width:36, border:'none', outline:'none', background:'transparent', padding:0,
+            fontSize:13, fontWeight:600, color:'#8EC5FF' }} />
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:5, height:30, padding:'0 10px', borderRadius:16,
-      border:`1px solid ${filled ? 'rgba(58,143,212,0.5)' : BRAND.border}`,
-      background: filled ? 'rgba(58,143,212,0.12)' : BRAND.faint }}>
-      <span style={{ fontSize:12 }}>🕐</span>
-      <input
-        type="text" inputMode="numeric" placeholder="HH:MM" maxLength={5}
-        value={text} onChange={handleChange} onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-        title="Hora estimada de llegada (HH:MM)"
-        style={{ width:38, border:'none', outline:'none', background:'transparent', padding:0,
-          fontSize:13, fontWeight:600, color: filled ? '#8EC5FF' : BRAND.muted }} />
-    </div>
+    <button type="button" onClick={() => setEditing(true)}
+      title={value ? `Hora estimada ${value} · tocar para editar` : 'Poner hora estimada'}
+      style={{ display:'flex', alignItems:'center', gap:4, height:28, minWidth:28, padding: value ? '0 8px' : 0,
+        justifyContent:'center', borderRadius:14, border:'none', cursor:'pointer',
+        background: value ? 'rgba(58,143,212,0.10)' : 'transparent',
+        color: value ? '#8EC5FF' : BRAND.muted }}>
+      <span style={{ fontSize:14, opacity: value ? 1 : 0.55 }}>🕐</span>
+      {value && <span style={{ fontSize:13, fontWeight:600 }}>{value}</span>}
+    </button>
   );
 }
 
