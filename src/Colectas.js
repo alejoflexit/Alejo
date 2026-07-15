@@ -4,6 +4,10 @@ import { login, logout, getSession, authedFetch, getToken } from './auth';
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
+// Bridge LightData (VPS) — solo lectura, riesgo aceptado de exponer la key en el bundle (ver spec-lightdata-bridge)
+const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
+const BRIDGE_KEY = "PENDIENTE_ALEJO"; // pegar la clave real de /root/flexit/bridge.key en el VPS — hasta entonces el badge no aparece (fallback normal, no rompe la vista)
+
 const BRAND = {
   navy:    "#0d1b2a",
   navyMid: "#112236",
@@ -38,6 +42,26 @@ function todayStr() {
 
 function fmtMonto(n) {
   return n ? '$' + Number(n).toLocaleString('es-AR') : '—';
+}
+
+// Normaliza nombres de LightData para matchear (doble espacio, tildes, mayúsculas)
+function normNombre(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Devuelve una función canon(nombre) que resuelve alias (pagos_cadete_alias, regla=merge) a su nombre canónico
+function buildCanonAlias(aliasList) {
+  const map = new Map();
+  (aliasList || []).forEach(a => {
+    if (a.regla === 'merge' && a.nombre_lightdata && a.paga_como) {
+      map.set(normNombre(a.nombre_lightdata), normNombre(a.paga_como));
+    }
+  });
+  return nombre => { const n = normNombre(nombre); return map.get(n) || n; };
 }
 
 function getWeekRange(fechaStr) {
@@ -200,6 +224,8 @@ function ColectasInner({ soloArribos = false }) {
   const [copiedChofer, setCopiedChofer] = useState(null);
   const [hoverChofer, setHoverChofer] = useState(null); // resalta el grupo del cadete al pasar el mouse
   const [arribos, setArribos] = useState({}); // Arribos: cadete -> { id, llego_at }
+  const [colectaLD, setColectaLD] = useState({ porChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦
+  const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
 
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
@@ -430,6 +456,31 @@ function ColectasInner({ soloArribos = false }) {
       })
       .catch(e => setError('Error cargando arribos: ' + e.message));
   }, [navView, fecha]);
+
+  // Arribos — colecta LightData en vivo (bridge VPS). Fallback silencioso: nunca rompe la vista.
+  useEffect(() => {
+    if (navView !== 'arribos' || !fecha) return;
+    if (aliasCadetes.length === 0) {
+      sbFetch('pagos_cadete_alias?select=*').then(setAliasCadetes).catch(() => {});
+    }
+    const d = new Date(fecha + 'T12:00:00');
+    const fechaLD = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    fetch(`${BRIDGE_URL}?fecha=${encodeURIComponent(fechaLD)}`, { headers: { 'x-bridge-key': BRIDGE_KEY }, signal: ctrl.signal })
+      .then(r => { if (!r.ok) throw new Error('bridge ' + r.status); return r.json(); })
+      .then(json => {
+        const porChofer = {};
+        (json.datos || []).forEach(row => {
+          const key = normNombre(row.chofer);
+          porChofer[key] = (porChofer[key] || 0) + Number(row.valorColecta || 0);
+        });
+        setColectaLD({ porChofer, actualizado: json.actualizado || new Date().toISOString(), ok: true });
+      })
+      .catch(() => setColectaLD(prev => ({ ...prev, ok: false })))
+      .finally(() => clearTimeout(timer));
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [navView, fecha, aliasCadetes.length]);
 
   // Arribos — tiempo real
   useEffect(() => {
@@ -1201,6 +1252,9 @@ function ColectasInner({ soloArribos = false }) {
     });
     let lista = Object.values(map);
     const total = lista.length;
+    const canon = buildCanonAlias(aliasCadetes);
+    const colectaLDTotal = Object.values(colectaLD.porChofer).reduce((a, b) => a + b, 0);
+    const colectaLDHora = colectaLD.actualizado ? new Date(colectaLD.actualizado).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
     const llegados = lista.filter(c => arribos[c.cadete]?.llego_at).length;
     const pct = total ? Math.round(llegados / total * 100) : 0;
     lista.sort((a, b) => {
@@ -1219,6 +1273,14 @@ function ColectasInner({ soloArribos = false }) {
             <span>📅</span>
             <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSt, padding:'5px 10px' }} />
           </div>
+          {colectaLD.ok ? (
+            <div title="Datos de Informes → Colecta de LightData, vía bridge (cache 60s)"
+              style={{ fontSize:11, color:BRAND.muted, background:BRAND.faint, border:`1px solid ${BRAND.border}`, borderRadius:20, padding:'4px 10px' }}>
+              📦 colecta LightData{colectaLDHora ? ` · ${colectaLDHora}` : ''}{colectaLDTotal > 0 ? ` · ${colectaLDTotal} hoy` : ''}
+            </div>
+          ) : (
+            <div style={{ fontSize:11, color:'#FBBF24' }}>colecta en vivo no disponible</div>
+          )}
           <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
             {saveStatus==='saving' && '💾 Guardando...'}
             {saveStatus==='saved'  && '✓ Guardado'}
@@ -1275,6 +1337,17 @@ function ColectasInner({ soloArribos = false }) {
                       </div>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                      {(() => {
+                        const key = canon(c.cadete);
+                        const cantidad = colectaLD.porChofer[key];
+                        if (cantidad === undefined) return null;
+                        return (
+                          <div title="Envíos de colecta hoy (Informes → Colecta de LightData)"
+                            style={{ display:'flex', alignItems:'center', gap:3, height:26, padding:'0 8px', borderRadius:14, border:'1px solid rgba(46,207,170,0.4)', background:'rgba(46,207,170,0.1)', color:'#2ECFAA', fontSize:12, fontWeight:700 }}>
+                            📦 {cantidad}
+                          </div>
+                        );
+                      })()}
                       {/* el input nativo va transparente ENCIMA del reloj: el tap abre el selector de iOS */}
                       <div style={{ position:'relative', display:'inline-flex' }}>
                         {eta ? (
