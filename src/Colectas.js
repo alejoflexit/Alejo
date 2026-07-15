@@ -179,6 +179,41 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
   );
 }
 
+// Input de hora HH:MM con máscara manual — reemplaza <input type="time">, que en Firefox
+// y algunos móviles se ve mal o no abre el selector. Solo dígitos, valida 00:00–23:59 al confirmar.
+function EtaInput({ value, onChange }) {
+  const [text, setText] = useState(value || '');
+  useEffect(() => { setText(value || ''); }, [value]);
+
+  const handleChange = e => {
+    const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 4);
+    setText(digits.length > 2 ? digits.slice(0, 2) + ':' + digits.slice(2) : digits);
+  };
+
+  const commit = () => {
+    if (text === '') { onChange(''); return; }
+    const m = text.match(/^(\d{2}):(\d{2})$/);
+    if (m && Number(m[1]) <= 23 && Number(m[2]) <= 59) onChange(text);
+    else setText(value || '');
+  };
+
+  const filled = /^\d{2}:\d{2}$/.test(text);
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:5, height:30, padding:'0 10px', borderRadius:16,
+      border:`1px solid ${filled ? 'rgba(58,143,212,0.5)' : BRAND.border}`,
+      background: filled ? 'rgba(58,143,212,0.12)' : BRAND.faint }}>
+      <span style={{ fontSize:12 }}>🕐</span>
+      <input
+        type="text" inputMode="numeric" placeholder="HH:MM" maxLength={5}
+        value={text} onChange={handleChange} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+        title="Hora estimada de llegada (HH:MM)"
+        style={{ width:38, border:'none', outline:'none', background:'transparent', padding:0,
+          fontSize:13, fontWeight:600, color: filled ? '#8EC5FF' : BRAND.muted }} />
+    </div>
+  );
+}
+
 function LoginColectas({ onOk }) {
   const [em, setEm] = useState('');
   const [pw, setPw] = useState('');
@@ -1348,19 +1383,7 @@ function ColectasInner({ soloArribos = false }) {
                           </div>
                         );
                       })()}
-                      {/* el input nativo va transparente ENCIMA del reloj: el tap abre el selector de iOS */}
-                      <div style={{ position:'relative', display:'inline-flex' }}>
-                        {eta ? (
-                          <div style={{ display:'flex', alignItems:'center', gap:5, height:30, padding:'0 10px', borderRadius:16, border:'1px solid rgba(58,143,212,0.5)', background:'rgba(58,143,212,0.12)', color:'#8EC5FF', fontSize:13, fontWeight:600 }}>
-                            <span style={{ fontSize:12 }}>🕐</span>{eta}
-                          </div>
-                        ) : (
-                          <div style={{ width:34, height:34, borderRadius:'50%', border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:16, display:'flex', alignItems:'center', justifyContent:'center' }}>🕐</div>
-                        )}
-                        <input type="time" value={eta || '15:00'} onChange={e => setEta(c.cadete, e.target.value)}
-                          title="Hora estimada de llegada"
-                          style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, margin:0, padding:0, border:'none', background:'transparent', cursor:'pointer', colorScheme:'dark' }} />
-                      </div>
+                      <EtaInput value={eta} onChange={v => setEta(c.cadete, v)} />
                       {eta && (
                         <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
                           style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
