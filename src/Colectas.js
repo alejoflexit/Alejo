@@ -624,7 +624,11 @@ function ColectasInner({ soloArribos = false }) {
       return true;
     });
     const { groups, order } = getGroups(clientesFiltrados);
-    const sinAsignar = getGroups(seccionClientes).groups['A coordinar']?.length || 0;
+    const sinAsignar = (getGroups(seccionClientes).groups['A coordinar'] || []).filter(c => {
+      const reg = registros[c.id];
+      const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
+      return estEf !== 'rojo'; // los cancelados / sin envíos no cuentan como "sin asignar"
+    }).length;
 
     // Conteo de estados
     const conteoEstados = seccionClientes.reduce((acc, c) => {
