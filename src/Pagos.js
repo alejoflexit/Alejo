@@ -825,7 +825,7 @@ function PagosInner({ session }) {
     cierres.forEach(c => m.set(norm(c.cadete), c));
     return m;
   }, [cierres]);
-  const nCols = yaCerrada ? 9 : 8; // la columna "Pagado" solo aparece con la semana cerrada
+  const nCols = 8; // columna "Pagado" removida — el pago se marca en la vista "Pagar"
 
   async function cerrarSemana() {
     if (!window.confirm(`¿Cerrar la semana ${fmtSemanaLabel(semanaLunes)}? Esto congela los montos actuales en pagos_cierres (se puede volver a cerrar y se pisa).`)) return;
@@ -1021,21 +1021,21 @@ function PagosInner({ session }) {
 
           {!cargando && (
             <>
-              {/* Filtro método + subtotales */}
-              <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap', alignItems: 'stretch' }}>
-                <div style={{ ...cardSt, flex: '0 0 auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {[['todos', 'Todos'], ['transferencia', 'Transferencia'], ['efectivo', 'Efectivo']].map(([k, l]) => (
-                    <button key={k} onClick={() => setFiltroMetodo(k)} style={btnPill(filtroMetodo === k)}>{l}</button>
-                  ))}
-                </div>
-                <div style={{ ...cardSt, flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, minWidth: 280 }}>
-                  {[['TOTAL', subtotales.total, BRAND.white], ['Transferencia', subtotales.transferencia, BRAND.teal], ['Efectivo', subtotales.efectivo, BRAND.amber]].map(([lbl, val, color]) => (
-                    <div key={lbl} style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 2 }}>{lbl}</div>
-                      <div style={{ fontSize: 17, fontWeight: 700, color }}>{money(val)}</div>
-                    </div>
-                  ))}
-                </div>
+              {/* Filtro método (fila propia) */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Método</span>
+                {[['todos', 'Todos'], ['transferencia', 'Transferencia'], ['efectivo', 'Efectivo']].map(([k, l]) => (
+                  <button key={k} onClick={() => setFiltroMetodo(k)} style={btnPill(filtroMetodo === k)}>{l}</button>
+                ))}
+              </div>
+              {/* Subtotales como tarjetas de métrica */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+                {[['TOTAL', subtotales.total, BRAND.white], ['Transferencia', subtotales.transferencia, BRAND.teal], ['Efectivo', subtotales.efectivo, BRAND.amber]].map(([lbl, val, color]) => (
+                  <div key={lbl} style={{ ...cardSt, padding: '12px 14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
+                    <div style={{ fontSize: 19, fontWeight: 800, color }}>{money(val)}</div>
+                  </div>
+                ))}
               </div>
 
               {/* Tabla principal */}
@@ -1051,11 +1051,10 @@ function PagosInner({ session }) {
                       <th style={thNum}>Ajuste</th>
                       <th style={thNum}>TOTAL</th>
                       <th style={thSt}>Método</th>
-                      {yaCerrada && <th style={thSt}>Pagado</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {filasVisibles.map(f => {
+                    {filasVisibles.map((f, i) => {
                       const precioUnit = f.cantidad ? (f.monto || 0) / f.cantidad : (f.precioFijo || 0);
                       const open = expandido === f.key;
                       return (
@@ -1063,7 +1062,7 @@ function PagosInner({ session }) {
                           <tr
                             onMouseEnter={() => setHoverKey(f.key)}
                             onMouseLeave={() => setHoverKey(h => (h === f.key ? null : h))}
-                            style={{ borderTop: `1px solid ${BRAND.border}`, background: open ? 'rgba(46,207,170,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : 'transparent' }}>
+                            style={{ borderTop: `1px solid ${BRAND.border}`, background: open ? 'rgba(46,207,170,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : (i % 2 ? 'rgba(255,255,255,0.022)' : 'transparent') }}>
                             <td onClick={() => setExpandido(open ? null : f.key)} title="ver / ocultar detalle" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}` }}>
                               <span style={{ borderBottom: `1px dotted ${BRAND.muted}` }}>{f.nombre}</span>
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
@@ -1079,13 +1078,13 @@ function PagosInner({ session }) {
                                 onRestore={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
                               />
                             </td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>{money(f.colecta)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{money(f.colecta)}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
                               {f.ajusteTotal ? <span style={{ color: BRAND.red, textDecoration: 'underline dotted' }}>{money(-f.ajusteTotal)}</span> : <span style={{ fontSize: 11, color: BRAND.muted, textDecoration: 'underline dotted' }}>+ descuento</span>}
                             </td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>{money(f.total)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, color: BRAND.teal }}>{money(f.total)}</td>
                             <td style={{ padding: '8px 12px' }}>
                               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, color: f.factura ? BRAND.teal : BRAND.amber, background: f.factura ? 'rgba(46,207,170,0.12)' : 'rgba(255,176,32,0.12)' }}>
                                 {f.factura ? 'Transferencia' : 'Efectivo'}
@@ -1094,20 +1093,6 @@ function PagosInner({ session }) {
                                 <button onClick={() => setExpandido(open ? null : f.key)} style={{ marginLeft: 8, fontSize: 11, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>detalle</button>
                               )}
                             </td>
-                            {yaCerrada && (
-                              <td style={{ padding: '8px 12px' }}>
-                                {(() => {
-                                  const ci = cierreByKey.get(f.key);
-                                  if (!ci) return <span style={{ fontSize: 11, color: BRAND.muted }}>&mdash;</span>;
-                                  return (
-                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: busyAccion ? 'default' : 'pointer', fontSize: 11 }}>
-                                      <input type="checkbox" checked={!!ci.pagado} disabled={busyAccion} onChange={() => togglePagado(ci.id, !ci.pagado)} />
-                                      {ci.pagado ? <span style={{ color: BRAND.teal, fontWeight: 700 }}>&#10003; Pagado</span> : <span style={{ color: BRAND.muted }}>marcar</span>}
-                                    </label>
-                                  );
-                                })()}
-                              </td>
-                            )}
                           </tr>
                           {open && (
                             <tr>
