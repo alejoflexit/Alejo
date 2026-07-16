@@ -12,7 +12,7 @@ const BRAND = {
   red:      "#E24B4A",
   amber:    "#FFB020",
   white:    "#FFFFFF",
-  muted:    "rgba(255,255,255,0.45)",
+  muted:    "rgba(255,255,255,0.58)",
   faint:    "rgba(255,255,255,0.06)",
   border:   "rgba(255,255,255,0.09)",
 };
@@ -24,6 +24,11 @@ function norm(s) {
 function money(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
+function maskCbu(cbu) {
+  const s = String(cbu || '');
+  return s.length > 8 ? '…' + s.slice(-6) : s;
 }
 
 function fmtSemanaLabel(lunes) {
@@ -55,21 +60,18 @@ function copiar(valor, setCopiado, key) {
   }).catch(() => {});
 }
 
-function CopyField({ label, valor, campoKey, copiado, setCopiado }) {
-  if (!valor) return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: BRAND.amber }}>
-      <span>⚠</span> sin {label.toLowerCase()}
-    </span>
-  );
+// Chip copiable de un dato bancario. `display` opcional (ej. CBU enmascarado); copia el valor completo.
+function CopyField({ label, valor, display, campoKey, copiado, setCopiado }) {
+  if (!valor) return null;
   const isCopiado = copiado === campoKey;
   return (
-    <span onClick={() => copiar(valor, setCopiado, campoKey)} title="tocar para copiar"
+    <span onClick={() => copiar(valor, setCopiado, campoKey)} title={`Tocar para copiar ${label}`}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5,
-        padding: '4px 9px', borderRadius: 8, background: isCopiado ? 'rgba(46,207,170,0.15)' : BRAND.faint,
+        padding: '5px 10px', borderRadius: 8, background: isCopiado ? 'rgba(46,207,170,0.15)' : BRAND.faint,
         border: `1px solid ${isCopiado ? 'rgba(46,207,170,0.4)' : BRAND.border}` }}>
       <span style={{ color: BRAND.muted }}>{label}</span>
-      <span style={{ fontWeight: 600, color: BRAND.white, wordBreak: 'break-all' }}>{valor}</span>
-      <span style={{ fontSize: 11, color: isCopiado ? BRAND.teal : BRAND.muted }}>{isCopiado ? '✓' : '📋'}</span>
+      <span style={{ fontWeight: 600, color: BRAND.white, wordBreak: 'break-all' }}>{display || valor}</span>
+      <span style={{ fontSize: 12, color: isCopiado ? BRAND.teal : BRAND.muted }}>{isCopiado ? '✓' : '📋'}</span>
     </span>
   );
 }
@@ -118,6 +120,7 @@ export default function PagosPagador({ tarifas }) {
   const filas = useMemo(() => {
     return cierres.map(c => {
       const t = tarifaByLD.get(norm(c.cadete)) || {};
+      const alias = t.alias || '', cbu = t.cbu || '';
       return {
         id: c.id,
         nombre: t.nombre || c.cadete,
@@ -125,9 +128,8 @@ export default function PagosPagador({ tarifas }) {
         metodo: c.metodo,
         factura: c.metodo === 'transferencia',
         pagado: !!c.pagado,
-        alias: t.alias || '',
-        cuil: t.cuil || '',
-        cbu: t.cbu || '',
+        alias, cuil: t.cuil || '', cbu,
+        sinDatos: c.metodo === 'transferencia' && !alias && !cbu, // no hay forma de transferir
       };
     }).sort((a, b) => {
       if (a.factura !== b.factura) return a.factura ? -1 : 1; // factura (cobran lunes) primero
@@ -177,7 +179,7 @@ export default function PagosPagador({ tarifas }) {
   const pill = (active, color = BRAND.teal) => ({ padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? color : BRAND.border}`, background: active ? 'rgba(46,207,170,0.15)' : BRAND.faint, color: active ? color : BRAND.muted });
 
   return (
-    <div>
+    <div style={{ maxWidth: 940 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
         <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
         {semanas.length > 0 && (
@@ -196,18 +198,16 @@ export default function PagosPagador({ tarifas }) {
 
       {semanaSel && (
         <>
-          {/* Resumen + progreso */}
           <div style={{ ...cardSt, marginBottom: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 14, fontWeight: 700 }}>Pagados {resumen.pagados} de {resumen.total}</span>
-              <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: resumen.faltan ? BRAND.amber : BRAND.teal }}>{money(resumen.faltan)}</b>{resumen.faltanFactura > 0 && <> · factura {money(resumen.faltanFactura)}</>}</span>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>Pagados {resumen.pagados} de {resumen.total} <span style={{ color: BRAND.muted, fontWeight: 600 }}>· {resumen.pct}%</span></span>
+              <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: resumen.faltan ? BRAND.amber : BRAND.teal }}>{money(resumen.faltan)}</b>{resumen.faltanFactura > 0 && <> · factura <b style={{ color: BRAND.white }}>{money(resumen.faltanFactura)}</b></>}</span>
             </div>
-            <div style={{ height: 8, borderRadius: 20, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+            <div style={{ height: 10, borderRadius: 20, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
               <div style={{ width: `${resumen.pct}%`, height: '100%', borderRadius: 20, background: resumen.pct === 100 ? BRAND.teal : 'linear-gradient(90deg,#FFB020,#2ECFAA)', transition: 'width 0.3s' }} />
             </div>
           </div>
 
-          {/* Filtros: estado + método */}
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['todos', 'Todos']].map(([k, l]) => (
@@ -228,34 +228,35 @@ export default function PagosPagador({ tarifas }) {
             <div style={{ color: BRAND.muted, fontSize: 13, padding: '2rem', textAlign: 'center' }}>Nada para mostrar con este filtro.</div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filasFiltradas.map(f => {
               const chipColor = f.factura ? BRAND.teal : BRAND.amber;
-              const chipBg = f.factura ? 'rgba(46,207,170,0.12)' : 'rgba(255,176,32,0.12)';
+              const chipBg = f.factura ? 'rgba(46,207,170,0.10)' : 'rgba(255,176,32,0.10)';
               return (
-                <div key={f.id} style={{ ...cardSt, opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 10, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : BRAND.border }}>
+                <div key={f.id} style={{ ...cardSt, padding: '10px 14px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 8, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : BRAND.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: chipColor, background: chipBg, border: `1px solid ${chipColor}44`, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, color: chipColor, background: chipBg, border: `1px solid ${chipColor}33`, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                       {f.factura ? 'Factura' : 'Efectivo'}
                     </span>
-                    <span style={{ fontWeight: 700, fontSize: 15, flex: 1, minWidth: 120, textDecoration: f.pagado ? 'line-through' : 'none' }}>{f.nombre}</span>
-                    <span style={{ fontSize: 17, fontWeight: 800, color: f.pagado ? BRAND.muted : BRAND.teal }}>{money(f.total)}</span>
+                    <span style={{ fontWeight: 700, fontSize: 15, minWidth: 130, textDecoration: f.pagado ? 'line-through' : 'none' }}>{f.nombre}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 17, fontWeight: 800, color: f.pagado ? BRAND.muted : BRAND.white }}>{money(f.total)}</span>
                     <button onClick={() => togglePagado(f)} disabled={busyId === f.id}
                       style={{
                         height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: busyId === f.id ? 'wait' : 'pointer',
-                        border: `1px solid ${f.pagado ? BRAND.teal : 'rgba(46,207,170,0.5)'}`,
-                        background: f.pagado ? BRAND.teal : 'rgba(46,207,170,0.1)',
-                        color: f.pagado ? '#06231b' : BRAND.teal,
+                        border: `1px solid ${f.pagado ? BRAND.teal : 'transparent'}`,
+                        background: f.pagado ? 'transparent' : BRAND.teal,
+                        color: f.pagado ? BRAND.teal : '#06231b',
                         display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
                       }}>
                       {f.pagado ? '✓ Pagado' : 'Marcar pagado'}
                     </button>
                   </div>
-                  {f.factura && (
+                  {f.factura && (f.alias || f.cuil || f.cbu || f.sinDatos) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                       <CopyField label="Alias" valor={f.alias} campoKey={`alias-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
                       <CopyField label="CUIL" valor={f.cuil} campoKey={`cuil-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
-                      <CopyField label="CBU" valor={f.cbu} campoKey={`cbu-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
+                      <CopyField label="CBU" valor={f.cbu} display={maskCbu(f.cbu)} campoKey={`cbu-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
+                      {f.sinDatos && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: BRAND.amber }}>⚠ falta alias o CBU para transferir</span>}
                     </div>
                   )}
                 </div>
