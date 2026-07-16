@@ -208,15 +208,16 @@ export default function PagosPagador({ tarifas }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
               {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['todos', 'Todos']].map(([k, l]) => (
                 <button key={k} onClick={() => setFiltro(k)} style={pill(filtro === k)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Método</span>
-              {[['todos', 'Todos'], ['factura', 'Factura'], ['efectivo', 'Efectivo']].map(([k, l]) => (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Método</span>
+              {[['todos', 'Ambos'], ['factura', 'Factura'], ['efectivo', 'Efectivo']].map(([k, l]) => (
                 <button key={k} onClick={() => setFiltroMetodo(k)} style={pill(filtroMetodo === k, k === 'efectivo' ? BRAND.amber : BRAND.teal)}>{l}{k !== 'todos' && <span style={{ opacity: 0.7 }}> ({counts[k]})</span>}</button>
               ))}
             </div>
