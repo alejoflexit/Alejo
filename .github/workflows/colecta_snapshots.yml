@@ -1,0 +1,24 @@
+name: Colecta Snapshots (Fase 0 anticipo)
+
+# Fase 0 de spec-anticipo-dia-zonas: snapshot horario de la colecta del día
+# durante la franja de colecta (11:00–17:00 AR = 14:00–20:00 UTC).
+# Appendea en `colecta_snapshots`; no toca nada más.
+
+on:
+  schedule:
+    - cron: '0 14-20 * * *'   # cada hora, 11–17 AR
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tomar snapshot de colecta
+        run: node automation/colecta_snapshot.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
