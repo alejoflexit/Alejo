@@ -895,7 +895,7 @@ function PagosInner({ session }) {
           <button onClick={() => setVista('tabla')} style={btnPill(vista === 'tabla')}>Semana</button>
           <button onClick={() => setVista('colectas')} style={btnPill(vista === 'colectas')}>Colectas</button>
           {isAdmin && <button onClick={() => setVista('config')} style={btnPill(vista === 'config')}>Config de cadetes</button>}
-          {isAdmin && <button onClick={() => setVista('pagador')} style={btnPill(vista === 'pagador')}>Vista pagador</button>}
+          {isAdmin && <button onClick={() => setVista('pagador')} style={btnPill(vista === 'pagador')}>Pagar</button>}
         </div>
         <div style={{ fontSize: 12, color: BRAND.muted }}>
           {session?.nombre} {isAdmin && <span style={{ color: BRAND.teal }}>(admin)</span>} · <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => { logout(); window.location.reload(); }}>Salir</span>

@@ -1,5 +1,5 @@
-// src/PagosPagador.js — Vista simplificada para quien ejecuta las transferencias (Adrián).
-// Solo LEE pagos_cierres + cadetes_tarifas. No recalcula nada, no edita montos, sin export, sin Config.
+// src/PagosPagador.js — Vista de pago semanal de cadetes (para quien ejecuta los pagos).
+// Solo LEE pagos_cierres + cadetes_tarifas. No recalcula, no edita montos, sin export, sin Config.
 // Ver wiki/analisis/spec-pagos-vista-pagador.md
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { authedFetch } from './auth';
@@ -18,10 +18,7 @@ const BRAND = {
 };
 
 function norm(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .trim();
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
 
 function money(n) {
@@ -59,16 +56,21 @@ function copiar(valor, setCopiado, key) {
 }
 
 function CopyField({ label, valor, campoKey, copiado, setCopiado }) {
-  if (!valor) return <div style={{ fontSize: 11.5, color: BRAND.amber, padding: '3px 0' }}>⚠ sin {label.toLowerCase()}</div>;
+  if (!valor) return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: BRAND.amber }}>
+      <span>⚠</span> sin {label.toLowerCase()}
+    </span>
+  );
   const isCopiado = copiado === campoKey;
   return (
-    <div onClick={() => copiar(valor, setCopiado, campoKey)}
-      title="tocar para copiar"
-      style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5, padding: '3px 0' }}>
-      <span style={{ color: BRAND.muted, minWidth: 42 }}>{label}</span>
+    <span onClick={() => copiar(valor, setCopiado, campoKey)} title="tocar para copiar"
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5,
+        padding: '4px 9px', borderRadius: 8, background: isCopiado ? 'rgba(46,207,170,0.15)' : BRAND.faint,
+        border: `1px solid ${isCopiado ? 'rgba(46,207,170,0.4)' : BRAND.border}` }}>
+      <span style={{ color: BRAND.muted }}>{label}</span>
       <span style={{ fontWeight: 600, color: BRAND.white, wordBreak: 'break-all' }}>{valor}</span>
-      <span style={{ fontSize: 11, color: isCopiado ? BRAND.teal : BRAND.muted }}>{isCopiado ? '✓ copiado' : '📋'}</span>
-    </div>
+      <span style={{ fontSize: 11, color: isCopiado ? BRAND.teal : BRAND.muted }}>{isCopiado ? '✓' : '📋'}</span>
+    </span>
   );
 }
 
@@ -80,11 +82,11 @@ export default function PagosPagador({ tarifas }) {
   const [loadingSemanas, setLoadingSemanas] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filtro, setFiltro] = useState('pendientes'); // pendientes | pagados | todos
+  const [filtro, setFiltro] = useState('pendientes');      // pendientes | pagados | todos
+  const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | factura | efectivo
   const [copiado, setCopiado] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
-  // semanas con cierre (únicas, orden por fecha real desc — semana_label es YYYY-MM-DD)
   useEffect(() => {
     sb('pagos_cierres?select=semana_label')
       .then(rows => {
@@ -121,33 +123,50 @@ export default function PagosPagador({ tarifas }) {
         nombre: t.nombre || c.cadete,
         total: c.total,
         metodo: c.metodo,
+        factura: c.metodo === 'transferencia',
         pagado: !!c.pagado,
         alias: t.alias || '',
         cuil: t.cuil || '',
         cbu: t.cbu || '',
       };
-    }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    }).sort((a, b) => {
+      if (a.factura !== b.factura) return a.factura ? -1 : 1; // factura (cobran lunes) primero
+      return a.nombre.localeCompare(b.nombre, 'es');
+    });
   }, [cierres, tarifaByLD]);
 
   const filasFiltradas = useMemo(() => {
-    if (filtro === 'todos') return filas;
-    if (filtro === 'pagados') return filas.filter(f => f.pagado);
-    return filas.filter(f => !f.pagado);
-  }, [filas, filtro]);
+    let r = filas;
+    if (filtro === 'pagados') r = r.filter(f => f.pagado);
+    else if (filtro === 'pendientes') r = r.filter(f => !f.pagado);
+    if (filtroMetodo === 'factura') r = r.filter(f => f.factura);
+    else if (filtroMetodo === 'efectivo') r = r.filter(f => !f.factura);
+    return r;
+  }, [filas, filtro, filtroMetodo]);
+
+  const counts = useMemo(() => ({
+    pendientes: filas.filter(f => !f.pagado).length,
+    pagados: filas.filter(f => f.pagado).length,
+    todos: filas.length,
+    factura: filas.filter(f => f.factura).length,
+    efectivo: filas.filter(f => !f.factura).length,
+  }), [filas]);
 
   const resumen = useMemo(() => {
     const pagados = filas.filter(f => f.pagado).length;
     const faltan = filas.filter(f => !f.pagado).reduce((s, f) => s + (f.total || 0), 0);
-    return { pagados, total: filas.length, faltan };
+    const faltanFactura = filas.filter(f => !f.pagado && f.factura).reduce((s, f) => s + (f.total || 0), 0);
+    const pct = filas.length ? Math.round(pagados / filas.length * 100) : 0;
+    return { pagados, total: filas.length, faltan, faltanFactura, pct };
   }, [filas]);
 
   async function togglePagado(f) {
     setBusyId(f.id);
-    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: !f.pagado } : c)); // optimista
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: !f.pagado } : c));
     try {
       await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: !f.pagado }) });
     } catch (e) {
-      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: f.pagado } : c)); // revert
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: f.pagado } : c));
       setError(e.message);
     } finally {
       setBusyId(null);
@@ -155,7 +174,7 @@ export default function PagosPagador({ tarifas }) {
   }
 
   const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '12px 14px' };
-  const pill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.teal : BRAND.border}`, background: active ? 'rgba(46,207,170,0.15)' : BRAND.faint, color: active ? BRAND.teal : BRAND.muted });
+  const pill = (active, color = BRAND.teal) => ({ padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? color : BRAND.border}`, background: active ? 'rgba(46,207,170,0.15)' : BRAND.faint, color: active ? color : BRAND.muted });
 
   return (
     <div>
@@ -177,13 +196,28 @@ export default function PagosPagador({ tarifas }) {
 
       {semanaSel && (
         <>
-          <div style={{ ...cardSt, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>
-              Pagados {resumen.pagados} de {resumen.total} — faltan {money(resumen.faltan)}
+          {/* Resumen + progreso */}
+          <div style={{ ...cardSt, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>Pagados {resumen.pagados} de {resumen.total}</span>
+              <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: resumen.faltan ? BRAND.amber : BRAND.teal }}>{money(resumen.faltan)}</b>{resumen.faltanFactura > 0 && <> · factura {money(resumen.faltanFactura)}</>}</span>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ height: 8, borderRadius: 20, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+              <div style={{ width: `${resumen.pct}%`, height: '100%', borderRadius: 20, background: resumen.pct === 100 ? BRAND.teal : 'linear-gradient(90deg,#FFB020,#2ECFAA)', transition: 'width 0.3s' }} />
+            </div>
+          </div>
+
+          {/* Filtros: estado + método */}
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['todos', 'Todos']].map(([k, l]) => (
-                <button key={k} onClick={() => setFiltro(k)} style={pill(filtro === k)}>{l}</button>
+                <button key={k} onClick={() => setFiltro(k)} style={pill(filtro === k)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Método</span>
+              {[['todos', 'Todos'], ['factura', 'Factura'], ['efectivo', 'Efectivo']].map(([k, l]) => (
+                <button key={k} onClick={() => setFiltroMetodo(k)} style={pill(filtroMetodo === k, k === 'efectivo' ? BRAND.amber : BRAND.teal)}>{l}{k !== 'todos' && <span style={{ opacity: 0.7 }}> ({counts[k]})</span>}</button>
               ))}
             </div>
           </div>
@@ -191,27 +225,42 @@ export default function PagosPagador({ tarifas }) {
           {loading && <div style={{ color: BRAND.muted, fontSize: 13, padding: 20, textAlign: 'center' }}>Cargando…</div>}
 
           {!loading && filasFiltradas.length === 0 && (
-            <div style={{ color: BRAND.muted, fontSize: 13 }}>Nada para mostrar con este filtro.</div>
+            <div style={{ color: BRAND.muted, fontSize: 13, padding: '2rem', textAlign: 'center' }}>Nada para mostrar con este filtro.</div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {filasFiltradas.map(f => (
-              <div key={f.id} style={{ ...cardSt, opacity: f.pagado ? 0.55 : 1, display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flex: '0 0 auto' }}>
-                  <input type="checkbox" checked={f.pagado} disabled={busyId === f.id} onChange={() => togglePagado(f)} style={{ width: 18, height: 18 }} />
-                </label>
-                <div style={{ flex: '1 1 160px', minWidth: 140 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, textDecoration: f.pagado ? 'line-through' : 'none' }}>{f.nombre}</div>
-                  <div style={{ fontSize: 11, color: BRAND.muted }}>{f.metodo === 'efectivo' ? 'Efectivo' : 'Transferencia'}</div>
+            {filasFiltradas.map(f => {
+              const chipColor = f.factura ? BRAND.teal : BRAND.amber;
+              const chipBg = f.factura ? 'rgba(46,207,170,0.12)' : 'rgba(255,176,32,0.12)';
+              return (
+                <div key={f.id} style={{ ...cardSt, opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 10, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : BRAND.border }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: chipColor, background: chipBg, border: `1px solid ${chipColor}44`, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      {f.factura ? 'Factura' : 'Efectivo'}
+                    </span>
+                    <span style={{ fontWeight: 700, fontSize: 15, flex: 1, minWidth: 120, textDecoration: f.pagado ? 'line-through' : 'none' }}>{f.nombre}</span>
+                    <span style={{ fontSize: 17, fontWeight: 800, color: f.pagado ? BRAND.muted : BRAND.teal }}>{money(f.total)}</span>
+                    <button onClick={() => togglePagado(f)} disabled={busyId === f.id}
+                      style={{
+                        height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: busyId === f.id ? 'wait' : 'pointer',
+                        border: `1px solid ${f.pagado ? BRAND.teal : 'rgba(46,207,170,0.5)'}`,
+                        background: f.pagado ? BRAND.teal : 'rgba(46,207,170,0.1)',
+                        color: f.pagado ? '#06231b' : BRAND.teal,
+                        display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+                      }}>
+                      {f.pagado ? '✓ Pagado' : 'Marcar pagado'}
+                    </button>
+                  </div>
+                  {f.factura && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                      <CopyField label="Alias" valor={f.alias} campoKey={`alias-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
+                      <CopyField label="CUIL" valor={f.cuil} campoKey={`cuil-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
+                      <CopyField label="CBU" valor={f.cbu} campoKey={`cbu-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: BRAND.teal, flex: '0 0 auto' }}>{money(f.total)}</div>
-                <div style={{ flex: '1 1 220px', minWidth: 200 }}>
-                  <CopyField label="Alias" valor={f.alias} campoKey={`alias-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
-                  <CopyField label="CUIL" valor={f.cuil} campoKey={`cuil-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
-                  <CopyField label="CBU" valor={f.cbu} campoKey={`cbu-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
