@@ -820,11 +820,6 @@ function PagosInner({ session }) {
   const thNum = { ...thSt, textAlign: 'right' };
 
   const yaCerrada = cierres.length > 0;
-  const cierreByKey = useMemo(() => {
-    const m = new Map();
-    cierres.forEach(c => m.set(norm(c.cadete), c));
-    return m;
-  }, [cierres]);
   const nCols = 8; // columna "Pagado" removida — el pago se marca en la vista "Pagar"
 
   async function cerrarSemana() {
@@ -848,15 +843,6 @@ function PagosInner({ session }) {
   }
 
   // Tarea 3: alternar el check "Pagado" de una fila del cierre
-  async function togglePagado(cierreId, valor) {
-    setBusyAccion(true); setError('');
-    try {
-      await sb(`pagos_cierres?id=eq.${cierreId}`, { method: 'PATCH', body: JSON.stringify({ pagado: valor }) });
-      await refreshSemana(semanaLunes);
-    } catch (e) { setError(e.message); }
-    finally { setBusyAccion(false); }
-  }
-
   async function altaRapida(nombreLD) {
     setBusyAccion(true); setError('');
     try {
