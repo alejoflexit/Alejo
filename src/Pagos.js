@@ -482,6 +482,9 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
               <th style={{ padding: '4px 6px' }}>Nombre LightData</th>
               <th style={{ padding: '4px 6px' }}>Factura</th>
               <th style={{ padding: '4px 6px' }}>Precio fijo</th>
+              <th style={{ padding: '4px 6px' }}>CUIL</th>
+              <th style={{ padding: '4px 6px' }}>CBU</th>
+              <th style={{ padding: '4px 6px' }}>Alias</th>
               <th style={{ padding: '4px 6px' }}></th>
             </tr>
           </thead>
@@ -504,6 +507,15 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, onRefresh }) {
                       const zonas = [['CABA', t.tarifa_caba], ['G1', t.tarifa_gba1], ['G2', t.tarifa_gba2], ['G3', t.tarifa_gba3]].filter(x => x[1] != null);
                       return zonas.length ? <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 3 }}>sin precio fijo — usa zona: {zonas.map(x => x[0] + ' ' + money(x[1])).join(' · ')}</div> : null;
                     })()}
+                  </td>
+                  <td style={{ padding: '5px 6px' }}>
+                    <input style={{ ...inp, width: 110 }} placeholder="sin CUIL" value={draftVal(t, 'cuil') ?? ''} onChange={e => setDraft(t.id, 'cuil', e.target.value)} />
+                  </td>
+                  <td style={{ padding: '5px 6px' }}>
+                    <input style={{ ...inp, width: 130 }} placeholder="sin CBU" value={draftVal(t, 'cbu') ?? ''} onChange={e => setDraft(t.id, 'cbu', e.target.value)} />
+                  </td>
+                  <td style={{ padding: '5px 6px' }}>
+                    <input style={{ ...inp, width: 110 }} placeholder="sin alias" value={draftVal(t, 'alias') ?? ''} onChange={e => setDraft(t.id, 'alias', e.target.value)} />
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     {isDirty && (
