@@ -230,6 +230,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
   //    mismo criterio que la sub-vista "Pagos" existente dentro de Colectas)
   const colectaByKey = new Map();
   const colectasSinMatch = [];
+  const colectaResumen = new Map(); // desglose por chofer para la seccion Colectas de Liquidaciones (solo lectura)
   colectas.forEach(c => {
     const confirmada = c.estado === 'verde' || (Array.isArray(c.confirmado_por) && c.confirmado_por.length > 0);
     if (!confirmada) return; // solo se paga la colecta confirmada (no 'sin envíos'/rojo ni pendientes)
@@ -240,6 +241,9 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
       const key = norm(raw);
       if (tarifaByLD.has(key)) {
         colectaByKey.set(key, (colectaByKey.get(key) || 0) + monto);
+        const r = colectaResumen.get(key) || { chofer: raw, cadete: tarifaByLD.get(key).nombre_lightdata || raw, cantidad: 0, monto: 0 };
+        r.cantidad += 1; r.monto += monto;
+        colectaResumen.set(key, r);
       } else {
         colectasSinMatch.push({ chofer: raw, fecha: c.fecha, monto });
       }
@@ -282,7 +286,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     }
   }
 
-  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete };
+  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen };
 }
 
 // aplica el override de cantidad (editable en la UI) a una fila calculada
@@ -765,7 +769,7 @@ function PagosInner({ session }) {
   useEffect(() => { if (semanaLunes) refreshSemana(semanaLunes); }, [semanaLunes, refreshSemana]);
 
   const calc = useMemo(() => {
-    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [] };
+    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map() };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
@@ -889,6 +893,7 @@ function PagosInner({ session }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => setVista('tabla')} style={btnPill(vista === 'tabla')}>Semana</button>
+          <button onClick={() => setVista('colectas')} style={btnPill(vista === 'colectas')}>Colectas</button>
           {isAdmin && <button onClick={() => setVista('config')} style={btnPill(vista === 'config')}>Config de cadetes</button>}
           {isAdmin && <button onClick={() => setVista('pagador')} style={btnPill(vista === 'pagador')}>Vista pagador</button>}
         </div>
@@ -905,6 +910,60 @@ function PagosInner({ session }) {
 
       {vista === 'pagador' && isAdmin && (
         <PagosPagador tarifas={tarifas} />
+      )}
+
+      {vista === 'colectas' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
+            <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
+          </div>
+          {cargando && <div style={{ color: BRAND.muted, padding: '2rem', textAlign: 'center' }}>Calculando...</div>}
+          {!cargando && (() => {
+            const filasCol = [...calc.colectaResumen.values()].sort((a, b) => b.monto - a.monto);
+            const totCant = filasCol.reduce((t, r) => t + r.cantidad, 0);
+            const totMonto = filasCol.reduce((t, r) => t + r.monto, 0);
+            return (
+              <>
+                <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 10 }}>Solo lectura — la colecta se gestiona en la pestaña Colectas. Estos montos son los que entran a la columna "Colecta" de la liquidación.</div>
+                {filasCol.length === 0 && <div style={{ color: BRAND.muted, padding: '2.5rem', textAlign: 'center' }}>Sin colectas confirmadas para esta semana.</div>}
+                {filasCol.length > 0 && (
+                  <div style={{ ...cardSt, padding: 0, overflow: 'auto', marginBottom: 16 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520, fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ color: BRAND.muted, textAlign: 'left', borderBottom: `1px solid ${BRAND.border}` }}>
+                          <th style={thSt}>Chofer</th>
+                          <th style={thSt}>Se imputa a</th>
+                          <th style={thNum}>Colectas</th>
+                          <th style={thNum}>Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filasCol.map(r => (
+                          <tr key={r.chofer} style={{ borderBottom: `1px solid ${BRAND.border}` }}>
+                            <td style={{ padding: '9px 12px', fontWeight: 600 }}>{r.chofer}</td>
+                            <td style={{ padding: '9px 12px', color: BRAND.muted }}>{r.cadete}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right' }}>{r.cantidad}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.teal }}>{money(r.monto)}</td>
+                          </tr>
+                        ))}
+                        <tr>
+                          <td style={{ padding: '10px 12px', fontWeight: 700 }}>TOTAL</td>
+                          <td />
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>{totCant}</td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.teal }}>{money(totMonto)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {calc.colectasSinMatch.length > 0 && (
+                  <div style={{ fontSize: 12, color: BRAND.amber }}>⚠️ {calc.colectasSinMatch.length} colecta(s) con chofer sin resolver — no entran acá ni a la liquidación (ver "A revisar" en Semana).</div>
+                )}
+              </>
+            );
+          })()}
+        </>
       )}
 
       {vista === 'tabla' && (
