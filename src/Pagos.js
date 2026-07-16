@@ -4,6 +4,7 @@
 // Maker/checker: la app calcula y muestra; Alejo revisa, edita y confirma — nada se paga solo.
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { login, logout, getSession, authedFetch } from './auth';
+import PagosPagador from './PagosPagador';
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -692,7 +693,7 @@ function PagosInner({ session }) {
   const xlsxReady = useXLSX();
   const isAdmin = session && session.email === ADMIN_EMAIL;
 
-  const [vista, setVista] = useState('tabla'); // 'tabla' | 'config'
+  const [vista, setVista] = useState('tabla'); // 'tabla' | 'config' | 'pagador'
   const [fecha, setFecha] = useState(todayStr);
   const [semanaLunes, setSemanaLunes] = useState(null); // se resuelve al cargar
 
@@ -889,6 +890,7 @@ function PagosInner({ session }) {
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => setVista('tabla')} style={btnPill(vista === 'tabla')}>Semana</button>
           {isAdmin && <button onClick={() => setVista('config')} style={btnPill(vista === 'config')}>Config de cadetes</button>}
+          {isAdmin && <button onClick={() => setVista('pagador')} style={btnPill(vista === 'pagador')}>Vista pagador</button>}
         </div>
         <div style={{ fontSize: 12, color: BRAND.muted }}>
           {session?.nombre} {isAdmin && <span style={{ color: BRAND.teal }}>(admin)</span>} · <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => { logout(); window.location.reload(); }}>Salir</span>
@@ -899,6 +901,10 @@ function PagosInner({ session }) {
 
       {vista === 'config' && isAdmin && (
         <ConfigCadetes tarifas={tarifas} alias={alias} cpOverrides={cpOverrides} onRefresh={refreshConfig} />
+      )}
+
+      {vista === 'pagador' && isAdmin && (
+        <PagosPagador tarifas={tarifas} />
       )}
 
       {vista === 'tabla' && (
