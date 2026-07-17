@@ -185,18 +185,16 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
 // que en Firefox y algunos móviles se veía mal o no abría el selector.
 const ETA_DEFAULT = '15:00';
 
-function EtaInput({ value, onChange }) {
-  const [editing, setEditing] = useState(false);
+// Muestra la hora estimada en el slot central de la fila. La edición se abre desde acá (tocando la hora)
+// o desde el botón reloj fijo de la derecha (editing controlado por el padre).
+function EtaInput({ value, onChange, editing, onEditingChange }) {
   const [text, setText] = useState(value || '');
   const inputRef = useRef(null);
 
   useEffect(() => { if (!editing) setText(value || ''); }, [value, editing]);
+  // al abrir la edición, arranca en la hora cargada o 15:00 (horario habitual) para no tipear las 4 cifras
+  useEffect(() => { if (editing) setText(value || ETA_DEFAULT); }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [editing]);
-
-  const startEditing = () => {
-    setText(value || ETA_DEFAULT); // sin hora cargada, arranca en 15:00 (horario habitual) para no tipear las 4 cifras
-    setEditing(true);
-  };
 
   const handleChange = e => {
     const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 4);
@@ -204,7 +202,7 @@ function EtaInput({ value, onChange }) {
   };
 
   const commit = () => {
-    setEditing(false);
+    onEditingChange(false);
     if (text === '') { onChange(''); return; }
     // si solo cargó la hora (2 cifras, sin ':'), completa los minutos en 00
     const candidate = /^\d{2}$/.test(text) ? `${text}:00` : text;
@@ -224,7 +222,7 @@ function EtaInput({ value, onChange }) {
           value={text} onChange={handleChange} onBlur={commit}
           onKeyDown={e => {
             if (e.key === 'Enter') e.target.blur();
-            if (e.key === 'Escape') { setText(value || ''); setEditing(false); }
+            if (e.key === 'Escape') { setText(value || ''); onEditingChange(false); }
           }}
           title="Hora estimada de llegada (HH:MM)"
           style={{ width:36, border:'none', outline:'none', background:'transparent', padding:0,
@@ -233,15 +231,16 @@ function EtaInput({ value, onChange }) {
     );
   }
 
+  if (!value) return null;
+
   return (
-    <button type="button" onClick={startEditing}
-      title={value ? `Hora estimada ${value} · tocar para editar` : 'Poner hora estimada'}
-      style={{ display:'flex', alignItems:'center', gap:4, height:28, minWidth:28, padding: value ? '0 8px' : 0,
+    <button type="button" onClick={() => onEditingChange(true)}
+      title={`Hora estimada ${value} · tocar para editar`}
+      style={{ display:'flex', alignItems:'center', gap:4, height:28, padding:'0 8px',
         justifyContent:'center', borderRadius:14, border:'none', cursor:'pointer',
-        background: value ? 'rgba(58,143,212,0.10)' : 'transparent',
-        color: value ? '#8EC5FF' : BRAND.muted }}>
-      <span style={{ fontSize:14, opacity: value ? 1 : 0.55 }}>🕐</span>
-      {value && <span style={{ fontSize:13, fontWeight:600 }}>{value}</span>}
+        background: 'rgba(58,143,212,0.10)', color: '#8EC5FF' }}>
+      <span style={{ fontSize:14 }}>🕐</span>
+      <span style={{ fontSize:13, fontWeight:600 }}>{value}</span>
     </button>
   );
 }
@@ -294,6 +293,7 @@ function ColectasInner({ soloArribos = false }) {
   const [colectaLD, setColectaLD] = useState({ porChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
+  const [etaEdit, setEtaEdit] = useState(null); // cadete cuya hora estimada se está editando
 
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
@@ -1298,7 +1298,8 @@ function ColectasInner({ soloArribos = false }) {
 
   const toggleLlego = (cadete) => {
     const llego = arribos[cadete]?.llego_at;
-    upsertArribo(cadete, { llego_at: llego ? null : new Date().toISOString() });
+    // al confirmar la llegada se borra la hora estimada (ya no hace falta)
+    upsertArribo(cadete, llego ? { llego_at: null } : { llego_at: new Date().toISOString(), eta: null });
   };
 
   const setEta = (cadete, valor) => {
@@ -1401,12 +1402,17 @@ function ColectasInner({ soloArribos = false }) {
                         </div>
                       </div>
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:5, flexShrink:0 }}>
-                      <EtaInput value={eta} onChange={v => setEta(c.cadete, v)} />
-                      {eta && (
-                        <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
-                          style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-                      )}
+
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6, flexShrink:0 }}>
+                      {/* Slot central de ancho fijo para la hora estimada: nada se desplaza al cargarla */}
+                      <div style={{ width:118, display:'flex', alignItems:'center', justifyContent:'center', gap:5, flexShrink:0 }}>
+                        <EtaInput value={eta} onChange={v => setEta(c.cadete, v)}
+                          editing={etaEdit === c.cadete} onEditingChange={v => setEtaEdit(v ? c.cadete : null)} />
+                        {eta && etaEdit !== c.cadete && (
+                          <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
+                            style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                        )}
+                      </div>
                       {(() => {
                         const key = canon(c.cadete);
                         const cantidad = colectaLD.porChofer[key];
@@ -1418,6 +1424,10 @@ function ColectasInner({ soloArribos = false }) {
                           </div>
                         );
                       })()}
+                      {/* Botón reloj fijo a la derecha del paquete: abre la edición de hora estimada */}
+                      <button onClick={() => setEtaEdit(c.cadete)}
+                        title={eta ? `Hora estimada ${eta} · tocar para editar` : 'Poner hora estimada'}
+                        style={{ width:28, height:28, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>🕐</button>
                     </div>
                   </div>
                 );
