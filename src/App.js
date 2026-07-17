@@ -781,14 +781,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background:BRAND.navy, minHeight:"100vh", padding:"1.5rem", paddingBottom: isMobile ? "5rem" : "1.5rem", paddingLeft: isMobile ? "1.5rem" : "calc(228px + 1.5rem)", color:BRAND.white }}>
-
-      {/* Sidebar fija en desktop: navegación siempre visible con la sección activa marcada */}
-      {!isMobile && (
-        <div style={{ position:"fixed", top:0, left:0, bottom:0, width:228, boxSizing:"border-box", background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", overflowY:"auto", zIndex:500 }}>
-          <NavPanel seccion={seccion} go={setSeccion} logo={FLEXIT_LOGO} />
-        </div>
-      )}
+    <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background:BRAND.navy, minHeight:"100vh", padding:"1.5rem", paddingBottom: isMobile ? "5rem" : "1.5rem", color:BRAND.white }}>
 
       {/* Modal: elegir fecha antes de procesar Excel */}
       {showDateModal && (
@@ -813,8 +806,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Sidebar overlay (solo mobile; en desktop la sidebar es fija) */}
-      {isMobile && sidebarOpen && (
+      {/* Sidebar overlay (se abre con ☰) */}
+      {sidebarOpen && (
         <div onClick={() => setSidebarOpen(false)}
           style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, backdropFilter:"blur(2px)" }}>
           <div onClick={e => e.stopPropagation()}
@@ -827,10 +820,10 @@ export default function App() {
       {/* Header */}
       {seccion !== "home" && (<div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-        {isMobile && <button onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"
+        <button onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"
           style={{ width:40, height:40, borderRadius:9, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           ☰
-        </button>}
+        </button>
         <div style={{ width:44, height:44, borderRadius:12, flexShrink:0, overflow:"hidden" }}>
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>

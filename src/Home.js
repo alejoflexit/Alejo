@@ -51,11 +51,7 @@ export default function Home({ onNav, onMenu, isMobile, logo }) {
 
   return (
     <div style={{ minHeight: "72vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", position: "relative", paddingTop: isMobile ? 8 : 24 }}>
-      {/* Menú (abre el sidebar) — solo mobile; en desktop la sidebar es fija */}
-      {isMobile && <button onClick={onMenu} aria-label="Menú"
-        style={{ position: "absolute", top: 0, left: 0, width: 38, height: 38, borderRadius: 9, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        ☰
-      </button>}
+      {/* En la página principal no se muestra el menú: se navega con las tarjetas */}
 
       {/* Marca */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: isMobile ? 26 : 38 }}>
