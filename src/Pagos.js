@@ -29,6 +29,7 @@ function norm(s) {
   return String(s || '')
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ') // colapsa dobles espacios ("Emanuel  Cortazzo" == "Emanuel Cortazzo")
     .trim();
 }
 
@@ -231,14 +232,25 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
   const colectaByKey = new Map();
   const colectasSinMatch = [];
   const colectaResumen = new Map(); // desglose por chofer para la seccion Colectas de Liquidaciones (solo lectura)
+  const fleteroMap = new Map(); // fleteros: solo hacen colectas y cobran el monto de cada una
   colectas.forEach(c => {
     const confirmada = c.estado === 'verde' || (Array.isArray(c.confirmado_por) && c.confirmado_por.length > 0);
     if (!confirmada) return; // solo se paga la colecta confirmada (no 'sin envíos'/rojo ni pendientes)
     const monto = Number(c.monto ?? c.colectas_clientes?.monto ?? 0) || 0; // fallback al precio del cliente (el monto por colecta casi nunca se guarda)
     (c.choferes || []).forEach(ch => {
-      const raw = (ch || '').trim();
+      let raw = (ch || '').trim();
       if (!raw || norm(raw) === 'a coordinar') return;
+      // resolver alias también en colectas (ej. "Yeni" -> "Yeni Sambrano")
+      const alC = aliasByLD.get(norm(raw));
+      if (alC && alC.regla === 'merge' && alC.paga_como) raw = alC.paga_como;
       const key = norm(raw);
+      const tC = tarifaByLD.get(key);
+      if (tC && tC.fletero) {
+        const f = fleteroMap.get(key) || { key, nombre: tC.nombre_lightdata || raw, cantidad: 0, monto: 0, entregas: 0 };
+        f.cantidad += 1; f.monto += monto;
+        fleteroMap.set(key, f);
+        return;
+      }
       if (tarifaByLD.has(key)) {
         colectaByKey.set(key, (colectaByKey.get(key) || 0) + monto);
         const r = colectaResumen.get(key) || { chofer: raw, cadete: tarifaByLD.get(key).nombre_lightdata || raw, cantidad: 0, monto: 0 };
@@ -268,8 +280,16 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
       configErrors.push({ nombre: g.canonName, cantidad: g.rows.length, motivo: 'canónico sin fila en cadetes_tarifas (revisar pagos_cadete_alias.paga_como o dar de alta)' });
       continue;
     }
+    if (tarifa.fletero) {
+      // fletero: no entra a la liquidación por entregas; se le pagan las colectas (sección Fleteros)
+      const f = fleteroMap.get(key) || { key, nombre: tarifa.nombre_lightdata || g.canonName, cantidad: 0, monto: 0, entregas: 0 };
+      f.entregas += g.rows.length;
+      fleteroMap.set(key, f);
+      continue;
+    }
     filas.push(calcularFila(g.canonName, g.rows, tarifa, ctx));
   }
+  const fleteros = [...fleteroMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
   const aparte = [];
   for (const [key, g] of aparteGroups) {
@@ -305,7 +325,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     }).sort((x, y) => y.cantidad - x.cantidad);
     cpsPorCadete.set(canonKey, arr);
   }
-  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete };
+  return { filas, aparte, fleteros, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete };
 }
 
 // aplica el override de cantidad (editable en la UI) a una fila calculada
@@ -366,7 +386,7 @@ function LoginPagos({ onOk }) {
 
 // ───────────────────────── export a excel ─────────────────────────
 
-function exportarExcel({ filas, aparte, sinResolver, semanaLunes, subtotales }) {
+function exportarExcel({ filas, aparte, fleteros = [], sinResolver, semanaLunes, subtotales }) {
   const label = fmtSemanaLabel(semanaLunes);
   const header = ['Cadete', 'Cantidad', 'Precio', 'Monto', 'Colecta', 'Ajuste', 'TOTAL', 'Método'];
   const rows = filas.map(f => [
@@ -386,6 +406,13 @@ function exportarExcel({ filas, aparte, sinResolver, semanaLunes, subtotales }) 
     ['Transferencia', '', '', '', '', '', Math.round(subtotales.transferencia)],
     ['Efectivo', '', '', '', '', '', Math.round(subtotales.efectivo)],
   ];
+
+  if (fleteros.length) {
+    aoa.push([], ['FLETEROS (colectas — no suman al total)']);
+    aoa.push(['Fletero', 'Colectas', 'TOTAL']);
+    fleteros.forEach(f => aoa.push([f.nombre, f.cantidad, Math.round(f.monto || 0)]));
+    aoa.push(['Total fleteros', fleteros.reduce((s, f) => s + f.cantidad, 0), Math.round(fleteros.reduce((s, f) => s + f.monto, 0))]);
+  }
 
   if (aparte.length) {
     aoa.push([], ['PAGOS APARTE (fleteros / no suman al total)']);
@@ -521,6 +548,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
             <tr style={{ color: BRAND.muted, textAlign: 'left' }}>
               <th style={{ padding: '4px 6px' }}>Nombre LightData</th>
               <th style={{ padding: '4px 6px' }}>Factura</th>
+              <th style={{ padding: '4px 6px' }} title="Solo hace colectas: cobra el monto de cada colecta y no entra a la liquidación por entregas">Fletero</th>
               <th style={{ padding: '4px 6px' }}>Precio fijo</th>
               <th style={{ padding: '4px 6px' }}>CUIL</th>
               <th style={{ padding: '4px 6px' }}>CBU</th>
@@ -540,6 +568,9 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
                   <td style={{ padding: '5px 6px', fontWeight: 600, borderLeft: `3px solid ${isSel ? BRAND.teal : 'transparent'}` }}>{t.nombre_lightdata || <span style={{ color: BRAND.amber }}>{t.nombre} (sin nombre_lightdata)</span>}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <input type="checkbox" checked={!!draftVal(t, 'factura')} onChange={e => setDraft(t.id, 'factura', e.target.checked)} />
+                  </td>
+                  <td style={{ padding: '5px 6px' }}>
+                    <input type="checkbox" checked={!!draftVal(t, 'fletero')} onChange={e => setDraft(t.id, 'fletero', e.target.checked)} />
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     <input className="no-spin" style={{ ...inp, width: 90 }} type="number" placeholder={t.precio_fijo == null ? 'sin fijar' : ''} value={draftVal(t, 'precio_fijo') ?? ''} onChange={e => setDraft(t.id, 'precio_fijo', e.target.value === '' ? null : Number(e.target.value))} />
@@ -823,7 +854,7 @@ function PagosInner({ session }) {
   useEffect(() => { if (semanaLunes) refreshSemana(semanaLunes); }, [semanaLunes, refreshSemana]);
 
   const calc = useMemo(() => {
-    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map() };
+    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], fleteros: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map() };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
@@ -1042,7 +1073,7 @@ function PagosInner({ session }) {
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               {xlsxReady && (
-                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, sinResolver, semanaLunes, subtotales })}
+                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, fleteros: calc.fleteros, sinResolver, semanaLunes, subtotales })}
                   style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 8, cursor: 'pointer', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} /> Exportar Excel
                 </button>
@@ -1202,6 +1233,42 @@ function PagosInner({ session }) {
                 </table>
               </div>
 
+              {/* Fleteros: solo hacen colectas y cobran el monto de cada una */}
+              {calc.fleteros.length > 0 && (
+                <div style={{ ...cardSt, marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.teal }}>🚚 Fleteros — colectas de la semana ({calc.fleteros.length})</div>
+                    <div style={{ fontSize: 11, color: BRAND.muted }}>Cobran el monto de cada colecta. No suman al total general.</div>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead>
+                      <tr style={{ color: BRAND.muted, textAlign: 'left' }}>
+                        <th style={{ padding: '4px 6px' }}>Fletero</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'right' }}>Colectas</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'right' }}>TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {calc.fleteros.map(f => (
+                        <tr key={f.key} style={{ borderTop: `1px solid ${BRAND.border}` }}>
+                          <td style={{ padding: '6px 6px', fontWeight: 600 }}>
+                            {f.nombre}
+                            {f.entregas > 0 && <span title="figura con entregas en LightData; no se pagan por ser fletero" style={{ marginLeft: 8, fontSize: 10.5, color: BRAND.muted }}>({f.entregas} entregas en LD — no se pagan)</span>}
+                          </td>
+                          <td style={{ padding: '6px 6px', textAlign: 'right' }}>{f.cantidad}</td>
+                          <td style={{ padding: '6px 6px', textAlign: 'right', fontWeight: 700, color: BRAND.teal }}>{money(f.monto)}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ borderTop: `2px solid ${BRAND.border}`, fontWeight: 700 }}>
+                        <td style={{ padding: '6px 6px' }}>Total fleteros</td>
+                        <td style={{ padding: '6px 6px', textAlign: 'right' }}>{calc.fleteros.reduce((s, f) => s + f.cantidad, 0)}</td>
+                        <td style={{ padding: '6px 6px', textAlign: 'right', color: BRAND.teal }}>{money(calc.fleteros.reduce((s, f) => s + f.monto, 0))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               {/* Panel A revisar (Tarea 4) */}
               {(() => {
                 const nRevisar = (sinResolver.length > 0 ? 1 : 0) + ((calc.sinCadete && calc.sinCadete.length) ? 1 : 0) + (calc.configErrors.length > 0 ? 1 : 0) + (calc.aparte.length > 0 ? 1 : 0) + (calc.colectasSinMatch.length > 0 ? 1 : 0);
@@ -1250,8 +1317,9 @@ function PagosInner({ session }) {
                 )}
 
                 {calc.colectasSinMatch.length > 0 && (
-                  <TarjetaRevisar icon="📦" titulo="Colectas sin chofer resuelto" count={calc.colectasSinMatch.length} color={BRAND.amber}
+                  <TarjetaRevisar icon="📦" titulo="Colectas de choferes sin dar de alta" count={calc.colectasSinMatch.length} color={BRAND.amber}
                     onToggle={() => setRevExpand(r => ({ ...r, colectas: !r.colectas }))} expanded={!!revExpand.colectas}>
+                    <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>El chofer no existe en Config de cadetes. Dalo de alta (marcá "Fletero" si solo hace colectas) o creá un alias si es una variante del nombre.</div>
                     {calc.colectasSinMatch.map((c, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
                         <span style={{ flex: 1 }}>{c.chofer}</span>
