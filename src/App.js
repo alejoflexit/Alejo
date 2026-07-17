@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"; // build: 20 nav + lazy
 import Home from "./Home";
+import { getSession } from "./auth";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
 const Colectas = lazy(() => import("./Colectas"));
 const Tiquetera = lazy(() => import("./Tiquetera"));
 const Pagos = lazy(() => import("./Pagos"));
-import { getSession } from "./auth";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
