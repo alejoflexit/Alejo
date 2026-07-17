@@ -198,7 +198,7 @@ export default function PagosPagador({ tarifas }) {
 
       {semanaSel && (
         <>
-          <div style={{ ...cardSt, marginBottom: 12 }}>
+          <div style={{ ...cardSt, marginBottom: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <span style={{ fontSize: 14, fontWeight: 700 }}>Pagados {resumen.pagados} de {resumen.total} <span style={{ color: BRAND.muted, fontWeight: 600 }}>· {resumen.pct}%</span></span>
               <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: resumen.faltan ? BRAND.amber : BRAND.teal }}>{money(resumen.faltan)}</b>{resumen.faltanFactura > 0 && <> · factura <b style={{ color: BRAND.white }}>{money(resumen.faltanFactura)}</b></>}</span>
@@ -208,7 +208,7 @@ export default function PagosPagador({ tarifas }) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
               {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['todos', 'Todos']].map(([k, l]) => (
@@ -229,12 +229,12 @@ export default function PagosPagador({ tarifas }) {
             <div style={{ color: BRAND.muted, fontSize: 13, padding: '2rem', textAlign: 'center' }}>Nada para mostrar con este filtro.</div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {filasFiltradas.map(f => {
               const chipColor = f.factura ? BRAND.teal : BRAND.amber;
               const chipBg = f.factura ? 'rgba(46,207,170,0.10)' : 'rgba(255,176,32,0.10)';
               return (
-                <div key={f.id} style={{ ...cardSt, padding: '10px 14px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 8, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : BRAND.border }}>
+                <div key={f.id} style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : BRAND.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, color: chipColor, background: chipBg, border: `1px solid ${chipColor}33`, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                       {f.factura ? 'Factura' : 'Efectivo'}
