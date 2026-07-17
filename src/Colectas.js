@@ -1401,7 +1401,12 @@ function ColectasInner({ soloArribos = false }) {
                         </div>
                       </div>
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:5, flexShrink:0 }}>
+                      <EtaInput value={eta} onChange={v => setEta(c.cadete, v)} />
+                      {eta && (
+                        <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
+                          style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                      )}
                       {(() => {
                         const key = canon(c.cadete);
                         const cantidad = colectaLD.porChofer[key];
@@ -1413,11 +1418,6 @@ function ColectasInner({ soloArribos = false }) {
                           </div>
                         );
                       })()}
-                      <EtaInput value={eta} onChange={v => setEta(c.cadete, v)} />
-                      {eta && (
-                        <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
-                          style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-                      )}
                     </div>
                   </div>
                 );
