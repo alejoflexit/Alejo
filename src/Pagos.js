@@ -874,7 +874,9 @@ function PagosInner({ session }) {
   const thNum = { ...thSt, textAlign: 'right' };
 
   const yaCerrada = cierres.length > 0;
-  const nCols = 8; // columna "Pagado" removida — el pago se marca en la vista "Pagar"
+  // La columna Ajuste solo se muestra si alguna fila visible tiene ajuste; el descuento se agrega desde el detalle del cadete
+  const hayAjustes = filasVisibles.some(f => f.ajusteTotal);
+  const nCols = hayAjustes ? 8 : 7; // columna "Pagado" removida — el pago se marca en la vista "Pagar"
 
   async function cerrarSemana() {
     if (!window.confirm(`¿Cerrar la semana ${fmtSemanaLabel(semanaLunes)}? Esto congela los montos actuales en pagos_cierres (se puede volver a cerrar y se pisa).`)) return;
@@ -1088,7 +1090,7 @@ function PagosInner({ session }) {
                       <th style={thNum}>Precio</th>
                       <th style={thNum}>Monto</th>
                       <th style={thNum}>Colecta</th>
-                      <th style={thNum}>Ajuste</th>
+                      {hayAjustes && <th style={thNum}>Ajuste</th>}
                       <th style={thNum}>TOTAL</th>
                       <th style={thSt}>Método</th>
                     </tr>
@@ -1121,9 +1123,11 @@ function PagosInner({ session }) {
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{money(f.colecta)}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
-                              {f.ajusteTotal ? <span style={{ color: BRAND.red, textDecoration: 'underline dotted' }}>{money(-f.ajusteTotal)}</span> : <span style={{ fontSize: 11, color: BRAND.muted, textDecoration: 'underline dotted' }}>+ descuento</span>}
-                            </td>
+                            {hayAjustes && (
+                              <td style={{ padding: '8px 12px', textAlign: 'right', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
+                                {f.ajusteTotal ? <span style={{ color: BRAND.red, textDecoration: 'underline dotted' }}>{money(-f.ajusteTotal)}</span> : null}
+                              </td>
+                            )}
                             <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, color: BRAND.teal }}>{money(f.total)}</td>
                             <td style={{ padding: '8px 12px' }}>
                               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, color: f.factura ? BRAND.teal : BRAND.amber, background: f.factura ? 'rgba(46,207,170,0.12)' : 'rgba(255,176,32,0.12)' }}>
@@ -1188,7 +1192,7 @@ function PagosInner({ session }) {
                         <td></td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.monto)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.colecta)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.red }}>{totalesVisibles.ajuste ? money(-totalesVisibles.ajuste) : '—'}</td>
+                        {hayAjustes && <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.red }}>{totalesVisibles.ajuste ? money(-totalesVisibles.ajuste) : '—'}</td>}
                         <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.teal }}>{money(totalesVisibles.total)}</td>
                         <td></td>
                         {yaCerrada && <td></td>}
