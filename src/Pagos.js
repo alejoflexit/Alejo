@@ -827,11 +827,10 @@ function PagosInner({ session }) {
     const nombrePila = (f.nombre || '').trim().split(/\s+/)[0];
     let msg;
     if (f.esFletero) {
-      msg = `Hola ${nombrePila}! Esta semana me figuran ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.`;
+      msg = `Buen día ${nombrePila}, tengo ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.`;
     } else {
-      msg = `Hola ${nombrePila}! Esta semana me figuran ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.`;
+      msg = `Buen día ${nombrePila}, tengo ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.`;
     }
-    msg += ` ¿Te cierra?`;
     navigator.clipboard.writeText(msg).then(() => {
       setCopiadoKey(f.key);
       setTimeout(() => setCopiadoKey(k => (k === f.key ? null : k)), 1500);
