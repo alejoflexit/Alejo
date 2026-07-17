@@ -281,7 +281,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
       continue;
     }
     if (tarifa.fletero) {
-      // fletero: no entra a la liquidación por entregas; se le pagan las colectas (sección Fleteros)
+      // fletero: sus entregas en LightData no se pagan; cobra solo las colectas (fila fletero más abajo)
       const f = fleteroMap.get(key) || { key, nombre: tarifa.nombre_lightdata || g.canonName, cantidad: 0, monto: 0, entregas: 0 };
       f.entregas += g.rows.length;
       fleteroMap.set(key, f);
@@ -289,7 +289,23 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     }
     filas.push(calcularFila(g.canonName, g.rows, tarifa, ctx));
   }
-  const fleteros = [...fleteroMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  // fleteros: fila normal en la liquidación (suma al total y respeta transferencia/efectivo), pero solo cobra colectas
+  for (const f of fleteroMap.values()) {
+    const t = tarifaByLD.get(f.key);
+    const ajusteRows = ajusteRowsByKey.get(f.key) || [];
+    const ajusteTotal = ajusteRows.reduce((s, a) => s + (Number(a.monto) || 0), 0);
+    filas.push({
+      key: f.key, nombre: f.nombre, esFletero: true,
+      colectasCant: f.cantidad, entregasLD: f.entregas,
+      cantidad: 0, cantidadOriginal: 0,
+      monto: 0, faltaPrecio: false, fallbackInfo: null, cpBreakdown: null,
+      colecta: f.monto, ajusteRows, ajusteTotal,
+      total: f.monto - ajusteTotal,
+      factura: !!(t && t.factura),
+      activo: !t || t.activo !== false,
+      modo: 'fletero', precioFijo: null, tarifaId: t ? t.id : null,
+    });
+  }
 
   const aparte = [];
   for (const [key, g] of aparteGroups) {
@@ -325,7 +341,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     }).sort((x, y) => y.cantidad - x.cantidad);
     cpsPorCadete.set(canonKey, arr);
   }
-  return { filas, aparte, fleteros, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete };
+  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete };
 }
 
 // aplica el override de cantidad (editable en la UI) a una fila calculada
@@ -386,10 +402,14 @@ function LoginPagos({ onOk }) {
 
 // ───────────────────────── export a excel ─────────────────────────
 
-function exportarExcel({ filas, aparte, fleteros = [], sinResolver, semanaLunes, subtotales }) {
+function exportarExcel({ filas, aparte, sinResolver, semanaLunes, subtotales }) {
   const label = fmtSemanaLabel(semanaLunes);
   const header = ['Cadete', 'Cantidad', 'Precio', 'Monto', 'Colecta', 'Ajuste', 'TOTAL', 'Método'];
-  const rows = filas.map(f => [
+  const rows = filas.map(f => f.esFletero ? [
+    `${f.nombre} (fletero)`, `${f.colectasCant} colectas`, '', '',
+    Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
+    Math.round(f.total || 0), f.factura ? 'Transferencia' : 'Efectivo',
+  ] : [
     f.nombre, f.cantidad,
     f.cantidad ? Math.round((f.monto || 0) / f.cantidad) : (f.precioFijo || ''),
     Math.round(f.monto || 0), Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
@@ -406,13 +426,6 @@ function exportarExcel({ filas, aparte, fleteros = [], sinResolver, semanaLunes,
     ['Transferencia', '', '', '', '', '', Math.round(subtotales.transferencia)],
     ['Efectivo', '', '', '', '', '', Math.round(subtotales.efectivo)],
   ];
-
-  if (fleteros.length) {
-    aoa.push([], ['FLETEROS (colectas — no suman al total)']);
-    aoa.push(['Fletero', 'Colectas', 'TOTAL']);
-    fleteros.forEach(f => aoa.push([f.nombre, f.cantidad, Math.round(f.monto || 0)]));
-    aoa.push(['Total fleteros', fleteros.reduce((s, f) => s + f.cantidad, 0), Math.round(fleteros.reduce((s, f) => s + f.monto, 0))]);
-  }
 
   if (aparte.length) {
     aoa.push([], ['PAGOS APARTE (fleteros / no suman al total)']);
@@ -807,6 +820,23 @@ function PagosInner({ session }) {
   const [busyAccion, setBusyAccion] = useState(false);
   const [menuEdiciones, setMenuEdiciones] = useState(false); // Tarea 2: menú del chip de ediciones
   const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
+  const [copiadoKey, setCopiadoKey] = useState(null); // fila cuyo mensaje se acaba de copiar
+
+  // mensaje para mandarle al cadete por WhatsApp y chequear diferencias
+  function copiarMensaje(f) {
+    const nombrePila = (f.nombre || '').trim().split(/\s+/)[0];
+    let msg;
+    if (f.esFletero) {
+      msg = `Hola ${nombrePila}! Esta semana me figuran ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.`;
+    } else {
+      msg = `Hola ${nombrePila}! Esta semana me figuran ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.`;
+    }
+    msg += ` ¿Te cierra?`;
+    navigator.clipboard.writeText(msg).then(() => {
+      setCopiadoKey(f.key);
+      setTimeout(() => setCopiadoKey(k => (k === f.key ? null : k)), 1500);
+    });
+  }
   const [revExpand, setRevExpand] = useState({}); // Tarea 4: tarjetas expandibles de 'A revisar'
 
   // config global (no depende de semana) — se busca al montar
@@ -854,7 +884,7 @@ function PagosInner({ session }) {
   useEffect(() => { if (semanaLunes) refreshSemana(semanaLunes); }, [semanaLunes, refreshSemana]);
 
   const calc = useMemo(() => {
-    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], fleteros: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map() };
+    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map() };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
@@ -1073,7 +1103,7 @@ function PagosInner({ session }) {
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               {xlsxReady && (
-                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, fleteros: calc.fleteros, sinResolver, semanaLunes, subtotales })}
+                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, sinResolver, semanaLunes, subtotales })}
                   style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 8, cursor: 'pointer', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} /> Exportar Excel
                 </button>
@@ -1138,11 +1168,15 @@ function PagosInner({ session }) {
                             style={{ borderTop: `1px solid ${BRAND.border}`, background: open ? 'rgba(46,207,170,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : (i % 2 ? 'rgba(255,255,255,0.022)' : 'transparent') }}>
                             <td onClick={() => setExpandido(open ? null : f.key)} title="ver / ocultar detalle" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}` }}>
                               <span style={{ borderBottom: `1px dotted ${BRAND.muted}` }}>{f.nombre}</span>
+                              {f.esFletero && <span title="fletero: solo colectas" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, color: BRAND.muted, border: `1px solid ${BRAND.border}` }}>fletero</span>}
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
                               <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>{open ? '▲' : '▾'}</span>
                             </td>
                             <td style={{ padding: '8px 12px', background: f.editado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
+                              {f.esFletero ? (
+                                <span title="cantidad de colectas de la semana" style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{f.colectasCant} col.</span>
+                              ) : (
                               <CantidadInput
                                 value={f.cantidad}
                                 original={f.cantidadOriginal}
@@ -1150,9 +1184,10 @@ function PagosInner({ session }) {
                                 onCommit={n => setOverridesPersist(o => { const nn = { ...o }; if (n === f.cantidadOriginal) delete nn[f.key]; else nn[f.key] = n; return nn; })}
                                 onRestore={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
                               />
+                              )}
                             </td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : <>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</>}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{money(f.colecta)}</td>
                             {hayAjustes && (
                               <td style={{ padding: '8px 12px', textAlign: 'right', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
@@ -1164,6 +1199,11 @@ function PagosInner({ session }) {
                               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, color: f.factura ? BRAND.teal : BRAND.amber, background: f.factura ? 'rgba(46,207,170,0.12)' : 'rgba(255,176,32,0.12)' }}>
                                 {f.factura ? 'Transferencia' : 'Efectivo'}
                               </span>
+                              <button onClick={e => { e.stopPropagation(); copiarMensaje(f); }}
+                                title={'copiar mensaje para el cadete: "Hola ..., esta semana me figuran X envíos y $Y de colecta"'}
+                                style={{ marginLeft: 8, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
+                                {copiadoKey === f.key ? '✓ copiado' : '💬'}
+                              </button>
                               {f.modo === 'cp' && (
                                 <button onClick={() => setExpandido(open ? null : f.key)} style={{ marginLeft: 8, fontSize: 11, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>detalle</button>
                               )}
@@ -1173,9 +1213,19 @@ function PagosInner({ session }) {
                             <tr>
                               <td colSpan={nCols} style={{ padding: '10px 16px', background: 'rgba(46,207,170,0.05)', borderLeft: `3px solid ${BRAND.teal}` }}>
                                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: BRAND.muted, marginBottom: 10 }}>
-                                  <span>Precio unit.: <b style={{ color: BRAND.white }}>{money(precioUnit)}</b>{f.modo === 'cp' ? ' (por CP)' : ''}</span>
+                                  {f.esFletero ? (
+                                    <>
+                                      <span>Fletero — cobra el monto de cada colecta</span>
+                                      <span>Colectas: <b style={{ color: BRAND.white }}>{f.colectasCant}</b> por <b style={{ color: BRAND.white }}>{money(f.colecta)}</b></span>
+                                      {f.entregasLD > 0 && <span style={{ color: BRAND.amber }}>{f.entregasLD} entregas en LightData — no se pagan</span>}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span>Precio unit.: <b style={{ color: BRAND.white }}>{money(precioUnit)}</b>{f.modo === 'cp' ? ' (por CP)' : ''}</span>
+                                      <span>Entregas LightData: <b style={{ color: BRAND.white }}>{f.cantidadOriginal}</b></span>
+                                    </>
+                                  )}
                                   <span>Método: <b style={{ color: f.factura ? BRAND.teal : BRAND.amber }}>{f.factura ? 'Transferencia' : 'Efectivo'}</b></span>
-                                  <span>Entregas LightData: <b style={{ color: BRAND.white }}>{f.cantidadOriginal}</b></span>
                                   {!f.activo && <span style={{ color: BRAND.amber }}>inactivo</span>}
                                 </div>
                                 {f.modo === 'cp' && f.cpBreakdown && (
@@ -1232,42 +1282,6 @@ function PagosInner({ session }) {
                   )}
                 </table>
               </div>
-
-              {/* Fleteros: solo hacen colectas y cobran el monto de cada una */}
-              {calc.fleteros.length > 0 && (
-                <div style={{ ...cardSt, marginBottom: 20 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.teal }}>🚚 Fleteros — colectas de la semana ({calc.fleteros.length})</div>
-                    <div style={{ fontSize: 11, color: BRAND.muted }}>Cobran el monto de cada colecta. No suman al total general.</div>
-                  </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                    <thead>
-                      <tr style={{ color: BRAND.muted, textAlign: 'left' }}>
-                        <th style={{ padding: '4px 6px' }}>Fletero</th>
-                        <th style={{ padding: '4px 6px', textAlign: 'right' }}>Colectas</th>
-                        <th style={{ padding: '4px 6px', textAlign: 'right' }}>TOTAL</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {calc.fleteros.map(f => (
-                        <tr key={f.key} style={{ borderTop: `1px solid ${BRAND.border}` }}>
-                          <td style={{ padding: '6px 6px', fontWeight: 600 }}>
-                            {f.nombre}
-                            {f.entregas > 0 && <span title="figura con entregas en LightData; no se pagan por ser fletero" style={{ marginLeft: 8, fontSize: 10.5, color: BRAND.muted }}>({f.entregas} entregas en LD — no se pagan)</span>}
-                          </td>
-                          <td style={{ padding: '6px 6px', textAlign: 'right' }}>{f.cantidad}</td>
-                          <td style={{ padding: '6px 6px', textAlign: 'right', fontWeight: 700, color: BRAND.teal }}>{money(f.monto)}</td>
-                        </tr>
-                      ))}
-                      <tr style={{ borderTop: `2px solid ${BRAND.border}`, fontWeight: 700 }}>
-                        <td style={{ padding: '6px 6px' }}>Total fleteros</td>
-                        <td style={{ padding: '6px 6px', textAlign: 'right' }}>{calc.fleteros.reduce((s, f) => s + f.cantidad, 0)}</td>
-                        <td style={{ padding: '6px 6px', textAlign: 'right', color: BRAND.teal }}>{money(calc.fleteros.reduce((s, f) => s + f.monto, 0))}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
 
               {/* Panel A revisar (Tarea 4) */}
               {(() => {
