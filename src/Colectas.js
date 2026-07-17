@@ -301,6 +301,14 @@ function ColectasInner({ soloArribos = false }) {
     return () => window.removeEventListener('resize', h);
   }, []);
 
+  // Reloj para la alerta de "cadete acercándose" (refresca cada 30s solo en Arribos)
+  const [ahora, setAhora] = useState(Date.now());
+  useEffect(() => {
+    if (navView !== 'arribos') return;
+    const t = setInterval(() => setAhora(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, [navView]);
+
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
   const [pagosData, setPagosData] = useState([]);
@@ -1343,6 +1351,7 @@ function ColectasInner({ soloArribos = false }) {
 
     return (
       <div style={{ maxWidth:560 }}>
+        <style>{`@keyframes flexitTiemble { 0%, 86%, 100% { transform: translateX(0); } 88% { transform: translateX(-2px) rotate(-0.4deg); } 90% { transform: translateX(2px) rotate(0.4deg); } 92% { transform: translateX(-2px); } 94% { transform: translateX(2px); } 96% { transform: translateX(-1px); } 98% { transform: translateX(1px); } }`}</style>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
             <span>📅</span>
@@ -1392,19 +1401,31 @@ function ColectasInner({ soloArribos = false }) {
                 const llego = !!ar.llego_at;
                 const hora = ar.llego_at ? new Date(ar.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
                 const eta = ar.eta ? String(ar.eta).slice(0,5) : '';
+                // Alerta "acercándose": faltan 15 min o menos para la hora estimada y todavía no llegó
+                const cerca = (() => {
+                  if (llego || !eta) return false;
+                  const [h, m] = eta.split(':').map(Number);
+                  const d = new Date(fecha + 'T00:00:00');
+                  d.setHours(h, m, 0, 0);
+                  return d.getTime() - ahora <= 15 * 60000;
+                })();
                 return (
                   <div key={c.cadete}
                     style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:12, width:'100%',
-                      border:`1px solid ${llego ? 'rgba(46,207,170,0.4)' : BRAND.border}`, background: llego ? 'rgba(46,207,170,0.08)' : BRAND.faint, transition:'all 0.15s' }}>
+                      border:`1px solid ${llego ? 'rgba(46,207,170,0.4)' : cerca ? 'rgba(251,191,36,0.55)' : BRAND.border}`,
+                      background: llego ? 'rgba(46,207,170,0.08)' : cerca ? 'rgba(251,191,36,0.07)' : BRAND.faint,
+                      animation: cerca ? 'flexitTiemble 3s ease-in-out infinite' : 'none', transition:'all 0.15s' }}>
                     <div onClick={() => toggleLlego(c.cadete)} style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0, cursor:'pointer' }}>
                       <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
                         border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17 }}>
                         {llego ? '✓' : ''}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.cadete}</div>
-                        <div style={{ fontSize:12, color: llego ? '#2ECFAA' : BRAND.muted }}>
-                          {llego ? `llegó ${hora}` : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
+                        <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                          {cerca && <span title="está por llegar" style={{ marginRight:6 }}>🚚</span>}{c.cadete}
+                        </div>
+                        <div style={{ fontSize:12, color: llego ? '#2ECFAA' : cerca ? '#FBBF24' : BRAND.muted }}>
+                          {llego ? `llegó ${hora}` : cerca ? `está por llegar · ETA ${eta}` : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
                         </div>
                       </div>
                     </div>
