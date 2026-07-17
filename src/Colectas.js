@@ -1449,8 +1449,15 @@ function ColectasInner({ soloArribos = false }) {
                         if (cantidad === undefined) return null;
                         return (
                           <div title="Envíos de colecta hoy (Informes → Colecta de LightData)"
-                            style={{ display:'flex', alignItems:'center', gap:3, height:26, padding:'0 8px', borderRadius:14, border:'1px solid rgba(46,207,170,0.4)', background:'rgba(46,207,170,0.1)', color:'#2ECFAA', fontSize:12, fontWeight:700 }}>
-                            📦 {cantidad}
+                            style={{ display:'flex', alignItems:'center', gap:4, height:26, padding:'0 9px', borderRadius:14, border:'1px solid rgba(46,207,170,0.45)', background:'transparent', color:'#2ECFAA', fontSize:12, fontWeight:700 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9l8 -4.5" />
+                              <path d="M12 12l8 -4.5" />
+                              <path d="M12 12v9" />
+                              <path d="M12 12l-8 -4.5" />
+                              <path d="M16 5.25l-8 4.5" />
+                            </svg>
+                            {cantidad}
                           </div>
                         );
                       })()}
