@@ -6,6 +6,8 @@ const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
 // Bridge LightData (VPS) — solo lectura, riesgo aceptado de exponer la key en el bundle (ver spec-lightdata-bridge)
 const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
+const BRIDGE_GEO_URL = "https://srv1801226.hstgr.cloud/bridge/geo"; // GPS de cadetes (proximidad al depósito)
+const GEO_ALERTA_M = 800; // umbral: alerta cuando el cadete está a <= 800 m de la base
 const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // clave del bridge (/root/flexit/bridge.key en el VPS) — visible en el bundle, riesgo aceptado (ver spec-lightdata-bridge)
 
 const BRAND = {
@@ -291,6 +293,7 @@ function ColectasInner({ soloArribos = false }) {
   const [hoverChofer, setHoverChofer] = useState(null); // resalta el grupo del cadete al pasar el mouse
   const [arribos, setArribos] = useState({}); // Arribos: cadete -> { id, llego_at }
   const [colectaLD, setColectaLD] = useState({ porChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦
+  const [gpsPos, setGpsPos] = useState({ porNombre: {}, actualizado: null, ok: false }); // GPS real por nombre normalizado
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
   const [etaEdit, setEtaEdit] = useState(null); // cadete cuya hora estimada se está editando
@@ -563,6 +566,33 @@ function ColectasInner({ soloArribos = false }) {
       .finally(() => clearTimeout(timer));
     return () => { clearTimeout(timer); ctrl.abort(); };
   }, [navView, fecha, aliasCadetes.length]);
+
+  // Arribos — GPS real (bridge /geo). Polling cada 45s. Fallback silencioso: si el bridge no responde,
+  // la vista sigue andando con la alerta por hora estimada. Solo corre viendo Arribos.
+  useEffect(() => {
+    if (navView !== 'arribos') return;
+    let vivo = true;
+    const traer = () => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      fetch(BRIDGE_GEO_URL, { headers: { 'x-bridge-key': BRIDGE_KEY }, signal: ctrl.signal })
+        .then(r => { if (!r.ok) throw new Error('geo ' + r.status); return r.json(); })
+        .then(json => {
+          if (!vivo) return;
+          const porNombre = {};
+          (json.cadetes || []).forEach(c => {
+            if (c.nombre == null || c.distancia_m == null) return;
+            porNombre[normNombre(c.nombre)] = { dist: Number(c.distancia_m), vel: Number(c.velocidad || 0) };
+          });
+          setGpsPos({ porNombre, actualizado: json.actualizado || new Date().toISOString(), ok: true });
+        })
+        .catch(() => { if (vivo) setGpsPos(prev => ({ ...prev, ok: false })); })
+        .finally(() => clearTimeout(timer));
+    };
+    traer();
+    const iv = setInterval(traer, 45000);
+    return () => { vivo = false; clearInterval(iv); };
+  }, [navView]);
 
   // Arribos — tiempo real
   useEffect(() => {
@@ -1401,14 +1431,18 @@ function ColectasInner({ soloArribos = false }) {
                 const llego = !!ar.llego_at;
                 const hora = ar.llego_at ? new Date(ar.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
                 const eta = ar.eta ? String(ar.eta).slice(0,5) : '';
-                // Alerta "acercándose": faltan 15 min o menos para la hora estimada y todavía no llegó
-                const cerca = (() => {
+                // GPS real (si el bridge lo trae): distancia del cadete al depósito
+                const gp = gpsPos.porNombre[normNombre(c.cadete)];
+                const cercaGps = !llego && gp && gp.dist <= GEO_ALERTA_M;
+                // Alerta por hora estimada (fallback si no hay GPS): faltan ≤15 min y no llegó
+                const cercaEta = (() => {
                   if (llego || !eta) return false;
                   const [h, m] = eta.split(':').map(Number);
                   const d = new Date(fecha + 'T00:00:00');
                   d.setHours(h, m, 0, 0);
                   return d.getTime() - ahora <= 15 * 60000;
                 })();
+                const cerca = cercaGps || cercaEta;
                 return (
                   <div key={c.cadete}
                     style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:12, width:'100%',
@@ -1425,7 +1459,10 @@ function ColectasInner({ soloArribos = false }) {
                           {cerca && <span title="está por llegar" style={{ marginRight:6 }}>🚚</span>}{c.cadete}
                         </div>
                         <div style={{ fontSize:12, color: llego ? '#2ECFAA' : cerca ? '#FBBF24' : BRAND.muted }}>
-                          {llego ? `llegó ${hora}` : cerca ? `está por llegar · ETA ${eta}` : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
+                          {llego ? `llegó ${hora}`
+                            : cercaGps ? `está por llegar · a ${gp.dist < 1000 ? gp.dist + ' m' : (gp.dist/1000).toFixed(1) + ' km'} del depósito`
+                            : cercaEta ? `está por llegar · ETA ${eta}`
+                            : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
                         </div>
                       </div>
                     </div>
