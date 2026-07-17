@@ -294,6 +294,12 @@ function ColectasInner({ soloArribos = false }) {
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
   const [etaEdit, setEtaEdit] = useState(null); // cadete cuya hora estimada se está editando
+  const [esMovil, setEsMovil] = useState(typeof window !== 'undefined' && window.innerWidth < 700);
+  useEffect(() => {
+    const h = () => setEsMovil(window.innerWidth < 700);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
 
   // Pagos
   const [semanaFecha, setSemanaFecha] = useState(todayStr);
@@ -1404,15 +1410,18 @@ function ColectasInner({ soloArribos = false }) {
                     </div>
 
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6, flexShrink:0 }}>
-                      {/* Slot central de ancho fijo para la hora estimada: nada se desplaza al cargarla */}
-                      <div style={{ width:118, display:'flex', alignItems:'center', justifyContent:'center', gap:5, flexShrink:0 }}>
-                        <EtaInput value={eta} onChange={v => setEta(c.cadete, v)}
-                          editing={etaEdit === c.cadete} onEditingChange={v => setEtaEdit(v ? c.cadete : null)} />
-                        {eta && etaEdit !== c.cadete && (
-                          <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
-                            style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-                        )}
-                      </div>
+                      {/* Slot central para la hora estimada. En desktop tiene ancho fijo (nada se desplaza);
+                          en mobile solo aparece si hay hora, para no comerle espacio al nombre */}
+                      {(!esMovil || eta || etaEdit === c.cadete) && (
+                        <div style={{ width: esMovil ? 'auto' : 118, display:'flex', alignItems:'center', justifyContent:'center', gap:5, flexShrink:0 }}>
+                          <EtaInput value={eta} onChange={v => setEta(c.cadete, v)}
+                            editing={etaEdit === c.cadete} onEditingChange={v => setEtaEdit(v ? c.cadete : null)} />
+                          {eta && etaEdit !== c.cadete && (
+                            <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
+                              style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                          )}
+                        </div>
+                      )}
                       {(() => {
                         const key = canon(c.cadete);
                         const cantidad = colectaLD.porChofer[key];
