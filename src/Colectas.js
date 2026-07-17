@@ -1464,7 +1464,12 @@ function ColectasInner({ soloArribos = false }) {
                       {/* Botón reloj fijo a la derecha del paquete: abre la edición de hora estimada */}
                       <button onClick={() => setEtaEdit(c.cadete)}
                         title={eta ? `Hora estimada ${eta} · tocar para editar` : 'Poner hora estimada'}
-                        style={{ width:28, height:28, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>🕐</button>
+                        style={{ width:28, height:28, borderRadius:14, border:'1px solid rgba(46,207,170,0.45)', background:'transparent', color:'#2ECFAA', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 3" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 );
