@@ -211,14 +211,14 @@ export default function PagosPagador({ tarifas }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
-              {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['todos', 'Todos']].map(([k, l]) => (
-                <button key={k} onClick={() => setFiltro(k)} style={pill(filtro === k)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
+              {[['pendientes', 'Pendientes'], ['pagados', 'Pagados']].map(([k, l]) => (
+                <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Método</span>
-              {[['todos', 'Ambos'], ['factura', 'Factura'], ['efectivo', 'Efectivo']].map(([k, l]) => (
-                <button key={k} onClick={() => setFiltroMetodo(k)} style={pill(filtroMetodo === k, k === 'efectivo' ? BRAND.amber : BRAND.teal)}>{l}{k !== 'todos' && <span style={{ opacity: 0.7 }}> ({counts[k]})</span>}</button>
+              {[['factura', 'Factura'], ['efectivo', 'Efectivo']].map(([k, l]) => (
+                <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)} style={pill(filtroMetodo === k, k === 'efectivo' ? BRAND.amber : BRAND.teal)}>{l} <span style={{ opacity: 0.7 }}>({counts[k]})</span></button>
               ))}
             </div>
           </div>
