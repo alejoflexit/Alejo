@@ -290,8 +290,20 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
   const cpsPorCadete = new Map();
   for (const [canonKey, g] of canonGroups) {
     const porCp = new Map();
-    g.rows.forEach(r => { const cp = String(r.cp || '').trim() || '(sin CP)'; porCp.set(cp, (porCp.get(cp) || 0) + 1); });
-    cpsPorCadete.set(canonKey, [...porCp.entries()].map(([cp, cantidad]) => ({ cp, cantidad })).sort((x, y) => y.cantidad - x.cantidad));
+    g.rows.forEach(r => {
+      const cp = String(r.cp || '').trim() || '(sin CP)';
+      const zona = zonaByLoc.get(norm(r.localidad)) || '';
+      let e = porCp.get(cp);
+      if (!e) { e = { cp, cantidad: 0, zonas: new Map() }; porCp.set(cp, e); }
+      e.cantidad += 1;
+      if (zona) e.zonas.set(zona, (e.zonas.get(zona) || 0) + 1);
+    });
+    const arr = [...porCp.values()].map(e => {
+      let zona = '', best = 0;
+      e.zonas.forEach((n, z) => { if (n > best) { best = n; zona = z; } });
+      return { cp: e.cp, cantidad: e.cantidad, zona };
+    }).sort((x, y) => y.cantidad - x.cantidad);
+    cpsPorCadete.set(canonKey, arr);
   }
   return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete };
 }
@@ -451,8 +463,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
   const ovByCp = new Map(overridesDeSel.map(o => [String(o.cp).trim(), o.precio]));
   const cpRows = (() => {
     const seen = new Set(); const out = [];
-    entregasCp.forEach(({ cp, cantidad }) => { seen.add(cp); out.push({ cp, cantidad, precio: ovByCp.has(cp) ? ovByCp.get(cp) : null }); });
-    overridesDeSel.forEach(o => { const cp = String(o.cp).trim(); if (!seen.has(cp)) out.push({ cp, cantidad: 0, precio: o.precio }); });
+    entregasCp.forEach(({ cp, cantidad, zona }) => { seen.add(cp); out.push({ cp, cantidad, zona: zona || '', precio: ovByCp.has(cp) ? ovByCp.get(cp) : null }); });
+    overridesDeSel.forEach(o => { const cp = String(o.cp).trim(); if (!seen.has(cp)) out.push({ cp, cantidad: 0, zona: '', precio: o.precio }); });
     return out;
   })();
   const cpSinPrecio = cpRows.filter(r => r.precio == null && r.cantidad > 0).length;
@@ -585,14 +597,15 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
               <>
                 <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 8 }}>CPs a los que entregó en la semana seleccionada — poné el precio de cada uno (Enter o salí del campo para guardar).{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
-                  <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Entregas</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Precio</th><th></th></tr></thead>
+                  <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px' }}>Zona</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Entregas</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Precio</th><th></th></tr></thead>
                   <tbody>
-                    {cpRows.map(({ cp, cantidad, precio }) => {
+                    {cpRows.map(({ cp, cantidad, zona, precio }) => {
                       const val = cpDraft[cp] !== undefined ? cpDraft[cp] : (precio != null ? String(precio) : '');
                       const sinPrecio = precio == null && cantidad > 0;
                       return (
                         <tr key={cp} style={{ borderTop: `1px solid ${BRAND.border}`, background: sinPrecio ? 'rgba(255,176,32,0.06)' : 'transparent' }}>
                           <td style={{ padding: '5px 6px' }}>{cp}</td>
+                          <td style={{ padding: '5px 6px', color: BRAND.muted, fontSize: 11.5 }}>{zona || '—'}</td>
                           <td style={{ padding: '5px 6px', textAlign: 'right', color: BRAND.muted }}>{cantidad || '—'}</td>
                           <td style={{ padding: '5px 6px', textAlign: 'right' }}>
                             <input className="no-spin" type="number" placeholder="—" value={val}
