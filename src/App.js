@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useRef, useEffect } from "react"; // build: 19 tiquetera
-import Colectas from "./Colectas";
-import Tiquetera from "./Tiquetera";
-import Pagos from "./Pagos";
+import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"; // build: 20 nav + lazy
 import Home from "./Home";
+// Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
+const Colectas = lazy(() => import("./Colectas"));
+const Tiquetera = lazy(() => import("./Tiquetera"));
+const Pagos = lazy(() => import("./Pagos"));
 import { getSession } from "./auth";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
@@ -76,10 +77,68 @@ const BRAND = {
   teal:    "#2ECFAA",
   blue:    "#3A8FD4",
   white:   "#FFFFFF",
-  muted:   "rgba(255,255,255,0.5)",
+  muted:   "rgba(255,255,255,0.62)", // contraste AA sobre navy (antes 0.5)
   faint:   "rgba(255,255,255,0.08)",
   border:  "rgba(255,255,255,0.1)",
 };
+
+// Skeleton de carga: feedback inmediato al cambiar de vista (evita la pantalla congelada)
+function VistaSkeleton() {
+  const bar = (w, h = 16) => ({ width: w, height: h, borderRadius: 8, background: "rgba(255,255,255,0.07)", animation: "flexitPulse 1.2s ease-in-out infinite" });
+  return (
+    <div aria-label="Cargando..." style={{ padding: "0.5rem 0" }}>
+      <style>{`@keyframes flexitPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
+      <div style={{ ...bar(220, 26), marginBottom: 18 }} />
+      <div style={{ display: "flex", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
+        {[0, 1, 2, 3].map(i => <div key={i} style={bar(180, 72)} />)}
+      </div>
+      {[0, 1, 2, 3, 4, 5, 6, 7].map(i => <div key={i} style={{ ...bar("100%", 34), marginBottom: 8 }} />)}
+    </div>
+  );
+}
+
+// Panel de navegación (compartido entre la sidebar fija de desktop y el overlay de mobile)
+function NavPanel({ seccion, go, onClose, logo }) {
+  const items = [
+    { id: "metricas", icon: "ti ti-chart-bar", label: "Métricas" },
+    { id: "colectas", icon: "ti ti-package", label: "Colectas" },
+    { id: "arribos", icon: "ti ti-truck-delivery", label: "Arribos" },
+    { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
+    ...(getSession()?.email === "admin@flexit.app" ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
+  ];
+  return (
+    <>
+      <div onClick={() => go("home")} title="Ir al inicio" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "2rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(255,255,255,0.08)", cursor: "pointer" }}>
+        <img src={logo} alt="Flexit" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 8 }} />
+        <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Flexit</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6, paddingLeft: 10 }}>Navegación</div>
+        {items.map(it => {
+          const active = seccion === it.id;
+          return (
+            <button key={it.id} onClick={() => go(it.id)}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${active ? "rgba(46,207,170,0.3)" : "rgba(255,255,255,0.08)"}`, background: active ? "rgba(46,207,170,0.1)" : "rgba(255,255,255,0.04)", color: active ? "#2ECFAA" : "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
+              <i className={it.icon} style={{ fontSize: 18 }} />
+              {it.label}
+            </button>
+          );
+        })}
+        <a href="/choferes.html"
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
+          <i className="ti ti-user-plus" style={{ fontSize: 18 }} />
+          Alta de Choferes
+        </a>
+      </div>
+      {onClose && (
+        <button onClick={onClose}
+          style={{ marginTop: "auto", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "none", color: "rgba(255,255,255,0.45)", fontSize: 13, cursor: "pointer" }}>
+          Cerrar ✕
+        </button>
+      )}
+    </>
+  );
+}
 
 const SLA_VERDE = 98;
 const SLA_AMARILLO = 95;
@@ -522,6 +581,12 @@ export default function App() {
   const [seccion, setSeccion] = useState("home");
   const fileRef = useRef();
 
+  // Título de la pestaña del navegador acorde a la sección activa
+  useEffect(() => {
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", tiquetera: "Tiquetera", pagos: "Liquidaciones" };
+    document.title = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
+  }, [seccion]);
+
   // Cargar desde Supabase al inicio
   useEffect(() => {
     cargarDesdeSupabase()
@@ -715,7 +780,14 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background:BRAND.navy, minHeight:"100vh", padding:"1.5rem", paddingBottom: isMobile ? "5rem" : "1.5rem", color:BRAND.white }}>
+    <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background:BRAND.navy, minHeight:"100vh", padding:"1.5rem", paddingBottom: isMobile ? "5rem" : "1.5rem", paddingLeft: isMobile ? "1.5rem" : "calc(228px + 1.5rem)", color:BRAND.white }}>
+
+      {/* Sidebar fija en desktop: navegación siempre visible con la sección activa marcada */}
+      {!isMobile && (
+        <div style={{ position:"fixed", top:0, left:0, bottom:0, width:228, boxSizing:"border-box", background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", overflowY:"auto", zIndex:500 }}>
+          <NavPanel seccion={seccion} go={setSeccion} logo={FLEXIT_LOGO} />
+        </div>
+      )}
 
       {/* Modal: elegir fecha antes de procesar Excel */}
       {showDateModal && (
@@ -740,56 +812,13 @@ export default function App() {
         </div>
       )}
 
-      {/* Sidebar overlay */}
-      {sidebarOpen && (
+      {/* Sidebar overlay (solo mobile; en desktop la sidebar es fija) */}
+      {isMobile && sidebarOpen && (
         <div onClick={() => setSidebarOpen(false)}
           style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, backdropFilter:"blur(2px)" }}>
           <div onClick={e => e.stopPropagation()}
             style={{ position:"absolute", top:0, left:0, bottom:0, width:240, background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem" }}>
-            {/* Sidebar header */}
-            <div onClick={() => { setSeccion("home"); setSidebarOpen(false); }} title="Ir al inicio" style={{ display:"flex", alignItems:"center", gap:10, marginBottom:"2rem", paddingBottom:"1rem", borderBottom:"1px solid rgba(255,255,255,0.08)", cursor:"pointer" }}>
-              <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:32, height:32, objectFit:"cover", borderRadius:8 }} />
-              <span style={{ fontSize:15, fontWeight:700, color:"#fff" }}>Flexit</span>
-            </div>
-            {/* Nav items */}
-            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-              <div style={{ fontSize:10, fontWeight:600, color:"rgba(255,255,255,0.35)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6, paddingLeft:10 }}>Navegación</div>
-              <button onClick={() => { setSeccion("metricas"); setSidebarOpen(false); }}
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="metricas"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="metricas"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="metricas"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
-                <i className="ti ti-chart-bar" style={{ fontSize:18 }} />
-                Métricas
-              </button>
-              <button onClick={() => { setSeccion("colectas"); setSidebarOpen(false); }}
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="colectas"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="colectas"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="colectas"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
-                <i className="ti ti-package" style={{ fontSize:18 }} />
-                Colectas
-              </button>
-              <button onClick={() => { setSeccion("arribos"); setSidebarOpen(false); }}
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="arribos"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="arribos"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="arribos"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
-                <i className="ti ti-truck-delivery" style={{ fontSize:18 }} />
-                Arribos
-              </button>
-              <button onClick={() => { setSeccion("tiquetera"); setSidebarOpen(false); }}
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="tiquetera"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="tiquetera"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="tiquetera"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
-                <i className="ti ti-ticket" style={{ fontSize:18 }} />
-                Tiquetera
-              </button>
-              {getSession()?.email === "admin@flexit.app" && <button onClick={() => { setSeccion("pagos"); setSidebarOpen(false); }}
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${seccion==="pagos"?"rgba(46,207,170,0.3)":"rgba(255,255,255,0.08)"}`, background:seccion==="pagos"?"rgba(46,207,170,0.1)":"rgba(255,255,255,0.04)", color:seccion==="pagos"?"#2ECFAA":"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer", textAlign:"left" }}>
-                <i className="ti ti-cash" style={{ fontSize:18 }} />
-                Liquidaciones
-              </button>}
-              <a href="/choferes.html"
-                style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.08)", background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.75)", fontSize:14, fontWeight:500, cursor:"pointer", textDecoration:"none" }}>
-                <i className="ti ti-user-plus" style={{ fontSize:18 }} />
-                Alta de Choferes
-              </a>
-            </div>
-            {/* Bottom close */}
-            <button onClick={() => setSidebarOpen(false)}
-              style={{ marginTop:"auto", padding:"8px 12px", borderRadius:8, border:"1px solid rgba(255,255,255,0.08)", background:"none", color:"rgba(255,255,255,0.3)", fontSize:13, cursor:"pointer" }}>
-              Cerrar ✕
-            </button>
+            <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} />
           </div>
         </div>
       )}
@@ -797,10 +826,10 @@ export default function App() {
       {/* Header */}
       {seccion !== "home" && (<div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-        <button onClick={() => setSidebarOpen(true)}
-          style={{ width:36, height:36, borderRadius:9, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        {isMobile && <button onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"
+          style={{ width:40, height:40, borderRadius:9, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           ☰
-        </button>
+        </button>}
         <div style={{ width:44, height:44, borderRadius:12, flexShrink:0, overflow:"hidden" }}>
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
@@ -828,13 +857,13 @@ export default function App() {
 
       {seccion === "home" && <Home onNav={setSeccion} onMenu={() => setSidebarOpen(true)} isMobile={isMobile} logo={FLEXIT_LOGO} />}
 
-      {seccion === "colectas" && <Colectas />}
+      {seccion === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas /></Suspense>}
 
-      {seccion === "arribos" && <Colectas soloArribos />}
+      {seccion === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos /></Suspense>}
 
-      {seccion === "tiquetera" && <Tiquetera />}
+      {seccion === "tiquetera" && <Suspense fallback={<VistaSkeleton />}><Tiquetera /></Suspense>}
 
-      {seccion === "pagos" && <Pagos />}
+      {seccion === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
 
       {seccion === "metricas" && (<>
       {error && <div style={{ background:"rgba(226,75,74,0.15)", color:"#E24B4A", border:"1px solid rgba(226,75,74,0.3)", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:"1rem" }}>{error}</div>}

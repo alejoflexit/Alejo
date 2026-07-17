@@ -18,12 +18,19 @@ const BRAND = {
   red:      "#E24B4A",
   amber:    "#FFB020",
   white:    "#FFFFFF",
-  muted:    "rgba(255,255,255,0.45)",
+  muted:    "rgba(255,255,255,0.62)",
   faint:    "rgba(255,255,255,0.06)",
   border:   "rgba(255,255,255,0.09)",
 };
 
 // ───────────────────────── helpers ─────────────────────────
+
+// '2026-07-06' -> '06/07' (formato local para mostrar fechas)
+function fmtDM(iso) {
+  const s = String(iso || '').slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}` : s;
+}
 
 function norm(s) {
   return String(s || '')
@@ -995,7 +1002,7 @@ function PagosInner({ session }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => setVista('tabla')} style={btnPill(vista === 'tabla')}>Semana</button>
-          <button onClick={() => setVista('colectas')} style={btnPill(vista === 'colectas')}>Colectas</button>
+          <button onClick={() => setVista('colectas')} title="Resumen de lo que se paga por colectas (la gestión del día está en la sección Colectas del menú)" style={btnPill(vista === 'colectas')}>Resumen colectas</button>
           {isAdmin && <button onClick={() => setVista('config')} style={btnPill(vista === 'config')}>Config de cadetes</button>}
           {isAdmin && <button onClick={() => setVista('pagador')} style={btnPill(vista === 'pagador')}>Pagar</button>}
         </div>
@@ -1108,6 +1115,7 @@ function PagosInner({ session }) {
                 </button>
               )}
               <button disabled={busyAccion || cargando} onClick={cerrarSemana}
+                title={yaCerrada ? 'Vuelve a congelar los montos actuales, pisando el cierre anterior de esta semana' : 'Congela los montos actuales para pagarlos (se puede volver a cerrar si algo cambia)'}
                 style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, border: '1px solid rgba(255,176,32,0.4)', borderRadius: 8, cursor: 'pointer', background: 'rgba(255,176,32,0.1)', color: BRAND.amber }}>
                 {yaCerrada ? 'Re-cerrar semana' : 'Cerrar semana'}
               </button>
@@ -1200,7 +1208,7 @@ function PagosInner({ session }) {
                               </span>
                               <button onClick={e => { e.stopPropagation(); copiarMensaje(f); }}
                                 title={'copiar mensaje para el cadete: "Hola ..., esta semana me figuran X envíos y $Y de colecta"'}
-                                style={{ marginLeft: 8, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
+                                style={{ marginLeft: 6, fontSize: 14, padding: '4px 8px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
                                 {copiadoKey === f.key ? '✓ copiado' : '💬'}
                               </button>
                               {f.modo === 'cp' && (
@@ -1303,7 +1311,7 @@ function PagosInner({ session }) {
 
                 {calc.sinCadete && calc.sinCadete.length > 0 && (() => {
                   const fechas = calc.sinCadete.map(e => String(e.fecha_estado || '').slice(0, 10)).filter(Boolean).sort();
-                  const rango = fechas.length ? (fechas[0] === fechas[fechas.length - 1] ? fechas[0] : `${fechas[0]} → ${fechas[fechas.length - 1]}`) : 'sin fecha';
+                  const rango = fechas.length ? (fechas[0] === fechas[fechas.length - 1] ? fmtDM(fechas[0]) : `${fmtDM(fechas[0])} → ${fmtDM(fechas[fechas.length - 1])}`) : 'sin fecha';
                   const porFecha = {};
                   calc.sinCadete.forEach(e => { const d = String(e.fecha_estado || '').slice(0, 10) || 'sin fecha'; porFecha[d] = (porFecha[d] || 0) + 1; });
                   return (
@@ -1313,7 +1321,7 @@ function PagosInner({ session }) {
                       <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Envíos repartidos que nadie cobra. Rastrealas en LightData para asignarles cadete.</div>
                       {Object.entries(porFecha).sort().map(([d, n]) => (
                         <div key={d} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
-                          <span>{d}</span><span style={{ color: BRAND.muted }}>{n} entrega{n === 1 ? '' : 's'}</span>
+                          <span>{fmtDM(d)}</span><span style={{ color: BRAND.muted }}>{n} entrega{n === 1 ? '' : 's'}</span>
                         </div>
                       ))}
                     </TarjetaRevisar>
@@ -1336,7 +1344,7 @@ function PagosInner({ session }) {
                     {calc.colectasSinMatch.map((c, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
                         <span style={{ flex: 1 }}>{c.chofer}</span>
-                        <span style={{ color: BRAND.muted, marginRight: 10 }}>{String(c.fecha || '').slice(0, 10)}</span>
+                        <span style={{ color: BRAND.muted, marginRight: 10 }}>{fmtDM(c.fecha)}</span>
                         <span>{money(c.monto)}</span>
                       </div>
                     ))}

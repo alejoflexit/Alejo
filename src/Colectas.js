@@ -15,7 +15,7 @@ const BRAND = {
   navySide:"#0a1520",
   teal:    "#2ECFAA",
   white:   "#FFFFFF",
-  muted:   "rgba(255,255,255,0.45)",
+  muted:   "rgba(255,255,255,0.62)",
   faint:   "rgba(255,255,255,0.06)",
   border:  "rgba(255,255,255,0.09)",
 };
@@ -1004,7 +1004,7 @@ function ColectasInner({ soloArribos = false }) {
                                 title={reg.zona_barrio ? `Zona de hoy · la fija es: ${c.zona_barrio||'—'}` : 'Click para una zona puntual de hoy'}
                                 style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
                                 {(reg.zona_barrio || c.zona_barrio)
-                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(58,143,212,0.15)', color: reg.zona_barrio ? '#FBBF24' : '#3A8FD4' }}>{reg.zona_barrio || c.zona_barrio}</span>
+                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, textTransform:'capitalize', background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(58,143,212,0.15)', color: reg.zona_barrio ? '#FBBF24' : '#3A8FD4' }}>{String(reg.zona_barrio || c.zona_barrio).toLowerCase()}</span>
                                   : <span style={{ fontSize:11, color:BRAND.muted }}>+ zona</span>}
                                 {reg.zona_barrio
                                   ? <button onClick={ev => { ev.stopPropagation(); updateRegistro(c.id, { zona_barrio: null }); }} title="Volver a la zona fija" style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:0 }}>↩</button>
