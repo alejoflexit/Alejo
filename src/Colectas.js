@@ -591,8 +591,15 @@ function ColectasInner({ soloArribos = false }) {
         .then(json => {
           if (!vivo) return;
           const porNombre = {};
+          // Solo posiciones FRESCAS: backgps2 devuelve la última conocida aunque el celu haya dejado de
+          // reportar (visto 18/07: un cadete clavado a 28 m del depósito con 138 min de antigüedad →
+          // temblaría eternamente como si estuviera llegando). Sin reporte reciente, no hay alerta.
+          const MAX_ANTIGUEDAD_MS = 10 * 60 * 1000;
+          const ahora = Date.now();
           (json.cadetes || []).forEach(c => {
             if (c.nombre == null || c.distancia_m == null) return;
+            const t = c.hora ? new Date(c.hora).getTime() : NaN;
+            if (!isFinite(t) || ahora - t > MAX_ANTIGUEDAD_MS) return; // posición vieja: se ignora
             porNombre[normNombre(c.nombre)] = { dist: Number(c.distancia_m), vel: Number(c.velocidad || 0) };
           });
           setGpsPos({ porNombre, actualizado: json.actualizado || new Date().toISOString(), ok: true });
