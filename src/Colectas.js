@@ -550,21 +550,32 @@ function ColectasInner({ soloArribos = false }) {
     }
     const d = new Date(fecha + 'T12:00:00');
     const fechaLD = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000);
-    fetch(`${BRIDGE_URL}?fecha=${encodeURIComponent(fechaLD)}`, { headers: { 'x-bridge-key': BRIDGE_KEY }, signal: ctrl.signal })
-      .then(r => { if (!r.ok) throw new Error('bridge ' + r.status); return r.json(); })
-      .then(json => {
-        const porChofer = {};
-        (json.choferes || []).forEach(row => {
-          const key = normNombre(row.chofer);
-          porChofer[key] = (porChofer[key] || 0) + Number(row.cantidad || 0);
-        });
-        setColectaLD({ porChofer, actualizado: json.actualizado || new Date().toISOString(), ok: true });
-      })
-      .catch(() => setColectaLD(prev => ({ ...prev, ok: false })))
-      .finally(() => clearTimeout(timer));
-    return () => { clearTimeout(timer); ctrl.abort(); };
+    // Reset al cambiar de fecha/vista: nunca mostrar cantidades de otro día si el bridge falla
+    setColectaLD({ porChofer: {}, actualizado: null, ok: false });
+    let cancelado = false, ctrlActual = null, retryTimer = null;
+    const intentar = (nro) => {
+      const ctrl = new AbortController();
+      ctrlActual = ctrl;
+      const timer = setTimeout(() => ctrl.abort(), 10000);
+      fetch(`${BRIDGE_URL}?fecha=${encodeURIComponent(fechaLD)}`, { headers: { 'x-bridge-key': BRIDGE_KEY }, signal: ctrl.signal })
+        .then(r => { if (!r.ok) throw new Error('bridge ' + r.status); return r.json(); })
+        .then(json => {
+          if (cancelado) return;
+          const porChofer = {};
+          (json.choferes || []).forEach(row => {
+            const key = normNombre(row.chofer);
+            porChofer[key] = (porChofer[key] || 0) + Number(row.cantidad || 0);
+          });
+          setColectaLD({ porChofer, actualizado: json.actualizado || new Date().toISOString(), ok: true });
+        })
+        .catch(() => {
+          // El primer intento puede pillar al bridge haciendo su login inicial (503): reintento deliberado
+          if (!cancelado && nro < 2) retryTimer = setTimeout(() => intentar(nro + 1), 4000);
+        })
+        .finally(() => clearTimeout(timer));
+    };
+    intentar(1);
+    return () => { cancelado = true; clearTimeout(retryTimer); if (ctrlActual) ctrlActual.abort(); };
   }, [navView, fecha, aliasCadetes.length]);
 
   // Arribos — GPS real (bridge /geo). Polling cada 45s. Fallback silencioso: si el bridge no responde,
