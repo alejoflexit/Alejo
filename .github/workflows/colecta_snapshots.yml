@@ -5,8 +5,10 @@ name: Colecta Snapshots (Fase 0 anticipo)
 # Appendea en `colecta_snapshots`; no toca nada más.
 
 on:
-  schedule:
-    - cron: '0 14-20 * * *'   # cada hora, 11–17 AR
+  # schedule APAGADO 2026-07-18: Fase 0 (snapshots horarios) supersedida por el corte diario 14:30
+  # en el VPS — ver wiki/analisis/spec-corte-dia-1430 en el vault. Queda workflow_dispatch por si acaso.
+  # schedule:
+  #   - cron: '0 14-20 * * *'
   workflow_dispatch:
 
 jobs:
