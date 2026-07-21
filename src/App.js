@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"; // build: 20 nav + lazy
 import Home from "./Home";
-import { getSession } from "./auth";
+import { getSession, login, logout } from "./auth";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
@@ -580,12 +580,15 @@ export default function App() {
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [seccion, setSeccion] = useState("home");
+  const [session, setSession] = useState(() => getSession());
   const fileRef = useRef();
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
     const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", tiquetera: "Tiquetera", pagos: "Liquidaciones" };
     document.title = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
+    // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
+    if (seccion === "home") setSession(getSession());
   }, [seccion]);
 
   // Cargar desde Supabase al inicio
@@ -849,7 +852,10 @@ export default function App() {
 
       )}
 
-      {seccion === "home" && <Home onNav={setSeccion} onMenu={() => setSidebarOpen(true)} isMobile={isMobile} logo={FLEXIT_LOGO} />}
+      {seccion === "home" && <Home onNav={setSeccion} onMenu={() => setSidebarOpen(true)} isMobile={isMobile} logo={FLEXIT_LOGO}
+        session={session}
+        onLogin={async (em, pw) => { const s = await login(em, pw); setSession(s); return s; }}
+        onLogout={() => { logout(); setSession(null); }} />}
 
       {seccion === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas /></Suspense>}
 
