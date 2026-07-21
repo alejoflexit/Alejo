@@ -11,9 +11,6 @@ name: Pagos - Descarga semanal de entregados
 on:
   schedule:
     - cron: '0 10 * * 1'   # lunes 10:00 UTC = 07:00 AR (semana cerrada anterior)
-  push:
-    paths:
-      - 'automation/.rerun-trigger'   # TEMPORAL: disparo manual del re-import (revertir)
   workflow_dispatch:
     inputs:
       fecha_desde:
