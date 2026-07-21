@@ -8,16 +8,17 @@
 // `envios_busqueda`. Reutiliza el MISMO login + endpoint de descarga que
 // descargar_lightdata.js / sync_envios_agente.js (probado).
 //
-// Por qué "a planta + filtro" en vez de filtrar por fecha de entrega en el
-// servidor: LightData descarga por `tipo_fecha=6` (fecha "a planta"), que es
-// el único código verificado en el repo. La columna "Fecha estado" de un
-// envío Entregado ES su fecha/hora de entrega (así la usa el nightly para
-// post-21hs). Entonces descargamos una ventana "a planta" que cubre la semana
-// con holgura (DIAS_BUFFER días antes del lunes) y filtramos en el script por
-// fecha de entrega real. Resultado idéntico al export manual de Alejo, siempre
-// que el buffer alcance a cubrir los envíos entregados esa semana.
-//   → Si algún día se confirma el `tipo_fecha` de "fecha de entrega", basta
-//     poner TIPO_FECHA=<código> y DIAS_BUFFER=0 por env y filtrar exacto.
+// Descarga por FECHA DE ENTREGA directo del servidor: en LightData
+// `tipo_fecha=2` es "Fecha Entregado" (confirmado 2026-07-21 leyendo el select
+// `envios_f_tipo_fecha` de la UI de listado). Es el MISMO filtro que usa Alejo
+// a mano, así que el resultado coincide exactamente con su export manual.
+// Por eso DIAS_BUFFER=0: no hace falta traer una ventana "a planta" con holgura.
+//   Historia: hasta el 2026-07-21 esto descargaba por `tipo_fecha=6` (fecha "a
+//   planta") con un buffer de 12 días y filtraba en el script. Se le escapaban
+//   los envíos que estuvieron >12 días en depósito antes de entregarse (la
+//   semana 13–18/07 quedó ~316 corta: app 9.710 vs LightData 10.026).
+// El filtro por "Fecha estado" del script queda como red de seguridad: para un
+// envío Entregado, "Fecha estado" ES su fecha/hora de entrega.
 //
 // Env:
 //   SUPABASE_URL, SUPABASE_KEY   (mismos secrets que envios_agente.yml)
@@ -25,8 +26,9 @@
 //                                procesar. Para backfill / re-corridas.
 //                                Si no se pasan: semana cerrada anterior
 //                                (lunes–sábado de la semana pasada).
-//   DIAS_BUFFER  (opcional, default 12) días "a planta" antes del lunes.
-//   TIPO_FECHA   (opcional, default 6).
+//   DIAS_BUFFER  (opcional, default 0) días antes del lunes para ampliar la
+//                ventana de descarga. Con tipo_fecha=2 no hace falta (=0).
+//   TIPO_FECHA   (opcional, default 2 = "Fecha Entregado").
 // -------------------------------------------------------------------------
 
 const puppeteer = require('puppeteer-core');
@@ -39,8 +41,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const LD_USER = "beto";
 const LD_PASS = "123456";
-const DIAS_BUFFER = parseInt(process.env.DIAS_BUFFER || "12", 10);
-const TIPO_FECHA  = process.env.TIPO_FECHA || "6";
+const DIAS_BUFFER = parseInt(process.env.DIAS_BUFFER || "0", 10);
+const TIPO_FECHA  = process.env.TIPO_FECHA || "2"; // 2 = "Fecha Entregado" en LightData
 
 const ESTADOS_ENTREGADO = ["Entregado", "Entregado 2DA visita"]; // exactos, del repo
 
@@ -133,7 +135,7 @@ async function main() {
   const fechaHasta = fmtDDMMYYYY(entregaHasta);
 
   console.log(`Semana de ENTREGA: ${entregaDesdeYMD} → ${entregaHastaYMD} (semana_lunes=${semanaLunes})`);
-  console.log(`Ventana descarga a-planta: ${fechaDesde} → ${fechaHasta} (buffer ${DIAS_BUFFER}d, tipo_fecha=${TIPO_FECHA})`);
+  console.log(`Ventana descarga: ${fechaDesde} → ${fechaHasta} (buffer ${DIAS_BUFFER}d, tipo_fecha=${TIPO_FECHA})`);
 
   const downloadPath = '/tmp/lightdata-pagos';
   fs.mkdirSync(downloadPath, { recursive: true });
