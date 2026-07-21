@@ -346,8 +346,24 @@ function ColectasInner({ soloArribos = false }) {
   const saveTimer = useRef(null);
   const registrosRef = useRef({});
   const pendingSavesRef = useRef(new Map());
+  const diaSemanaRef = useRef(null); // último día de semana visto, para restaurarlo al salir de SÁBADOS
 
   useEffect(() => { registrosRef.current = registros; }, [registros]);
+
+  // La colecta del sábado vive en la FECHA del sábado (es una colecta distinta a la de semana).
+  // Por eso la pestaña SÁBADOS opera sobre el sábado de la semana, no sobre el día seleccionado:
+  // así confirmar una colecta entre semana ya no aparece confirmada en SÁBADOS (bug clientes doble-zona).
+  useEffect(() => { if (tab !== 'SABADOS') diaSemanaRef.current = fecha; }, [fecha, tab]);
+  const cambiarTab = (s) => {
+    if (s === 'SABADOS' && tab !== 'SABADOS') {
+      const sab = getWeekRange(fecha).end; // sábado de esa semana
+      if (sab !== fecha) setFecha(sab);
+    } else if (s !== 'SABADOS' && tab === 'SABADOS') {
+      const volver = diaSemanaRef.current || todayStr();
+      if (volver !== fecha) setFecha(volver);
+    }
+    setTab(s);
+  };
 
   // Tiempo real: cambios de otros usuarios en el dia activo (Supabase Realtime)
   useEffect(() => {
@@ -1559,7 +1575,7 @@ function ColectasInner({ soloArribos = false }) {
           return estEf === 'amarillo';
         }).length;
         return (
-          <button key={s} onClick={() => setTab(s)} style={{
+          <button key={s} onClick={() => cambiarTab(s)} style={{
             padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', border:'none',
             background:'transparent', color: active ? BRAND.teal : BRAND.muted,
             borderBottom: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
