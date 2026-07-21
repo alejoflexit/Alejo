@@ -131,26 +131,36 @@ function precioZonaDominante(rows, tarifa, zonaByLoc) {
 }
 
 function calcularFila(canonName, rows, tarifa, ctx) {
-  const { cpPriceMap, zonaByLoc, colectaByKey, ajusteRowsByKey } = ctx;
+  const { cpPriceMap, cpTierMap, cadetesConTier, zonaByLoc, colectaByKey, ajusteRowsByKey } = ctx;
   const key = norm(canonName);
   const cantidad = rows.length;
   const base = tarifa.precio_fijo != null ? Number(tarifa.precio_fijo) : null;
+  const hasTiers = cadetesConTier && cadetesConTier.has(key);
   let monto = 0, faltaPrecio = false, fallbackInfo = null, cpBreakdown = null, modoEfectivo = 'fijo';
 
-  if (base != null) {
-    // Modelo unificado: precio base para TODO + overrides por CP (excepciones, ej. sábados de Javier).
-    // Un cadete sin overrides cobra todo al precio base (idéntico al viejo "fijo").
+  if (base != null || hasTiers) {
+    // Modelo por CP: cada CP toma su tarifa asignada (T1/T2/T3) o el precio base.
+    // Prioridad por CP: override exacto (cadete_precio_cp) > tarifa del tier del CP > precio base.
     const porCp = new Map();
     rows.forEach(r => {
       const cp = String(r.cp || '').trim() || '(sin CP)';
-      const ov = cpPriceMap.get(`${key}|${cp}`);
       const prev = porCp.get(cp);
-      if (prev) prev.cantidad += 1;
-      else porCp.set(cp, { cp, cantidad: 1, precio: ov != null ? Number(ov) : base, conOverride: ov != null });
+      if (prev) { prev.cantidad += 1; return; }
+      const ov = cpPriceMap.get(`${key}|${cp}`);
+      const tier = cpTierMap ? cpTierMap.get(`${key}|${cp}`) : null;
+      const tierAmt = tier ? tarifa[`tarifa${tier}`] : null;
+      let precio = null, fuente = 'base';
+      if (ov != null) { precio = Number(ov); fuente = 'cp'; }
+      else if (tier && tierAmt != null) { precio = Number(tierAmt); fuente = `T${tier}`; }
+      else if (base != null) { precio = base; fuente = 'base'; }
+      else { precio = null; fuente = tier ? `T${tier}` : 'sin'; }
+      porCp.set(cp, { cp, cantidad: 1, precio, fuente, tier: tier || null, conOverride: fuente !== 'base' });
     });
     const bd = [...porCp.values()].sort((a, b) => b.cantidad - a.cantidad);
-    bd.forEach(b => { monto += b.precio * b.cantidad; });
-    if (bd.some(b => b.conOverride)) { cpBreakdown = bd; modoEfectivo = 'cp'; } // solo se muestra desglose si hay excepciones
+    let faltantes = 0;
+    bd.forEach(b => { if (b.precio == null) faltantes += b.cantidad; else monto += b.precio * b.cantidad; });
+    if (bd.some(b => b.conOverride || b.precio == null)) { cpBreakdown = bd; modoEfectivo = 'cp'; }
+    if (faltantes > 0) { faltaPrecio = true; fallbackInfo = `${faltantes} entrega(s) sin tarifa — asigná su tarifa por CP o poné precio base`; }
   } else if (tarifa.modo === 'cp') {
     // Legacy: cadete en modo cp sin precio base (solo overrides). Sin base, lo que no tenga override queda sin precio.
     const porCp = new Map();
@@ -191,7 +201,7 @@ function calcularFila(canonName, rows, tarifa, ctx) {
   };
 }
 
-function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes }) {
+function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes }) {
   const tarifaByLD = new Map();
   tarifas.forEach(t => { if (t.nombre_lightdata) tarifaByLD.set(norm(t.nombre_lightdata), t); });
 
@@ -203,6 +213,16 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
 
   const cpPriceMap = new Map();
   cpOverrides.forEach(o => { cpPriceMap.set(`${norm(o.nombre_lightdata)}|${String(o.cp).trim()}`, Number(o.precio)); });
+
+  // asignación CP -> tarifa (1/2/3) por cadete, y qué cadetes tienen alguna asignada
+  const cpTierMap = new Map();
+  const cadetesConTier = new Set();
+  (cpTarifas || []).forEach(t => {
+    if (!t.nombre_lightdata || t.tier == null) return;
+    const k = norm(t.nombre_lightdata);
+    cpTierMap.set(`${k}|${String(t.cp).trim()}`, Number(t.tier));
+    cadetesConTier.add(k);
+  });
 
   // 1. agrupar crudo por nombre LightData tal cual viene
   const rawGroups = new Map();
@@ -277,7 +297,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     ajusteRowsByKey.get(key).push(a);
   });
 
-  const ctx = { cpPriceMap, zonaByLoc, colectaByKey, ajusteRowsByKey };
+  const ctx = { cpPriceMap, cpTierMap, cadetesConTier, zonaByLoc, colectaByKey, ajusteRowsByKey };
 
   const filas = [];
   for (const [key, g] of canonGroups) {
@@ -377,15 +397,19 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     g.rows.forEach(r => {
       const cp = String(r.cp || '').trim() || '(sin CP)';
       const zona = zonaByLoc.get(norm(r.localidad)) || '';
+      const loc = String(r.localidad || '').trim();
       let e = porCp.get(cp);
-      if (!e) { e = { cp, cantidad: 0, zonas: new Map() }; porCp.set(cp, e); }
+      if (!e) { e = { cp, cantidad: 0, zonas: new Map(), locs: new Map() }; porCp.set(cp, e); }
       e.cantidad += 1;
       if (zona) e.zonas.set(zona, (e.zonas.get(zona) || 0) + 1);
+      if (loc) e.locs.set(loc, (e.locs.get(loc) || 0) + 1);
     });
     const arr = [...porCp.values()].map(e => {
       let zona = '', best = 0;
       e.zonas.forEach((n, z) => { if (n > best) { best = n; zona = z; } });
-      return { cp: e.cp, cantidad: e.cantidad, zona };
+      let localidad = '', bestL = 0;
+      e.locs.forEach((n, l) => { if (n > bestL) { bestL = n; localidad = l; } });
+      return { cp: e.cp, cantidad: e.cantidad, zona, localidad };
     }).sort((x, y) => y.cantidad - x.cantidad);
     cpsPorCadete.set(canonKey, arr);
   }
@@ -521,7 +545,7 @@ function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotales }) {
 
 // ───────────────────────── sub-vista: Config de cadetes (solo admin) ─────────────────────────
 
-function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh }) {
+function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, onRefresh }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [filtro, setFiltro] = useState('');
@@ -531,8 +555,6 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
   const [nuevoAlias, setNuevoAlias] = useState({ nombre_lightdata: '', regla: 'merge', paga_como: '', detalle: '' });
   const [nuevoCadete, setNuevoCadete] = useState({ nombre_lightdata: '', nombre: '', factura: false, precio_fijo: '' });
   const [drafts, setDrafts] = useState({}); // id -> campos editados pendientes
-  const [cpDraft, setCpDraft] = useState({}); // cp -> precio en edición (modal de CPs)
-  useEffect(() => { setCpDraft({}); }, [cpSel]);
 
   const inp = { padding: '5px 8px', fontSize: 12.5, border: `1px solid ${BRAND.border}`, borderRadius: 6, background: BRAND.faint, color: BRAND.white, outline: 'none' };
   const btn = { padding: '5px 12px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(46,207,170,0.35)', background: 'rgba(46,207,170,0.12)', color: BRAND.teal };
@@ -564,22 +586,39 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
   }, [doAction]);
 
   const filtrados = tarifas.filter(t => !filtro || norm(t.nombre_lightdata || t.nombre).includes(norm(filtro)));
-  const cadetesCp = tarifas.filter(t => t.nombre_lightdata); // todos los cadetes con nombre (el modal de CPs sirve para cualquiera)
-  const overridesDeSel = cpOverrides.filter(o => norm(o.nombre_lightdata) === norm(cpSel));
+  const cadetesCp = tarifas.filter(t => t.nombre_lightdata); // el modal de tarifas sirve para cualquier cadete
+  const selTarifa = tarifas.find(t => t.nombre_lightdata === cpSel) || null;
   const entregasCp = (cpsPorCadete && cpsPorCadete.get(norm(cpSel))) || [];
-  const ovByCp = new Map(overridesDeSel.map(o => [String(o.cp).trim(), o.precio]));
+  const tierByCp = new Map(cpTarifas.filter(ct => norm(ct.nombre_lightdata) === norm(cpSel)).map(ct => [String(ct.cp).trim(), Number(ct.tier)]));
+  const ovByCp = new Map(cpOverrides.filter(o => norm(o.nombre_lightdata) === norm(cpSel)).map(o => [String(o.cp).trim(), o.precio]));
+  const tierAmt = (tier) => selTarifa && selTarifa[`tarifa${tier}`] != null ? Number(selTarifa[`tarifa${tier}`]) : null;
+  const baseSel = selTarifa && selTarifa.precio_fijo != null ? Number(selTarifa.precio_fijo) : null;
+  // precio efectivo de un CP: override exacto > tarifa del tier asignado > precio base
+  const precioCp = (cp) => {
+    if (ovByCp.has(cp)) return { precio: Number(ovByCp.get(cp)), fuente: 'CP' };
+    const tr = tierByCp.get(cp);
+    if (tr) { const a = tierAmt(tr); return { precio: a, fuente: `T${tr}`, falta: a == null }; }
+    if (baseSel != null) return { precio: baseSel, fuente: 'base' };
+    return { precio: null, fuente: null, falta: true };
+  };
   const cpRows = (() => {
     const seen = new Set(); const out = [];
-    entregasCp.forEach(({ cp, cantidad, zona }) => { seen.add(cp); out.push({ cp, cantidad, zona: zona || '', precio: ovByCp.has(cp) ? ovByCp.get(cp) : null }); });
-    overridesDeSel.forEach(o => { const cp = String(o.cp).trim(); if (!seen.has(cp)) out.push({ cp, cantidad: 0, zona: '', precio: o.precio }); });
-    return out;
+    entregasCp.forEach(({ cp, cantidad, zona, localidad }) => { seen.add(cp); out.push({ cp, cantidad, zona: zona || '', localidad: localidad || '' }); });
+    tierByCp.forEach((tr, cp) => { if (!seen.has(cp)) { seen.add(cp); out.push({ cp, cantidad: 0, zona: '', localidad: '' }); } });
+    return out.map(r => ({ ...r, tier: tierByCp.get(r.cp) || 0, ...precioCp(r.cp) }));
   })();
-  const cpSinPrecio = cpRows.filter(r => r.precio == null && r.cantidad > 0).length;
-  const guardarCpRow = (cp, precio) => doAction(async () => {
-    if (ovByCp.has(cp)) await sb(`cadete_precio_cp?nombre_lightdata=eq.${encodeURIComponent(cpSel)}&cp=eq.${encodeURIComponent(cp)}`, { method: 'PATCH', body: JSON.stringify({ precio }) });
-    else await sb('cadete_precio_cp', { method: 'POST', body: JSON.stringify([{ nombre_lightdata: cpSel, cp, precio }]) });
+  const cpSinPrecio = cpRows.filter(r => r.falta && r.cantidad > 0).length;
+  const asignarTier = (cp, tier) => doAction(async () => {
+    const existe = tierByCp.has(cp);
+    if (!tier) { if (existe) await sb(`cadete_cp_tarifa?nombre_lightdata=eq.${encodeURIComponent(cpSel)}&cp=eq.${encodeURIComponent(cp)}`, { method: 'DELETE' }); return; }
+    if (existe) await sb(`cadete_cp_tarifa?nombre_lightdata=eq.${encodeURIComponent(cpSel)}&cp=eq.${encodeURIComponent(cp)}`, { method: 'PATCH', body: JSON.stringify({ tier }) });
+    else await sb('cadete_cp_tarifa', { method: 'POST', body: JSON.stringify([{ nombre_lightdata: cpSel, cp, tier }]) });
   });
-  const borrarCpRow = (cp) => doAction(async () => { await sb(`cadete_precio_cp?nombre_lightdata=eq.${encodeURIComponent(cpSel)}&cp=eq.${encodeURIComponent(cp)}`, { method: 'DELETE' }); });
+  const guardarTierAmt = (tier, value) => doAction(async () => {
+    if (!selTarifa) return;
+    const v = value === '' || value == null ? null : Number(value);
+    await sb(`cadetes_tarifas?id=eq.${selTarifa.id}`, { method: 'PATCH', body: JSON.stringify({ [`tarifa${tier}`]: v }) });
+  });
 
   function setDraft(id, field, value) {
     setDrafts(d => ({ ...d, [id]: { ...(d[id] || {}), [field]: value } }));
@@ -679,8 +718,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
                       </>
                     )}
                     {t.nombre_lightdata && (() => {
-                      const nCp = cpOverrides.filter(o => o.nombre_lightdata === t.nombre_lightdata).length;
-                      return <button title="agregar precios especiales por CP (excepciones sobre el precio base)" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: nCp ? BRAND.teal : BRAND.border, color: nCp ? BRAND.teal : BRAND.white, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>CPs extra{nCp ? ` (${nCp})` : ''}</button>;
+                      const nCp = (cpTarifas || []).filter(o => norm(o.nombre_lightdata) === norm(t.nombre_lightdata)).length;
+                      return <button title="tarifas por CP (T1/T2/T3) y asignación de cada CP" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: nCp ? BRAND.teal : BRAND.border, color: nCp ? BRAND.teal : BRAND.white, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>Tarifas{nCp ? ` (${nCp})` : ''}</button>;
                     })()}
                     <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 6, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
                   </td>
@@ -691,12 +730,12 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
         </table>
       </div>
 
-      {/* Precios por CP — modal (Tarea post-review) */}
+      {/* Tarifas por CP — modal (T1/T2/T3 por cadete) */}
       {cpSel && (
         <div onClick={() => setCpSel('')} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 480, maxWidth: '94vw', maxHeight: '86vh', overflowY: 'auto', background: BRAND.navyCard, border: `1px solid ${BRAND.teal}`, borderRadius: 14, padding: 18, boxShadow: '0 14px 44px rgba(0,0,0,0.55)' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 580, maxWidth: '95vw', maxHeight: '88vh', overflowY: 'auto', background: BRAND.navyCard, border: `1px solid ${BRAND.teal}`, borderRadius: 14, padding: 18, boxShadow: '0 14px 44px rgba(0,0,0,0.55)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.teal }}>Precios por CP · <span style={{ color: BRAND.white }}>{cpSel}</span></div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.teal }}>Tarifas por CP · <span style={{ color: BRAND.white }}>{cpSel}</span></div>
               <button onClick={() => setCpSel('')} title="cerrar" style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
             </div>
             {cadetesCp.length > 1 && (
@@ -704,52 +743,68 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpsPorCadete, onRefresh })
                 {cadetesCp.map(c => <option key={c.id} value={c.nombre_lightdata}>{c.nombre_lightdata}</option>)}
               </select>
             )}
+
+            {/* montos de las 3 tarifas + base de referencia */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+              {[1, 2, 3].map(tr => {
+                const tc = tr === 1 ? BRAND.teal : tr === 2 ? BRAND.amber : BRAND.red;
+                return (
+                  <label key={`${cpSel}-t${tr}`} style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: BRAND.muted }}>
+                    <span style={{ fontWeight: 700, color: tc }}>Tarifa {tr}</span>
+                    <input className="no-spin" type="number" placeholder="—" disabled={busy || !selTarifa}
+                      defaultValue={tierAmt(tr) != null ? String(tierAmt(tr)) : ''}
+                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                      onBlur={e => { const s = e.target.value.trim(); const cur = tierAmt(tr); if (s === '' && cur == null) return; if (s !== '' && Number(s) === cur) return; guardarTierAmt(tr, s); }}
+                      style={{ ...inp, width: 92 }} />
+                  </label>
+                );
+              })}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: BRAND.muted }}>
+                <span style={{ fontWeight: 700 }}>Base</span>
+                <span style={{ ...inp, width: 92, opacity: 0.7 }}>{baseSel != null ? money(baseSel) : '—'}</span>
+              </label>
+            </div>
+            <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 10 }}>Cargá el monto de cada tarifa y abajo asigná cada CP a una tarifa (o dejalo en Base). Un CP sin tarifa cobra el precio base.{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
+
             {cpRows.length > 0 ? (
-              <>
-                <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 8 }}>CPs a los que entregó en la semana seleccionada — poné el precio de cada uno (Enter o salí del campo para guardar).{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
-                  <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px' }}>Zona</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Entregas</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Precio</th><th></th></tr></thead>
-                  <tbody>
-                    {cpRows.map(({ cp, cantidad, zona, precio }) => {
-                      const val = cpDraft[cp] !== undefined ? cpDraft[cp] : (precio != null ? String(precio) : '');
-                      const sinPrecio = precio == null && cantidad > 0;
-                      return (
-                        <tr key={cp} style={{ borderTop: `1px solid ${BRAND.border}`, background: sinPrecio ? 'rgba(255,176,32,0.06)' : 'transparent' }}>
-                          <td style={{ padding: '5px 6px' }}>{cp}</td>
-                          <td style={{ padding: '5px 6px', color: BRAND.muted, fontSize: 11.5 }}>{zona || '—'}</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'right', color: BRAND.muted }}>{cantidad || '—'}</td>
-                          <td style={{ padding: '5px 6px', textAlign: 'right' }}>
-                            <input className="no-spin" type="number" placeholder="—" value={val}
-                              onChange={e => setCpDraft(d => ({ ...d, [cp]: e.target.value }))}
-                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                              onBlur={() => {
-                                const raw = cpDraft[cp]; if (raw === undefined) return;
-                                const str = String(raw).trim();
-                                if (str === '') { if (precio != null) borrarCpRow(cp); return; }
-                                const n = Number(str); if (Number.isNaN(n) || n === Number(precio)) return;
-                                guardarCpRow(cp, n);
-                              }}
-                              style={{ ...inp, width: 88, textAlign: 'right', borderColor: sinPrecio ? BRAND.amber : BRAND.border }} />
-                          </td>
-                          <td style={{ padding: '5px 6px', textAlign: 'right' }}>
-                            {precio != null && <button title="quitar precio de este CP" disabled={busy} onClick={() => borrarCpRow(cp)} style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
+                <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}>
+                  <th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px' }}>Localidad</th>
+                  <th style={{ padding: '4px 6px', textAlign: 'right' }}>Entregas</th>
+                  <th style={{ padding: '4px 6px' }}>Tarifa</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Precio</th>
+                </tr></thead>
+                <tbody>
+                  {cpRows.map(({ cp, cantidad, localidad, tier, precio, fuente, falta }) => (
+                    <tr key={cp} style={{ borderTop: `1px solid ${BRAND.border}`, background: falta ? 'rgba(255,176,32,0.06)' : 'transparent' }}>
+                      <td style={{ padding: '5px 6px' }}>{cp}</td>
+                      <td style={{ padding: '5px 6px', color: BRAND.muted, fontSize: 11.5 }}>{localidad || '—'}</td>
+                      <td style={{ padding: '5px 6px', textAlign: 'right', color: BRAND.muted }}>{cantidad || '—'}</td>
+                      <td style={{ padding: '5px 6px' }}>
+                        <select value={tier || ''} disabled={busy} onChange={e => asignarTier(cp, Number(e.target.value) || 0)} style={{ ...inp, padding: '3px 6px', width: 78 }}>
+                          <option value="">Base</option>
+                          <option value="1">T1</option>
+                          <option value="2">T2</option>
+                          <option value="3">T3</option>
+                        </select>
+                      </td>
+                      <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 700, color: falta ? BRAND.amber : BRAND.white }}>
+                        {falta ? 'FALTA' : money(precio)}{fuente && fuente !== 'base' && !falta && <span style={{ fontSize: 10, color: BRAND.muted, fontWeight: 400 }}> {fuente}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : (
-              <div style={{ fontSize: 12, color: BRAND.muted, padding: '6px 0 14px' }}>Este cadete no tiene entregas en la semana seleccionada. Podés agregar un CP a mano abajo.</div>
+              <div style={{ fontSize: 12, color: BRAND.muted, padding: '6px 0 14px' }}>Este cadete no tiene entregas en la semana seleccionada. Agregá un CP a mano abajo.</div>
             )}
+
+            {/* agregar un CP a mano y asignarle tarifa */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', borderTop: `1px solid ${BRAND.border}`, paddingTop: 12 }}>
               <input className="no-spin" style={{ ...inp, flex: 1 }} placeholder="CP" value={nuevoCp.cp} onChange={e => setNuevoCp(s => ({ ...s, cp: e.target.value }))} />
-              <input className="no-spin" style={{ ...inp, width: 120 }} type="number" placeholder="Precio" value={nuevoCp.precio} onChange={e => setNuevoCp(s => ({ ...s, precio: e.target.value }))} />
-              <button style={btn} disabled={busy || !nuevoCp.cp || !nuevoCp.precio} onClick={() => doAction(async () => {
-                await sb('cadete_precio_cp', { method: 'POST', body: JSON.stringify([{ nombre_lightdata: cpSel, cp: nuevoCp.cp.trim(), precio: Number(nuevoCp.precio) }]) });
-                setNuevoCp({ cp: '', precio: '' });
-              })}>+ Agregar</button>
+              <select style={{ ...inp, width: 92 }} value={nuevoCp.precio} onChange={e => setNuevoCp(s => ({ ...s, precio: e.target.value }))}>
+                <option value="">Base</option><option value="1">T1</option><option value="2">T2</option><option value="3">T3</option>
+              </select>
+              <button style={btn} disabled={busy || !nuevoCp.cp} onClick={() => { asignarTier(nuevoCp.cp.trim(), Number(nuevoCp.precio) || 0); setNuevoCp({ cp: '', precio: '' }); }}>+ Agregar</button>
             </div>
           </div>
         </div>
@@ -932,6 +987,7 @@ function PagosInner({ session }) {
   const [tarifas, setTarifas] = useState([]);
   const [alias, setAlias] = useState([]);
   const [cpOverrides, setCpOverrides] = useState([]);
+  const [cpTarifas, setCpTarifas] = useState([]); // cadete_cp_tarifa: asignación CP->tier por cadete
   const [zonas, setZonas] = useState([]);
   const [entregados, setEntregados] = useState([]);
   const [colectas, setColectas] = useState([]);
@@ -972,13 +1028,14 @@ function PagosInner({ session }) {
   const refreshConfig = useCallback(async () => {
     setLoadingConfig(true); setError('');
     try {
-      const [t, a, cp, z] = await Promise.all([
+      const [t, a, cp, z, ct] = await Promise.all([
         sbAll('cadetes_tarifas?select=*&order=nombre_lightdata.asc'),
         sbAll('pagos_cadete_alias?select=*'),
         sbAll('cadete_precio_cp?select=*'),
         sbAll('localidad_zonas?select=localidad,zona'),
+        sbAll('cadete_cp_tarifa?select=*'),
       ]);
-      setTarifas(t || []); setAlias(a || []); setCpOverrides(cp || []); setZonas(z || []);
+      setTarifas(t || []); setAlias(a || []); setCpOverrides(cp || []); setZonas(z || []); setCpTarifas(ct || []);
     } catch (e) { setError(e.message); }
     finally { setLoadingConfig(false); }
   }, []);
@@ -1013,8 +1070,8 @@ function PagosInner({ session }) {
 
   const calc = useMemo(() => {
     if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map(), porDarAlta: [] };
-    return calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes });
-  }, [entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
+    return calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes });
+  }, [entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
   const filasEfectivas = useMemo(() => calc.filas.map(f => filaConOverride(f, overrides[f.key], colectaOv[f.key])), [calc.filas, overrides, colectaOv]);
 
@@ -1164,7 +1221,7 @@ function PagosInner({ session }) {
       {error && <div style={{ background: 'rgba(226,75,74,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
       {vista === 'config' && isAdmin && (
-        <ConfigCadetes tarifas={tarifas} alias={alias} cpOverrides={cpOverrides} cpsPorCadete={calc.cpsPorCadete} onRefresh={refreshConfig} />
+        <ConfigCadetes tarifas={tarifas} alias={alias} cpOverrides={cpOverrides} cpTarifas={cpTarifas} cpsPorCadete={calc.cpsPorCadete} onRefresh={refreshConfig} />
       )}
 
       {vista === 'pagador' && isAdmin && (
@@ -1401,7 +1458,7 @@ function PagosInner({ session }) {
                                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                                       {f.cpBreakdown.map(b => (
                                         <div key={b.cp} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: BRAND.faint, border: `1px solid ${b.precio == null ? BRAND.red : BRAND.border}` }}>
-                                          CP {b.cp}: {b.cantidad} × {b.precio != null ? money(b.precio) : 'SIN PRECIO'}
+                                          CP {b.cp}: {b.cantidad} × {b.precio != null ? money(b.precio) : 'SIN PRECIO'}{b.fuente && b.fuente !== 'base' && b.precio != null ? <span style={{ color: BRAND.muted }}> · {b.fuente}</span> : ''}
                                         </div>
                                       ))}
                                     </div>
