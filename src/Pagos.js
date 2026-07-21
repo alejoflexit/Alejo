@@ -222,7 +222,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
 
   for (const [key, g] of rawGroups) {
     const al = aliasByLD.get(key);
-    if (al && al.regla === 'ignorar') { ignorados.push({ raw: g.raw, cantidad: g.rows.length }); continue; }
+    if (al && al.regla === 'ignorar') { ignorados.push({ raw: g.raw, cantidad: g.rows.length, desde: al.updated_at }); continue; }
     if (al && al.regla === 'aparte') {
       if (!aparteGroups.has(key)) aparteGroups.set(key, { raw: g.raw, rows: [] });
       aparteGroups.get(key).rows.push(...g.rows);
@@ -280,11 +280,11 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
   const ctx = { cpPriceMap, zonaByLoc, colectaByKey, ajusteRowsByKey };
 
   const filas = [];
-  const configErrors = [];
   for (const [key, g] of canonGroups) {
     const tarifa = tarifaByLD.get(key);
     if (!tarifa) {
-      configErrors.push({ nombre: g.canonName, cantidad: g.rows.length, motivo: 'canónico sin fila en cadetes_tarifas (revisar pagos_cadete_alias.paga_como o dar de alta)' });
+      // sin tarifa: no genera fila. Se reporta abajo como "por dar de alta" (chofer
+      // nuevo desconocido) o como "error de config" (alias que apunta a la nada).
       continue;
     }
     if (tarifa.fletero) {
@@ -329,6 +329,47 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     }
   }
 
+  // ── Choferes POR DAR DE ALTA: nombres que aparecen esta semana (entregas y/o
+  //    colectas), sin tarifa y sin NINGÚN alias configurado (desconocidos reales).
+  //    Usa el mismo matching (norm) que el que paga -> no hay falsos "nuevos".
+  const altaMap = new Map();
+  for (const [key, g] of rawGroups) {
+    if (tarifaByLD.has(key) || aliasByLD.has(key)) continue;
+    const e = altaMap.get(key) || { key, nombre: g.raw, entregas: 0, colectas: 0 };
+    e.entregas += g.rows.length;
+    altaMap.set(key, e);
+  }
+  colectas.forEach(c => {
+    const confirmada = c.estado === 'verde' || (Array.isArray(c.confirmado_por) && c.confirmado_por.length > 0);
+    if (!confirmada) return;
+    (c.choferes || []).forEach(ch => {
+      const raw = (ch || '').trim();
+      if (!raw || norm(raw) === 'a coordinar') return;
+      const key = norm(raw);
+      if (tarifaByLD.has(key) || aliasByLD.has(key)) return;
+      const e = altaMap.get(key) || { key, nombre: raw, entregas: 0, colectas: 0 };
+      e.colectas += 1;
+      altaMap.set(key, e);
+    });
+  });
+  const porDarAlta = [...altaMap.values()].sort((a, b) => (b.entregas + b.colectas) - (a.entregas + a.colectas));
+
+  // ── Errores de config REALES: un alias 'merge' cuyo paga_como no existe en
+  //    cadetes_tarifas. (Distinto de "por dar de alta": acá el alias ya está,
+  //    pero apunta a un nombre inexistente, así que esas entregas no se pagan.)
+  const configErrors = [];
+  for (const a of alias) {
+    if (a.regla !== 'merge' || !a.paga_como) continue;
+    if (tarifaByLD.has(norm(a.paga_como))) continue;
+    const rg = rawGroups.get(norm(a.nombre_lightdata));
+    configErrors.push({
+      pagaComo: a.paga_como,
+      aliasDesde: a.nombre_lightdata,
+      cantidad: rg ? rg.rows.length : 0,
+      motivo: `El alias «${a.nombre_lightdata}» paga como «${a.paga_como}», que no existe en Config`,
+    });
+  }
+
   // CPs a los que entregó cada cadete esta semana (para pre-cargar el modal de precios por CP en Config)
   const cpsPorCadete = new Map();
   for (const [canonKey, g] of canonGroups) {
@@ -348,7 +389,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
     }).sort((x, y) => y.cantidad - x.cantidad);
     cpsPorCadete.set(canonKey, arr);
   }
-  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete };
+  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete, porDarAlta };
 }
 
 // aplica el override de cantidad (editable en la UI) a una fila calculada
@@ -409,7 +450,7 @@ function LoginPagos({ onOk }) {
 
 // ───────────────────────── export a excel ─────────────────────────
 
-function exportarExcel({ filas, aparte, sinResolver, semanaLunes, subtotales }) {
+function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotales }) {
   const label = fmtSemanaLabel(semanaLunes);
   const header = ['Cadete', 'Cantidad', 'Precio', 'Monto', 'Colecta', 'Ajuste', 'TOTAL', 'Método'];
   const rows = filas.map(f => f.esFletero ? [
@@ -446,10 +487,10 @@ function exportarExcel({ filas, aparte, sinResolver, semanaLunes, subtotales }) 
     ]));
   }
 
-  if (sinResolver.length) {
-    aoa.push([], ['A REVISAR — choferes nuevos sin dar de alta']);
-    aoa.push(['Cadete', 'Entregas', 'Primera', 'Última']);
-    sinResolver.forEach(s => aoa.push([s.cadete, s.entregas, s.primera, s.ultima]));
+  if (porDarAlta && porDarAlta.length) {
+    aoa.push([], ['A REVISAR — choferes por dar de alta']);
+    aoa.push(['Chofer', 'Entregas', 'Colectas']);
+    porDarAlta.forEach(s => aoa.push([s.nombre, s.entregas, s.colectas]));
   }
 
   const wb = window.XLSX.utils.book_new();
@@ -796,6 +837,39 @@ function TarjetaRevisar({ icon, titulo, count, color, right, onToggle, expanded,
   );
 }
 
+// fila de "dar de alta" con formulario inline (precio / fletero / factura).
+// Si recibe onIgnorar muestra el botón "Ocultar"; note pinta una aclaración arriba.
+function FilaDarAlta({ item, onAlta, onIgnorar, busy, note }) {
+  const [open, setOpen] = useState(false);
+  const [precio, setPrecio] = useState('');
+  const [fletero, setFletero] = useState(false);
+  const [factura, setFactura] = useState(false);
+  const resumen = [item.entregas ? `${item.entregas} entregas` : null, item.colectas ? `${item.colectas} colectas` : null].filter(Boolean).join(' · ') || '—';
+  const inp = { padding: '4px 8px', fontSize: 12, border: `1px solid ${BRAND.border}`, borderRadius: 6, background: BRAND.faint, color: BRAND.white, outline: 'none' };
+  const btn = (bg, col, bd) => ({ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: busy ? 'default' : 'pointer', border: `1px solid ${bd}`, background: bg, color: col });
+  const lbl = { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: BRAND.muted, cursor: 'pointer' };
+  const puedeConfirmar = !busy && (fletero || precio !== '');
+  return (
+    <div style={{ padding: '6px 0', borderTop: `1px solid ${BRAND.border}` }}>
+      {note && <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 4 }}>{note}</div>}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, flexWrap: 'wrap' }}>
+        <span style={{ flex: 1, fontWeight: 600, minWidth: 120 }}>{item.nombre}</span>
+        <span style={{ color: BRAND.muted }}>{resumen}</span>
+        <button onClick={() => setOpen(o => !o)} disabled={busy} style={btn('rgba(46,207,170,0.1)', BRAND.teal, BRAND.teal)}>Dar de alta</button>
+        {onIgnorar && <button onClick={() => onIgnorar(item.nombre)} disabled={busy} title="Basura o ya pagado aparte: deja de mostrarlo. Si vuelve a aparecer, te aviso." style={btn(BRAND.faint, BRAND.muted, BRAND.border)}>Ocultar</button>}
+      </div>
+      {open && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 7, flexWrap: 'wrap' }}>
+          <label style={lbl}><input type="checkbox" checked={fletero} onChange={e => setFletero(e.target.checked)} /> Fletero (solo colectas)</label>
+          {!fletero && <input type="number" placeholder="Precio x entrega" value={precio} onChange={e => setPrecio(e.target.value)} style={{ ...inp, width: 130 }} />}
+          <label style={lbl}><input type="checkbox" checked={factura} onChange={e => setFactura(e.target.checked)} /> Factura (transferencia)</label>
+          <button disabled={!puedeConfirmar} onClick={() => onAlta(item.nombre, { precio: fletero ? null : precio, fletero, factura })} style={{ ...btn(BRAND.teal, '#04121a', BRAND.teal), opacity: puedeConfirmar ? 1 : 0.5 }}>Confirmar alta</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ───────────────────────── componente principal ─────────────────────────
 
 function PagosInner({ session }) {
@@ -813,7 +887,6 @@ function PagosInner({ session }) {
   const [entregados, setEntregados] = useState([]);
   const [colectas, setColectas] = useState([]);
   const [ajustes, setAjustes] = useState([]);
-  const [sinResolver, setSinResolver] = useState([]);
   const [cierres, setCierres] = useState([]);
 
   const [loadingConfig, setLoadingConfig] = useState(true);
@@ -874,15 +947,14 @@ function PagosInner({ session }) {
     setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes));
     try {
       const sabado = addDays(lunes, 5);
-      const [ent, col, aj, sr, ci] = await Promise.all([
+      const [ent, col, aj, ci] = await Promise.all([
         sbAll(`pagos_entregados?select=cadete,localidad,cp,fecha_estado&semana_lunes=eq.${lunes}`),
         sbAll(`colectas_registros?select=fecha,choferes,monto,estado,confirmado_por,colectas_clientes(monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
         sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
-        sb(`pagos_cadetes_sin_resolver?semana_lunes=eq.${lunes}`),
         sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`),
       ]);
       setEntregados(ent || []); setColectas(col || []); setAjustes(aj || []);
-      setSinResolver(sr || []); setCierres(ci || []);
+      setCierres(ci || []);
     } catch (e) { setError(e.message); }
     finally { setLoadingSemana(false); }
   }, []);
@@ -890,7 +962,7 @@ function PagosInner({ session }) {
   useEffect(() => { if (semanaLunes) refreshSemana(semanaLunes); }, [semanaLunes, refreshSemana]);
 
   const calc = useMemo(() => {
-    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map() };
+    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map(), porDarAlta: [] };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
@@ -965,11 +1037,30 @@ function PagosInner({ session }) {
     finally { setBusyAccion(false); }
   }
 
-  // Tarea 3: alternar el check "Pagado" de una fila del cierre
-  async function altaRapida(nombreLD) {
+  // dar de alta un chofer con su tarifa completa desde el panel "A revisar".
+  // Si el nombre estaba "oculto" (alias ignorar), lo saca primero para que quede activo.
+  async function altaCadete(nombreLD, { precio, fletero, factura } = {}) {
     setBusyAccion(true); setError('');
     try {
-      await sb('cadetes_tarifas', { method: 'POST', body: JSON.stringify([{ nombre: nombreLD, nombre_lightdata: nombreLD, activo: true, factura: false, modo: 'fijo' }]) });
+      const enc = encodeURIComponent(nombreLD);
+      await sb(`pagos_cadete_alias?nombre_lightdata=eq.${enc}&regla=eq.ignorar`, { method: 'DELETE' });
+      await sb('cadetes_tarifas', { method: 'POST', body: JSON.stringify([{
+        nombre: nombreLD, nombre_lightdata: nombreLD,
+        activo: true, factura: !!factura, fletero: !!fletero, modo: 'fijo',
+        precio_fijo: (fletero || precio === '' || precio == null) ? null : Number(precio),
+      }]) });
+      await refreshConfig();
+    } catch (e) { setError(e.message); }
+    finally { setBusyAccion(false); }
+  }
+
+  // "Ocultar": marca un nombre como que no hay que mostrarlo (basura o ya pagado
+  // aparte) -> alias 'ignorar'. Deja de sumar y de aparecer, pero si vuelve a
+  // tener entregas reaparece en la caja "Ocultos que siguen apareciendo".
+  async function ignorarChofer(nombreLD) {
+    setBusyAccion(true); setError('');
+    try {
+      await sb('pagos_cadete_alias', { method: 'POST', body: JSON.stringify([{ nombre_lightdata: nombreLD, regla: 'ignorar' }]) });
       await refreshConfig();
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -1109,7 +1200,7 @@ function PagosInner({ session }) {
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               {xlsxReady && (
-                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, sinResolver, semanaLunes, subtotales })}
+                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, porDarAlta: calc.porDarAlta, semanaLunes, subtotales })}
                   style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 8, cursor: 'pointer', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} /> Exportar Excel
                 </button>
@@ -1290,87 +1381,106 @@ function PagosInner({ session }) {
                 </table>
               </div>
 
-              {/* Panel A revisar (Tarea 4) */}
+              {/* Panel A revisar — reordenado por acción (accionable arriba, info abajo) */}
               {(() => {
-                const nRevisar = (sinResolver.length > 0 ? 1 : 0) + ((calc.sinCadete && calc.sinCadete.length) ? 1 : 0) + (calc.configErrors.length > 0 ? 1 : 0) + (calc.aparte.length > 0 ? 1 : 0) + (calc.colectasSinMatch.length > 0 ? 1 : 0);
+                const porDarAlta = calc.porDarAlta || [];
+                // "Siguen apareciendo" = ocultados en una semana ANTERIOR que vuelven a
+                // tener entregas. Los ocultados en la semana que estás viendo no molestan.
+                const ignoradosActivos = (calc.ignorados || [])
+                  .filter(ig => !ig.desde || String(ig.desde).slice(0, 10) < semanaLunes)
+                  .sort((a, b) => b.cantidad - a.cantidad);
+                const UMBRAL_REAP = 15; // reaparición "fuerte": abre la caja sola y avisa
+                const reapFuerte = ignoradosActivos.filter(i => i.cantidad >= UMBRAL_REAP);
+                const nAccion = porDarAlta.length + calc.configErrors.length;
+                const hayInfo = (calc.sinCadete && calc.sinCadete.length) || calc.aparte.length || ignoradosActivos.length;
+                const igExpanded = revExpand.ignorados === undefined ? reapFuerte.length > 0 : revExpand.ignorados;
                 return (
               <div style={{ ...cardSt, marginBottom: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: BRAND.amber }}>⚠ A revisar{nRevisar > 0 ? ` (${nRevisar})` : ''}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: BRAND.amber }}>⚠ A revisar{nAccion > 0 ? ` (${nAccion})` : ''}</div>
 
-                {sinResolver.length > 0 && (
-                  <TarjetaRevisar icon="🆕" titulo="Choferes nuevos (sin dar de alta)" count={sinResolver.length} color={BRAND.amber}>
-                    {sinResolver.map(sc => (
-                      <div key={sc.cadete} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 0', fontSize: 12.5, borderTop: `1px solid ${BRAND.border}` }}>
-                        <span style={{ flex: 1, fontWeight: 600 }}>{sc.cadete}</span>
-                        <span style={{ color: BRAND.muted }}>{sc.entregas} entregas</span>
-                        <button onClick={() => altaRapida(sc.cadete)} disabled={busyAccion} style={{ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal }}>Dar de alta</button>
-                      </div>
+                {/* 1 · Choferes por dar de alta (junta entregas y colectas de desconocidos) */}
+                {porDarAlta.length > 0 && (
+                  <TarjetaRevisar icon="🆕" titulo="Choferes por dar de alta" count={porDarAlta.length} color={BRAND.amber}>
+                    <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 2 }}>Aparecieron esta semana pero no están en Config. Dales de alta con su precio (o marcá Fletero si solo hacen colectas). Si no es un chofer o ya lo pagaste aparte, "Ocultar".</div>
+                    {porDarAlta.map(item => (
+                      <FilaDarAlta key={item.key} item={item} busy={busyAccion}
+                        onAlta={(nombre, opts) => altaCadete(nombre, opts)}
+                        onIgnorar={(nombre) => ignorarChofer(nombre)} />
                     ))}
                   </TarjetaRevisar>
                 )}
 
-                {calc.sinCadete && calc.sinCadete.length > 0 && (() => {
-                  const fechas = calc.sinCadete.map(e => String(e.fecha_estado || '').slice(0, 10)).filter(Boolean).sort();
-                  const rango = fechas.length ? (fechas[0] === fechas[fechas.length - 1] ? fmtDM(fechas[0]) : `${fmtDM(fechas[0])} → ${fmtDM(fechas[fechas.length - 1])}`) : 'sin fecha';
-                  const porFecha = {};
-                  calc.sinCadete.forEach(e => { const d = String(e.fecha_estado || '').slice(0, 10) || 'sin fecha'; porFecha[d] = (porFecha[d] || 0) + 1; });
-                  return (
-                    <TarjetaRevisar icon="🕳" titulo="Entregas sin cadete en LightData" count={calc.sinCadete.length} color={BRAND.red}
-                      right={<span style={{ fontSize: 11, color: BRAND.muted }}>{rango}</span>}
-                      onToggle={() => setRevExpand(r => ({ ...r, sinCadete: !r.sinCadete }))} expanded={!!revExpand.sinCadete}>
-                      <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Envíos repartidos que nadie cobra. Rastrealas en LightData para asignarles cadete.</div>
-                      {Object.entries(porFecha).sort().map(([d, n]) => (
-                        <div key={d} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
-                          <span>{fmtDM(d)}</span><span style={{ color: BRAND.muted }}>{n} entrega{n === 1 ? '' : 's'}</span>
-                        </div>
-                      ))}
-                    </TarjetaRevisar>
-                  );
-                })()}
-
+                {/* 2 · Errores de config reales (alias que apunta a un nombre inexistente) */}
                 {calc.configErrors.length > 0 && (
-                  <TarjetaRevisar icon="⚠" titulo="Errores de config (alias apunta a cadete inexistente)" count={calc.configErrors.length} color={BRAND.red}
+                  <TarjetaRevisar icon="⛔" titulo="Errores de config" count={calc.configErrors.length} color={BRAND.red}
                     right={isAdmin && <button onClick={() => setVista('config')} style={{ fontSize: 11, color: BRAND.teal, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>ir a Config</button>}>
                     {calc.configErrors.map((c, i) => (
-                      <div key={i} style={{ fontSize: 12.5, padding: '4px 0', color: BRAND.red, borderTop: `1px solid ${BRAND.border}` }}>{c.nombre} — {c.cantidad} entregas — {c.motivo}</div>
+                      <FilaDarAlta key={i} item={{ key: c.pagaComo, nombre: c.pagaComo, entregas: c.cantidad, colectas: 0 }} busy={busyAccion}
+                        note={`${c.motivo}${c.cantidad ? ` · ${c.cantidad} entregas afectadas` : ''}`}
+                        onAlta={(nombre, opts) => altaCadete(nombre, opts)} />
                     ))}
                   </TarjetaRevisar>
                 )}
 
-                {calc.colectasSinMatch.length > 0 && (
-                  <TarjetaRevisar icon="📦" titulo="Colectas de choferes sin dar de alta" count={calc.colectasSinMatch.length} color={BRAND.amber}
-                    onToggle={() => setRevExpand(r => ({ ...r, colectas: !r.colectas }))} expanded={!!revExpand.colectas}>
-                    <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>El chofer no existe en Config de cadetes. Dalo de alta (marcá "Fletero" si solo hace colectas) o creá un alias si es una variante del nombre.</div>
-                    {calc.colectasSinMatch.map((c, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
-                        <span style={{ flex: 1 }}>{c.chofer}</span>
-                        <span style={{ color: BRAND.muted, marginRight: 10 }}>{fmtDM(c.fecha)}</span>
-                        <span>{money(c.monto)}</span>
-                      </div>
-                    ))}
-                  </TarjetaRevisar>
+                {nAccion === 0 && (
+                  <div style={{ fontSize: 12.5, color: BRAND.muted, marginBottom: hayInfo ? 12 : 0 }}>✓ Nada por resolver esta semana.</div>
                 )}
 
-                {calc.aparte.length > 0 && (
-                  <TarjetaRevisar icon="💰" titulo="Pagos aparte (fleteros — no suman al total)" count={calc.aparte.length} color={BRAND.muted}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                      <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>Cadete</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Cant.</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Monto</th></tr></thead>
-                      <tbody>
-                        {calc.aparte.map(f => (
-                          <tr key={f.key} style={{ borderTop: `1px solid ${BRAND.border}` }}>
-                            <td style={{ padding: '5px 6px' }}>{f.nombre}</td>
-                            <td style={{ padding: '5px 6px', textAlign: 'right' }}>{f.cantidad}</td>
-                            <td style={{ padding: '5px 6px', textAlign: 'right' }}>{f.monto != null ? money(f.monto) : <span style={{ color: BRAND.red }}>FALTA PRECIO</span>}</td>
-                          </tr>
+                {/* ── Información (no accionable): separado del bloque de arriba ── */}
+                {hayInfo ? (
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BRAND.border}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Información</div>
+
+                    {ignoradosActivos.length > 0 && (
+                      <TarjetaRevisar icon="🙈" titulo="Ocultos que siguen apareciendo" count={ignoradosActivos.length}
+                        color={reapFuerte.length > 0 ? BRAND.amber : BRAND.muted}
+                        right={reapFuerte.length > 0 ? <span style={{ fontSize: 11, color: BRAND.amber }}>⚠ {reapFuerte.length} con actividad fuerte</span> : null}
+                        onToggle={() => setRevExpand(r => ({ ...r, ignorados: !igExpanded }))} expanded={igExpanded}>
+                        <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Los marcaste como "Ocultar" pero volvieron a tener entregas. Si alguno se volvió fijo (o lo ocultaste sin querer), dalo de alta.</div>
+                        {ignoradosActivos.map((ig, i) => (
+                          <FilaDarAlta key={i} item={{ key: ig.raw, nombre: ig.raw, entregas: ig.cantidad, colectas: 0 }} busy={busyAccion}
+                            onAlta={(nombre, opts) => altaCadete(nombre, opts)} />
                         ))}
-                      </tbody>
-                    </table>
-                  </TarjetaRevisar>
-                )}
+                      </TarjetaRevisar>
+                    )}
 
-                {nRevisar === 0 && (
-                  <div style={{ fontSize: 12.5, color: BRAND.muted }}>Nada para revisar esta semana.</div>
-                )}
+                    {calc.sinCadete && calc.sinCadete.length > 0 && (() => {
+                      const fechas = calc.sinCadete.map(e => String(e.fecha_estado || '').slice(0, 10)).filter(Boolean).sort();
+                      const rango = fechas.length ? (fechas[0] === fechas[fechas.length - 1] ? fmtDM(fechas[0]) : `${fmtDM(fechas[0])} → ${fmtDM(fechas[fechas.length - 1])}`) : 'sin fecha';
+                      const porFecha = {};
+                      calc.sinCadete.forEach(e => { const d = String(e.fecha_estado || '').slice(0, 10) || 'sin fecha'; porFecha[d] = (porFecha[d] || 0) + 1; });
+                      return (
+                        <TarjetaRevisar icon="🕳" titulo="Entregas sin cadete en LightData" count={calc.sinCadete.length} color={BRAND.muted}
+                          right={<span style={{ fontSize: 11, color: BRAND.muted }}>{rango}</span>}
+                          onToggle={() => setRevExpand(r => ({ ...r, sinCadete: !r.sinCadete }))} expanded={!!revExpand.sinCadete}>
+                          <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Envíos entregados que en LightData no tienen cadete asignado. No es algo que des de alta acá: se corrige asignando el cadete en LightData.</div>
+                          {Object.entries(porFecha).sort().map(([d, n]) => (
+                            <div key={d} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
+                              <span>{fmtDM(d)}</span><span style={{ color: BRAND.muted }}>{n} entrega{n === 1 ? '' : 's'}</span>
+                            </div>
+                          ))}
+                        </TarjetaRevisar>
+                      );
+                    })()}
+
+                    {calc.aparte.length > 0 && (
+                      <TarjetaRevisar icon="💰" titulo="Pagos aparte (fleteros — no suman al total)" count={calc.aparte.length} color={BRAND.muted}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                          <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>Cadete</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Cant.</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Monto</th></tr></thead>
+                          <tbody>
+                            {calc.aparte.map(f => (
+                              <tr key={f.key} style={{ borderTop: `1px solid ${BRAND.border}` }}>
+                                <td style={{ padding: '5px 6px' }}>{f.nombre}</td>
+                                <td style={{ padding: '5px 6px', textAlign: 'right' }}>{f.cantidad}</td>
+                                <td style={{ padding: '5px 6px', textAlign: 'right' }}>{f.monto != null ? money(f.monto) : <span style={{ color: BRAND.red }}>FALTA PRECIO</span>}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </TarjetaRevisar>
+                    )}
+                  </div>
+                ) : null}
               </div>
                 );
               })()}
