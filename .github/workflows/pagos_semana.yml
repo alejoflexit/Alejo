@@ -10,7 +10,7 @@ name: Pagos - Descarga semanal de entregados
 
 on:
   schedule:
-    - cron: '0 10 * * 1'   # lunes 10:00 UTC = 07:00 AR (semana cerrada anterior)
+    - cron: '0 8 * * 1'   # lunes 08:00 UTC = 05:00 AR (semana cerrada anterior; ~2h de colchón contra la demora de Actions)
   workflow_dispatch:
     inputs:
       fecha_desde:
