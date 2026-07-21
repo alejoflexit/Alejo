@@ -1384,16 +1384,17 @@ function PagosInner({ session }) {
               {/* Panel A revisar — reordenado por acción (accionable arriba, info abajo) */}
               {(() => {
                 const porDarAlta = calc.porDarAlta || [];
-                // "Siguen apareciendo" = ocultados en una semana ANTERIOR que vuelven a
-                // tener entregas. Los ocultados en la semana que estás viendo no molestan.
+                const UMBRAL_REAP = 15; // solo resurface una reaparición FUERTE (probable fijo o borrado sin querer)
+                // "Reaparecen fuerte" = ocultados en una semana ANTERIOR que vuelven con
+                // volumen. Los de bajo volumen (usuarios de sistema tipo "Repro gramar" o
+                // "devuelto deposito", u ocasionales ya pagados) quedan invisibles; y lo que
+                // ocultás en la semana en curso tampoco molesta.
                 const ignoradosActivos = (calc.ignorados || [])
-                  .filter(ig => !ig.desde || String(ig.desde).slice(0, 10) < semanaLunes)
+                  .filter(ig => ig.cantidad >= UMBRAL_REAP && (!ig.desde || String(ig.desde).slice(0, 10) < semanaLunes))
                   .sort((a, b) => b.cantidad - a.cantidad);
-                const UMBRAL_REAP = 15; // reaparición "fuerte": abre la caja sola y avisa
-                const reapFuerte = ignoradosActivos.filter(i => i.cantidad >= UMBRAL_REAP);
                 const nAccion = porDarAlta.length + calc.configErrors.length;
                 const hayInfo = (calc.sinCadete && calc.sinCadete.length) || calc.aparte.length || ignoradosActivos.length;
-                const igExpanded = revExpand.ignorados === undefined ? reapFuerte.length > 0 : revExpand.ignorados;
+                const igExpanded = revExpand.ignorados === undefined ? true : revExpand.ignorados;
                 return (
               <div style={{ ...cardSt, marginBottom: 20 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: BRAND.amber }}>⚠ A revisar{nAccion > 0 ? ` (${nAccion})` : ''}</div>
@@ -1432,11 +1433,11 @@ function PagosInner({ session }) {
                     <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Información</div>
 
                     {ignoradosActivos.length > 0 && (
-                      <TarjetaRevisar icon="🙈" titulo="Ocultos que siguen apareciendo" count={ignoradosActivos.length}
-                        color={reapFuerte.length > 0 ? BRAND.amber : BRAND.muted}
-                        right={reapFuerte.length > 0 ? <span style={{ fontSize: 11, color: BRAND.amber }}>⚠ {reapFuerte.length} con actividad fuerte</span> : null}
+                      <TarjetaRevisar icon="🙈" titulo="Ocultos que reaparecen fuerte" count={ignoradosActivos.length}
+                        color={BRAND.amber}
+                        right={<span style={{ fontSize: 11, color: BRAND.amber }}>⚠ revisá</span>}
                         onToggle={() => setRevExpand(r => ({ ...r, ignorados: !igExpanded }))} expanded={igExpanded}>
-                        <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Los marcaste como "Ocultar" pero volvieron a tener entregas. Si alguno se volvió fijo (o lo ocultaste sin querer), dalo de alta.</div>
+                        <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Los ocultaste antes pero volvieron con bastante volumen. Si alguno se volvió fijo (o lo ocultaste sin querer), dalo de alta.</div>
                         {ignoradosActivos.map((ig, i) => (
                           <FilaDarAlta key={i} item={{ key: ig.raw, nombre: ig.raw, entregas: ig.cantidad, colectas: 0 }} busy={busyAccion}
                             onAlta={(nombre, opts) => altaCadete(nombre, opts)} />
