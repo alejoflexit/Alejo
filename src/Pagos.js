@@ -182,7 +182,7 @@ function calcularFila(canonName, rows, tarifa, ctx) {
     nombre: tarifa.nombre_lightdata || canonName,
     cantidad, cantidadOriginal: cantidad,
     monto, faltaPrecio, fallbackInfo, cpBreakdown,
-    colecta, ajusteRows, ajusteTotal, total,
+    colecta, colectaOriginal: colecta, ajusteRows, ajusteTotal, total,
     factura: !!tarifa.factura,
     activo: tarifa.activo !== false,
     modo: modoEfectivo,
@@ -306,7 +306,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
       colectasCant: f.cantidad, entregasLD: f.entregas,
       cantidad: 0, cantidadOriginal: 0,
       monto: 0, faltaPrecio: false, fallbackInfo: null, cpBreakdown: null,
-      colecta: f.monto, ajusteRows, ajusteTotal,
+      colecta: f.monto, colectaOriginal: f.monto, ajusteRows, ajusteTotal,
       total: f.monto - ajusteTotal,
       factura: !!(t && t.factura),
       activo: !t || t.activo !== false,
@@ -323,7 +323,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
       aparte.push({
         key, nombre: g.raw, cantidad: g.rows.length, cantidadOriginal: g.rows.length,
         monto: null, faltaPrecio: true, fallbackInfo: 'sin tarifa cargada (dar de alta en Config)',
-        cpBreakdown: null, colecta: 0, ajusteRows: [], ajusteTotal: 0, total: 0,
+        cpBreakdown: null, colecta: 0, colectaOriginal: 0, ajusteRows: [], ajusteTotal: 0, total: 0,
         factura: false, activo: true, modo: 'fijo', precioFijo: null, tarifaId: null,
       });
     }
@@ -392,15 +392,19 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colecta
   return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete, porDarAlta };
 }
 
-// aplica el override de cantidad (editable en la UI) a una fila calculada
-function filaConOverride(fila, overrideCantidad) {
-  if (overrideCantidad == null || overrideCantidad === fila.cantidadOriginal) return fila;
+// aplica los overrides editables en la UI (cantidad y/o colecta) a una fila calculada
+function filaConOverride(fila, overrideCantidad, overrideColecta) {
+  const cantEditado = overrideCantidad != null && overrideCantidad !== fila.cantidadOriginal;
+  const colectaEditado = overrideColecta != null && overrideColecta !== fila.colectaOriginal;
+  if (!cantEditado && !colectaEditado) return fila;
   const precioUnit = fila.cantidadOriginal > 0
     ? (fila.monto || 0) / fila.cantidadOriginal
     : (fila.precioFijo || 0);
-  const montoNuevo = precioUnit * overrideCantidad;
-  const total = montoNuevo + fila.colecta - fila.ajusteTotal;
-  return { ...fila, cantidad: overrideCantidad, monto: montoNuevo, total, editado: true };
+  const cantidad = cantEditado ? overrideCantidad : fila.cantidad;
+  const monto = cantEditado ? precioUnit * overrideCantidad : fila.monto;
+  const colecta = colectaEditado ? overrideColecta : fila.colecta;
+  const total = (monto || 0) + colecta - fila.ajusteTotal;
+  return { ...fila, cantidad, monto, colecta, total, editado: true, cantEditado, colectaEditado };
 }
 
 // overrides de cantidad persistidos por semana (sobreviven al F5 hasta cerrar la semana)
@@ -415,6 +419,21 @@ function saveOverrides(lunes, obj) {
   try {
     if (obj && Object.keys(obj).length) localStorage.setItem(overridesKey(lunes), JSON.stringify(obj));
     else localStorage.removeItem(overridesKey(lunes));
+  } catch { /* localStorage no disponible: seguimos en memoria */ }
+}
+
+// overrides de colecta editados a mano, mismo esquema por semana (se congelan al cerrar)
+function colectaOvKey(lunes) { return `pagos_colecta_ov_${lunes}`; }
+function loadColectaOv(lunes) {
+  if (!lunes) return {};
+  try { const raw = localStorage.getItem(colectaOvKey(lunes)); return raw ? JSON.parse(raw) : {}; }
+  catch { return {}; }
+}
+function saveColectaOv(lunes, obj) {
+  if (!lunes) return;
+  try {
+    if (obj && Object.keys(obj).length) localStorage.setItem(colectaOvKey(lunes), JSON.stringify(obj));
+    else localStorage.removeItem(colectaOvKey(lunes));
   } catch { /* localStorage no disponible: seguimos en memoria */ }
 }
 
@@ -821,6 +840,36 @@ function CantidadInput({ value, original, editado, onCommit, onRestore }) {
   );
 }
 
+// input editable de colecta (pesos) — muestra formateado en reposo, crudo al enfocar
+function ColectaInput({ value, editado, onCommit, onRestore }) {
+  const [text, setText] = useState(String(Math.round(value || 0)));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(String(Math.round(value || 0))); }, [value, focused]);
+  const inpSt = { padding: '4px 8px', width: 96, fontSize: 13, textAlign: 'right', border: `1px solid ${editado ? BRAND.amber : BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield' };
+  const commit = () => {
+    const digits = text.replace(/[^\d]/g, ''); // pesos enteros; tolera "$100.000"
+    if (digits === '') { setText(String(Math.round(value || 0))); return; }
+    onCommit(Number(digits));
+  };
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+      <input
+        type="text" inputMode="numeric"
+        value={focused ? text : money(value || 0)}
+        onFocus={e => { setFocused(true); setText(String(Math.round(value || 0))); const t = e.target; setTimeout(() => t.select(), 0); }}
+        onBlur={() => { setFocused(false); commit(); }}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+        style={inpSt}
+      />
+      {editado && (
+        <button title="volver al valor calculado" onClick={onRestore}
+          style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}>↺</button>
+      )}
+    </div>
+  );
+}
+
 // ───────────────────────── tarjeta del panel "A revisar" (Tarea 4) ─────────────────────────
 function TarjetaRevisar({ icon, titulo, count, color, right, onToggle, expanded, children }) {
   const collapsible = typeof onToggle === 'function';
@@ -894,6 +943,7 @@ function PagosInner({ session }) {
   const [error, setError] = useState('');
 
   const [overrides, setOverrides] = useState({}); // key -> cantidad editada
+  const [colectaOv, setColectaOv] = useState({}); // key -> colecta editada a mano
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | transferencia | efectivo
   const [expandido, setExpandido] = useState(null); // key de la fila con detalle abierto
   const [ajusteForm, setAjusteForm] = useState({ concepto: '', monto: '' });
@@ -944,7 +994,7 @@ function PagosInner({ session }) {
 
   const refreshSemana = useCallback(async (lunes) => {
     if (!lunes) return;
-    setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes));
+    setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes)); setColectaOv(loadColectaOv(lunes));
     try {
       const sabado = addDays(lunes, 5);
       const [ent, col, aj, ci] = await Promise.all([
@@ -966,7 +1016,7 @@ function PagosInner({ session }) {
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
-  const filasEfectivas = useMemo(() => calc.filas.map(f => filaConOverride(f, overrides[f.key])), [calc.filas, overrides]);
+  const filasEfectivas = useMemo(() => calc.filas.map(f => filaConOverride(f, overrides[f.key], colectaOv[f.key])), [calc.filas, overrides, colectaOv]);
 
   // orden canónico (Factura primero, luego A-Z) — lo usa la vista y el Excel
   const filasOrdenadas = useMemo(() => {
@@ -986,6 +1036,14 @@ function PagosInner({ session }) {
     setOverrides(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveOverrides(semanaLunes, next);
+      return next;
+    });
+  }, [semanaLunes]);
+
+  const setColectaOvPersist = useCallback((updater) => {
+    setColectaOv(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveColectaOv(semanaLunes, next);
       return next;
     });
   }, [semanaLunes]);
@@ -1032,6 +1090,7 @@ function PagosInner({ session }) {
       if (rows.length) await sb('pagos_cierres', { method: 'POST', body: JSON.stringify(rows) });
       // Tarea 2: al cerrar, las ediciones quedan congeladas en el cierre -> limpiar el borrador
       saveOverrides(semanaLunes, {}); setOverrides({});
+      saveColectaOv(semanaLunes, {}); setColectaOv({});
       await refreshSemana(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -1184,13 +1243,16 @@ function PagosInner({ session }) {
                   <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 10, minWidth: 270, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: BRAND.white }}>Ediciones sin cerrar</span>
-                      <button onClick={() => { setOverridesPersist({}); setMenuEdiciones(false); }} style={{ fontSize: 11, color: BRAND.amber, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>restaurar todo</button>
+                      <button onClick={() => { setOverridesPersist({}); setColectaOvPersist({}); setMenuEdiciones(false); }} style={{ fontSize: 11, color: BRAND.amber, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>restaurar todo</button>
                     </div>
                     {filasEfectivas.filter(f => f.editado).map(f => (
                       <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 0', borderTop: `1px solid ${BRAND.border}` }}>
                         <span style={{ flex: 1, fontWeight: 600 }}>{f.nombre}</span>
-                        <span style={{ color: BRAND.muted }}>{f.cantidadOriginal} &#8594; <span style={{ color: BRAND.amber, fontWeight: 700 }}>{f.cantidad}</span></span>
-                        <button title={`volver a ${f.cantidadOriginal}`} onClick={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })} style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 14, padding: 0 }}>↺</button>
+                        <span style={{ color: BRAND.muted, textAlign: 'right' }}>
+                          {f.cantEditado && <div>cant: {f.cantidadOriginal} &#8594; <span style={{ color: BRAND.amber, fontWeight: 700 }}>{f.cantidad}</span></div>}
+                          {f.colectaEditado && <div>colecta: {money(f.colectaOriginal)} &#8594; <span style={{ color: BRAND.amber, fontWeight: 700 }}>{money(f.colecta)}</span></div>}
+                        </span>
+                        <button title="restaurar esta fila" onClick={() => { setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; }); setColectaOvPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; }); }} style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 14, padding: 0 }}>↺</button>
                       </div>
                     ))}
                   </div>
@@ -1271,14 +1333,14 @@ function PagosInner({ session }) {
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
                               <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>{open ? '▲' : '▾'}</span>
                             </td>
-                            <td style={{ padding: '8px 12px', background: f.editado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
+                            <td style={{ padding: '8px 12px', background: f.cantEditado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
                               {f.esFletero ? (
                                 <span title="cantidad de colectas de la semana" style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{f.colectasCant} col.</span>
                               ) : (
                               <CantidadInput
                                 value={f.cantidad}
                                 original={f.cantidadOriginal}
-                                editado={f.editado}
+                                editado={f.cantEditado}
                                 onCommit={n => setOverridesPersist(o => { const nn = { ...o }; if (n === f.cantidadOriginal) delete nn[f.key]; else nn[f.key] = n; return nn; })}
                                 onRestore={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
                               />
@@ -1286,7 +1348,14 @@ function PagosInner({ session }) {
                             </td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : <>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</>}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{money(f.colecta)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', background: f.colectaEditado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
+                              <ColectaInput
+                                value={f.colecta}
+                                editado={f.colectaEditado}
+                                onCommit={n => setColectaOvPersist(o => { const nn = { ...o }; if (n === Math.round(f.colectaOriginal || 0)) delete nn[f.key]; else nn[f.key] = n; return nn; })}
+                                onRestore={() => setColectaOvPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
+                              />
+                            </td>
                             {hayAjustes && (
                               <td style={{ padding: '8px 12px', textAlign: 'right', cursor: 'pointer' }} onClick={() => setExpandido(open ? null : f.key)}>
                                 {f.ajusteTotal ? <span style={{ color: BRAND.red, textDecoration: 'underline dotted' }}>{money(-f.ajusteTotal)}</span> : null}
