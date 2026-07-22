@@ -1402,9 +1402,25 @@ function ColectasInner({ soloArribos = false }) {
     const canon = buildCanonAlias(aliasCadetes);
     const llegados = lista.filter(c => arribos[c.cadete]?.llego_at).length;
     const pct = total ? Math.round(llegados / total * 100) : 0;
+    // "está por llegar": GPS dentro del radio, o (fallback) ETA a ≤15 min — mismo criterio que la tarjeta.
+    const estaPorLlegar = (cadete) => {
+      if (arribos[cadete]?.llego_at) return false;
+      const gp = gpsPos.porNombre[normNombre(cadete)];
+      if (gp && gp.dist <= GEO_ALERTA_M) return true;
+      const eta = arribos[cadete]?.eta ? String(arribos[cadete].eta).slice(0,5) : '';
+      if (!eta) return false;
+      const [h, m] = eta.split(':').map(Number);
+      const dd = new Date(fecha + 'T00:00:00'); dd.setHours(h, m, 0, 0);
+      return dd.getTime() - ahora <= 15 * 60000;
+    };
+    // Orden: 1º los que están por llegar (arriba de todo), después el resto sin llegar, y al fondo los que ya llegaron.
     lista.sort((a, b) => {
       const la = !!arribos[a.cadete]?.llego_at, lb = !!arribos[b.cadete]?.llego_at;
-      if (la !== lb) return la ? 1 : -1;
+      if (la !== lb) return la ? 1 : -1;              // llegaron → al fondo
+      if (!la) {
+        const pa = estaPorLlegar(a.cadete), pb = estaPorLlegar(b.cadete);
+        if (pa !== pb) return pa ? -1 : 1;            // por llegar → arriba de todo
+      }
       return a.cadete.localeCompare(b.cadete, 'es');
     });
     const q = normNombre(busquedaArribos);
