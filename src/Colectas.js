@@ -1750,3 +1750,5 @@ export default function Colectas({ soloArribos = false }) {
   if (!usuario) return <LoginColectas onOk={setUsuario} />;
   return <ColectasInner soloArribos={soloArribos} />;
 }
+
+// deploy nudge 2026-07-22: forzar rebuild (webhook de 9d3c393 no disparó)
