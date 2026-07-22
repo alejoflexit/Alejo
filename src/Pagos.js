@@ -550,11 +550,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
   const [err, setErr] = useState('');
   const [filtro, setFiltro] = useState('');
   const [cpSel, setCpSel] = useState('');
+  const [cpFiltroTier, setCpFiltroTier] = useState('todos'); // filtro del listado de CPs por tarifa: 'todos' | 0(base) | 1 | 2 | 3
   const [hoverId, setHoverId] = useState(null); // fila de Config bajo el mouse
   const [nuevoCp, setNuevoCp] = useState({ cp: '', precio: '' });
   const [nuevoAlias, setNuevoAlias] = useState({ nombre_lightdata: '', regla: 'merge', paga_como: '', detalle: '' });
   const [nuevoCadete, setNuevoCadete] = useState({ nombre_lightdata: '', nombre: '', factura: false, precio_fijo: '' });
   const [drafts, setDrafts] = useState({}); // id -> campos editados pendientes
+  useEffect(() => { setCpFiltroTier('todos'); }, [cpSel]); // al abrir/cambiar de cadete, arranca sin filtro
 
   const inp = { padding: '5px 8px', fontSize: 12.5, border: `1px solid ${BRAND.border}`, borderRadius: 6, background: BRAND.faint, color: BRAND.white, outline: 'none' };
   const btn = { padding: '5px 12px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(46,207,170,0.35)', background: 'rgba(46,207,170,0.12)', color: BRAND.teal };
@@ -610,6 +612,9 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
   const cpSinPrecio = cpRows.filter(r => r.falta && r.cantidad > 0).length;
   // Envíos que caen en cada tarifa (0 = Base, 1/2/3 = tier), según el tier asignado a cada CP
   const envPorTier = cpRows.reduce((a, r) => { const t = r.tier || 0; a[t] = (a[t] || 0) + (r.cantidad || 0); return a; }, {});
+  // Filtro del listado por tarifa (no afecta los totales de arriba)
+  const cpRowsVis = cpFiltroTier === 'todos' ? cpRows : cpRows.filter(r => (r.tier || 0) === cpFiltroTier);
+  const colorTier = tr => (tr === 1 ? BRAND.teal : tr === 2 ? BRAND.amber : tr === 3 ? BRAND.red : BRAND.white);
   const asignarTier = (cp, tier) => doAction(async () => {
     const existe = tierByCp.has(cp);
     if (!tier) { if (existe) await sb(`cadete_cp_tarifa?nombre_lightdata=eq.${encodeURIComponent(cpSel)}&cp=eq.${encodeURIComponent(cp)}`, { method: 'DELETE' }); return; }
@@ -774,6 +779,25 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
             </div>
             <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 10 }}>Cargá el monto de cada tarifa y abajo asigná cada CP a una tarifa (o dejalo en Base). Un CP sin tarifa cobra el precio base.{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
 
+            {cpRows.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: BRAND.muted }}>Filtrar:</span>
+                {[{ k: 'todos', lbl: 'Todos', c: BRAND.teal }, { k: 0, lbl: 'Base', c: BRAND.white }, { k: 1, lbl: 'T1', c: BRAND.teal }, { k: 2, lbl: 'T2', c: BRAND.amber }, { k: 3, lbl: 'T3', c: BRAND.red }].map(({ k, lbl, c }) => {
+                  const n = k === 'todos' ? cpRows.length : cpRows.filter(r => (r.tier || 0) === k).length;
+                  const vacio = k !== 'todos' && n === 0;
+                  const on = cpFiltroTier === k;
+                  return (
+                    <button key={String(k)} disabled={vacio} onClick={() => setCpFiltroTier(k)}
+                      style={{ padding: '3px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 20, cursor: vacio ? 'default' : 'pointer',
+                        border: `1px solid ${on ? c : BRAND.border}`, background: on ? 'rgba(255,255,255,0.08)' : BRAND.faint,
+                        color: on ? c : vacio ? 'rgba(255,255,255,0.25)' : BRAND.muted, opacity: vacio ? 0.5 : 1 }}>
+                      {lbl}{k !== 'todos' ? ` ${n}` : ''}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {cpRows.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
                 <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}>
@@ -782,7 +806,11 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                   <th style={{ padding: '4px 6px' }}>Tarifa</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Precio</th>
                 </tr></thead>
                 <tbody>
-                  {cpRows.map(({ cp, cantidad, localidad, tier, precio, fuente, falta }) => (
+                  {cpRowsVis.length === 0 ? (
+                    <tr><td colSpan={5} style={{ padding: '12px 6px', color: BRAND.muted, fontSize: 12 }}>No hay CPs en esta tarifa.</td></tr>
+                  ) : cpRowsVis.map(({ cp, cantidad, localidad, tier, precio, fuente, falta }) => {
+                    const tc = colorTier(tier || 0);
+                    return (
                     <tr key={cp} style={{ borderTop: `1px solid ${BRAND.border}`, background: falta ? 'rgba(255,176,32,0.06)' : 'transparent' }}>
                       <td style={{ padding: '5px 6px' }}>{cp}</td>
                       <td style={{ padding: '5px 6px', color: BRAND.muted, fontSize: 11.5 }}>{localidad || '—'}</td>
@@ -795,11 +823,12 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                           <option value="3">T3</option>
                         </select>
                       </td>
-                      <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 700, color: falta ? BRAND.amber : BRAND.white }}>
-                        {falta ? 'FALTA' : money(precio)}{fuente && fuente !== 'base' && !falta && <span style={{ fontSize: 10, color: BRAND.muted, fontWeight: 400 }}> {fuente}</span>}
+                      <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 700, color: falta ? BRAND.amber : tc }}>
+                        {falta ? 'FALTA' : money(precio)}{fuente && fuente !== 'base' && !falta && <span style={{ fontSize: 10, color: tc, opacity: 0.85, fontWeight: 700 }}> {fuente}</span>}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
