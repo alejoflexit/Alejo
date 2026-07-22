@@ -766,6 +766,23 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
             </div>
             <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 10 }}>Cargá el monto de cada tarifa y abajo asigná cada CP a una tarifa (o dejalo en Base). Un CP sin tarifa cobra el precio base.{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
 
+            {/* Resumen: cuántos envíos caen en cada tarifa (Base/T1/T2/T3), según el tier asignado a cada CP */}
+            {cpRows.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {[{ k: 'Base', tier: 0, color: BRAND.muted }, { k: 'T1', tier: 1, color: BRAND.teal }, { k: 'T2', tier: 2, color: BRAND.amber }, { k: 'T3', tier: 3, color: BRAND.red }].map(({ k, tier, color }) => {
+                  const n = cpRows.reduce((a, r) => a + (((r.tier || 0) === tier) ? (r.cantidad || 0) : 0), 0);
+                  if (!n) return null;
+                  return (
+                    <div key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 6, padding: '5px 11px', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: `1px solid ${BRAND.border}` }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color }}>{k}</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: BRAND.white }}>{n}</span>
+                      <span style={{ fontSize: 10.5, color: BRAND.muted }}>{n === 1 ? 'envío' : 'envíos'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {cpRows.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
                 <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}>
