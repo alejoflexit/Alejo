@@ -722,20 +722,29 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                     <input disabled={!esFactura} title={bancoTitle} style={{ ...bancoInp, width: 110 }} placeholder={esFactura ? 'sin alias' : '—'} value={draftVal(t, 'alias') ?? ''} onChange={e => setDraft(t.id, 'alias', e.target.value)} />
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    {isDirty && (
-                      <>
-                        <button style={{ ...btn, padding: '3px 10px' }} disabled={busy} onClick={() => doAction(async () => {
-                          await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(drafts[t.id]) });
-                          setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; });
-                        })}>Guardar</button>
-                        <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺</button>
-                      </>
-                    )}
-                    {t.nombre_lightdata && (() => {
-                      const nCp = (cpTarifas || []).filter(o => norm(o.nombre_lightdata) === norm(t.nombre_lightdata)).length;
-                      return <button title="tarifas por CP (T1/T2/T3) y asignación de cada CP" style={{ ...btn, padding: '3px 10px', marginLeft: 6, borderColor: nCp ? BRAND.teal : BRAND.border, color: nCp ? BRAND.teal : BRAND.white, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>Tarifas{nCp ? ` (${nCp})` : ''}</button>;
-                    })()}
-                    <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 6, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, minHeight: 28 }}>
+                      {isDirty && (
+                        <>
+                          <button style={{ ...btn, padding: '3px 10px' }} disabled={busy} onClick={() => doAction(async () => {
+                            await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(drafts[t.id]) });
+                            setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; });
+                          })}>Guardar</button>
+                          <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺</button>
+                        </>
+                      )}
+                      {(hoverId === t.id || isDirty) ? (
+                        <>
+                          {t.nombre_lightdata && (() => {
+                            const nCp = (cpTarifas || []).filter(o => norm(o.nombre_lightdata) === norm(t.nombre_lightdata)).length;
+                            return <button title="tarifas por CP (T1/T2/T3) y asignación de cada CP" style={{ ...btn, padding: '3px 10px', borderColor: nCp ? BRAND.teal : BRAND.border, color: nCp ? BRAND.teal : BRAND.white, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>Tarifas{nCp ? ` (${nCp})` : ''}</button>;
+                          })()}
+                          <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 4, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setHoverId(t.id)} title="Ver acciones"
+                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 10px', letterSpacing: 2 }}>⋯</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
