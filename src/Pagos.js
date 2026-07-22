@@ -681,6 +681,10 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
             {filtrados.map(t => {
               const isDirty = !!drafts[t.id];
               const isSel = cpSel && t.nombre_lightdata === cpSel;
+              // Datos bancarios (CUIL/CBU/Alias) solo para los que cobran por transferencia (factura)
+              const esFactura = !!draftVal(t, 'factura');
+              const bancoInp = { ...inp, opacity: esFactura ? 1 : 0.4, cursor: esFactura ? 'text' : 'not-allowed' };
+              const bancoTitle = esFactura ? '' : 'Solo para cadetes con Factura (los que cobran por transferencia)';
               return (
                 <tr key={t.id}
                   onMouseEnter={() => setHoverId(t.id)}
@@ -701,13 +705,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                     })()}
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    <input style={{ ...inp, width: 110 }} placeholder="sin CUIL" value={draftVal(t, 'cuil') ?? ''} onChange={e => setDraft(t.id, 'cuil', e.target.value)} />
+                    <input disabled={!esFactura} title={bancoTitle} style={{ ...bancoInp, width: 110 }} placeholder={esFactura ? 'sin CUIL' : '—'} value={draftVal(t, 'cuil') ?? ''} onChange={e => setDraft(t.id, 'cuil', e.target.value)} />
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    <input style={{ ...inp, width: 130 }} placeholder="sin CBU" value={draftVal(t, 'cbu') ?? ''} onChange={e => setDraft(t.id, 'cbu', e.target.value)} />
+                    <input disabled={!esFactura} title={bancoTitle} style={{ ...bancoInp, width: 130 }} placeholder={esFactura ? 'sin CBU' : '—'} value={draftVal(t, 'cbu') ?? ''} onChange={e => setDraft(t.id, 'cbu', e.target.value)} />
                   </td>
                   <td style={{ padding: '5px 6px' }}>
-                    <input style={{ ...inp, width: 110 }} placeholder="sin alias" value={draftVal(t, 'alias') ?? ''} onChange={e => setDraft(t.id, 'alias', e.target.value)} />
+                    <input disabled={!esFactura} title={bancoTitle} style={{ ...bancoInp, width: 110 }} placeholder={esFactura ? 'sin alias' : '—'} value={draftVal(t, 'alias') ?? ''} onChange={e => setDraft(t.id, 'alias', e.target.value)} />
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     {isDirty && (
