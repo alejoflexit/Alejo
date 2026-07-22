@@ -136,7 +136,7 @@ function calcularFila(canonName, rows, tarifa, ctx) {
   const cantidad = rows.length;
   const base = tarifa.precio_fijo != null ? Number(tarifa.precio_fijo) : null;
   const hasTiers = cadetesConTier && cadetesConTier.has(key);
-  let monto = 0, faltaPrecio = false, fallbackInfo = null, cpBreakdown = null, modoEfectivo = 'fijo';
+  let monto = 0, faltaPrecio = false, fallbackInfo = null, cpBreakdown = null, modoEfectivo = 'fijo', split = null, puedeSplit = false;
 
   if (base != null || hasTiers) {
     // Modelo por CP: cada CP toma su tarifa asignada (T1/T2/T3) o el precio base.
@@ -161,6 +161,16 @@ function calcularFila(canonName, rows, tarifa, ctx) {
     bd.forEach(b => { if (b.precio == null) faltantes += b.cantidad; else monto += b.precio * b.cantidad; });
     if (bd.some(b => b.conOverride || b.precio == null)) { cpBreakdown = bd; modoEfectivo = 'cp'; }
     if (faltantes > 0) { faltaPrecio = true; fallbackInfo = `${faltantes} entrega(s) sin tarifa — asigná su tarifa por CP o poné precio base`; }
+    // Desglose por tarifa (0=Base,1/2/3=tier): cantidad de envíos y precio efectivo por tarifa.
+    // El precio efectivo = monto real / cantidad de esa tarifa (cuadra exacto con el monto);
+    // si una tarifa no tiene envíos esta semana, cae al monto de config. Alimenta el ajuste manual por semana.
+    if (hasTiers) {
+      const cnt = { 0: 0, 1: 0, 2: 0, 3: 0 }, mto = { 0: 0, 1: 0, 2: 0, 3: 0 };
+      bd.forEach(b => { const t = b.tier || 0; cnt[t] += b.cantidad; mto[t] += (b.precio || 0) * b.cantidad; });
+      const amt = t => cnt[t] > 0 ? mto[t] / cnt[t] : (t === 0 ? base : (tarifa[`tarifa${t}`] != null ? Number(tarifa[`tarifa${t}`]) : null));
+      split = { counts: cnt, amts: { 0: amt(0), 1: amt(1), 2: amt(2), 3: amt(3) } };
+      puedeSplit = true;
+    }
   } else if (tarifa.modo === 'cp') {
     // Legacy: cadete en modo cp sin precio base (solo overrides). Sin base, lo que no tenga override queda sin precio.
     const porCp = new Map();
@@ -198,6 +208,7 @@ function calcularFila(canonName, rows, tarifa, ctx) {
     modo: modoEfectivo,
     precioFijo: base,
     tarifaId: tarifa.id,
+    split, puedeSplit,
   };
 }
 
@@ -416,19 +427,26 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
   return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete, porDarAlta };
 }
 
-// aplica los overrides editables en la UI (cantidad y/o colecta) a una fila calculada
-function filaConOverride(fila, overrideCantidad, overrideColecta) {
-  const cantEditado = overrideCantidad != null && overrideCantidad !== fila.cantidadOriginal;
+// aplica los overrides editables en la UI (reparto por tarifa, cantidad y/o colecta) a una fila calculada
+function filaConOverride(fila, overrideCantidad, overrideColecta, overrideSplit) {
+  // El reparto manual por tarifa (solo semana) tiene prioridad: redefine cantidad y monto.
+  const splitEditado = !!(overrideSplit && fila.split);
+  const cantEditado = !splitEditado && overrideCantidad != null && overrideCantidad !== fila.cantidadOriginal;
   const colectaEditado = overrideColecta != null && overrideColecta !== fila.colectaOriginal;
-  if (!cantEditado && !colectaEditado) return fila;
-  const precioUnit = fila.cantidadOriginal > 0
-    ? (fila.monto || 0) / fila.cantidadOriginal
-    : (fila.precioFijo || 0);
-  const cantidad = cantEditado ? overrideCantidad : fila.cantidad;
-  const monto = cantEditado ? precioUnit * overrideCantidad : fila.monto;
+  if (!cantEditado && !colectaEditado && !splitEditado) return fila;
+  let cantidad = fila.cantidad, monto = fila.monto;
+  if (splitEditado) {
+    const a = fila.split.amts, c = overrideSplit;
+    cantidad = (c[0] || 0) + (c[1] || 0) + (c[2] || 0) + (c[3] || 0);
+    monto = (c[0] || 0) * (a[0] || 0) + (c[1] || 0) * (a[1] || 0) + (c[2] || 0) * (a[2] || 0) + (c[3] || 0) * (a[3] || 0);
+  } else if (cantEditado) {
+    const precioUnit = fila.cantidadOriginal > 0 ? (fila.monto || 0) / fila.cantidadOriginal : (fila.precioFijo || 0);
+    cantidad = overrideCantidad;
+    monto = precioUnit * overrideCantidad;
+  }
   const colecta = colectaEditado ? overrideColecta : fila.colecta;
   const total = (monto || 0) + colecta - fila.ajusteTotal;
-  return { ...fila, cantidad, monto, colecta, total, editado: true, cantEditado, colectaEditado };
+  return { ...fila, cantidad, monto, colecta, total, editado: true, cantEditado, colectaEditado, splitEditado };
 }
 
 // overrides de cantidad persistidos por semana (sobreviven al F5 hasta cerrar la semana)
@@ -458,6 +476,22 @@ function saveColectaOv(lunes, obj) {
   try {
     if (obj && Object.keys(obj).length) localStorage.setItem(colectaOvKey(lunes), JSON.stringify(obj));
     else localStorage.removeItem(colectaOvKey(lunes));
+  } catch { /* localStorage no disponible: seguimos en memoria */ }
+}
+
+// ajuste manual del reparto de envíos por tarifa, por cadete y por semana (se congela al cerrar)
+// forma: { [key]: { 0: nBase, 1: nT1, 2: nT2, 3: nT3 } }
+function splitOvKey(lunes) { return `pagos_split_ov_${lunes}`; }
+function loadSplitOv(lunes) {
+  if (!lunes) return {};
+  try { const raw = localStorage.getItem(splitOvKey(lunes)); return raw ? JSON.parse(raw) : {}; }
+  catch { return {}; }
+}
+function saveSplitOv(lunes, obj) {
+  if (!lunes) return;
+  try {
+    if (obj && Object.keys(obj).length) localStorage.setItem(splitOvKey(lunes), JSON.stringify(obj));
+    else localStorage.removeItem(splitOvKey(lunes));
   } catch { /* localStorage no disponible: seguimos en memoria */ }
 }
 
@@ -944,32 +978,45 @@ function CantidadInput({ value, original, editado, onCommit, onRestore }) {
   );
 }
 
-// input editable de colecta (pesos) — muestra formateado en reposo, crudo al enfocar
+// input de colecta (pesos): en reposo muestra el monto plano; al hacer clic recién aparece
+// el cuadro para editar (evita el "cajón" siempre visible). Se confirma con Enter o al salir.
 function ColectaInput({ value, editado, onCommit, onRestore }) {
   const [text, setText] = useState(String(Math.round(value || 0)));
-  const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setText(String(Math.round(value || 0))); }, [value, focused]);
-  const inpSt = { padding: '4px 8px', width: 96, fontSize: 13, textAlign: 'right', border: `1px solid ${editado ? BRAND.amber : BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield' };
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (!open) setText(String(Math.round(value || 0))); }, [value, open]);
+  const inpSt = { padding: '4px 8px', width: 96, fontSize: 13, textAlign: 'right', border: `1.5px solid ${BRAND.teal}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield' };
   const commit = () => {
+    setOpen(false);
     const digits = text.replace(/[^\d]/g, ''); // pesos enteros; tolera "$100.000"
-    if (digits === '') { setText(String(Math.round(value || 0))); return; }
-    onCommit(Number(digits));
+    if (digits === '') return;
+    if (Number(digits) !== Math.round(value || 0)) onCommit(Number(digits));
   };
+  if (!open) {
+    return (
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+        <span onClick={() => setOpen(true)} title="Click para editar la colecta"
+          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, color: editado ? BRAND.amber : 'rgba(255,255,255,0.82)' }}>
+          {money(value || 0)}
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)' }}>✎</span>
+        </span>
+        {editado && (
+          <button title="volver al valor calculado" onClick={onRestore}
+            style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}>↺</button>
+        )}
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
       <input
-        type="text" inputMode="numeric"
-        value={focused ? text : money(value || 0)}
-        onFocus={e => { setFocused(true); setText(String(Math.round(value || 0))); const t = e.target; setTimeout(() => t.select(), 0); }}
-        onBlur={() => { setFocused(false); commit(); }}
+        autoFocus type="text" inputMode="numeric"
+        value={text}
+        onFocus={e => e.target.select()}
+        onBlur={commit}
         onChange={e => setText(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setOpen(false); }}
         style={inpSt}
       />
-      {editado && (
-        <button title="volver al valor calculado" onClick={onRestore}
-          style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}>↺</button>
-      )}
     </div>
   );
 }
@@ -1049,6 +1096,7 @@ function PagosInner({ session }) {
 
   const [overrides, setOverrides] = useState({}); // key -> cantidad editada
   const [colectaOv, setColectaOv] = useState({}); // key -> colecta editada a mano
+  const [splitOv, setSplitOv] = useState({}); // key -> reparto de envíos por tarifa editado a mano {0,1,2,3}
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | transferencia | efectivo
   const [expandido, setExpandido] = useState(null); // key de la fila con detalle abierto
   const [ajusteForm, setAjusteForm] = useState({ concepto: '', monto: '' });
@@ -1100,7 +1148,7 @@ function PagosInner({ session }) {
 
   const refreshSemana = useCallback(async (lunes) => {
     if (!lunes) return;
-    setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes)); setColectaOv(loadColectaOv(lunes));
+    setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes)); setColectaOv(loadColectaOv(lunes)); setSplitOv(loadSplitOv(lunes));
     try {
       const sabado = addDays(lunes, 5);
       const [ent, col, aj, ci] = await Promise.all([
@@ -1122,7 +1170,7 @@ function PagosInner({ session }) {
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
-  const filasEfectivas = useMemo(() => calc.filas.map(f => filaConOverride(f, overrides[f.key], colectaOv[f.key])), [calc.filas, overrides, colectaOv]);
+  const filasEfectivas = useMemo(() => calc.filas.map(f => filaConOverride(f, overrides[f.key], colectaOv[f.key], splitOv[f.key])), [calc.filas, overrides, colectaOv, splitOv]);
 
   // orden canónico (Factura primero, luego A-Z) — lo usa la vista y el Excel
   const filasOrdenadas = useMemo(() => {
@@ -1153,6 +1201,33 @@ function PagosInner({ session }) {
       return next;
     });
   }, [semanaLunes]);
+
+  const setSplitOvPersist = useCallback((updater) => {
+    setSplitOv(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveSplitOv(semanaLunes, next);
+      return next;
+    });
+  }, [semanaLunes]);
+
+  // ajusta la cantidad de envíos de una tarifa (0=Base,1/2/3) para un cadete en la semana.
+  // Si el reparto vuelve a coincidir con el automático, se borra el override (= volver al automático).
+  const setSplitCount = useCallback((f, tier, value) => {
+    setSplitOvPersist(prev => {
+      const def = f.split.counts;
+      const cur = prev[f.key] || def;
+      const next = { 0: cur[0] || 0, 1: cur[1] || 0, 2: cur[2] || 0, 3: cur[3] || 0 };
+      next[tier] = Math.max(0, Math.floor(Number(value) || 0));
+      const igualAuto = [0, 1, 2, 3].every(t => (next[t] || 0) === (def[t] || 0));
+      const nn = { ...prev };
+      if (igualAuto) delete nn[f.key]; else nn[f.key] = next;
+      return nn;
+    });
+  }, [setSplitOvPersist]);
+
+  const revertSplit = useCallback((f) => {
+    setSplitOvPersist(prev => { const nn = { ...prev }; delete nn[f.key]; return nn; });
+  }, [setSplitOvPersist]);
 
   const nEdiciones = useMemo(() => filasEfectivas.filter(f => f.editado).length, [filasEfectivas]);
 
@@ -1197,6 +1272,7 @@ function PagosInner({ session }) {
       // Tarea 2: al cerrar, las ediciones quedan congeladas en el cierre -> limpiar el borrador
       saveOverrides(semanaLunes, {}); setOverrides({});
       saveColectaOv(semanaLunes, {}); setColectaOv({});
+      saveSplitOv(semanaLunes, {}); setSplitOv({});
       await refreshSemana(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -1439,7 +1515,7 @@ function PagosInner({ session }) {
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
                               <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>{open ? '▲' : '▾'}</span>
                             </td>
-                            <td style={{ padding: '8px 12px', background: f.cantEditado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
+                            <td style={{ padding: '8px 12px', background: (f.cantEditado || f.splitEditado) ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
                               {f.esFletero ? (
                                 <span title="cantidad de colectas de la semana" style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{f.colectasCant} col.</span>
                               ) : (
@@ -1513,6 +1589,34 @@ function PagosInner({ session }) {
                                     </div>
                                   </div>
                                 )}
+                                {f.puedeSplit && f.split && (() => {
+                                  const cur = splitOv[f.key] || f.split.counts;
+                                  const editadoSplit = !!splitOv[f.key];
+                                  const tiers = [{ t: 0, lbl: 'Base', c: BRAND.white }, { t: 1, lbl: 'T1', c: BRAND.teal }, { t: 2, lbl: 'T2', c: BRAND.amber }, { t: 3, lbl: 'T3', c: BRAND.red }].filter(x => f.split.amts[x.t] != null);
+                                  const totalEnv = (cur[0] || 0) + (cur[1] || 0) + (cur[2] || 0) + (cur[3] || 0);
+                                  const stepBtn = { width: 26, height: 28, border: 'none', background: 'transparent', color: BRAND.muted, fontSize: 15, cursor: 'pointer', lineHeight: 1 };
+                                  const stepInp = { width: 44, height: 28, textAlign: 'center', border: 'none', borderLeft: `1px solid ${BRAND.border}`, borderRight: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.white, fontSize: 13, fontWeight: 700, outline: 'none', MozAppearance: 'textfield' };
+                                  return (
+                                    <div style={{ marginBottom: 12 }}>
+                                      <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Envíos por tarifa · ajuste de esta semana</div>
+                                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                        {tiers.map(({ t, lbl, c }) => (
+                                          <div key={t} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 800, color: c }}>{lbl} <span style={{ fontSize: 10, color: BRAND.muted, fontWeight: 400 }}>× {money(Math.round(f.split.amts[t]))}</span></span>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 8, overflow: 'hidden', background: 'rgba(0,0,0,0.22)' }}>
+                                              <button onClick={() => setSplitCount(f, t, (cur[t] || 0) - 1)} style={stepBtn}>−</button>
+                                              <input type="text" inputMode="numeric" value={cur[t] || 0} onChange={e => setSplitCount(f, t, e.target.value.replace(/[^\d]/g, ''))} style={stepInp} />
+                                              <button onClick={() => setSplitCount(f, t, (cur[t] || 0) + 1)} style={stepBtn}>+</button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                        <div style={{ fontSize: 12, color: BRAND.muted }}>Total: <b style={{ color: BRAND.white, fontSize: 14 }}>{totalEnv}</b> env · <b style={{ color: BRAND.teal, fontSize: 14 }}>{money(f.monto)}</b></div>
+                                        {editadoSplit && <button onClick={() => revertSplit(f)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>↩ volver al automático</button>}
+                                      </div>
+                                      <div style={{ fontSize: 10.5, color: BRAND.muted, marginTop: 6 }}>La base (qué CP es cada tarifa) se define en Config. Este ajuste vale solo para esta semana y se congela al cerrar.</div>
+                                    </div>
+                                  );
+                                })()}
                                 {f.fallbackInfo && <div style={{ fontSize: 11.5, color: BRAND.amber, marginBottom: 8 }}>⚠ {f.fallbackInfo}</div>}
                                 <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 4 }}>Ajustes de la semana</div>
                                 {f.ajusteRows.map(a => (
