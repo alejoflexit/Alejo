@@ -1587,7 +1587,7 @@ function ColectasInner({ soloArribos = false }) {
             {s}
             {sinConfirmar > 0 && (
               <span title={`${sinConfirmar} con envíos sin confirmar`}
-                style={{ fontSize:11, fontWeight:700, color:'#FBBF24', lineHeight:1, marginLeft:1, transform:'translateY(-6px)' }}>
+                style={{ fontSize:11, fontWeight:700, color:'#FBBF24', lineHeight:1, marginLeft:-4, transform:'translateY(-6px)' }}>
                 {sinConfirmar}
               </span>
             )}
