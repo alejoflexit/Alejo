@@ -1260,13 +1260,15 @@ function PagosInner({ session }) {
     if (!window.confirm(`¿Cerrar la semana ${fmtSemanaLabel(semanaLunes)}? Esto congela los montos actuales en pagos_cierres (se puede volver a cerrar y se pisa).`)) return;
     setBusyAccion(true); setError('');
     try {
-      // Tarea 3: preservar los pagos ya marcados al re-cerrar (matchear por cadete antes del delete+insert)
+      // Tarea 3: preservar los pagos ya marcados (y su medio de pago) al re-cerrar (matchear por cadete antes del delete+insert)
       const pagadoPrev = new Set(cierres.filter(c => c.pagado).map(c => norm(c.cadete)));
+      const viaPrev = new Map(cierres.filter(c => c.pagado).map(c => [norm(c.cadete), c.pagado_via || null]));
       await sb(`pagos_cierres?semana_label=eq.${semanaLunes}`, { method: 'DELETE' });
       const rows = filasEfectivas.map(f => ({
         semana_label: semanaLunes, cadete: f.nombre,
         detalle: { cantidad: f.cantidad, monto: f.monto, colecta: f.colecta, ajuste: f.ajusteTotal, modo: f.modo, falta_precio: f.faltaPrecio },
         total: f.total, metodo: f.factura ? 'transferencia' : 'efectivo', pagado: pagadoPrev.has(norm(f.nombre)),
+        pagado_via: viaPrev.get(norm(f.nombre)) || null,
       }));
       if (rows.length) await sb('pagos_cierres', { method: 'POST', body: JSON.stringify(rows) });
       // Tarea 2: al cerrar, las ediciones quedan congeladas en el cierre -> limpiar el borrador
