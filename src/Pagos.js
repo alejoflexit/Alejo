@@ -608,6 +608,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
     return out.map(r => ({ ...r, tier: tierByCp.get(r.cp) || 0, ...precioCp(r.cp) }));
   })();
   const cpSinPrecio = cpRows.filter(r => r.falta && r.cantidad > 0).length;
+  // Envíos que caen en cada tarifa (0 = Base, 1/2/3 = tier), según el tier asignado a cada CP
+  const envPorTier = cpRows.reduce((a, r) => { const t = r.tier || 0; a[t] = (a[t] || 0) + (r.cantidad || 0); return a; }, {});
   const asignarTier = (cp, tier) => doAction(async () => {
     const existe = tierByCp.has(cp);
     if (!tier) { if (existe) await sb(`cadete_cp_tarifa?nombre_lightdata=eq.${encodeURIComponent(cpSel)}&cp=eq.${encodeURIComponent(cp)}`, { method: 'DELETE' }); return; }
@@ -744,8 +746,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
               </select>
             )}
 
-            {/* montos de las 3 tarifas + base de referencia */}
-            <div style={{ display: 'flex', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+            {/* montos de las 3 tarifas + base — cada una con su cantidad de envíos debajo (queda todo un bloque) */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
               {[1, 2, 3].map(tr => {
                 const tc = tr === 1 ? BRAND.teal : tr === 2 ? BRAND.amber : BRAND.red;
                 return (
@@ -756,32 +758,17 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                       onBlur={e => { const s = e.target.value.trim(); const cur = tierAmt(tr); if (s === '' && cur == null) return; if (s !== '' && Number(s) === cur) return; guardarTierAmt(tr, s); }}
                       style={{ ...inp, width: 92 }} />
+                    <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'center' }}><b style={{ color: BRAND.white }}>{envPorTier[tr] || 0}</b> {(envPorTier[tr] || 0) === 1 ? 'envío' : 'envíos'}</span>
                   </label>
                 );
               })}
               <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: BRAND.muted }}>
                 <span style={{ fontWeight: 700 }}>Base</span>
                 <span style={{ ...inp, width: 92, opacity: 0.7 }}>{baseSel != null ? money(baseSel) : '—'}</span>
+                <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'center' }}><b style={{ color: BRAND.white }}>{envPorTier[0] || 0}</b> {(envPorTier[0] || 0) === 1 ? 'envío' : 'envíos'}</span>
               </label>
             </div>
             <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 10 }}>Cargá el monto de cada tarifa y abajo asigná cada CP a una tarifa (o dejalo en Base). Un CP sin tarifa cobra el precio base.{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
-
-            {/* Resumen: cuántos envíos caen en cada tarifa (Base/T1/T2/T3), según el tier asignado a cada CP */}
-            {cpRows.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {[{ k: 'Base', tier: 0, color: BRAND.muted }, { k: 'T1', tier: 1, color: BRAND.teal }, { k: 'T2', tier: 2, color: BRAND.amber }, { k: 'T3', tier: 3, color: BRAND.red }].map(({ k, tier, color }) => {
-                  const n = cpRows.reduce((a, r) => a + (((r.tier || 0) === tier) ? (r.cantidad || 0) : 0), 0);
-                  if (!n) return null;
-                  return (
-                    <div key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 6, padding: '5px 11px', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: `1px solid ${BRAND.border}` }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color }}>{k}</span>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: BRAND.white }}>{n}</span>
-                      <span style={{ fontSize: 10.5, color: BRAND.muted }}>{n === 1 ? 'envío' : 'envíos'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             {cpRows.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
