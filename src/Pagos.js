@@ -762,14 +762,14 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                       onBlur={e => { const s = e.target.value.trim(); const cur = tierAmt(tr); if (s === '' && cur == null) return; if (s !== '' && Number(s) === cur) return; guardarTierAmt(tr, s); }}
                       style={{ ...inp, width: 92 }} />
-                    <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'center' }}><b style={{ color: BRAND.white }}>{envPorTier[tr] || 0}</b> {(envPorTier[tr] || 0) === 1 ? 'envío' : 'envíos'}</span>
+                    <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[tr] || 0}</b> {(envPorTier[tr] || 0) === 1 ? 'envío' : 'envíos'}</span>
                   </label>
                 );
               })}
               <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: BRAND.muted }}>
                 <span style={{ fontWeight: 700 }}>Base</span>
                 <span style={{ ...inp, width: 92, opacity: 0.7 }}>{baseSel != null ? money(baseSel) : '—'}</span>
-                <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'center' }}><b style={{ color: BRAND.white }}>{envPorTier[0] || 0}</b> {(envPorTier[0] || 0) === 1 ? 'envío' : 'envíos'}</span>
+                <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[0] || 0}</b> {(envPorTier[0] || 0) === 1 ? 'envío' : 'envíos'}</span>
               </label>
             </div>
             <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 10 }}>Cargá el monto de cada tarifa y abajo asigná cada CP a una tarifa (o dejalo en Base). Un CP sin tarifa cobra el precio base.{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
