@@ -732,18 +732,17 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                           <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺</button>
                         </>
                       )}
-                      {(hoverId === t.id || isDirty) ? (
-                        <>
-                          {t.nombre_lightdata && (() => {
-                            const nCp = (cpTarifas || []).filter(o => norm(o.nombre_lightdata) === norm(t.nombre_lightdata)).length;
-                            return <button title="tarifas por CP (T1/T2/T3) y asignación de cada CP" style={{ ...btn, padding: '3px 10px', borderColor: nCp ? BRAND.teal : BRAND.border, color: nCp ? BRAND.teal : BRAND.white, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }} onClick={() => setCpSel(t.nombre_lightdata)}>Tarifas{nCp ? ` (${nCp})` : ''}</button>;
-                          })()}
-                          <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 4, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
-                        </>
-                      ) : (
-                        <button onClick={() => setHoverId(t.id)} title="Ver acciones"
-                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.28)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 10px', letterSpacing: 2 }}>⋯</button>
-                      )}
+                      {t.nombre_lightdata && (() => {
+                        const nCp = (cpTarifas || []).filter(o => norm(o.nombre_lightdata) === norm(t.nombre_lightdata)).length;
+                        return (
+                          <button title={nCp ? `${nCp} tarifa(s) por CP — abrir` : 'Tarifas por CP (T1/T2/T3)'} onClick={() => setCpSel(t.nombre_lightdata)}
+                            style={{ position: 'relative', width: 30, height: 28, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, cursor: 'pointer', border: `1px solid ${nCp ? BRAND.teal : BRAND.border}`, color: nCp ? BRAND.teal : BRAND.muted, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7.5 7.5h.01M3 12V5a2 2 0 0 1 2-2h7l9 9-7 7-9-9z" /></svg>
+                            {nCp > 0 && <span style={{ position: 'absolute', top: -6, right: -6, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, background: BRAND.teal, color: '#04121a', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{nCp}</span>}
+                          </button>
+                        );
+                      })()}
+                      <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 4, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
                     </div>
                   </td>
                 </tr>
