@@ -1577,18 +1577,6 @@ function PagosInner({ session }) {
                                   <span>Método: <b style={{ color: f.factura ? BRAND.teal : BRAND.amber }}>{f.factura ? 'Transferencia' : 'Efectivo'}</b></span>
                                   {!f.activo && <span style={{ color: BRAND.amber }}>inactivo</span>}
                                 </div>
-                                {f.modo === 'cp' && f.cpBreakdown && (
-                                  <div style={{ marginBottom: 10 }}>
-                                    <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 4 }}>Desglose por CP</div>
-                                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                      {f.cpBreakdown.map(b => (
-                                        <div key={b.cp} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: BRAND.faint, border: `1px solid ${b.precio == null ? BRAND.red : BRAND.border}` }}>
-                                          CP {b.cp}: {b.cantidad} × {b.precio != null ? money(b.precio) : 'SIN PRECIO'}{b.fuente && b.fuente !== 'base' && b.precio != null ? <span style={{ color: BRAND.muted }}> · {b.fuente}</span> : ''}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
                                 {f.puedeSplit && f.split && (() => {
                                   const cur = splitOv[f.key] || f.split.counts;
                                   const editadoSplit = !!splitOv[f.key];
