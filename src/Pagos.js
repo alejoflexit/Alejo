@@ -551,6 +551,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
   const [filtro, setFiltro] = useState('');
   const [cpSel, setCpSel] = useState('');
   const [cpFiltroTier, setCpFiltroTier] = useState('todos'); // filtro del listado de CPs por tarifa: 'todos' | 0(base) | 1 | 2 | 3
+  const [cpAgrupar, setCpAgrupar] = useState(false); // agrupar el listado por tarifa (Base → T1 → T2 → T3) al tocar "Precio"
   const [hoverId, setHoverId] = useState(null); // fila de Config bajo el mouse
   const [nuevoCp, setNuevoCp] = useState({ cp: '', precio: '' });
   const [nuevoAlias, setNuevoAlias] = useState({ nombre_lightdata: '', regla: 'merge', paga_como: '', detalle: '' });
@@ -614,6 +615,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
   const envPorTier = cpRows.reduce((a, r) => { const t = r.tier || 0; a[t] = (a[t] || 0) + (r.cantidad || 0); return a; }, {});
   // Filtro del listado por tarifa (no afecta los totales de arriba)
   const cpRowsVis = cpFiltroTier === 'todos' ? cpRows : cpRows.filter(r => (r.tier || 0) === cpFiltroTier);
+  // Agrupar por tarifa (Base → T1 → T2 → T3) al tocar "Precio"; dentro de cada grupo respeta el orden por entregas
+  const cpRowsShown = cpAgrupar ? [...cpRowsVis].sort((a, b) => (a.tier || 0) - (b.tier || 0)) : cpRowsVis;
   const colorTier = tr => (tr === 1 ? BRAND.teal : tr === 2 ? BRAND.amber : tr === 3 ? BRAND.red : BRAND.white);
   const asignarTier = (cp, tier) => doAction(async () => {
     const existe = tierByCp.has(cp);
@@ -755,8 +758,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
               </select>
             )}
 
-            {/* montos de las 3 tarifas + base — cada una con su cantidad de envíos debajo (queda todo un bloque) */}
+            {/* Base primero y después las 3 tarifas — cada una con su cantidad de envíos debajo (queda todo un bloque) */}
             <div style={{ display: 'flex', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: BRAND.muted }}>
+                <span style={{ fontWeight: 700 }}>Base</span>
+                <span style={{ ...inp, width: 92, opacity: 0.7 }}>{baseSel != null ? money(baseSel) : '—'}</span>
+                <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[0] || 0}</b> {(envPorTier[0] || 0) === 1 ? 'envío' : 'envíos'}</span>
+              </label>
               {[1, 2, 3].map(tr => {
                 const tc = tr === 1 ? BRAND.teal : tr === 2 ? BRAND.amber : BRAND.red;
                 return (
@@ -771,11 +779,6 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                   </label>
                 );
               })}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: BRAND.muted }}>
-                <span style={{ fontWeight: 700 }}>Base</span>
-                <span style={{ ...inp, width: 92, opacity: 0.7 }}>{baseSel != null ? money(baseSel) : '—'}</span>
-                <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[0] || 0}</b> {(envPorTier[0] || 0) === 1 ? 'envío' : 'envíos'}</span>
-              </label>
             </div>
             <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 10 }}>Cargá el monto de cada tarifa y abajo asigná cada CP a una tarifa (o dejalo en Base). Un CP sin tarifa cobra el precio base.{cpSinPrecio > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}> · {cpSinPrecio} sin precio</span>}</div>
 
@@ -803,12 +806,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                 <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}>
                   <th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px' }}>Localidad</th>
                   <th style={{ padding: '4px 6px', textAlign: 'right' }}>Entregas</th>
-                  <th style={{ padding: '4px 6px' }}>Tarifa</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Precio</th>
+                  <th style={{ padding: '4px 6px' }}>Tarifa</th>
+                  <th onClick={() => setCpAgrupar(v => !v)} title="Agrupar por tarifa: Base primero, después T1, T2, T3" style={{ padding: '4px 6px', textAlign: 'right', cursor: 'pointer', userSelect: 'none', color: cpAgrupar ? BRAND.teal : BRAND.muted }}>Precio {cpAgrupar ? '▾' : '⇅'}</th>
                 </tr></thead>
                 <tbody>
-                  {cpRowsVis.length === 0 ? (
+                  {cpRowsShown.length === 0 ? (
                     <tr><td colSpan={5} style={{ padding: '12px 6px', color: BRAND.muted, fontSize: 12 }}>No hay CPs en esta tarifa.</td></tr>
-                  ) : cpRowsVis.map(({ cp, cantidad, localidad, tier, precio, fuente, falta }) => {
+                  ) : cpRowsShown.map(({ cp, cantidad, localidad, tier, precio, fuente, falta }) => {
                     const tc = colorTier(tier || 0);
                     return (
                     <tr key={cp} style={{ borderTop: `1px solid ${BRAND.border}`, background: falta ? 'rgba(255,176,32,0.06)' : 'transparent' }}>
