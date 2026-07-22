@@ -7,6 +7,7 @@ const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 // Bridge LightData (VPS) — solo lectura, riesgo aceptado de exponer la key en el bundle (ver spec-lightdata-bridge)
 const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
 const BRIDGE_GEO_URL = "https://srv1801226.hstgr.cloud/bridge/geo"; // GPS de cadetes (proximidad al depósito)
+const BRIDGE_DETALLE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta-detalle"; // detalle por zona+localidad de lo que trae cada cadete
 const GEO_ALERTA_M = 800; // umbral: alerta cuando el cadete está a <= 800 m de la base
 const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // clave del bridge (/root/flexit/bridge.key en el VPS) — visible en el bundle, riesgo aceptado (ver spec-lightdata-bridge)
 
@@ -294,6 +295,8 @@ function ColectasInner({ soloArribos = false }) {
   const [arribos, setArribos] = useState({}); // Arribos: cadete -> { id, llego_at }
   const [colectaLD, setColectaLD] = useState({ porChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦
   const [gpsPos, setGpsPos] = useState({ porNombre: {}, actualizado: null, ok: false }); // GPS real por nombre normalizado
+  const [detalleLD, setDetalleLD] = useState({ fecha: null, porChofer: {}, loading: false, ok: false }); // detalle colecta (zona+localidad) por cadete, lazy
+  const [detalleAbierto, setDetalleAbierto] = useState(null); // cadete cuyo panel de detalle está expandido
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
   const [etaEdit, setEtaEdit] = useState(null); // cadete cuya hora estimada se está editando
@@ -1400,6 +1403,19 @@ function ColectasInner({ soloArribos = false }) {
     let lista = Object.values(map);
     const total = lista.length;
     const canon = buildCanonAlias(aliasCadetes);
+    const ddet = new Date(fecha + 'T12:00:00');
+    const fechaLDdet = `${String(ddet.getDate()).padStart(2,'0')}/${String(ddet.getMonth()+1).padStart(2,'0')}/${ddet.getFullYear()}`;
+    const abrirDetalle = async (cadete) => {
+      setDetalleAbierto(prev => prev === cadete ? null : cadete);
+      if (detalleLD.fecha === fechaLDdet || detalleLD.loading) return;
+      setDetalleLD(d => ({ ...d, loading: true }));
+      try {
+        const j = await fetch(`${BRIDGE_DETALLE_URL}?fecha=${encodeURIComponent(fechaLDdet)}`, { headers: { 'x-bridge-key': BRIDGE_KEY } }).then(r => r.json());
+        const porChofer = {};
+        (j.choferes || []).forEach(ch => { porChofer[canon(ch.cadete)] = ch; });
+        setDetalleLD({ fecha: fechaLDdet, porChofer, loading: false, ok: true });
+      } catch (e) { setDetalleLD({ fecha: fechaLDdet, porChofer: {}, loading: false, ok: false }); }
+    };
     const llegados = lista.filter(c => arribos[c.cadete]?.llego_at).length;
     const pct = total ? Math.round(llegados / total * 100) : 0;
     // "está por llegar": GPS dentro del radio, o (fallback) ETA a ≤15 min — mismo criterio que la tarjeta.
@@ -1495,10 +1511,11 @@ function ColectasInner({ soloArribos = false }) {
                 const cerca = cercaGps || cercaEta;
                 return (
                   <div key={c.cadete}
-                    style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderRadius:12, width:'100%',
+                    style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px 14px', borderRadius:12, width:'100%',
                       border:`1px solid ${llego ? 'rgba(46,207,170,0.4)' : cerca ? 'rgba(251,191,36,0.55)' : BRAND.border}`,
                       background: llego ? 'rgba(46,207,170,0.08)' : cerca ? 'rgba(251,191,36,0.07)' : BRAND.faint,
                       animation: cerca ? 'flexitTiemble 3s ease-in-out infinite' : 'none', transition:'all 0.15s' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10, width:'100%' }}>
                     <div onClick={() => toggleLlego(c.cadete)} style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0, cursor:'pointer' }}>
                       <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
                         border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17 }}>
@@ -1534,9 +1551,11 @@ function ColectasInner({ soloArribos = false }) {
                         const key = canon(c.cadete);
                         const cantidad = colectaLD.porChofer[key];
                         if (cantidad === undefined) return null;
+                        const detAbierto = detalleAbierto === c.cadete;
                         return (
-                          <div title="Envíos de colecta hoy (Informes → Colecta de LightData)"
-                            style={{ display:'flex', alignItems:'center', gap:4, height:26, padding:'0 9px', borderRadius:14, border:'1px solid rgba(46,207,170,0.45)', background:'transparent', color:'#2ECFAA', fontSize:12, fontWeight:700 }}>
+                          <div onClick={(e) => { e.stopPropagation(); abrirDetalle(c.cadete); }}
+                            title="Ver localidades que trae (tocar)"
+                            style={{ display:'flex', alignItems:'center', gap:4, height:26, padding:'0 9px', borderRadius:14, cursor:'pointer', border:'1px solid rgba(46,207,170,0.45)', background: detAbierto ? 'rgba(46,207,170,0.15)' : 'transparent', color:'#2ECFAA', fontSize:12, fontWeight:700 }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9l8 -4.5" />
                               <path d="M12 12l8 -4.5" />
@@ -1558,6 +1577,34 @@ function ColectasInner({ soloArribos = false }) {
                         </svg>
                       </button>
                     </div>
+                    </div>
+                    {detalleAbierto === c.cadete && (
+                      detalleLD.fecha !== fechaLDdet
+                        ? <div style={{ fontSize:12, color:BRAND.muted, paddingTop:2 }}>Cargando detalle…</div>
+                        : (() => {
+                            const det = detalleLD.porChofer[canon(c.cadete)];
+                            if (!det) return <div style={{ fontSize:12, color:BRAND.muted, paddingTop:2 }}>Sin detalle de colecta para este cadete.</div>;
+                            const zonas = Object.entries(det.zonas || {}).sort((a, b) => b[1] - a[1]);
+                            const locs = Object.entries(det.localidades || {}).sort((a, b) => b[1] - a[1]);
+                            return (
+                              <div style={{ borderTop:`1px solid ${BRAND.border}`, paddingTop:8, display:'flex', flexDirection:'column', gap:8 }}>
+                                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                                  {zonas.map(([z, n]) => (
+                                    <span key={z} style={{ fontSize:11, fontWeight:700, color:'#2ECFAA', border:'1px solid rgba(46,207,170,0.4)', borderRadius:12, padding:'2px 8px' }}>{z} · {n}</span>
+                                  ))}
+                                </div>
+                                <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                                  {locs.map(([l, n]) => (
+                                    <div key={l} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.85)' }}>
+                                      <span style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{l}</span>
+                                      <span style={{ color:BRAND.muted, fontWeight:600, marginLeft:8 }}>{n}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()
+                    )}
                   </div>
                 );
               })}
