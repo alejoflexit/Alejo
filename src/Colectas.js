@@ -293,9 +293,9 @@ function ColectasInner({ soloArribos = false }) {
   const [copiedChofer, setCopiedChofer] = useState(null);
   const [hoverChofer, setHoverChofer] = useState(null); // resalta el grupo del cadete al pasar el mouse
   const [arribos, setArribos] = useState({}); // Arribos: cadete -> { id, llego_at }
-  const [colectaLD, setColectaLD] = useState({ porChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦
+  const [colectaLD, setColectaLD] = useState({ porChofer: {}, idPorChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦 + idChofer para el detalle
   const [gpsPos, setGpsPos] = useState({ porNombre: {}, actualizado: null, ok: false }); // GPS real por nombre normalizado
-  const [detalleLD, setDetalleLD] = useState({ fecha: null, porChofer: {}, loading: false, ok: false }); // detalle colecta (zona+localidad) por cadete, lazy
+  const [detalleLD, setDetalleLD] = useState({}); // cache lazy del detalle de colecta por cadete: { [canonNombre]: {loading, ok, total, localidades, fecha} }
   const [detalleAbierto, setDetalleAbierto] = useState(null); // cadete cuyo panel de detalle está expandido
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
@@ -580,12 +580,13 @@ function ColectasInner({ soloArribos = false }) {
         .then(r => { if (!r.ok) throw new Error('bridge ' + r.status); return r.json(); })
         .then(json => {
           if (cancelado) return;
-          const porChofer = {};
+          const porChofer = {}; const idPorChofer = {};
           (json.choferes || []).forEach(row => {
             const key = normNombre(row.chofer);
             porChofer[key] = (porChofer[key] || 0) + Number(row.cantidad || 0);
+            if (row.idChofer != null) idPorChofer[key] = row.idChofer;
           });
-          setColectaLD({ porChofer, actualizado: json.actualizado || new Date().toISOString(), ok: true });
+          setColectaLD({ porChofer, idPorChofer, actualizado: json.actualizado || new Date().toISOString(), ok: true });
         })
         .catch(() => {
           // El primer intento puede pillar al bridge haciendo su login inicial (503): reintento deliberado
@@ -1406,15 +1407,19 @@ function ColectasInner({ soloArribos = false }) {
     const ddet = new Date(fecha + 'T12:00:00');
     const fechaLDdet = `${String(ddet.getDate()).padStart(2,'0')}/${String(ddet.getMonth()+1).padStart(2,'0')}/${ddet.getFullYear()}`;
     const abrirDetalle = async (cadete) => {
-      setDetalleAbierto(prev => prev === cadete ? null : cadete);
-      if (detalleLD.fecha === fechaLDdet || detalleLD.loading) return;
-      setDetalleLD(d => ({ ...d, loading: true }));
+      const key = canon(cadete);
+      const yaAbierto = detalleAbierto === cadete;
+      setDetalleAbierto(yaAbierto ? null : cadete);
+      if (yaAbierto) return;
+      const ch = detalleLD[key];
+      if (ch && ch.fecha === fechaLDdet && !ch.loading) return;
+      const idChofer = colectaLD.idPorChofer[key];
+      if (idChofer == null) { setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: false, ok: false, total: 0, localidades: {} } })); return; }
+      setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: true } }));
       try {
-        const j = await fetch(`${BRIDGE_DETALLE_URL}?fecha=${encodeURIComponent(fechaLDdet)}`, { headers: { 'x-bridge-key': BRIDGE_KEY } }).then(r => r.json());
-        const porChofer = {};
-        (j.choferes || []).forEach(ch => { porChofer[canon(ch.cadete)] = ch; });
-        setDetalleLD({ fecha: fechaLDdet, porChofer, loading: false, ok: true });
-      } catch (e) { setDetalleLD({ fecha: fechaLDdet, porChofer: {}, loading: false, ok: false }); }
+        const j = await fetch(`${BRIDGE_DETALLE_URL}?fecha=${encodeURIComponent(fechaLDdet)}&idChofer=${encodeURIComponent(idChofer)}`, { headers: { 'x-bridge-key': BRIDGE_KEY } }).then(r => r.json());
+        setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: false, ok: true, total: j.total || 0, localidades: j.localidades || {} } }));
+      } catch (e) { setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: false, ok: false, total: 0, localidades: {} } })); }
     };
     const llegados = lista.filter(c => arribos[c.cadete]?.llego_at).length;
     const pct = total ? Math.round(llegados / total * 100) : 0;
@@ -1578,33 +1583,24 @@ function ColectasInner({ soloArribos = false }) {
                       </button>
                     </div>
                     </div>
-                    {detalleAbierto === c.cadete && (
-                      detalleLD.fecha !== fechaLDdet
-                        ? <div style={{ fontSize:12, color:BRAND.muted, paddingTop:2 }}>Cargando detalle…</div>
-                        : (() => {
-                            const det = detalleLD.porChofer[canon(c.cadete)];
-                            if (!det) return <div style={{ fontSize:12, color:BRAND.muted, paddingTop:2 }}>Sin detalle de colecta para este cadete.</div>;
-                            const zonas = Object.entries(det.zonas || {}).sort((a, b) => b[1] - a[1]);
-                            const locs = Object.entries(det.localidades || {}).sort((a, b) => b[1] - a[1]);
-                            return (
-                              <div style={{ borderTop:`1px solid ${BRAND.border}`, paddingTop:8, display:'flex', flexDirection:'column', gap:8 }}>
-                                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                                  {zonas.map(([z, n]) => (
-                                    <span key={z} style={{ fontSize:11, fontWeight:700, color:'#2ECFAA', border:'1px solid rgba(46,207,170,0.4)', borderRadius:12, padding:'2px 8px' }}>{z} · {n}</span>
-                                  ))}
-                                </div>
-                                <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-                                  {locs.map(([l, n]) => (
-                                    <div key={l} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.85)' }}>
-                                      <span style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{l}</span>
-                                      <span style={{ color:BRAND.muted, fontWeight:600, marginLeft:8 }}>{n}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()
-                    )}
+                    {detalleAbierto === c.cadete && (() => {
+                      const det = detalleLD[canon(c.cadete)];
+                      if (!det || det.loading || det.fecha !== fechaLDdet) return <div style={{ fontSize:12, color:BRAND.muted, paddingTop:2 }}>Cargando detalle…</div>;
+                      if (!det.ok) return <div style={{ fontSize:12, color:BRAND.muted, paddingTop:2 }}>Detalle no disponible.</div>;
+                      const locs = Object.entries(det.localidades || {}).sort((a, b) => b[1] - a[1]);
+                      if (!locs.length) return <div style={{ fontSize:12, color:BRAND.muted, paddingTop:2 }}>Sin colecta registrada para este cadete.</div>;
+                      return (
+                        <div style={{ borderTop:`1px solid ${BRAND.border}`, paddingTop:8, display:'flex', flexDirection:'column', gap:3 }}>
+                          <div style={{ fontSize:11, color:BRAND.muted, marginBottom:2 }}>Colecta · {det.total} envío{det.total===1?'':'s'} · localidades de destino</div>
+                          {locs.map(([l, n]) => (
+                            <div key={l} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.85)' }}>
+                              <span style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{l}</span>
+                              <span style={{ color:BRAND.muted, fontWeight:600, marginLeft:8 }}>{n}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -1750,5 +1746,3 @@ export default function Colectas({ soloArribos = false }) {
   if (!usuario) return <LoginColectas onOk={setUsuario} />;
   return <ColectasInner soloArribos={soloArribos} />;
 }
-
-// deploy nudge 2026-07-22: forzar rebuild (webhook de 9d3c393 no disparó)
