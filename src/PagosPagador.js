@@ -16,6 +16,7 @@ const BRAND = {
   teal:     "#2ECFAA",
   red:      "#E24B4A",
   amber:    "#FFB020",
+  azul:     "#3A8FD4",
   white:    "#FFFFFF",
   muted:    "rgba(255,255,255,0.58)",
   faint:    "rgba(255,255,255,0.06)",
@@ -99,6 +100,7 @@ export default function PagosPagador({ tarifas }) {
   const [copiado, setCopiado] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [pickId, setPickId] = useState(null); // fila cuyo selector de medio (Galicia/MP) está abierto
+  const [filtroMedio, setFiltroMedio] = useState('todos'); // en Pagados: todos | galicia | mercadopago
 
   useEffect(() => {
     sb('pagos_cierres?select=semana_label')
@@ -155,8 +157,9 @@ export default function PagosPagador({ tarifas }) {
     else if (filtro === 'pendientes') r = r.filter(f => !f.pagado);
     if (filtroMetodo === 'factura') r = r.filter(f => f.factura);
     else if (filtroMetodo === 'efectivo') r = r.filter(f => !f.factura);
+    if (filtro === 'pagados' && filtroMedio !== 'todos') r = r.filter(f => f.pagadoVia === filtroMedio);
     return r;
-  }, [filas, filtro, filtroMetodo]);
+  }, [filas, filtro, filtroMetodo, filtroMedio]);
 
   const counts = useMemo(() => ({
     pendientes: filas.filter(f => !f.pagado).length,
@@ -164,6 +167,8 @@ export default function PagosPagador({ tarifas }) {
     todos: filas.length,
     factura: filas.filter(f => f.factura).length,
     efectivo: filas.filter(f => !f.factura).length,
+    galicia: filas.filter(f => f.pagado && f.pagadoVia === 'galicia').length,
+    mercadopago: filas.filter(f => f.pagado && f.pagadoVia === 'mercadopago').length,
   }), [filas]);
 
   const resumen = useMemo(() => {
@@ -171,7 +176,10 @@ export default function PagosPagador({ tarifas }) {
     const faltan = filas.filter(f => !f.pagado).reduce((s, f) => s + (f.total || 0), 0);
     const faltanFactura = filas.filter(f => !f.pagado && f.factura).reduce((s, f) => s + (f.total || 0), 0);
     const pct = filas.length ? Math.round(pagados / filas.length * 100) : 0;
-    return { pagados, total: filas.length, faltan, faltanFactura, pct };
+    // total transferido/pagado por cada medio
+    const porMedio = {};
+    Object.keys(MEDIOS).forEach(k => { porMedio[k] = filas.filter(f => f.pagado && f.pagadoVia === k).reduce((s, f) => s + (f.total || 0), 0); });
+    return { pagados, total: filas.length, faltan, faltanFactura, pct, porMedio };
   }, [filas]);
 
   // marcar pagado eligiendo el medio (galicia | mercadopago); queda guardado en pagos_cierres.pagado_via
@@ -199,7 +207,7 @@ export default function PagosPagador({ tarifas }) {
   }
 
   const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '12px 14px' };
-  const pill = (active, color = BRAND.teal) => ({ padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? color : BRAND.border}`, background: active ? 'rgba(46,207,170,0.15)' : BRAND.faint, color: active ? color : BRAND.muted });
+  const pill = (active, color = BRAND.teal) => ({ padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? color : BRAND.border}`, background: active ? `${color}26` : BRAND.faint, color: active ? color : BRAND.muted });
 
   return (
     <div style={{ maxWidth: 940 }}>
@@ -229,21 +237,43 @@ export default function PagosPagador({ tarifas }) {
             <div style={{ height: 10, borderRadius: 20, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
               <div style={{ width: `${resumen.pct}%`, height: '100%', borderRadius: 20, background: resumen.pct === 100 ? BRAND.teal : 'linear-gradient(90deg,#FFB020,#2ECFAA)', transition: 'width 0.3s' }} />
             </div>
+            {(resumen.porMedio.galicia > 0 || resumen.porMedio.mercadopago > 0) && (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', alignSelf: 'center' }}>Pagado por</span>
+                {Object.entries(MEDIOS).map(([k, m]) => (
+                  <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, padding: '5px 11px', borderRadius: 10, background: `${m.color}1f`, border: `1px solid ${m.color}55` }}>
+                    <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block' }} />
+                    <span style={{ color: BRAND.muted }}>{m.nombre}</span>
+                    <b style={{ color: m.color }}>{money(resumen.porMedio[k] || 0)}</b>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
-              {[['pendientes', 'Pendientes'], ['pagados', 'Pagados']].map(([k, l]) => (
-                <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
+              {[['pendientes', 'Pendientes', BRAND.amber], ['pagados', 'Pagados', BRAND.teal]].map(([k, l, c]) => (
+                <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k, c)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Método</span>
               {[['factura', 'Factura'], ['efectivo', 'Efectivo']].map(([k, l]) => (
-                <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)} style={pill(filtroMetodo === k, k === 'efectivo' ? BRAND.amber : BRAND.teal)}>{l} <span style={{ opacity: 0.7 }}>({counts[k]})</span></button>
+                <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)} style={pill(filtroMetodo === k, k === 'efectivo' ? BRAND.amber : BRAND.azul)}>{l} <span style={{ opacity: 0.7 }}>({counts[k]})</span></button>
               ))}
             </div>
+            {filtro === 'pagados' && (counts.galicia > 0 || counts.mercadopago > 0) && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Medio</span>
+                {Object.entries(MEDIOS).map(([k, m]) => (
+                  <button key={k} onClick={() => setFiltroMedio(filtroMedio === k ? 'todos' : k)} style={{ ...pill(filtroMedio === k, m.color), display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block' }} /> {m.nombre} <span style={{ opacity: 0.7 }}>({counts[k]})</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {loading && <div style={{ color: BRAND.muted, fontSize: 13, padding: 20, textAlign: 'center' }}>Cargando…</div>}
