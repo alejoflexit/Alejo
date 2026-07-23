@@ -224,6 +224,8 @@ export default function Tiquetera() {
   const [chip, setChip] = useState("abiertos");
   const [orden, setOrden] = useState("antiguos");
   const [abierto, setAbierto] = useState(null);
+  const [respAbierta, setRespAbierta] = useState(true);      // respuesta del bot desplegable
+  const [confirmarResolver, setConfirmarResolver] = useState(null); // confirmación inline de "Resolver"
   const [textos, setTextos] = useState({});
   const [notaTxt, setNotaTxt] = useState("");
   const [operador, setOperador] = useState(() => (getSession() || {}).nombre || "");
@@ -295,7 +297,7 @@ export default function Tiquetera() {
     return () => { document.title = "Métricas Flexit"; };
   }, [casos]);
 
-  useEffect(() => { setNotaTxt(""); setBugPara(null); setBugTxt(""); }, [abierto]);
+  useEffect(() => { setNotaTxt(""); setBugPara(null); setBugTxt(""); setRespAbierta(true); setConfirmarResolver(null); }, [abierto]);
 
   useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
   useEffect(() => { (async () => { try { const gs = await sb("agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo"); const m = {}; (gs || []).forEach(g => { if (g.chat_id) m[g.chat_id] = g.nombre_grupo; }); setMapaGrupos(m); const eq = await sb("agente_config?tipo=eq.lid_equipo&select=lid,etiqueta,nombre_grupo"); const ml = {}; (eq || []).forEach(e => { const dig = String(e.lid || "").replace(/[^0-9]/g, ""); if (dig) ml[dig] = limpiarNombreEquipo(e.etiqueta || e.nombre_grupo || dig); }); setMapaLids(ml); } catch (e) {} })(); }, []);
@@ -761,11 +763,18 @@ export default function Tiquetera() {
                   ); })()}
                   {c.estado !== "resuelto" && (<>
                     <div style={{ border: "1px dashed rgba(46,207,170,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,207,170,0.04)", maxWidth: 640, marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, marginBottom: 5 }}>{c.respuesta_enviada ? "✦ Enviar otro mensaje (opcional)" : "✦ Respuesta — editá antes de enviar"}</div>
-                      <textarea value={textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_enviada ? "" : (c.respuesta_sugerida || ""))}
-                        onChange={e => setTextos({ ...textos, [c.id]: e.target.value })}
-                        rows={2}
-                        style={{ width: "100%", background: "transparent", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box" }} />
+                      <div onClick={() => setRespAbierta(v => !v)} title={respAbierta ? "Ocultar" : "Mostrar"}
+                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, userSelect: "none" }}>
+                        <span style={{ display: "inline-block", transition: "transform .15s", transform: respAbierta ? "rotate(90deg)" : "none", fontSize: 10 }}>▸</span>
+                        <span>🤖 {c.respuesta_enviada ? "Enviar otro mensaje (opcional)" : "Respuesta del bot — editá antes de enviar"}</span>
+                      </div>
+                      {respAbierta && (
+                        <textarea value={textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_enviada ? "" : (c.respuesta_sugerida || ""))}
+                          onChange={e => setTextos({ ...textos, [c.id]: e.target.value })}
+                          ref={el => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
+                          placeholder="Escribí la respuesta…"
+                          style={{ width: "100%", background: "transparent", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "inherit", resize: "none", overflow: "hidden", outline: "none", boxSizing: "border-box", marginTop: 8, minHeight: 40, display: "block" }} />
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 8, maxWidth: 640, marginBottom: 10 }}>
                       <input value={notaTxt} onChange={e => setNotaTxt(e.target.value)} placeholder="Nota interna para el equipo (no la ve el cliente)…"
@@ -778,11 +787,11 @@ export default function Tiquetera() {
                         if (!txt) { setError("No hay respuesta para copiar."); return; }
                         navigator.clipboard.writeText(txt); setCopiado(c.id);
                       }}>{copiado === c.id ? "✓" : "📋"}</button>
-                      <button style={btn(false)} onClick={() => {
+                      <button style={{ ...btn(false), padding: "8px 12px", fontSize: 17, borderColor: "rgba(46,207,170,0.5)", color: "#2ECFAA" }} title="Enviar mensaje de bot" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
                         if (!window.confirm("Se va a ENVIAR este mensaje al cliente por WhatsApp:\n\n" + txt + "\n\n¿Confirmás?")) return; patch(c.id, { respuesta_enviada: txt, estado: "enviando", enviado_por: operador });
-                      }}>✓ Aprobar y enviar</button>
+                      }}>🤖</button>
                       <button style={btn(false)} title="Si copiaste el mensaje y lo pegaste vos en WhatsApp, marcá el caso como respondido con esto" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual", enviado_por: operador });
@@ -807,12 +816,27 @@ export default function Tiquetera() {
                       </select>
                       {c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(255,176,32,0.5)", color: "#FFB020" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
                       <button style={{ ...btn(false), borderColor: "rgba(46,207,170,0.4)", color: "#2ECFAA" }}
-                        onClick={() => { if (!window.confirm("¿Marcar este caso como RESUELTO?")) return; patch(c.id, { estado: "resuelto", resuelto_por: operador, resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false }); }}>
+                        onClick={() => setConfirmarResolver(c.id)}>
                         Resolver
                       </button>
                       <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, borderColor: "rgba(229,115,115,0.45)", color: "#E57373" }} title="Reportar algo raro de este caso"
                         onClick={() => { setBugPara(bugPara === c.id ? null : c.id); setBugTxt(""); }}>🐛</button>
                     </div>
+                    {confirmarResolver === c.id && (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", maxWidth: 640, marginTop: 10, padding: "9px 12px", borderRadius: 8, border: "1px solid rgba(46,207,170,0.45)", background: "rgba(46,207,170,0.07)" }}>
+                        <span style={{ fontSize: 13, color: "#fff" }}>¿Marcar este caso como resuelto?</span>
+                        <button style={{ ...btn(true), marginLeft: "auto" }} onClick={async () => {
+                          const idx = visibles.findIndex(x => x.id === c.id);
+                          let siguiente = null;
+                          for (let j = idx + 1; j < visibles.length; j++) { if (visibles[j].id !== c.id && visibles[j].estado !== "resuelto") { siguiente = visibles[j].id; break; } }
+                          if (siguiente == null) for (let j = idx - 1; j >= 0; j--) { if (visibles[j].id !== c.id && visibles[j].estado !== "resuelto") { siguiente = visibles[j].id; break; } }
+                          setConfirmarResolver(null);
+                          await patch(c.id, { estado: "resuelto", resuelto_por: operador, resuelto_at: new Date().toISOString(), snooze_hasta: null, fijado: false });
+                          setAbierto(siguiente); // salta directo a la próxima consulta pendiente (o cierra si no hay)
+                        }}>Sí, resolver</button>
+                        <button style={btn(false)} onClick={() => setConfirmarResolver(null)}>Cancelar</button>
+                      </div>
+                    )}
                     {bugPara === c.id && (
                       <div style={{ display: "flex", gap: 8, maxWidth: 640, marginTop: 10 }}>
                         <input value={bugTxt} onChange={e => setBugTxt(e.target.value)} autoFocus placeholder="¿Qué viste raro en este caso?"
