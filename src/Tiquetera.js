@@ -251,6 +251,7 @@ export default function Tiquetera() {
   const [copiado, setCopiado] = useState(null);
   const [mediaCaso, setMediaCaso] = useState(null); // imagen adjunta del caso abierto {b64, mime}
   const [hilos, setHilos] = useState({}); // casoId -> historial de conversación abierto/cerrado
+  const [lightbox, setLightbox] = useState(null); // imagen abierta en grande (visor dentro de la tiquetera)
   const presCh = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -691,9 +692,7 @@ export default function Tiquetera() {
                     {resolverMenciones(c.mensaje, mapaLids)}
                   </div>
                   {mediaCaso && (
-                    <a href={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} target="_blank" rel="noreferrer" title="Tocar para ver en grande" style={{ display: "inline-block", marginBottom: 10 }}>
-                      <img src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" style={{ width: 104, height: 104, objectFit: "cover", borderRadius: 9, border: "1px solid rgba(255,255,255,0.14)", display: "block", cursor: "zoom-in" }} />
-                    </a>
+                    <img onClick={() => setLightbox(`data:${mediaCaso.mime};base64,${mediaCaso.b64}`)} src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" title="Tocar para ver en grande" style={{ width: 104, height: 104, objectFit: "cover", borderRadius: 9, border: "1px solid rgba(255,255,255,0.14)", display: "block", cursor: "zoom-in", marginBottom: 10 }} />
                   )}
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
                     {c.envio_id && <span>Envío <b style={{ color: "#fff" }}>#{c.envio_id}</b></span>}
@@ -852,6 +851,12 @@ export default function Tiquetera() {
           </div>
         );
       })()}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(4,6,12,0.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, cursor: "zoom-out" }}>
+          <img src={lightbox} alt="Imagen" style={{ maxWidth: "96%", maxHeight: "94%", borderRadius: 8, boxShadow: "0 20px 80px rgba(0,0,0,0.7)" }} />
+          <button onClick={() => setLightbox(null)} title="Cerrar" style={{ position: "absolute", top: 16, right: 20, background: "rgba(255,255,255,0.14)", border: "none", color: "#fff", fontSize: 24, lineHeight: 1, borderRadius: 8, width: 40, height: 40, cursor: "pointer" }}>×</button>
+        </div>
+      )}
     </div>
   );
 }
