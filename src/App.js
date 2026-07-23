@@ -495,16 +495,18 @@ function SinDatosBadge({ items }) {
   for (const it of items) { const c = (it.cliente || "").trim() || "Cliente sin identificar"; porCliente[c] = (porCliente[c] || 0) + 1; }
   const filas = Object.entries(porCliente).sort((a, b) => b[1] - a[1]);
   return (
-    <div ref={ref} style={{ position:"relative", marginBottom:"1rem" }}>
-      <button onClick={() => setShow(s => !s)}
-        style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(239,159,39,0.1)", border:"1px solid rgba(239,159,39,0.35)", borderRadius:10, padding:"9px 14px", fontSize:13, color:"#EF9F27", cursor:"pointer", textAlign:"left" }}>
-        <i className="ti ti-map-pin-off" style={{ fontSize:15 }} />
-        <span><strong>{items.length} envío{items.length > 1 ? "s" : ""} sin dirección</strong> — cliente desvinculado de LightData. No cuentan como demora.</span>
-        <i className={`ti ti-chevron-${show ? "up" : "down"}`} style={{ fontSize:14, opacity:0.7 }} />
+    <div ref={ref} style={{ position:"relative", display:"inline-block", marginBottom:"1rem" }}>
+      <button onClick={() => setShow(s => !s)} title="Envíos sin dirección (cliente desvinculado) — tocar para ver detalle"
+        style={{ display:"inline-flex", alignItems:"center", gap:6, background: show ? "rgba(239,159,39,0.22)" : "rgba(239,159,39,0.12)", border:"1px solid rgba(239,159,39,0.5)", borderRadius:9, padding:"6px 11px", fontSize:14, fontWeight:700, color:"#EF9F27", cursor:"pointer", lineHeight:1 }}>
+        <i className="ti ti-alert-triangle" style={{ fontSize:16 }} />
+        {items.length}
       </button>
       {show && (
-        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, background:"#0D0D2B", border:"1px solid rgba(239,159,39,0.4)", borderRadius:10, padding:"10px", zIndex:999, minWidth:260, maxWidth:360, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
-          <div style={{ color:"#EF9F27", fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:8 }}>Envíos sin dirección por cliente</div>
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, background:"#0D0D2B", border:"1px solid rgba(239,159,39,0.4)", borderRadius:10, padding:"12px", zIndex:999, minWidth:270, maxWidth:360, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
+          <div style={{ color:"rgba(255,255,255,0.85)", fontSize:12, lineHeight:"1.45", marginBottom:10 }}>
+            <strong style={{ color:"#EF9F27" }}>{items.length} envío{items.length > 1 ? "s" : ""} sin dirección</strong> — cliente desvinculado de LightData. No cuentan como demora.
+          </div>
+          <div style={{ color:"#EF9F27", fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Por cliente</div>
           <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:240, overflowY:"auto" }}>
             {filas.map(([cliente, n]) => (
               <div key={cliente} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"6px 8px", borderRadius:6, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.06)" }}>
