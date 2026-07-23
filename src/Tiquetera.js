@@ -688,8 +688,8 @@ export default function Tiquetera() {
                     {resolverMenciones(c.mensaje, mapaLids)}
                   </div>
                   {mediaCaso && (
-                    <a href={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} target="_blank" rel="noreferrer" title="Abrir imagen en grande" style={{ display: "block", marginBottom: 10 }}>
-                      <img src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", display: "block" }} />
+                    <a href={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} target="_blank" rel="noreferrer" title="Tocar para ver en grande" style={{ display: "inline-block", marginBottom: 10 }}>
+                      <img src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" style={{ width: 104, height: 104, objectFit: "cover", borderRadius: 9, border: "1px solid rgba(255,255,255,0.14)", display: "block", cursor: "zoom-in" }} />
                     </a>
                   )}
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
