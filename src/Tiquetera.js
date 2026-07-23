@@ -163,8 +163,14 @@ function numerosClave(c) {
 }
 function posiblesDuplicados(c, casos) {
   const mios = numerosClave(c);
-  if (!mios.size) return [];
-  return casos.filter(o => o.id !== c.id && [...numerosClave(o)].some(n => mios.has(n))).slice(0, 3);
+  const t = c.created_at ? new Date(c.created_at).getTime() : null;
+  const VENTANA = 3 * 60 * 1000; // mismo chat en ±3 min = probablemente la misma consulta partida (ej. imagen + texto)
+  return casos.filter(o => {
+    if (o.id === c.id || o.estado === "resuelto") return false;
+    const porNumero = mios.size && [...numerosClave(o)].some(n => mios.has(n));
+    const porChat = t && c.chat_id && o.chat_id === c.chat_id && o.created_at && Math.abs(new Date(o.created_at).getTime() - t) <= VENTANA;
+    return porNumero || porChat;
+  }).slice(0, 3);
 }
 
 function edadMin(caso) { return (Date.now() - new Date(caso.created_at).getTime()) / 60000; }
