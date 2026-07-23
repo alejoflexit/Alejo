@@ -181,7 +181,7 @@ async function supabaseFetch(path, options = {}) {
 async function cargarDesdeSupabase() {
   let rows;
   try {
-    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,demorados_detalle&order=fecha.asc&limit=50000");
+    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,demorados_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
   } catch(e) {
     // Columna demorados_detalle no existe aún — usar query sin ella
     rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta&order=fecha.asc&limit=50000");
@@ -195,6 +195,7 @@ async function cargarDesdeSupabase() {
       cadete: r.cadete, cantidad: r.cantidad, pendientes: r.pendientes,
       demorados: r.demorados, envios_ml: r.envios_ml, post21: r.post21||0, dem21: r.dem21||0, envios_particular: r.envios_particular||0, inicio_ruta: r.inicio_ruta||null, fin_ruta: r.fin_ruta||null, fecha: r.fecha,
       demoradosDetalle: r.demorados_detalle || [],
+      sinDatosDetalle: r.sin_datos_detalle || [],
     });
   }
   return Object.values(map).map(s => ({
@@ -223,12 +224,13 @@ async function guardarEnSupabase(datos, fecha, weekLabel) {
     cantidad: m.cantidad, pendientes: m.pendientes,
     demorados: m.demorados, envios_ml: m.envios_ml, post21: m.post21 || 0, dem21: m.dem21 || 0, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null,
     demorados_detalle: m.demoradosDetalle || [],
+    sin_datos_detalle: m.sinDatosDetalle || [],
   }));
   try {
     await supabaseFetch("semanas", { method: "POST", body: JSON.stringify(rows) });
   } catch(e) {
-    // Fallback sin demorados_detalle si la columna aún no existe
-    const rowsFallback = rows.map(({ demorados_detalle, ...r }) => r);
+    // Fallback sin columnas nuevas si aún no existen
+    const rowsFallback = rows.map(({ demorados_detalle, sin_datos_detalle, ...r }) => r);
     await supabaseFetch("semanas", { method: "POST", body: JSON.stringify(rowsFallback) });
   }
 }
@@ -283,7 +285,12 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     const esEnCamino = estado === "En camino al destinatario";
     const esEnPlanta = estado === "En planta de procesamiento";
     const esReproML = estado === "reprogramado por meli";
-    const esDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
+    const loc = String(row["Localidad"] || "").trim();
+    const tieneDatos = !!(dirBase || loc);
+    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const esDemorado = seriaDemorado && tieneDatos;
+    const esSinDatos = seriaDemorado && !tieneDatos; // cliente desvinculado de LightData: sin datos de destino, no se cuenta como demora
     const fechaEstado = String(row["Fecha estado"] || "").trim();
     const esEntregado = ["Entregado","Entregado 2DA visita"].includes(estado);
     let esPost21 = false;
@@ -294,15 +301,17 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
         if (h >= 21) esPost21 = true;
       }
     }
-    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [] };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [], sinDatosDetalle: [] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
       map[cadete].demorados++;
-      const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
-      const loc = String(row["Localidad"] || "").trim();
       const dir = [dirBase, loc].filter(Boolean).join(", ");
       map[cadete].demoradosDetalle.push({ id: idInterno, dir, estado });
+    }
+    if (esSinDatos) {
+      const cliente = String(row["Razon Social"] || row["Nombre Fantasia"] || "").trim() || ("Cod. " + String(row["Cod.Cliente"] || "").trim());
+      map[cadete].sinDatosDetalle.push({ id: idInterno, cliente, estado });
     }
     if (esML)        map[cadete].envios_ml++;
     if (!esML)       map[cadete].envios_particular++;
@@ -323,7 +332,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
     const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
     const slaReal = m.envios_ml > 0 ? (m.envios_ml - m.demorados - m.dem21) / m.envios_ml * 100 : null;
-    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [] };
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   });
 }
 
@@ -331,11 +340,12 @@ function acumularSemana(dias) {
   const map = {};
   for (const dia of dias) {
     for (const m of dia.datos) {
-      if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [] };
+      if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [], sinDatosDetalle: [] };
       map[m.cadete].cantidad  += m.cantidad;
       map[m.cadete].pendientes+= m.pendientes;
       map[m.cadete].demorados += m.demorados;
       map[m.cadete].demoradosDetalle = (map[m.cadete].demoradosDetalle || []).concat(m.demoradosDetalle || []);
+      map[m.cadete].sinDatosDetalle = (map[m.cadete].sinDatosDetalle || []).concat(m.sinDatosDetalle || []);
       map[m.cadete].envios_ml += m.envios_ml;
       map[m.cadete].post21    += (m.post21 || 0);
       map[m.cadete].dem21     += (m.dem21 || 0);
@@ -352,7 +362,7 @@ function acumularSemana(dias) {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
     const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
     const slaRealAcum = m.envios_ml > 0 ? (m.envios_ml - m.demorados - m.dem21) / m.envios_ml * 100 : null;
-    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaRealAcum !== null ? +slaRealAcum.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaRealAcum), post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [] };
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaRealAcum !== null ? +slaRealAcum.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaRealAcum), post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   }).sort((a, b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
 }
 
@@ -463,6 +473,43 @@ function DemoradosPopover({ detalle, count, cadete }) {
                 <div style={{ color:"rgba(255,255,255,0.85)", fontSize:11, lineHeight:"1.3", wordBreak:"break-word" }}>
                   {d.dir || <span style={{ color:"rgba(255,255,255,0.35)", fontStyle:"italic" }}>Sin dirección</span>}
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SinDatosBadge({ items }) {
+  const [show, setShow] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  if (!items || items.length === 0) return null;
+  const porCliente = {};
+  for (const it of items) { const c = (it.cliente || "").trim() || "Cliente sin identificar"; porCliente[c] = (porCliente[c] || 0) + 1; }
+  const filas = Object.entries(porCliente).sort((a, b) => b[1] - a[1]);
+  return (
+    <div ref={ref} style={{ position:"relative", marginBottom:"1rem" }}>
+      <button onClick={() => setShow(s => !s)}
+        style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(239,159,39,0.1)", border:"1px solid rgba(239,159,39,0.35)", borderRadius:10, padding:"9px 14px", fontSize:13, color:"#EF9F27", cursor:"pointer", textAlign:"left" }}>
+        <i className="ti ti-map-pin-off" style={{ fontSize:15 }} />
+        <span><strong>{items.length} envío{items.length > 1 ? "s" : ""} sin dirección</strong> — cliente desvinculado de LightData. No cuentan como demora.</span>
+        <i className={`ti ti-chevron-${show ? "up" : "down"}`} style={{ fontSize:14, opacity:0.7 }} />
+      </button>
+      {show && (
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, background:"#0D0D2B", border:"1px solid rgba(239,159,39,0.4)", borderRadius:10, padding:"10px", zIndex:999, minWidth:260, maxWidth:360, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
+          <div style={{ color:"#EF9F27", fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:8 }}>Envíos sin dirección por cliente</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:240, overflowY:"auto" }}>
+            {filas.map(([cliente, n]) => (
+              <div key={cliente} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"6px 8px", borderRadius:6, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.06)" }}>
+                <span style={{ color:"rgba(255,255,255,0.85)", wordBreak:"break-word" }}>{cliente}</span>
+                <span style={{ color:"#EF9F27", fontWeight:700 }}>{n}</span>
               </div>
             ))}
           </div>
@@ -707,6 +754,7 @@ export default function App() {
 
   const criticos       = acumulado.filter(m => m.slaMeli !== null && m.slaMeli < SLA_AMARILLO).length;
   const enRiesgo       = acumulado.filter(m => m.slaMeli !== null && m.slaMeli >= SLA_AMARILLO && m.slaMeli < SLA_VERDE).length;
+  const sinDatosItems  = acumulado.flatMap(m => m.sinDatosDetalle || []); // envíos ML sin datos de destino (cliente desvinculado)
   const totalEnvios    = acumulado.reduce((s,m) => s+m.cantidad, 0);
   const totalML        = acumulado.reduce((s,m) => s+m.envios_ml, 0);
   const totalParticular= acumulado.reduce((s,m) => s+(m.envios_particular||0), 0);
@@ -1037,6 +1085,9 @@ export default function App() {
               <strong>{criticos} cadete{criticos>1?"s":""} con SLA crítico</strong> — por debajo del 95%. Requieren atención inmediata.
             </div>
           )}
+
+          <SinDatosBadge items={sinDatosItems} />
+
 
           {/* Tabs + exportar — solo desktop */}
           {!isMobile && (

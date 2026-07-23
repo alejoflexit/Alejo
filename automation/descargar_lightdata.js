@@ -162,7 +162,12 @@ function calcularDia(rows, fecha, noEsDemora) {
     const esEnCamino = estado === "En camino al destinatario";
     const esEnPlanta = estado === "En planta de procesamiento";
     const esReproML = estado === "reprogramado por meli";
-    const esDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
+    const loc = String(row["Localidad"] || "").trim();
+    const tieneDatos = !!(dirBase || loc);
+    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const esDemorado = seriaDemorado && tieneDatos;
+    const esSinDatos = seriaDemorado && !tieneDatos; // cliente desvinculado de LightData: sin datos de destino, no se cuenta como demora
     const fechaEstado = String(row["Fecha estado"] || "").trim();
     const esEntregado = ["Entregado","Entregado 2DA visita"].includes(estado);
     let esPost21 = false;
@@ -171,15 +176,17 @@ function calcularDia(rows, fecha, noEsDemora) {
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
     const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
-    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null, demoradosDetalle:[] };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null, demoradosDetalle:[], sinDatosDetalle:[] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
       map[cadete].demorados++;
-      const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
-      const loc = String(row["Localidad"] || "").trim();
       const dir = [dirBase, loc].filter(Boolean).join(", ");
       map[cadete].demoradosDetalle.push({ id: idInterno, dir, estado });
+    }
+    if (esSinDatos) {
+      const cliente = String(row["Razon Social"] || row["Nombre Fantasia"] || "").trim() || ("Cod. " + String(row["Cod.Cliente"] || "").trim());
+      map[cadete].sinDatosDetalle.push({ id: idInterno, cliente, estado });
     }
     if (esML)        map[cadete].envios_ml++;
     if (!esML)       map[cadete].envios_particular++;
@@ -339,12 +346,13 @@ async function main() {
     envios_particular: m.envios_particular||0,
     inicio_ruta: m.inicio_ruta||null, fin_ruta: m.fin_ruta||null,
     demorados_detalle: m.demoradosDetalle || [],
+    sin_datos_detalle: m.sinDatosDetalle || [],
   }));
   try {
     await supabaseInsert("semanas", insertRows);
   } catch(e) {
-    // Fallback sin demorados_detalle si la columna aún no existe
-    const fallback = insertRows.map(({ demorados_detalle, ...r }) => r);
+    // Fallback sin columnas nuevas si aún no existen
+    const fallback = insertRows.map(({ demorados_detalle, sin_datos_detalle, ...r }) => r);
     await supabaseInsert("semanas", fallback);
   }
 
