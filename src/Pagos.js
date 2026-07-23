@@ -40,7 +40,7 @@ function norm(s) {
     .trim();
 }
 
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayStr() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); } // fecha AR (UTC-3)
 
 function mondayOf(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');

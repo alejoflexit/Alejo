@@ -136,6 +136,12 @@ async function main() {
 
   console.log(`Envíos a guardar: ${envios.length}`);
 
+  // Guard: si no se descargó nada, NO vaciar la caché (dejaría al agente de WhatsApp sin poder responder "¿dónde está mi pedido?").
+  if (envios.length === 0) {
+    console.error("⚠️ 0 envíos descargados — se cancela para no vaciar envios_busqueda");
+    process.exit(1);
+  }
+
   // Reemplazo completo (caché rodante de últimos días)
   await supabaseDeleteAll("envios_busqueda");
   const BATCH = 500;

@@ -202,8 +202,8 @@ async function cargarDesdeSupabase() {
     dias: Object.entries(s.dias).map(([fecha, datos]) => {
       const enriched = datos.map(m => {
         const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
-        const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
-        return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: sla !== null ? +sla.toFixed(2) : null, evaluacion: evaluar(m.demorados, sla) };
+        const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados - (m.dem21||0)) / m.envios_ml * 100 : null;
+        return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: sla !== null ? +sla.toFixed(2) : null, evaluacion: evaluar(m.demorados + (m.dem21||0), sla) };
       });
       return { fecha, datos: enriched };
     }).sort((a, b) => a.fecha.localeCompare(b.fecha)),
@@ -211,6 +211,10 @@ async function cargarDesdeSupabase() {
 }
 
 async function guardarEnSupabase(datos, fecha, weekLabel) {
+  // Guard: nunca borrar el día si no hay datos nuevos que insertar (evita dejar el día en blanco).
+  if (!datos || datos.length === 0) {
+    throw new Error("No hay datos para guardar: se cancela para no borrar el día ya cargado.");
+  }
   // Delete existing rows for this date
   await supabaseFetch(`semanas?fecha=eq.${fecha}&label=eq.${encodeURIComponent(weekLabel)}`, { method: "DELETE" });
   // Insert new rows
@@ -542,7 +546,7 @@ export default function App() {
   const xlsxReady = useXLSX();
   const [semanas, setSemanas]     = useState([]);
   const [semanaActiva, setSemanaActiva] = useState(null);
-  const [fecha, setFecha]         = useState(() => new Date().toISOString().slice(0,10));
+  const [fecha, setFecha]         = useState(() => new Date(Date.now() - 3*3600*1000).toISOString().slice(0,10));
   const [pendingFile, setPendingFile] = useState(null);
   const [showDateModal, setShowDateModal] = useState(false);
   const [loading, setLoading]     = useState(false);
@@ -713,7 +717,8 @@ export default function App() {
   const slaFlexit       = totalEnvios > 0 ? +((totalEnvios - totalPendientes) / totalEnvios * 100).toFixed(1) : null;
   const totalMLDia     = acumulado.reduce((s,m) => s+m.envios_ml, 0);
   const totalDemDia    = acumulado.reduce((s,m) => s+m.demorados, 0);
-  const slaPromedio    = totalMLDia > 0 ? +((totalMLDia - totalDemDia) / totalMLDia * 100).toFixed(2) : null;
+  // SLA Meli headline: descuenta demorados Y dem21 (reprogramados 21hs), igual que la tabla por cadete.
+  const slaPromedio    = totalMLDia > 0 ? +((totalMLDia - totalDemDia - totalDem21) / totalMLDia * 100).toFixed(2) : null;
 
   const tendencia   = cadeteSeleccionado ? tendenciaCadete(cadeteSeleccionado, semanas) : [];
 
@@ -722,16 +727,17 @@ export default function App() {
     const map = {};
     for (const dia of dias) {
       for (const m of dia.datos) {
-        if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, dias_con_demora:0 };
+        if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad:0, pendientes:0, demorados:0, dem21:0, envios_ml:0, dias_con_demora:0 };
         map[m.cadete].cantidad += m.cantidad;
         map[m.cadete].pendientes += m.pendientes;
         map[m.cadete].demorados += m.demorados;
+        map[m.cadete].dem21 += (m.dem21||0);
         map[m.cadete].envios_ml += m.envios_ml;
-        if (m.demorados > 0) map[m.cadete].dias_con_demora++;
+        if ((m.demorados + (m.dem21||0)) > 0) map[m.cadete].dias_con_demora++;
       }
     }
     return Object.values(map).map(m => {
-      const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
+      const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados - (m.dem21||0)) / m.envios_ml * 100 : null;
       return { ...m, slaMeli: sla !== null ? +sla.toFixed(2) : null };
     }).sort((a,b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
   };
@@ -745,12 +751,11 @@ export default function App() {
 
   const mesData = acumDias(diasDelMes);
   const mesDataActual = acumDias(diasMesActual);
-  const totalEnviosMes = mesData.reduce((s,m) => s+m.cantidad, 0);
-  const totalDemoradosMes = mesData.reduce((s,m) => s+m.demorados, 0);
+  const totalDemoradosMes = mesData.reduce((s,m) => s+m.demorados+(m.dem21||0), 0);
   const totalPendientesMes = mesData.reduce((s,m) => s+m.pendientes, 0);
   const slaArrMes = mesData.filter(m => m.slaMeli !== null);
   const totalMLMes = mesData.reduce((s,m) => s+m.envios_ml, 0);
-  const totalDemMes = mesData.reduce((s,m) => s+m.demorados, 0);
+  const totalDemMes = mesData.reduce((s,m) => s+m.demorados+(m.dem21||0), 0);
   const slaPromedioMes = totalMLMes > 0 ? +((totalMLMes - totalDemMes) / totalMLMes * 100).toFixed(2) : null;
   const criticosMes = mesData.filter(m => m.slaMeli !== null && m.slaMeli < 95);
   const okMes = mesData.filter(m => m.slaMeli !== null && m.slaMeli >= 98);
@@ -759,7 +764,7 @@ export default function App() {
   // SLA por dia para grafico
   const slaPorDia = diasDelMes.map(dia => {
     const totalML = dia.datos.reduce((s,m) => s+m.envios_ml, 0);
-    const demML = dia.datos.reduce((s,m) => s+m.demorados, 0);
+    const demML = dia.datos.reduce((s,m) => s+m.demorados+(m.dem21||0), 0);
     const sla = totalML > 0 ? +((totalML-demML)/totalML*100).toFixed(1) : null;
     const p = dia.fecha.split("-");
     return { fecha: `${p[2]}/${p[1]}`, sla };
@@ -1215,7 +1220,7 @@ export default function App() {
                   {/* KPIs mes */}
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10 }}>
                     {[
-                      ["Envíos ML", totalEnviosMes, BRAND.white, "ti-package"],
+                      ["Envíos ML", totalMLMes, BRAND.white, "ti-package"],
                       ["Demorados", totalDemoradosMes, "#E24B4A", "ti-alert-circle"],
                       ["SLA Meli", slaPromedioMes !== null ? slaPromedioMes.toFixed(1)+"%" : "—", slaPromedioMes !== null && slaPromedioMes >= 98 ? "#2ECFAA" : slaPromedioMes !== null && slaPromedioMes >= 95 ? "#EF9F27" : "#E24B4A", "ti-chart-bar"],
                       ["Críticos", criticosMes.length, "#E24B4A", "ti-users"],

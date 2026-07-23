@@ -52,8 +52,9 @@ async function supabaseInsert(table, rows) {
 }
 
 function getYesterdayDate() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
+  // "ayer" en hora de Argentina (UTC-3, sin DST): robusto aunque el cron se corra tarde.
+  const d = new Date(Date.now() - 3 * 3600 * 1000);
+  d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
@@ -137,7 +138,12 @@ async function esDemorReal(idInterno, codCliente, tokens, ldCookies) {
     const tuvoNadieAntes21 = data.data.estadosHistorial.some(h => {
       const estadoH = String(h.estado).toLowerCase();
       if (!estadoH.includes("nadie") && !estadoH.includes("reprogramado")) return false;
-      try { return new Date(h.fecha).getHours() < 21; } catch(e) { return true; }
+      // Parsear la hora del string (AR local, sin tz) igual que el historial interno — evita depender de la zona horaria del runner.
+      try {
+        const partes = String(h.fecha).split(" ");
+        const hora = partes.length > 1 ? parseInt(partes[1].split(":")[0]) : new Date(h.fecha).getHours();
+        return hora < 21;
+      } catch(e) { return true; }
     });
     return !tuvoNadieAntes21;
   } catch(e) { return true; }
@@ -311,6 +317,12 @@ async function main() {
   console.log(`No son demora real: ${noEsDemora.size}`);
 
   const datos = calcularDia(rows, fecha, noEsDemora);
+
+  // Guard: si LightData no devolvió cadetes (sesión vencida, Excel vacío), NO borrar ni pisar el día ya cargado.
+  if (!datos || datos.length === 0) {
+    console.error(`⚠️ ${fecha}: 0 cadetes calculados — se cancela para no dejar el día en blanco (revisar sesión/descarga de LightData)`);
+    process.exit(1);
+  }
 
   // Guardar en Supabase via fetch
   // Limpiar label viejo si cambió (antes domingo usaba +5 en vez de +6)

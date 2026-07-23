@@ -40,7 +40,8 @@ async function sbFetch(path, options = {}) {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  // fecha calendario en Argentina (UTC-3, sin DST) — evita saltar al día siguiente después de las 21hs
+  return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
 function fmtMonto(n) {
@@ -1432,7 +1433,8 @@ function ColectasInner({ soloArribos = false }) {
       if (!eta) return false;
       const [h, m] = eta.split(':').map(Number);
       const dd = new Date(fecha + 'T00:00:00'); dd.setHours(h, m, 0, 0);
-      return dd.getTime() - ahora <= 15 * 60000;
+      const diff = dd.getTime() - ahora;
+      return diff <= 15 * 60000 && diff >= -10 * 60000; // ventana [ETA-15min, ETA+10min]: no temblar todo el día
     };
     // Orden: 1º los que están por llegar (arriba de todo), después el resto sin llegar, y al fondo los que ya llegaron.
     lista.sort((a, b) => {
@@ -1511,7 +1513,8 @@ function ColectasInner({ soloArribos = false }) {
                   const [h, m] = eta.split(':').map(Number);
                   const d = new Date(fecha + 'T00:00:00');
                   d.setHours(h, m, 0, 0);
-                  return d.getTime() - ahora <= 15 * 60000;
+                  const diff = d.getTime() - ahora;
+                  return diff <= 15 * 60000 && diff >= -10 * 60000; // ventana [ETA-15min, ETA+10min]
                 })();
                 const cerca = cercaGps || cercaEta;
                 return (
