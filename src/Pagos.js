@@ -462,6 +462,7 @@ function saveOverrides(lunes, obj) {
     if (obj && Object.keys(obj).length) localStorage.setItem(overridesKey(lunes), JSON.stringify(obj));
     else localStorage.removeItem(overridesKey(lunes));
   } catch { /* localStorage no disponible: seguimos en memoria */ }
+  saveOverrideRemote(lunes, 'cantidad', obj);
 }
 
 // overrides de colecta editados a mano, mismo esquema por semana (se congelan al cerrar)
@@ -477,6 +478,7 @@ function saveColectaOv(lunes, obj) {
     if (obj && Object.keys(obj).length) localStorage.setItem(colectaOvKey(lunes), JSON.stringify(obj));
     else localStorage.removeItem(colectaOvKey(lunes));
   } catch { /* localStorage no disponible: seguimos en memoria */ }
+  saveOverrideRemote(lunes, 'colecta', obj);
 }
 
 // ajuste manual del reparto de envíos por tarifa, por cadete y por semana (se congela al cerrar)
@@ -493,6 +495,33 @@ function saveSplitOv(lunes, obj) {
     if (obj && Object.keys(obj).length) localStorage.setItem(splitOvKey(lunes), JSON.stringify(obj));
     else localStorage.removeItem(splitOvKey(lunes));
   } catch { /* localStorage no disponible: seguimos en memoria */ }
+  saveOverrideRemote(lunes, 'split', obj);
+}
+
+// ── persistencia remota de overrides en Supabase (respaldo durable, además del localStorage) ──
+// Antes los ajustes vivían solo en el navegador; ahora también en pagos_overrides para no perderlos entre máquinas.
+async function saveOverrideRemote(lunes, tipo, obj) {
+  if (!lunes) return;
+  try {
+    if (obj && Object.keys(obj).length) {
+      await sb('pagos_overrides', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ semana_lunes: lunes, tipo, payload: obj }),
+      });
+    } else {
+      await sb(`pagos_overrides?semana_lunes=eq.${lunes}&tipo=eq.${tipo}`, { method: 'DELETE' });
+    }
+  } catch (e) { /* si falla el remoto, queda el localStorage como respaldo */ }
+}
+async function loadOverridesRemote(lunes) {
+  if (!lunes) return null;
+  try {
+    const rows = await sb(`pagos_overrides?select=tipo,payload&semana_lunes=eq.${lunes}`);
+    const out = { cantidad: null, colecta: null, split: null };
+    if (rows) for (const r of rows) out[r.tipo] = r.payload || {};
+    return out;
+  } catch (e) { return null; } // remoto inalcanzable → el llamador conserva el localStorage
 }
 
 // ───────────────────────── login ─────────────────────────
@@ -1151,14 +1180,27 @@ function PagosInner({ session }) {
     setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes)); setColectaOv(loadColectaOv(lunes)); setSplitOv(loadSplitOv(lunes));
     try {
       const sabado = addDays(lunes, 5);
-      const [ent, col, aj, ci] = await Promise.all([
+      const [ent, col, aj, ci, remoteOv] = await Promise.all([
         sbAll(`pagos_entregados?select=cadete,localidad,cp,fecha_estado&semana_lunes=eq.${lunes}`),
         sbAll(`colectas_registros?select=fecha,choferes,monto,estado,confirmado_por,colectas_clientes(monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
         sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
         sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`),
+        loadOverridesRemote(lunes),
       ]);
       setEntregados(ent || []); setColectas(col || []); setAjustes(aj || []);
       setCierres(ci || []);
+      // Overrides: si el remoto (Supabase) está disponible es la fuente de verdad y se espeja al navegador;
+      // si no se pudo leer (remoteOv === null), se conserva lo que ya cargó el localStorage arriba.
+      if (remoteOv) {
+        const aplicar = (val, setter, keyFn) => {
+          const v = val || {};
+          setter(v);
+          try { if (Object.keys(v).length) localStorage.setItem(keyFn(lunes), JSON.stringify(v)); else localStorage.removeItem(keyFn(lunes)); } catch {}
+        };
+        aplicar(remoteOv.cantidad, setOverrides, overridesKey);
+        aplicar(remoteOv.colecta, setColectaOv, colectaOvKey);
+        aplicar(remoteOv.split, setSplitOv, splitOvKey);
+      }
     } catch (e) { setError(e.message); }
     finally { setLoadingSemana(false); }
   }, []);
