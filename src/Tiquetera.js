@@ -217,6 +217,33 @@ function ordenGrupo(c) {
   return 2;
 }
 
+// Busca el envío mencionado (por número de venta/orden/tracking) en el texto — sirve cuando el número
+// está en el mensaje citado y el bot no pudo vincularlo. Solo encuentra envíos recientes (caché ~6 días).
+function EnvioPorTexto({ texto }) {
+  const [envio, setEnvio] = React.useState(undefined);
+  React.useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const nums = [...new Set(String(texto || "").replace(/@[0-9]+/g, " ").match(/[0-9]{6,}/g) || [])].slice(0, 6);
+      if (!nums.length) { setEnvio(null); return; }
+      const list = nums.join(",");
+      try {
+        const rows = await sb(`envios_busqueda?or=(id_venta_ml.in.(${list}),id_interno.in.(${list}),tracking.in.(${list}))&select=id_interno,cadete,estado,fecha_estado,localidad&limit=1`);
+        if (!cancel) setEnvio(rows && rows[0] ? rows[0] : null);
+      } catch (e) { if (!cancel) setEnvio(null); }
+    })();
+    return () => { cancel = true; };
+  }, [texto]);
+  if (!envio) return null;
+  return (
+    <div style={{ maxWidth: 640, marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(46,207,170,0.35)", background: "rgba(46,207,170,0.06)", fontSize: 13, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+      <span style={{ color: "#2ECFAA", fontWeight: 700 }}>📦 Lo tiene: {envio.cadete || "sin asignar"}</span>
+      <span style={{ color: "rgba(255,255,255,0.6)" }}>· {envio.estado || "?"}{envio.fecha_estado ? " · " + envio.fecha_estado : ""}{envio.localidad ? " · " + envio.localidad : ""}</span>
+      <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>(envío #{envio.id_interno})</span>
+    </div>
+  );
+}
+
 export default function Tiquetera() {
   const [casos, setCasos] = useState([]);
   const [error, setError] = useState("");
@@ -708,6 +735,7 @@ export default function Tiquetera() {
                   </div>
 
                   {c.envio_id && <InfoEnvio envioId={c.envio_id} />}
+                  {!c.envio_id && (c.cita || c.mensaje) && <EnvioPorTexto texto={[c.cita, c.mensaje].filter(Boolean).join(" ")} />}
 
                   {Array.isArray(c.notas) && c.notas.length > 0 && (() => {
                     const hilo = [
