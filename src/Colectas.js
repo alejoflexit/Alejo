@@ -498,8 +498,17 @@ function ColectasInner({ soloArribos = false }) {
     const MSG = 'Hola, buen día! 👋 ¿Cómo va? ¿Tienen envíos para hoy?';
     if (!window.confirm(`Mandar "${MSG}" a ${conGrupo.length} grupo(s)` + (sinGrupo ? ` — ojo: ${sinGrupo} pendiente(s) sin grupo vinculado no reciben` : '') + '?')) return;
     const quien = (getSession() || {}).nombre || 'Colectas';
-    let ok = 0, fail = 0;
+    // dedup: no volver a preguntarle a un chat que ya recibió el aviso de colecta hoy
+    const hoyIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+    const yaHechos = new Set();
+    try {
+      const ex = await sbFetch(`casos?select=chat_id&tipo=eq.colecta&autor=eq.${encodeURIComponent('Colectas Flexit')}&created_at=gte.${hoyIso}`);
+      (ex || []).forEach(r => { if (r.chat_id) yaHechos.add(r.chat_id); });
+    } catch (e) {}
+    let ok = 0, fail = 0, dup = 0;
     for (const c of conGrupo) {
+      if (yaHechos.has(c.chat_id)) { dup++; continue; }
+      yaHechos.add(c.chat_id); // evitar duplicar si el mismo chat aparece dos veces en la tanda
       const g = gruposWA.find(x => x.chat_id === c.chat_id);
       try {
         await sbFetch('casos', { method: 'POST', body: JSON.stringify({
@@ -511,7 +520,7 @@ function ColectasInner({ soloArribos = false }) {
         ok++;
       } catch (e) { fail++; }
     }
-    setAvisoBot(`🤖 ${ok} mensaje(s) encolado(s) — el bot los manda en el próximo minuto (solo a grupos habilitados).` + (fail ? ` ${fail} fallaron.` : ''));
+    setAvisoBot(`🤖 ${ok} mensaje(s) encolado(s) — el bot los manda en el próximo minuto (solo a grupos habilitados).` + (dup ? ` ${dup} ya tenían aviso de hoy (omitidos).` : '') + (fail ? ` ${fail} fallaron.` : ''));
     setTimeout(() => setAvisoBot(''), 12000);
   };
 

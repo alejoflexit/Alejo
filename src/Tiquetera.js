@@ -186,6 +186,16 @@ function edadColor(caso) {
 function dormido(c)   { return c.snooze_hasta && new Date(c.snooze_hasta) > new Date(); }
 function desperto(c)  { return c.snooze_hasta && new Date(c.snooze_hasta) <= new Date() && c.estado !== "resuelto"; }
 // "Soporte Lemirk - Flexit" → "Lemirk" · "Tiziano Vila - Soporte Flexit" → "Tiziano Vila" · "Alejo - Flexit" → "Alejo"
+function limpiarNombreEquipo(txt) {
+  let t = String(txt || "").trim();
+  ["(equipo)", "(principal)"].forEach(s => { const i = t.toLowerCase().indexOf(s); if (i >= 0) t = t.slice(0, i); });
+  return t.trim();
+}
+// Reemplaza las menciones @<número/lid> por el nombre del equipo cuando se conoce (mapa de agente_config).
+function resolverMenciones(texto, mapa) {
+  if (!texto) return texto;
+  return String(texto).replace(/@([0-9]{6,})/g, (m, dig) => (mapa && mapa[dig]) ? "@" + mapa[dig] : m);
+}
 function nombreCliente(txt) {
   if (!txt) return "";
   let t = String(txt).trim();
@@ -223,6 +233,7 @@ export default function Tiquetera() {
   const [gruposOpen, setGruposOpen] = useState(false);
   const [grupos, setGrupos] = useState([]);
   const [mapaGrupos, setMapaGrupos] = useState({});
+  const [mapaLids, setMapaLids] = useState({}); // lid (dígitos) -> nombre del equipo, para mostrar las menciones @número con nombre
   const [viendo, setViendo] = useState({}); // casoId -> [operadores que lo estan viendo]
   const [bugPara, setBugPara] = useState(null);
   const [bugTxt, setBugTxt] = useState("");
@@ -236,7 +247,7 @@ export default function Tiquetera() {
     try {
       const desde = new Date(Date.now() - 7 * 86400000).toISOString();
       const rows = await sb(`casos?select=*&created_at=gte.${desde}&order=created_at.desc&limit=500`);
-      setCasos(rows || []);
+      setCasos((rows || []).filter(c => c.autor !== 'Colectas Flexit')); // ocultar los avisos automáticos de colecta (mensaje del propio bot, no es una consulta)
       setError("");
     } catch (e) { setError("No se pudo cargar la tiquetera: " + e.message); }
   }, []);
@@ -279,7 +290,7 @@ export default function Tiquetera() {
   useEffect(() => { setNotaTxt(""); setBugPara(null); setBugTxt(""); }, [abierto]);
 
   useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
-  useEffect(() => { (async () => { try { const gs = await sb("agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo"); const m = {}; (gs || []).forEach(g => { if (g.chat_id) m[g.chat_id] = g.nombre_grupo; }); setMapaGrupos(m); } catch (e) {} })(); }, []);
+  useEffect(() => { (async () => { try { const gs = await sb("agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo"); const m = {}; (gs || []).forEach(g => { if (g.chat_id) m[g.chat_id] = g.nombre_grupo; }); setMapaGrupos(m); const eq = await sb("agente_config?tipo=eq.lid_equipo&select=lid,etiqueta,nombre_grupo"); const ml = {}; (eq || []).forEach(e => { const dig = String(e.lid || "").replace(/[^0-9]/g, ""); if (dig) ml[dig] = limpiarNombreEquipo(e.etiqueta || e.nombre_grupo || dig); }); setMapaLids(ml); } catch (e) {} })(); }, []);
 
   async function guardarAdmin() {
     const nuevo = {
@@ -609,7 +620,7 @@ export default function Tiquetera() {
                 </span>
                 <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
-                <span style={{ flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 120 }}>{c.mensaje}</span>
+                <span style={{ flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 120 }}>{resolverMenciones(c.mensaje, mapaLids)}</span>
                 {c.fijado && c.estado !== "resuelto" && <span style={{ fontSize: 11.5, color: "#2ECFAA", background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", padding: "2px 8px", borderRadius: 6 }}>📌 Fijado</span>}
                 {dorm && <span style={{ fontSize: 11.5, color: "#FFB020", background: "rgba(255,176,32,0.12)", padding: "2px 8px", borderRadius: 6 }}>⏰ hasta {new Date(c.snooze_hasta).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
                 {desp && <span style={{ fontSize: 11.5, color: "#FFB020", background: "rgba(255,176,32,0.2)", fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>⏰ ¡Despertó!</span>}
@@ -653,7 +664,7 @@ export default function Tiquetera() {
                 {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: 10 }}>{error}</div>}
                   <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", maxWidth: 640, fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
-                    {c.mensaje}
+                    {resolverMenciones(c.mensaje, mapaLids)}
                   </div>
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
                     {c.envio_id && <span>Envío <b style={{ color: "#fff" }}>#{c.envio_id}</b></span>}
