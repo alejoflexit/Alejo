@@ -235,6 +235,14 @@ async function guardarEnSupabase(datos, fecha, weekLabel) {
   }
 }
 
+// Réplica de la captura por zona en la carga manual de Excel (mismo agregado que la Action nocturna).
+async function guardarZonasEnSupabase(zonas, fecha, weekLabel) {
+  if (!zonas || zonas.length === 0) return; // guard anti día-en-blanco: no borrar si no hay nada que insertar
+  await supabaseFetch(`semanas_zonas?fecha=eq.${fecha}`, { method: "DELETE" });
+  const rows = zonas.map(z => ({ label: weekLabel, fecha, ...z }));
+  await supabaseFetch("semanas_zonas", { method: "POST", body: JSON.stringify(rows) });
+}
+
 function useXLSX() {
   const [ready, setReady] = useState(typeof window !== "undefined" && !!window.XLSX);
   useEffect(() => {
@@ -333,6 +341,69 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
     const slaReal = m.envios_ml > 0 ? (m.envios_ml - m.demorados - m.dem21) / m.envios_ml * 100 : null;
     return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
+  });
+}
+
+// --- Métricas por zona (localidad) — mismo criterio de demorados/dem21 que calcularDia, agrupado por localidad ---
+function normLoc(s) {
+  return String(s || "").toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function fechaEstadoADia(fechaEstado) {
+  const datePart = String(fechaEstado || "").trim().split(" ")[0];
+  if (!datePart) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  const m = datePart.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return "";
+}
+
+function calcularZonas(rows, fecha, noEsDemora = new Set()) {
+  const map = {};
+  const RESUELTOS = ["Entregado", "Entregado 2DA visita", "Cancelado"];
+  for (const row of rows) {
+    const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
+    const origen = String(row["Origen"] || "").trim();
+    const esML = origen === "ML";
+    const esPendiente = !RESUELTOS.includes(estado);
+    const idInterno = String(row["ID (Interno)"] || "").trim();
+    const esEnCamino = estado === "En camino al destinatario";
+    const esEnPlanta = estado === "En planta de procesamiento";
+    const esReproML = estado === "reprogramado por meli";
+    const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
+    const locOrig = String(row["Localidad"] || "").trim();
+    const tieneDatos = !!(dirBase || locOrig);
+    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const esDemorado = seriaDemorado && tieneDatos;
+    const fechaEstado = String(row["Fecha estado"] || "").trim();
+    const esEntregado = ["Entregado", "Entregado 2DA visita"].includes(estado);
+    let esPost21 = false;
+    if (esEntregado && fechaEstado) {
+      const hora = fechaEstado.split(" ")[1];
+      if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
+    }
+    const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
+    const esNadie = estado.toLowerCase().includes("nadie");
+    const esSameday = esEntregado && fechaEstadoADia(fechaEstado) === fecha;
+
+    const norm = normLoc(locOrig);
+    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0 };
+    const g = map[norm];
+    if (locOrig) g.labels[locOrig] = (g.labels[locOrig] || 0) + 1;
+    g.cantidad++;
+    if (esEntregado) g.entregados++;
+    if (esPendiente) g.pendientes++;
+    if (esDemorado) g.demorados++;
+    if (esRepro21) g.dem21++;
+    if (esPost21) g.post21++;
+    if (esML) g.envios_ml++;
+    if (esNadie) g.nadie++;
+    if (esSameday) g.sameday++;
+  }
+  return Object.values(map).map(g => {
+    const labelTop = Object.keys(g.labels).sort((a, b) => g.labels[b] - g.labels[a])[0] || "(sin localidad)";
+    const { labels, ...rest } = g;
+    return { ...rest, localidad: labelTop };
   });
 }
 
@@ -723,6 +794,11 @@ export default function App() {
       }
       setLoadingMsg("Guardando en la nube...");
       await guardarEnSupabase(datos, fecha, weekLabel);
+      // Réplica por zona (no crítica: si falla no rompe la carga del día).
+      try {
+        const zonas = calcularZonas(rows, fecha, noEsDemora);
+        await guardarZonasEnSupabase(zonas, fecha, weekLabel);
+      } catch (e) { console.error("semanas_zonas (carga manual) falló:", e.message); }
       const data = await cargarDesdeSupabase();
       setSemanas(data);
       setSemanaActiva(weekLabel);

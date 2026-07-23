@@ -203,6 +203,70 @@ function calcularDia(rows, fecha, noEsDemora) {
   return Object.values(map);
 }
 
+// --- Métricas por zona (localidad) — mismo criterio de demorados/dem21 que calcularDia, agrupado por localidad ---
+function normLoc(s) {
+  return String(s || "").toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function fechaEstadoADia(fechaEstado) {
+  // "DD/MM/YYYY HH:MM" o "YYYY-MM-DD HH:MM" -> "YYYY-MM-DD"
+  const datePart = String(fechaEstado || "").trim().split(" ")[0];
+  if (!datePart) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+  const m = datePart.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return "";
+}
+
+function calcularZonas(rows, fecha, noEsDemora) {
+  const map = {};
+  const RESUELTOS = ["Entregado", "Entregado 2DA visita", "Cancelado"];
+  for (const row of rows) {
+    const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
+    const origen = String(row["Origen"] || "").trim();
+    const esML = origen === "ML";
+    const esPendiente = !RESUELTOS.includes(estado);
+    const idInterno = String(row["ID (Interno)"] || "").trim();
+    const esEnCamino = estado === "En camino al destinatario";
+    const esEnPlanta = estado === "En planta de procesamiento";
+    const esReproML = estado === "reprogramado por meli";
+    const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
+    const locOrig = String(row["Localidad"] || "").trim();
+    const tieneDatos = !!(dirBase || locOrig);
+    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const esDemorado = seriaDemorado && tieneDatos;
+    const fechaEstado = String(row["Fecha estado"] || "").trim();
+    const esEntregado = ["Entregado", "Entregado 2DA visita"].includes(estado);
+    let esPost21 = false;
+    if (esEntregado && fechaEstado) {
+      const hora = fechaEstado.split(" ")[1];
+      if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
+    }
+    const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
+    const esNadie = estado.toLowerCase().includes("nadie");
+    const esSameday = esEntregado && fechaEstadoADia(fechaEstado) === fecha;
+
+    const norm = normLoc(locOrig); // "" = sin localidad
+    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0 };
+    const g = map[norm];
+    if (locOrig) g.labels[locOrig] = (g.labels[locOrig] || 0) + 1;
+    g.cantidad++;
+    if (esEntregado) g.entregados++;
+    if (esPendiente) g.pendientes++;
+    if (esDemorado) g.demorados++;
+    if (esRepro21) g.dem21++;
+    if (esPost21) g.post21++;
+    if (esML) g.envios_ml++;
+    if (esNadie) g.nadie++;
+    if (esSameday) g.sameday++;
+  }
+  return Object.values(map).map(g => {
+    const labelTop = Object.keys(g.labels).sort((a, b) => g.labels[b] - g.labels[a])[0] || "(sin localidad)";
+    const { labels, ...rest } = g;
+    return { ...rest, localidad: labelTop };
+  });
+}
+
 async function main() {
   const fecha = getYesterdayDate();
   // Flexit no opera domingos: si "ayer" fue domingo (corrida de lunes), no cargar nada.
@@ -357,6 +421,23 @@ async function main() {
   }
 
   console.log(`✅ ${fecha} guardado — ${datos.length} cadetes`);
+
+  // --- semanas_zonas: mismo día, agregado por localidad. No es crítico: si falla, no rompe el pipeline de semanas. ---
+  try {
+    const zonas = calcularZonas(rows, fecha, noEsDemora);
+    // Guard anti día-en-blanco: solo borrar si hay zonas nuevas para insertar.
+    if (zonas.length > 0) {
+      await supabaseDelete("semanas_zonas", `fecha=eq.${fecha}`);
+      const zonaRows = zonas.map(z => ({ label: weekLabel, fecha, ...z }));
+      await supabaseInsert("semanas_zonas", zonaRows);
+      const totalZ = zonas.reduce((a, z) => a + z.cantidad, 0);
+      console.log(`✅ ${fecha} zonas guardadas — ${zonas.length} localidades, ${totalZ} envíos`);
+    } else {
+      console.log(`⚠️ ${fecha}: 0 zonas calculadas — no se toca semanas_zonas`);
+    }
+  } catch (e) {
+    console.error(`⚠️ semanas_zonas falló para ${fecha} (no crítico): ${e.message}`);
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
