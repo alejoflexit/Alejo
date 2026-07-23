@@ -257,7 +257,7 @@ export default function Tiquetera() {
   const cargar = useCallback(async () => {
     try {
       const desde = new Date(Date.now() - 7 * 86400000).toISOString();
-      const rows = await sb(`casos?select=id,created_at,grupo,chat_id,autor,mensaje,tipo,estado,envio_id,cadete,respuesta_sugerida,respuesta_enviada,asignado,turno,snooze_hasta,fijado,resuelto_por,resuelto_at,notas,enviado_at,enviado_via,enviado_por,mensaje_id,media_mime,media_expira&created_at=gte.${desde}&order=created_at.desc&limit=500`);
+      const rows = await sb(`casos?select=id,created_at,grupo,chat_id,autor,mensaje,tipo,estado,envio_id,cadete,respuesta_sugerida,respuesta_enviada,asignado,turno,snooze_hasta,fijado,resuelto_por,resuelto_at,notas,enviado_at,enviado_via,enviado_por,mensaje_id,media_mime,media_expira,cita&created_at=gte.${desde}&order=created_at.desc&limit=500`);
       setCasos((rows || []).filter(c => c.autor !== 'Colectas Flexit')); // ocultar los avisos automáticos de colecta (mensaje del propio bot, no es una consulta)
       setError("");
     } catch (e) { setError("No se pudo cargar la tiquetera: " + e.message); }
@@ -687,6 +687,12 @@ export default function Tiquetera() {
               </div>
               <div style={{ padding: "16px 18px" }}>
                 {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: 10 }}>{error}</div>}
+                  {c.cita && (
+                    <div style={{ borderLeft: "3px solid rgba(46,207,170,0.55)", background: "rgba(255,255,255,0.04)", borderRadius: "0 8px 8px 0", padding: "6px 10px", marginBottom: 6, maxWidth: 640 }}>
+                      <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 2, textTransform: "uppercase", letterSpacing: ".04em" }}>↩ En respuesta a</div>
+                      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.35 }}>{resolverMenciones(c.cita, mapaLids)}</div>
+                    </div>
+                  )}
                   <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", maxWidth: 640, fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
                     {resolverMenciones(c.mensaje, mapaLids)}
