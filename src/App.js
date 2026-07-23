@@ -755,6 +755,8 @@ export default function App() {
   const totalPendientesMes = mesData.reduce((s,m) => s+m.pendientes, 0);
   const slaArrMes = mesData.filter(m => m.slaMeli !== null);
   const totalMLMes = mesData.reduce((s,m) => s+m.envios_ml, 0);
+  const totalEnviosMes = mesData.reduce((s,m) => s+m.cantidad, 0);
+  const totalParticularMes = totalEnviosMes - totalMLMes;
   const totalDemMes = mesData.reduce((s,m) => s+m.demorados+(m.dem21||0), 0);
   const slaPromedioMes = totalMLMes > 0 ? +((totalMLMes - totalDemMes) / totalMLMes * 100).toFixed(2) : null;
   const criticosMes = mesData.filter(m => m.slaMeli !== null && m.slaMeli < 95);
@@ -1219,8 +1221,9 @@ export default function App() {
 
                   {/* KPIs mes */}
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10 }}>
+                    <TooltipKpi label="Total envíos" val={totalEnviosMes.toLocaleString("es-AR")} color={BRAND.white} icon="ti-package"
+                      tooltip={{ ml: totalMLMes, particular: totalParticularMes, totalEnvios: totalEnviosMes }} />
                     {[
-                      ["Envíos ML", totalMLMes, BRAND.white, "ti-package"],
                       ["Demorados", totalDemoradosMes, "#E24B4A", "ti-alert-circle"],
                       ["SLA Meli", slaPromedioMes !== null ? slaPromedioMes.toFixed(1)+"%" : "—", slaPromedioMes !== null && slaPromedioMes >= 98 ? "#2ECFAA" : slaPromedioMes !== null && slaPromedioMes >= 95 ? "#EF9F27" : "#E24B4A", "ti-chart-bar"],
                       ["Críticos", criticosMes.length, "#E24B4A", "ti-users"],
