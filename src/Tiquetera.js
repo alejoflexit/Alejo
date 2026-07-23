@@ -248,6 +248,7 @@ export default function Tiquetera() {
   const [reportes, setReportes] = useState([]);
   const [copiado, setCopiado] = useState(null);
   const [mediaCaso, setMediaCaso] = useState(null); // imagen adjunta del caso abierto {b64, mime}
+  const [hilos, setHilos] = useState({}); // casoId -> historial de conversación abierto/cerrado
   const presCh = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -701,11 +702,44 @@ export default function Tiquetera() {
 
                   {c.envio_id && <InfoEnvio envioId={c.envio_id} />}
 
-                  {Array.isArray(c.notas) && c.notas.length > 0 && c.notas.map((n, i) => (
-                    <div key={i} style={{ background: "rgba(255,176,32,0.08)", border: "1px solid rgba(255,176,32,0.3)", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#E8D9A8", maxWidth: 640, marginBottom: 8 }}>
-                      <b style={{ color: "#FFB020" }}>{n.quien || "Nota"}:</b> {n.texto}
-                    </div>
-                  ))}
+                  {Array.isArray(c.notas) && c.notas.length > 0 && (() => {
+                    const hilo = [
+                      { at: c.created_at, quien: c.autor, texto: c.mensaje, esConsulta: true },
+                      ...c.notas.map(n => ({ at: n.at, quien: n.quien, texto: n.texto, esConsulta: false })),
+                    ].sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+                    const ab = !!hilos[c.id];
+                    return (
+                      <div style={{ maxWidth: 640, marginBottom: 10 }}>
+                        <button onClick={() => setHilos(h => ({ ...h, [c.id]: !h[c.id] }))}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#cfe3ff", borderRadius: 9, padding: "9px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                          <span>💬 Conversación ({hilo.length} mensaje{hilo.length > 1 ? "s" : ""})</span>
+                          <span style={{ opacity: 0.7 }}>{ab ? "▴" : "▾"}</span>
+                        </button>
+                        {ab && (
+                          <div style={{ maxHeight: 230, overflowY: "auto", marginTop: 8, padding: "4px 2px", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, background: "rgba(0,0,0,0.15)" }}>
+                            <div style={{ position: "relative", padding: "8px 10px 8px 26px" }}>
+                              <div style={{ position: "absolute", left: 11, top: 12, bottom: 12, width: 2, background: "rgba(255,255,255,0.12)" }} />
+                              {hilo.map((it, i) => (
+                                <div key={i} style={{ position: "relative", marginBottom: i === hilo.length - 1 ? 2 : 12 }}>
+                                  <span style={{ position: "absolute", left: it.esConsulta ? -20 : -19, top: 4, width: it.esConsulta ? 11 : 9, height: it.esConsulta ? 11 : 9, borderRadius: "50%", background: it.esConsulta ? "#4A9EFF" : "rgba(255,255,255,0.35)", border: "2px solid #0f1626", boxShadow: it.esConsulta ? "0 0 0 4px rgba(74,158,255,0.18)" : "none" }} />
+                                  <div>
+                                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>{it.at ? new Date(it.at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>{nombreCliente(it.quien) || ""}</span>
+                                    {it.esConsulta && <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.15)", borderRadius: 4, padding: "1px 6px", marginLeft: 8 }}>consulta</span>}
+                                  </div>
+                                  <div style={it.esConsulta
+                                    ? { fontSize: 13, lineHeight: 1.38, marginTop: 3, color: "#fff", background: "rgba(74,158,255,0.10)", border: "1px solid rgba(74,158,255,0.4)", borderRadius: 8, padding: "7px 10px" }
+                                    : { fontSize: 13, lineHeight: 1.38, marginTop: 2, color: "rgba(255,255,255,0.9)" }}>
+                                    {resolverMenciones(it.texto, mapaLids)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {c.respuesta_enviada && (
                     <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 10, padding: "10px 12px", maxWidth: 640, marginBottom: 10 }}>
