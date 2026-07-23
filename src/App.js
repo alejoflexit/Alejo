@@ -8,6 +8,7 @@ const Colectas = lazy(() => import("./Colectas"));
 const Tiquetera = lazy(() => import("./Tiquetera"));
 const Pagos = lazy(() => import("./Pagos"));
 const Analisis = lazy(() => import("./Analisis"));
+const Zonas = lazy(() => import("./Zonas"));
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -105,6 +106,7 @@ function NavPanel({ seccion, go, onClose, logo }) {
     { id: "metricas", icon: "ti ti-chart-bar", label: "Métricas" },
     { id: "colectas", icon: "ti ti-package", label: "Colectas" },
     { id: "arribos", icon: "ti ti-truck-delivery", label: "Arribos" },
+    { id: "zonas", icon: "ti ti-map-2", label: "Zonas" },
     { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
     ...(getSession()?.email === "admin@flexit.app" ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
   ];
@@ -714,7 +716,7 @@ export default function App() {
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
-    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", tiquetera: "Tiquetera", pagos: "Liquidaciones" };
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", tiquetera: "Tiquetera", pagos: "Liquidaciones" };
     document.title = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
     if (seccion === "home") setSession(getSession());
@@ -969,8 +971,8 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pagos" ? "Liquidaciones" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pagos" ? "Liquidaciones" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
@@ -998,6 +1000,8 @@ export default function App() {
       {seccion === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas /></Suspense>}
 
       {seccion === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos /></Suspense>}
+
+      {seccion === "zonas" && <Suspense fallback={<VistaSkeleton />}><Zonas /></Suspense>}
 
       {seccion === "tiquetera" && <Suspense fallback={<VistaSkeleton />}><Tiquetera /></Suspense>}
 

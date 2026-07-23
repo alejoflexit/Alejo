@@ -93,7 +93,8 @@ export default function Home({ onNav, onMenu, isMobile, logo, session, onLogin, 
     { id: "colectas",  title: "Colectas",  desc: "Retiros del día por cliente, horarios y choferes.",     accent: "#A78BFA", grad: "linear-gradient(135deg, #A78BFA, #7C3AED)" },
     { id: "arribos",   title: "Arribos",   desc: "Quién va llegando al depósito, ETA y avance en vivo.",   accent: "#34D399", grad: "linear-gradient(135deg, #34D399, #059669)" },
     { id: "tiquetera", title: "Tiquetera", desc: "Casos de clientes, respuestas del agente y aprobación.", accent: "#FBBF24", grad: "linear-gradient(135deg, #FBBF24, #D97706)" },
-    { id: "pagos",     title: "Liquidaciones", desc: "Pagos semanales de cadetes: cálculo, tarifas y cierre.", accent: "#2ECFAA", grad: "linear-gradient(135deg, #2ECFAA, #059669)", full: true },
+    { id: "zonas",     title: "Zonas",     desc: "Saturación por zona en vivo: carga del día contra capacidad.", accent: "#F87171", grad: "linear-gradient(135deg, #F87171, #DC2626)" },
+    { id: "pagos",     title: "Liquidaciones", desc: "Pagos semanales de cadetes: cálculo, tarifas y cierre.", accent: "#2ECFAA", grad: "linear-gradient(135deg, #2ECFAA, #059669)" },
   ];
 
   return (
