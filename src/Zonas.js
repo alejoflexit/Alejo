@@ -33,14 +33,16 @@ async function supa(pathQuery) {
 }
 
 export default function Zonas() {
-  const [zonas, setZonas] = useState(null);       // [{zona, total, entregados, tope, pct, estado}]
+  const [vista, setVista] = useState("cadete");   // "cadete" (saturación real por asignación) | "zona"
+  const [zonas, setZonas] = useState(null);       // [{zona, total, entregados, tope, pct, estado, cadetes}]
+  const [cadetes, setCadetes] = useState(null);   // [{nombre, total, entregados, tope, zonas, pct, estado}]
   const [sinTope, setSinTope] = useState([]);     // zonas con envíos pero sin tope configurado
-  const [meta, setMeta] = useState(null);         // {total, actualizado, porEstado, sinZona, sinCp}
+  const [meta, setMeta] = useState(null);         // {total, actualizado, porEstado, sinZona, sinCp, sinCadete, tienePorCadete}
   const [error, setError] = useState(null);
   const [sinEndpoint, setSinEndpoint] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("");
-  const refMapas = useRef(null);                  // {cpZona, topeZona} — se cargan una vez
+  const refMapas = useRef(null);                  // {cpZona, topeZona, zonaCadetes, topes} — se cargan una vez
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -57,14 +59,17 @@ export default function Zonas() {
           if (digitos) cpZona.set(digitos, z.zona);
         }
         const topeZona = new Map();
+        const zonaCadetes = new Map(); // norm(zona) -> nombres de los cadetes que la hacen
         for (const t of topes) {
           if (!t.zonas) continue; // backups sin zona fija no aportan tope
           for (const z of String(t.zonas).split(/[,/]/)) {
             const k = norm(z);
-            if (k) topeZona.set(k, (topeZona.get(k) || 0) + (t.tope || 0));
+            if (!k) continue;
+            topeZona.set(k, (topeZona.get(k) || 0) + (t.tope || 0));
+            zonaCadetes.set(k, [...(zonaCadetes.get(k) || []), t.cadete]);
           }
         }
-        refMapas.current = { cpZona, topeZona };
+        refMapas.current = { cpZona, topeZona, zonaCadetes, topes };
       }
       // 2) carga del día desde el bridge
       const r = await fetch(`${BRIDGE_ZONAS_URL}`, { headers: { "x-bridge-key": BRIDGE_KEY } });
@@ -74,7 +79,7 @@ export default function Zonas() {
       setSinEndpoint(false);
 
       // 3) CP → zona
-      const { cpZona, topeZona } = refMapas.current;
+      const { cpZona, topeZona, zonaCadetes, topes } = refMapas.current;
       const porZona = {}; // zona -> {total, entregados}
       let sinZona = 0, sinCp = 0;
       for (const [cp, v] of Object.entries(j.porCP)) {
@@ -89,7 +94,7 @@ export default function Zonas() {
         const tope = topeZona.get(norm(zona));
         if (tope) {
           const pct = v.total / tope;
-          conTope.push({ zona, ...v, tope, pct, estado: pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok" });
+          conTope.push({ zona, ...v, tope, pct, estado: pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok", cadetes: zonaCadetes.get(norm(zona)) || [] });
         } else {
           sinTopeArr.push({ zona, ...v });
         }
@@ -98,7 +103,27 @@ export default function Zonas() {
       sinTopeArr.sort((a, b) => b.total - a.total);
       setZonas(conTope);
       setSinTope(sinTopeArr);
-      setMeta({ total: j.total, actualizado: j.actualizado, porEstado: j.porEstado || {}, sinZona, sinCp });
+
+      // 4) POR CADETE — la saturación real: envíos asignados en el Excel vs tope del cadete.
+      // Resuelve el caso "Ituzaingó se hace junto con Hurlingham": acá el territorio completo
+      // del cadete se mira contra SU tope, sin importar en cuántas zonas está partido.
+      let sinCadete = 0;
+      const tienePorCadete = !!j.porCadete;
+      if (tienePorCadete) {
+        const topePorCadete = new Map(); // norm(nombre) -> {tope, zonas}
+        for (const t of topes) topePorCadete.set(norm(t.cadete), { tope: t.tope || 0, zonas: t.zonas || "" });
+        const arr = [];
+        for (const [nombre, v] of Object.entries(j.porCadete)) {
+          if (nombre === "(sin cadete)") { sinCadete = v.t; continue; }
+          const info = topePorCadete.get(norm(nombre));
+          const tope = info ? info.tope : null;
+          const pct = tope ? v.t / tope : null;
+          arr.push({ nombre, total: v.t, entregados: v.e, tope, zonas: info ? info.zonas : "", pct, estado: pct == null ? "sintope" : pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok" });
+        }
+        arr.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || b.total - a.total);
+        setCadetes(arr);
+      }
+      setMeta({ total: j.total, actualizado: j.actualizado, porEstado: j.porEstado || {}, sinZona, sinCp, sinCadete, tienePorCadete });
       setError(null);
     } catch (e) {
       setError(e.message || String(e));
@@ -113,11 +138,15 @@ export default function Zonas() {
     return () => clearInterval(t);
   }, [cargar]);
 
-  const colorEstado = (e) => (e === "saturada" ? C.crit : e === "limite" ? C.warn : C.ok);
+  const colorEstado = (e) => (e === "saturada" ? C.crit : e === "limite" ? C.warn : e === "sintope" ? C.faint : C.ok);
   const f = norm(filtro);
-  const visibles = zonas ? zonas.filter((z) => !f || norm(z.zona).includes(f)) : [];
-  const saturadas = zonas ? zonas.filter((z) => z.estado === "saturada").length : 0;
-  const alLimite = zonas ? zonas.filter((z) => z.estado === "limite").length : 0;
+  const vistaCadete = vista === "cadete" && meta && meta.tienePorCadete && cadetes;
+  const items = vistaCadete
+    ? cadetes.filter((c) => !f || norm(c.nombre).includes(f) || norm(c.zonas).includes(f))
+    : (zonas ? zonas.filter((z) => !f || norm(z.zona).includes(f) || z.cadetes.some((cd) => norm(cd).includes(f))) : []);
+  const base = vistaCadete ? cadetes : (zonas || []);
+  const saturadas = base.filter((x) => x.estado === "saturada").length;
+  const alLimite = base.filter((x) => x.estado === "limite").length;
 
   if (sinEndpoint) {
     return (
@@ -144,8 +173,18 @@ export default function Zonas() {
             <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(239,159,39,0.12)", color: C.warn, fontWeight: 700 }}>🟠 {alLimite} al límite</span>
           </>
         )}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar zona…"
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {meta && meta.tienePorCadete && (
+            <div style={{ display: "flex", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
+              {[["cadete", "Por cadete"], ["zona", "Por zona"]].map(([k, lbl]) => (
+                <button key={k} onClick={() => setVista(k)}
+                  style={{ background: vista === k ? "rgba(46,207,170,0.15)" : "none", border: "none", color: vista === k ? C.ok : C.muted, padding: "7px 12px", fontSize: 13, fontWeight: vista === k ? 700 : 500, cursor: "pointer" }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          )}
+          <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder={vistaCadete ? "Buscar cadete o zona…" : "Buscar zona…"}
             style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, padding: "7px 12px", fontSize: 13, width: 150 }} />
           <button onClick={cargar} disabled={cargando} title="Actualizar ahora"
             style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.muted, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
@@ -164,39 +203,51 @@ export default function Zonas() {
         <div style={{ color: C.muted, fontSize: 14, padding: "30px 0" }}>Cargando el listado del día… la primera vez puede tardar un minuto (baja el Excel completo de LightData).</div>
       )}
 
-      {zonas && (
+      {(zonas || cadetes) && (
         <>
+          {vista === "cadete" && meta && !meta.tienePorCadete && (
+            <div style={{ background: "rgba(239,159,39,0.10)", border: "1px solid rgba(239,159,39,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14 }}>
+              La vista por cadete necesita el re-deploy del bridge (mensaje-hermes-zonas.md del vault). Mientras tanto, abajo va la vista por zona.
+            </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {visibles.map((z) => {
-              const col = colorEstado(z.estado);
-              const ancho = Math.min(z.pct, 1.2) / 1.2; // la barra se clava en 120% para que una zona muy pasada no aplaste al resto
+            {items.map((it) => {
+              const esCad = vistaCadete;
+              const nombre = esCad ? it.nombre : it.zona;
+              const sub = esCad ? (it.zonas || "sin zonas cargadas en cadete_topes") : (it.cadetes.length ? "La hacen: " + it.cadetes.join(" · ") : "");
+              const col = colorEstado(it.estado);
+              const pct = it.pct ?? 0;
+              const ancho = Math.min(pct, 1.2) / 1.2; // la barra se clava en 120% para que uno muy pasado no aplaste al resto
               return (
-                <div key={z.zona} style={{ background: C.card, border: `1px solid ${z.estado === "saturada" ? "rgba(226,75,74,0.45)" : C.border}`, borderRadius: 12, padding: "12px 16px" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 7 }}>
-                    <span style={{ fontSize: 15, fontWeight: 700 }}>{z.zona}</span>
+                <div key={nombre} style={{ background: C.card, border: `1px solid ${it.estado === "saturada" ? "rgba(226,75,74,0.45)" : C.border}`, borderRadius: 12, padding: "12px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>{nombre}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: col }}>
-                      {z.estado === "saturada" ? "🔴 SATURADA" : z.estado === "limite" ? "🟠 AL LÍMITE" : "🟢 OK"}
+                      {it.estado === "saturada" ? "🔴 SATURADO" : it.estado === "limite" ? "🟠 AL LÍMITE" : it.estado === "sintope" ? "sin tope" : "🟢 OK"}
                     </span>
                     <span style={{ marginLeft: "auto", fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
-                      <b>{num(z.total)}</b><span style={{ color: C.muted }}> / {num(z.tope)}</span>
-                      <span style={{ color: C.faint, fontSize: 12.5 }}> · {num(z.entregados)} entregados</span>
+                      <b>{num(it.total)}</b>{it.tope ? <span style={{ color: C.muted }}> / {num(it.tope)}</span> : null}
+                      <span style={{ color: C.faint, fontSize: 12.5 }}> · {num(it.entregados)} entregados</span>
                     </span>
                   </div>
-                  <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
-                    <div style={{ width: `${(ancho * 100).toFixed(1)}%`, height: "100%", borderRadius: 4, background: col, transition: "width .5s" }} />
-                    {/* marca del 100% del tope */}
-                    <div style={{ position: "absolute", left: `${((1 / 1.2) * 100).toFixed(1)}%`, top: 0, bottom: 0, width: 2, background: "rgba(255,255,255,0.35)" }} />
-                  </div>
+                  {sub && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 7 }}>{sub}</div>}
+                  {it.tope ? (
+                    <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
+                      <div style={{ width: `${(ancho * 100).toFixed(1)}%`, height: "100%", borderRadius: 4, background: col === C.faint ? C.muted : col, transition: "width .5s" }} />
+                      {/* marca del 100% del tope */}
+                      <div style={{ position: "absolute", left: `${((1 / 1.2) * 100).toFixed(1)}%`, top: 0, bottom: 0, width: 2, background: "rgba(255,255,255,0.35)" }} />
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
-            {visibles.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 4px" }}>Ninguna zona coincide con la búsqueda.</div>}
+            {items.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 4px" }}>Nada coincide con la búsqueda.</div>}
           </div>
 
-          {(sinTope.length > 0 || (meta && (meta.sinZona > 0 || meta.sinCp > 0))) && (
+          {(sinTope.length > 0 || (meta && (meta.sinZona > 0 || meta.sinCp > 0 || meta.sinCadete > 0))) && (
             <details style={{ marginTop: 18, color: C.muted }}>
               <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }}>
-                Sin tope o sin zona ({num(sinTope.reduce((s, z) => s + z.total, 0) + (meta ? meta.sinZona + meta.sinCp : 0))} envíos)
+                Datos sueltos: sin tope, sin zona o sin cadete
               </summary>
               <div style={{ fontSize: 12.5, lineHeight: 1.7, marginTop: 8 }}>
                 {sinTope.length > 0 && (
@@ -204,6 +255,7 @@ export default function Zonas() {
                 )}
                 {meta && meta.sinZona > 0 && <div>CPs que no matchean ninguna zona de <code>zonas_cp</code>: {num(meta.sinZona)} envíos.</div>}
                 {meta && meta.sinCp > 0 && <div>Envíos sin CP en LightData: {num(meta.sinCp)}.</div>}
+                {meta && meta.sinCadete > 0 && <div>Envíos sin cadete asignado todavía: {num(meta.sinCadete)}.</div>}
               </div>
             </details>
           )}
