@@ -220,8 +220,8 @@ function ordenGrupo(c) {
 // Busca el envío mencionado (por número de venta/orden/tracking) en el texto — sirve cuando el número
 // está en el mensaje citado y el bot no pudo vincularlo. Solo encuentra envíos recientes (caché ~6 días).
 function EnvioPorTexto({ texto }) {
-  const [envio, setEnvio] = React.useState(undefined);
-  React.useEffect(() => {
+  const [envio, setEnvio] = useState(undefined);
+  useEffect(() => {
     let cancel = false;
     (async () => {
       const nums = [...new Set(String(texto || "").replace(/@[0-9]+/g, " ").match(/[0-9]{6,}/g) || [])].slice(0, 6);
