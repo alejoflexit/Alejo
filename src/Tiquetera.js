@@ -247,12 +247,13 @@ export default function Tiquetera() {
   const [bugsOpen, setBugsOpen] = useState(false);
   const [reportes, setReportes] = useState([]);
   const [copiado, setCopiado] = useState(null);
+  const [mediaCaso, setMediaCaso] = useState(null); // imagen adjunta del caso abierto {b64, mime}
   const presCh = useRef(null);
 
   const cargar = useCallback(async () => {
     try {
       const desde = new Date(Date.now() - 7 * 86400000).toISOString();
-      const rows = await sb(`casos?select=*&created_at=gte.${desde}&order=created_at.desc&limit=500`);
+      const rows = await sb(`casos?select=id,created_at,grupo,chat_id,autor,mensaje,tipo,estado,envio_id,cadete,respuesta_sugerida,respuesta_enviada,asignado,turno,snooze_hasta,fijado,resuelto_por,resuelto_at,notas,enviado_at,enviado_via,enviado_por,mensaje_id,media_mime,media_expira&created_at=gte.${desde}&order=created_at.desc&limit=500`);
       setCasos((rows || []).filter(c => c.autor !== 'Colectas Flexit')); // ocultar los avisos automáticos de colecta (mensaje del propio bot, no es una consulta)
       setError("");
     } catch (e) { setError("No se pudo cargar la tiquetera: " + e.message); }
@@ -297,6 +298,20 @@ export default function Tiquetera() {
 
   useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
   useEffect(() => { (async () => { try { const gs = await sb("agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo"); const m = {}; (gs || []).forEach(g => { if (g.chat_id) m[g.chat_id] = g.nombre_grupo; }); setMapaGrupos(m); const eq = await sb("agente_config?tipo=eq.lid_equipo&select=lid,etiqueta,nombre_grupo"); const ml = {}; (eq || []).forEach(e => { const dig = String(e.lid || "").replace(/[^0-9]/g, ""); if (dig) ml[dig] = limpiarNombreEquipo(e.etiqueta || e.nombre_grupo || dig); }); setMapaLids(ml); } catch (e) {} })(); }, []);
+
+  // Traer la imagen adjunta (base64) sólo al abrir un caso — no en la lista, para no cargar de más.
+  useEffect(() => {
+    setMediaCaso(null);
+    if (abierto == null) return;
+    const c = casos.find(x => x.id === abierto);
+    if (!c || !c.media_mime || !String(c.media_mime).startsWith("image")) return;
+    if (c.media_expira && new Date(c.media_expira) < new Date()) return; // ya venció (se borra sola)
+    let cancel = false;
+    (async () => {
+      try { const r = await sb(`casos?id=eq.${abierto}&select=media_b64,media_mime`); const row = r && r[0]; if (!cancel && row && row.media_b64) setMediaCaso({ b64: row.media_b64, mime: row.media_mime }); } catch (e) {}
+    })();
+    return () => { cancel = true; };
+  }, [abierto]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function guardarAdmin() {
     const nuevo = {
@@ -672,6 +687,11 @@ export default function Tiquetera() {
                     <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
                     {resolverMenciones(c.mensaje, mapaLids)}
                   </div>
+                  {mediaCaso && (
+                    <a href={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} target="_blank" rel="noreferrer" title="Abrir imagen en grande" style={{ display: "block", marginBottom: 10 }}>
+                      <img src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", display: "block" }} />
+                    </a>
+                  )}
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
                     {c.envio_id && <span>Envío <b style={{ color: "#fff" }}>#{c.envio_id}</b></span>}
                     {c.cadete && <span>Cadete: <b style={{ color: "#fff" }}>{c.cadete}</b></span>}
