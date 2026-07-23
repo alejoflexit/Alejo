@@ -139,6 +139,12 @@ details code{background:var(--chip);border-radius:4px;padding:1px 5px;font-size:
     <div class="legend" id="scatterLegend"></div>
   </div>
 
+  <h2>Zonas — foto de la última semana <span class="n">(16 al 22/07 · estado final por envío)</span></h2>
+  <div class="chart" style="margin-bottom:4px;">
+    <div class="note">Adelanto con otra fuente (cache de envíos del agente, localidades con 40+ envíos): qué % quedó entregado, cuántos "Nadie" y cuánto se entrega post 21 en cada localidad. <b>No es el SLA Meli histórico por zona</b> — ese arranca cuando se ejecute la captura de la spec (tabla semanas_zonas). "Sin resolver" = en camino / en planta al momento de la foto.</div>
+    <div class="tablewrap" style="max-height:420px;border:none;"><table id="ztabla"><thead></thead><tbody></tbody></table></div>
+  </div>
+
   <h2>Ranking completo <span class="n">(clic en una columna para ordenar)</span></h2>
   <div class="tablewrap"><table id="tabla"><thead></thead><tbody></tbody></table></div>
   <div class="qnote" id="calidadNota"></div>
@@ -1240,6 +1246,97 @@ function drawScatter(cur){
   });
 }
 
+/* ---------- zonas (foto última semana, fuente: envios_busqueda) ---------- */
+const ZRAW=`PALERMO|255|252|0|2|0
+La Plata|189|178|5|5|13
+CABALLITO|168|167|1|0|0
+La Matanza|166|155|1|8|11
+RECOLETA|155|152|0|3|3
+Belgrano|141|139|1|1|9
+Lanús|122|120|2|0|0
+Lomas De Zamora|117|116|1|0|13
+Flores|104|104|0|0|0
+Moreno|90|87|1|1|6
+Almagro|90|87|3|0|0
+Villa Urquiza|90|89|0|0|0
+PILAR|87|83|1|3|0
+Almirante Brown|86|86|0|0|5
+Escobar|84|77|1|6|22
+OLIVOS|79|77|1|0|1
+Balvanera|77|73|3|1|0
+Ituzaingó|75|74|0|1|5
+VILLA CRESPO|73|72|1|0|4
+Campana|72|62|3|6|7
+BERAZATEGUI|71|71|0|0|0
+FLORENCIO VARELA|67|66|0|1|10
+MERLO|66|63|0|2|17
+CABA|65|58|2|5|0
+Esteban Echeverría|65|63|2|0|1
+San Miguel|61|61|0|0|1
+Villa Lugano|60|59|0|1|0
+Avellaneda|59|59|0|0|0
+Villa Del Parque|58|56|1|0|0
+Zárate|58|53|2|3|8
+Villa Devoto|58|57|0|0|1
+Quilmes|57|57|0|0|0
+Capital Federal|56|53|3|0|1
+San Nicolás|56|54|1|0|0
+Saavedra|55|53|0|0|0
+Luján|54|53|1|0|0
+Jose Clemente Paz|53|51|1|0|20
+HURLINGHAM|52|48|0|4|0
+Villa Ballester|51|51|0|0|1
+San Isidro|51|51|0|0|11
+SAN FERNANDO|50|49|1|0|14
+Núñez|50|50|0|0|0
+Morón|50|50|0|0|0
+Tres de febrero|48|47|0|0|0
+Bella Vista|47|46|0|1|4
+Castelar|47|47|0|0|0
+Parque Chacabuco|46|46|0|0|0
+Martínez|45|45|0|0|1
+Mataderos|45|45|0|0|0
+TIGRE|45|43|1|1|0
+Barracas|45|45|0|0|0
+Quilmes Oeste|44|44|0|0|0
+Boulogne|43|43|0|0|2
+Wilde|43|43|0|0|0
+Retiro|42|41|0|1|0
+Caseros|42|41|0|1|3
+Floresta|40|40|0|0|0`;
+const ZROWS=ZRAW.trim().split('\n').map(l=>{const p=l.split('|');
+  const z={loc:p[0],n:+p[1],ent:+p[2],nadie:+p[3],sinres:+p[4],p21:+p[5]};
+  z.entPct=z.ent/z.n*100; z.p21Pct=z.ent>0?z.p21/z.ent*100:0; return z;});
+let zSortCol='n', zSortDir=-1;
+const ZCOLS=[['loc','Localidad'],['n','Envíos'],['entPct','Entregado'],['nadie','Nadie'],['sinres','Sin resolver'],['p21Pct','Post 21']];
+function renderZonas(){
+  const rows=ZROWS.slice().sort((a,b)=>{const va=a[zSortCol],vb=b[zSortCol];
+    return (typeof va==='string')? zSortDir*va.localeCompare(vb) : zSortDir*(va-vb);});
+  const thead=document.querySelector('#ztabla thead'); thead.textContent='';
+  const trh=document.createElement('tr');
+  ZCOLS.forEach(([key,lbl])=>{const th=document.createElement('th');th.textContent=lbl;
+    if(key===zSortCol){const a=document.createElement('span');a.className='arr';a.textContent=zSortDir<0?' ▼':' ▲';th.appendChild(a);}
+    th.onclick=()=>{ if(zSortCol===key)zSortDir*=-1; else {zSortCol=key;zSortDir=key==='loc'?1:-1;} renderZonas(); };
+    trh.appendChild(th);});
+  thead.appendChild(trh);
+  const tb=document.querySelector('#ztabla tbody'); tb.textContent='';
+  rows.forEach(z=>{
+    const tr=document.createElement('tr');
+    const entIcon=z.entPct>=99?'✅':z.entPct>=97?'⚠️':'🔴';
+    const cells=[
+      ['loc',z.loc],['n',fmtInt(z.n)],
+      ['entPct',entIcon+' '+fmt1(z.entPct)+'%'],
+      ['nadie',fmtInt(z.nadie)],['sinres',fmtInt(z.sinres)],
+      ['p21Pct',(z.p21Pct>=15?'🌙 ':'')+z.p21Pct.toLocaleString('es-AR',{maximumFractionDigits:0})+'%']
+    ];
+    cells.forEach(([key,v])=>{const td=document.createElement('td');
+      if(key==='loc')td.className='name'; td.textContent=v;
+      if(key==='p21Pct'&&z.p21Pct>=15)td.style.color='var(--crittext)';
+      tr.appendChild(td);});
+    tb.appendChild(tr);
+  });
+}
+
 /* ---------- tabla ---------- */
 let sortCol='cant', sortDir=-1;
 const COLS=[
@@ -1292,7 +1389,7 @@ function renderMetodologia(){
     'Semanas con * son parciales (menos de 5 días de datos). En semanas parciales no se compara el volumen contra la semana anterior (solo las tasas).',
     'Fin de ruta promedio: promedio del último evento de ruta por día (columna fin_ruta), ponderado por días trabajados.',
     'Datos: tabla semanas de Supabase (por cadete y día, del 21/05 al 22/07/2026), agregada por semana. Los nombres "Repro gramar", "devuelto depósito" y los envíos sin asignar quedan fuera del ranking y las sugerencias, pero sí cuentan en los KPIs globales (igual que en la app).',
-    'Lo que este panel todavía NO puede mostrar: SLA por zona/localidad. La base no guarda el histórico por zona; la spec-analisis-decisiones (en el vault) agrega esa captura — cuando esté, acá entra el bloque "Oportunidades geográficas" estilo deep dive de Meli.'
+    'Zonas: el bloque "foto de la última semana" usa otra fuente (envios_busqueda, cache del agente WhatsApp con estado final por envío, 16–22/07, localidades con 40+ envíos). Sirve como adelanto geográfico pero NO es el SLA Meli por zona: no aplica la lógica de demorados reales ni tiene histórico. El SLA por zona de verdad arranca cuando se ejecute la Tarea 1 de spec-analisis-decisiones (tabla semanas_zonas) — ahí este bloque se reemplaza por el equivalente a "Oportunidades geográficas" del deep dive de Meli, filtrable por período como todo lo demás.'
   ];
   paras.forEach(t=>{ const p=document.createElement('p');p.textContent=t;el.appendChild(p); });
 }
@@ -1315,6 +1412,7 @@ function init(){
   };
   let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(render,150);});
   render();
+  renderZonas();
 }
 init();
 </script>
