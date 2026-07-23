@@ -7,6 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 const Colectas = lazy(() => import("./Colectas"));
 const Tiquetera = lazy(() => import("./Tiquetera"));
 const Pagos = lazy(() => import("./Pagos"));
+const Analisis = lazy(() => import("./Analisis"));
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -1175,7 +1176,7 @@ export default function App() {
           {!isMobile && (
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BRAND.border}`, marginBottom:"1.5rem" }}>
             <div style={{ display:"flex", gap:4 }}>
-              {[["tabla","ti-table","Tabla"],["ranking","ti-gauge","Semáforo"],["deepdive","ti-calendar-stats","Mensual"]].map(([key,icon,label]) => (
+              {[["tabla","ti-table","Tabla"],["ranking","ti-gauge","Semáforo"],["deepdive","ti-calendar-stats","Mensual"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => (
                 <button key={key} onClick={()=>setTab(key)} style={{ padding:"8px 18px", fontSize:13, fontWeight:600, cursor:"pointer", border:"none", background:"none", marginBottom:-1, color:tab===key?"#2ECFAA":BRAND.muted, borderBottom:`2px solid ${tab===key?"#2ECFAA":"transparent"}` }}>
                   <i className={`ti ${icon}`} style={{ marginRight:6, fontSize:14 }} />{label}
                 </button>
@@ -1192,7 +1193,7 @@ export default function App() {
           {/* Bottom nav — solo mobile */}
           {isMobile && (
             <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#0D0D2B", borderTop:`1px solid ${BRAND.border}`, display:"flex", alignItems:"stretch", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
-              {[["tabla","ti-table","Tabla"],["ranking","ti-gauge","Semáforo"],["deepdive","ti-calendar-stats","Mensual"]].map(([key,icon,label]) => (
+              {[["tabla","ti-table","Tabla"],["ranking","ti-gauge","Semáforo"],["deepdive","ti-calendar-stats","Mensual"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => (
                 <button key={key} onClick={()=>setTab(key)} style={{ flex:1, padding:"10px 4px 8px", fontSize:10, fontWeight:600, cursor:"pointer", border:"none", background:"none", color:tab===key?"#2ECFAA":BRAND.muted, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderTop:`2px solid ${tab===key?"#2ECFAA":"transparent"}` }}>
                   <i className={`ti ${icon}`} style={{ fontSize:20 }} />
                   {label}
@@ -1418,6 +1419,12 @@ export default function App() {
                 </>
               )}
             </div>
+          )}
+
+          {tab==="analisis" && (
+            <Suspense fallback={<VistaSkeleton />}>
+              <Analisis semanas={semanas} />
+            </Suspense>
           )}
 
           {tab==="tabla" && (
