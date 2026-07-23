@@ -224,7 +224,7 @@ export default function Tiquetera() {
   const [chip, setChip] = useState("abiertos");
   const [orden, setOrden] = useState("antiguos");
   const [abierto, setAbierto] = useState(null);
-  const [respAbierta, setRespAbierta] = useState(true);      // respuesta del bot desplegable
+  const [respAbierta, setRespAbierta] = useState(false);     // respuesta del bot desplegable (colapsada por defecto)
   const [confirmarResolver, setConfirmarResolver] = useState(null); // confirmación inline de "Resolver"
   const [textos, setTextos] = useState({});
   const [notaTxt, setNotaTxt] = useState("");
@@ -297,7 +297,7 @@ export default function Tiquetera() {
     return () => { document.title = "Métricas Flexit"; };
   }, [casos]);
 
-  useEffect(() => { setNotaTxt(""); setBugPara(null); setBugTxt(""); setRespAbierta(true); setConfirmarResolver(null); }, [abierto]);
+  useEffect(() => { setNotaTxt(""); setBugPara(null); setBugTxt(""); setRespAbierta(false); setConfirmarResolver(null); }, [abierto]);
 
   useEffect(() => { (async () => { try { const r = await sb("tiquetera_config?id=eq.1"); setCfg(r && r[0] ? r[0] : CONFIG_DEFAULT); } catch (e) { setCfg(CONFIG_DEFAULT); } })(); }, []);
   useEffect(() => { (async () => { try { const gs = await sb("agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo"); const m = {}; (gs || []).forEach(g => { if (g.chat_id) m[g.chat_id] = g.nombre_grupo; }); setMapaGrupos(m); const eq = await sb("agente_config?tipo=eq.lid_equipo&select=lid,etiqueta,nombre_grupo"); const ml = {}; (eq || []).forEach(e => { const dig = String(e.lid || "").replace(/[^0-9]/g, ""); if (dig) ml[dig] = limpiarNombreEquipo(e.etiqueta || e.nombre_grupo || dig); }); setMapaLids(ml); } catch (e) {} })(); }, []);
@@ -763,12 +763,12 @@ export default function Tiquetera() {
                   ); })()}
                   {c.estado !== "resuelto" && (<>
                     <div style={{ border: "1px dashed rgba(46,207,170,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,207,170,0.04)", maxWidth: 640, marginBottom: 10 }}>
-                      <div onClick={() => setRespAbierta(v => !v)} title={respAbierta ? "Ocultar" : "Mostrar"}
-                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, userSelect: "none" }}>
-                        <span style={{ display: "inline-block", transition: "transform .15s", transform: respAbierta ? "rotate(90deg)" : "none", fontSize: 10 }}>▸</span>
+                      <div onClick={c.respuesta_enviada ? undefined : () => setRespAbierta(v => !v)} title={c.respuesta_enviada ? undefined : (respAbierta ? "Ocultar" : "Mostrar")}
+                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: c.respuesta_enviada ? "default" : "pointer", fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, userSelect: "none" }}>
+                        {!c.respuesta_enviada && <span style={{ display: "inline-block", transition: "transform .15s", transform: respAbierta ? "rotate(90deg)" : "none", fontSize: 10 }}>▸</span>}
                         <span>🤖 {c.respuesta_enviada ? "Enviar otro mensaje (opcional)" : "Respuesta del bot — editá antes de enviar"}</span>
                       </div>
-                      {respAbierta && (
+                      {(respAbierta || c.respuesta_enviada) && (
                         <textarea value={textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_enviada ? "" : (c.respuesta_sugerida || ""))}
                           onChange={e => setTextos({ ...textos, [c.id]: e.target.value })}
                           ref={el => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
