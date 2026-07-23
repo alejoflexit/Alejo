@@ -498,7 +498,11 @@ function SinDatosBadge({ items }) {
     <div ref={ref} style={{ position:"relative", display:"inline-block", marginBottom:"1rem" }}>
       <button onClick={() => setShow(s => !s)} title="Envíos sin dirección (cliente desvinculado) — tocar para ver detalle"
         style={{ position:"relative", display:"inline-flex", alignItems:"center", justifyContent:"center", background: show ? "rgba(239,159,39,0.22)" : "rgba(239,159,39,0.12)", border:"1px solid rgba(239,159,39,0.5)", borderRadius:9, padding:8, color:"#EF9F27", cursor:"pointer", lineHeight:1 }}>
-        <i className="ti ti-alert-triangle" style={{ fontSize:19 }} />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block" }}>
+          <path d="M12 9v4" />
+          <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z" />
+          <path d="M12 16h.01" />
+        </svg>
         <span style={{ position:"absolute", top:-7, right:-7, background:"#E24B4A", color:"#fff", fontSize:11, fontWeight:700, minWidth:18, height:18, borderRadius:9, display:"inline-flex", alignItems:"center", justifyContent:"center", padding:"0 4px", border:"2px solid #0D0D2B" }}>{items.length}</span>
       </button>
       {show && (
