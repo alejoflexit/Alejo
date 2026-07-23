@@ -106,7 +106,7 @@ function NavPanel({ seccion, go, onClose, logo }) {
     { id: "metricas", icon: "ti ti-chart-bar", label: "Métricas" },
     { id: "colectas", icon: "ti ti-package", label: "Colectas" },
     { id: "arribos", icon: "ti ti-truck-delivery", label: "Arribos" },
-    { id: "zonas", icon: "ti ti-map-2", label: "Zonas" },
+    { id: "zonas", icon: "ti ti-alarm", label: "Zonas" },
     { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
     ...(getSession()?.email === "admin@flexit.app" ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
   ];
