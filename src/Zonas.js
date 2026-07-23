@@ -110,9 +110,15 @@ export default function Zonas() {
         if (cands.length === 1) {
           zona = cands[0];
         } else if (cands.length > 1) {
+          if (!finoDisponible) {
+            // Sin localidad (bridge viejo): repartir el CP compartido en partes iguales entre sus
+            // zonas — aproximado pero visible. Jamás descartar (el 30% del volumen vive en estos CPs).
+            for (const z of cands) suma(z, { t: v.t / cands.length, e: v.e / cands.length });
+            continue;
+          }
           const m = cands.filter((z) => matchNombre(nl, norm(z)));
           if (m.length === 1) zona = m[0];
-          else if (m.length === 0 && finoDisponible) {
+          else if (m.length === 0) {
             // la localidad no matchea las zonas de ese CP: buscar por nombre en todas las zonas
             const g = todasZonas.filter((z) => matchNombre(nl, norm(z)));
             if (g.length === 1) zona = g[0]; else { ambiguos += v.t; continue; }
@@ -181,7 +187,9 @@ export default function Zonas() {
       terrArr.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || b.total - a.total);
       setTerrs(terrArr);
 
-      setMeta({ total: j.total, actualizado: j.actualizado, sinZona, sinCp, ambiguos, sinCadete: 0, finoDisponible });
+      const asignados = Object.values(porZona).reduce((a, v) => a + v.total, 0);
+      const cadetesSinZonas = topes.filter((t) => !t.zonas || !String(t.zonas).trim()).length;
+      setMeta({ total: j.total, actualizado: j.actualizado, sinZona, sinCp, ambiguos, asignados, cadetesSinZonas, finoDisponible });
       setError(null);
     } catch (e) {
       setError(e.message || String(e));
@@ -199,7 +207,8 @@ export default function Zonas() {
   const colorEstado = (e) => (e === "saturada" ? C.crit : e === "limite" ? C.warn : e === "sintope" ? C.faint : C.ok);
   const f = norm(filtro);
   const esTerr = vista === "terr";
-  const listaBase = esTerr ? (terrs || []) : (zonas || []);
+  const zonasConSin = zonas ? [...zonas, ...sinTope.map((z) => ({ ...z, tope: null, pct: null, estado: "sintope", cadetes: [] }))] : [];
+  const listaBase = esTerr ? (terrs || []) : zonasConSin;
   const items = listaBase.filter((it) => {
     if (!f) return true;
     const nombre = esTerr ? it.nombre : it.zona;
@@ -227,7 +236,7 @@ export default function Zonas() {
         {meta && (
           <>
             <span style={{ fontSize: 13, color: C.muted }}>
-              <b style={{ color: C.text }}>{num(meta.total)}</b> envíos hoy · dato de las <b style={{ color: C.text }}>{horaAR(meta.actualizado)}</b> · se actualiza cada 5 min
+              <b style={{ color: C.text }}>{num(meta.total)}</b> envíos hoy (todos los estados, Fecha Flexit) · <b style={{ color: C.text }}>{num(meta.asignados)}</b> ubicados en zonas · dato de las <b style={{ color: C.text }}>{horaAR(meta.actualizado)}</b> · refresco 5 min
             </span>
             <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(226,75,74,0.12)", color: C.crit, fontWeight: 700 }}>🔴 {saturadas} saturados</span>
             <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(239,159,39,0.12)", color: C.warn, fontWeight: 700 }}>🟠 {alLimite} al límite</span>
@@ -253,7 +262,7 @@ export default function Zonas() {
 
       {meta && !meta.finoDisponible && (
         <div style={{ background: "rgba(239,159,39,0.10)", border: "1px solid rgba(239,159,39,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14 }}>
-          ⚠️ Números aproximados: los CPs compartidos entre zonas (48 de 515) todavía no se pueden desambiguar — falta el re-deploy del bridge (mensaje-hermes-zonas.md). Con el deploy, la atribución pasa a CP + localidad.
+          ⚠️ Números aproximados: los CPs que pertenecen a varias zonas (48 de 515, ~30% del volumen) se están repartiendo en partes iguales entre ellas. Con el re-deploy del bridge (mensaje-hermes-zonas.md) la atribución pasa a CP + localidad y queda exacta.
         </div>
       )}
 
@@ -310,11 +319,12 @@ export default function Zonas() {
               </summary>
               <div style={{ fontSize: 12.5, lineHeight: 1.7, marginTop: 8 }}>
                 {sinTope.length > 0 && (
-                  <div>Zonas con envíos pero sin cadete/tope en <code>cadete_topes</code>: {sinTope.slice(0, 15).map((z) => `${z.zona} (${num(z.total)})`).join(" · ")}{sinTope.length > 15 ? ` · +${sinTope.length - 15} más` : ""}</div>
+                  <div>Zonas sin tope (aparecen grises en "Por zona"): {sinTope.length} zonas, {num(sinTope.reduce((s2, z) => s2 + z.total, 0))} envíos.</div>
                 )}
                 {meta && meta.ambiguos > 0 && <div>Envíos en CPs compartidos cuya localidad no alcanzó para decidir la zona: {num(meta.ambiguos)} (quedan fuera de las barras — mejor faltar que inflar).</div>}
                 {meta && meta.sinZona > 0 && <div>CPs que no matchean ninguna zona de <code>zonas_cp</code>: {num(meta.sinZona)} envíos.</div>}
                 {meta && meta.sinCp > 0 && <div>Envíos sin CP en LightData: {num(meta.sinCp)}.</div>}
+                {meta && meta.cadetesSinZonas > 0 && <div>⚠️ {meta.cadetesSinZonas} cadetes activos sin zonas cargadas en <code>cadete_topes</code> — no suman capacidad en ninguna zona ni forman territorio (por eso faltan topes y territorios).</div>}
               </div>
             </details>
           )}
