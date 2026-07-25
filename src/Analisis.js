@@ -336,6 +336,15 @@ export default function Analisis({ semanas }) {
   const [verCompleto, setVerCompleto] = useState(false); // 7 tarjetas de Sugerencias colapsadas
   const [drill, setDrill] = useState(null); // {kind, name, src} — panel de detalle al tocar una alerta o fila
   const [verChicas, setVerChicas] = useState(false); // desplegar localidades de muestra chica
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 640);
+  const [chip, setChip] = useState(null); // filtro rápido del ranking: null | criticos | sobre | tarde | caida
+  const [copiado, setCopiado] = useState(false);
+
+  useEffect(() => {
+    const onR = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, []);
   // default: última semana completa (o la última que haya)
   const periodW = periodo.w || completas[completas.length - 1] || labels[labels.length - 1] || null;
 
@@ -529,6 +538,15 @@ export default function Analisis({ semanas }) {
   }, [cur, prev, sortCol, sortDir]);
   const doSort = (key) => { if (sortCol === key) setSortDir((d) => -d); else { setSortCol(key); setSortDir(key === "name" ? 1 : -1); } };
 
+  // Filtros rápidos (chips) sobre el ranking — reusan los mismos criterios que las Sugerencias.
+  const chipPred = {
+    criticos: (c) => c.sla != null && c.sla < CFG.slaCritico && c.ml >= CFG.minML,
+    sobre: (c) => c.prom >= CFG.sobrecarga,
+    tarde: (c) => c.entregados >= CFG.minEntregados && (c.p21rate >= CFG.tarde_post21 || (c.fin != null && c.fin >= CFG.tarde_fin)),
+    caida: (c) => c.delta != null && c.delta <= -CFG.deltaSla,
+  };
+  const rankingF = chip ? ranking.filter(chipPred[chip]) : ranking;
+
   if (!semanas || semanas.length === 0) {
     return <div style={{ padding: 24, color: C.muted }}>No hay datos cargados todavía.</div>;
   }
@@ -663,6 +681,25 @@ export default function Analisis({ semanas }) {
   const toggleDrill = (kind, name, src) => setDrill((d) => (d && d.src === src && d.name === name && d.kind === kind) ? null : { kind, name, src });
   const isOpen = (kind, name, src) => !!drill && drill.src === src && drill.name === name && drill.kind === kind;
 
+  // Texto plano para WhatsApp con las alertas + lo positivo + el resumen (mismos números que la pantalla).
+  const resumenTexto = () => {
+    const L = [`📊 Flexit · ${periodDesc}`];
+    if (maxFecha) L.push(`Datos hasta ${fmtDMY(maxFecha)}`);
+    L.push("", "🟠 Atención prioritaria:");
+    if (alertas.top.length === 0) L.push("• Nada urgente 👏");
+    else alertas.top.slice(0, 3).forEach((a) => L.push(`• ${a.kind === "localidad" ? "📍 " : ""}${a.name} · ${a.accion} — ${a.motivo}`));
+    const pos = [];
+    sug.caballos.slice(0, 3).forEach((c) => pos.push(`${c.name} — ${fmtInt(c.cant)} envíos, SLA ${fmt1(c.sla)}%`));
+    sug.mejora.slice(0, 3).forEach((c) => pos.push(`${c.name} — SLA ${fmt1(c.sla)}% (+${fmt1(c.delta)} pp)`));
+    if (pos.length) { L.push("", "💪 Lo positivo:"); pos.slice(0, 3).forEach((p) => L.push(`• ${p}`)); }
+    L.push("", `SLA Meli ${cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} · ${fmtInt(cur.g.cant)} envíos`);
+    return L.join("\n");
+  };
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(resumenTexto()); setCopiado(true); setTimeout(() => setCopiado(false), 1800); }
+    catch (e) { setCopiado(false); }
+  };
+
   const periodoParcial = periodLabels.some((l) => weeks.find((w) => w.label === l)?.parcial);
   const pocasZonas = zonasInfo.weeks > 0 && zonasInfo.weeks < 2;
   const badge = (txt) => <span key={txt} style={{ fontSize: 10.5, fontWeight: 600, color: "#f3c886", background: "rgba(239,159,39,0.12)", border: "1px solid rgba(239,159,39,0.30)", borderRadius: 999, padding: "2px 9px" }}>{txt}</span>;
@@ -705,7 +742,12 @@ export default function Analisis({ semanas }) {
           <Tile label="Requieren atención" value={fmtInt(alertas.top.length)} delta={<div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{alertas.nCad} cadete{alertas.nCad === 1 ? "" : "s"} · {alertas.nLoc} localidad{alertas.nLoc === 1 ? "" : "es"}</div>} />
         </div>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 2 }}>🟠 Atención prioritaria <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más importante primero</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1 }}>🟠 Atención prioritaria <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más importante primero</span></div>
+            <button onClick={copiar} title="Copiar resumen para WhatsApp" style={{ background: copiado ? "rgba(46,207,170,0.16)" : C.cardAlt, border: `1px solid ${copiado ? C.teal : C.border}`, borderRadius: 8, color: copiado ? C.teal : C.muted, fontSize: 12, fontWeight: 600, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+              {copiado ? "✓ Copiado" : "💬 Copiar resumen"}
+            </button>
+          </div>
           {alertas.top.length === 0 ? (
             <div style={{ fontSize: 12.5, color: C.muted, padding: "8px 6px" }}>Nada urgente en este período. 👏 Mirá "Ver análisis completo" para el detalle.</div>
           ) : (
@@ -878,7 +920,33 @@ export default function Analisis({ semanas }) {
       )}
 
       {/* Ranking completo */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Ranking completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(clic en una columna para ordenar)</span></h3>
+      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Ranking completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>{isMobile ? "(tocá una tarjeta para el detalle)" : "(clic en una columna para ordenar · clic en una fila para el detalle)"}</span></h3>
+      {/* chips de filtro rápido */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {[["criticos", "🔴 solo críticos"], ["sobre", "📦 sobre tope"], ["tarde", "🌙 terminan tarde"], ["caida", "📉 en caída"]].map(([k, lbl]) => (
+          <button key={k} onClick={() => setChip((x) => (x === k ? null : k))}
+            style={{ padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", borderRadius: 999, border: `1px solid ${chip === k ? C.teal : C.border}`, background: chip === k ? "rgba(46,207,170,0.14)" : "transparent", color: chip === k ? C.teal : C.muted }}>
+            {lbl}
+          </button>
+        ))}
+        {chip && <span style={{ fontSize: 11.5, color: C.muted, alignSelf: "center" }}>{rankingF.length} de {ranking.length}</span>}
+      </div>
+      {isMobile ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+          {rankingF.map((c, i) => (
+            <div key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ background: C.cardAlt, border: `1px solid ${isOpen("cadete", c.name, "rank") ? C.teal : C.border}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                <span style={{ color: slaColor(c.sla), fontWeight: 700, whiteSpace: "nowrap" }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</span>
+                <span style={{ color: C.teal, flex: "0 0 auto" }}>{isOpen("cadete", c.name, "rank") ? "▾" : "▸"}</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{fmtInt(c.cant)} envíos · {fmt1(c.prom)}/día vs tope {c.tope || CFG.tope} · {fmt0(c.p21rate * 100)}% post 21</div>
+              {isOpen("cadete", c.name, "rank") && renderDrill(drill)}
+            </div>
+          ))}
+          {rankingF.length === 0 && <div style={{ color: C.muted, fontSize: 12.5, padding: "12px 4px" }}>Nadie cumple ese filtro. 👏</div>}
+        </div>
+      ) : (
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 4, marginBottom: 14, overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -889,7 +957,7 @@ export default function Analisis({ semanas }) {
             </tr>
           </thead>
           <tbody>
-            {ranking.map((c, i) => (
+            {rankingF.map((c, i) => (
               <tr key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ borderBottom: `1px solid ${C.faint}`, cursor: "pointer", background: isOpen("cadete", c.name, "rank") ? "rgba(46,207,170,0.08)" : "transparent" }}>
                 <td style={{ padding: "6px 8px", fontWeight: 600 }}>{c.name}</td>
                 <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.cant)}</td>
@@ -907,7 +975,8 @@ export default function Analisis({ semanas }) {
           </tbody>
         </table>
       </div>
-      {drill && drill.src === "rank" && <div style={{ marginBottom: 14 }}>{renderDrill(drill)}</div>}
+      )}
+      {!isMobile && drill && drill.src === "rank" && <div style={{ marginBottom: 14 }}>{renderDrill(drill)}</div>}
 
       <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
         Calidad de datos del período: {fmtInt(cur.g.sin)} envíos sin cadete asignado{cur.g.basura > 0 ? ` · ${fmtInt(cur.g.basura)} bajo nombres basura ("Repro gramar", "devuelto depósito") que conviene limpiar en LightData` : ""}. Los sin-asignar y basura cuentan en los KPIs pero quedan fuera del ranking y sugerencias.
