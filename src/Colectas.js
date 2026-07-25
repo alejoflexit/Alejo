@@ -189,6 +189,63 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
 // que en Firefox y algunos móviles se veía mal o no abría el selector.
 const ETA_DEFAULT = '15:00';
 
+// Círculo de llegada con "mantené presionado ~0,45s para confirmar" (evita marcar/desmarcar sin querer).
+// Solo el círculo dispara: el resto de la fila ya no marca. Se cancela si arrastrás/scrolleás.
+// Anillo teal al marcar; rojo al desmarcar (borra la hora, el error caro).
+function LlegadaCircle({ llego, onConfirm }) {
+  const HOLD = 450, R = 18, C = 2 * Math.PI * R;
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef(null);
+  const rafRef = useRef(null);
+  const startRef = useRef(null);
+  const posRef = useRef(null);
+
+  const clear = () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    startRef.current = null; posRef.current = null; setProgress(0);
+  };
+  const start = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const p = e.touches ? e.touches[0] : e;
+    posRef.current = { x: p.clientX, y: p.clientY };
+    startRef.current = Date.now();
+    const tick = () => {
+      if (startRef.current == null) return;
+      const pr = Math.min(1, (Date.now() - startRef.current) / HOLD);
+      setProgress(pr);
+      if (pr < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    timerRef.current = setTimeout(() => { clear(); onConfirm(); }, HOLD);
+  };
+  const move = (e) => {
+    if (startRef.current == null || !posRef.current) return;
+    const p = e.touches ? e.touches[0] : e;
+    if (Math.hypot(p.clientX - posRef.current.x, p.clientY - posRef.current.y) > 10) clear();
+  };
+  useEffect(() => () => clear(), []);
+
+  return (
+    <div onMouseDown={start} onMouseUp={clear} onMouseLeave={clear} onMouseMove={move}
+      onTouchStart={start} onTouchEnd={clear} onTouchCancel={clear} onTouchMove={move}
+      onContextMenu={e => e.preventDefault()}
+      title={llego ? 'Mantené presionado para sacar la llegada' : 'Mantené presionado para marcar la llegada'}
+      style={{ position:'relative', width:32, height:32, flexShrink:0, cursor:'pointer', touchAction:'none', WebkitUserSelect:'none', userSelect:'none' }}>
+      <div style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+        border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17, transition:'all 0.15s' }}>
+        {llego ? '✓' : ''}
+      </div>
+      {progress > 0 && (
+        <svg width="40" height="40" viewBox="0 0 40 40" style={{ position:'absolute', top:-4, left:-4, pointerEvents:'none' }}>
+          <circle cx="20" cy="20" r={R} fill="none" stroke={llego ? '#E24B4A' : '#2ECFAA'} strokeWidth="2.5"
+            strokeDasharray={C} strokeDashoffset={(1 - progress) * C} strokeLinecap="round" transform="rotate(-90 20 20)" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 // Muestra la hora estimada en el slot central de la fila. La edición se abre desde acá (tocando la hora)
 // o desde el botón reloj fijo de la derecha (editing controlado por el padre).
 function EtaInput({ value, onChange, editing, onEditingChange }) {
@@ -1533,11 +1590,8 @@ function ColectasInner({ soloArribos = false }) {
                       background: llego ? 'rgba(46,207,170,0.08)' : cerca ? 'rgba(251,191,36,0.07)' : BRAND.faint,
                       animation: cerca ? 'flexitTiemble 3s ease-in-out infinite' : 'none', transition:'all 0.15s' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10, width:'100%' }}>
-                    <div onClick={() => toggleLlego(c.cadete)} style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0, cursor:'pointer' }}>
-                      <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
-                        border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17 }}>
-                        {llego ? '✓' : ''}
-                      </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0 }}>
+                      <LlegadaCircle llego={llego} onConfirm={() => toggleLlego(c.cadete)} />
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                           {cerca && <span title="está por llegar" style={{ marginRight:6 }}>🚚</span>}{c.cadete}
