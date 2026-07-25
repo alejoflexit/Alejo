@@ -152,24 +152,29 @@ function DeltaSpan({ delta, unidad, bueno, prevLbl }) {
     </div>
   );
 }
-function Card({ icon, titulo, items, render, vacio }) {
-  const [expanded, setExpanded] = useState(false);
-  const list = expanded ? items : items.slice(0, 5);
+// Tarjeta compacta de categoría: título + conteo, top 2 casos en una línea, "ver N más".
+function MiniCat({ icon, titulo, items, render, onPick, tono }) {
+  const [exp, setExp] = useState(false);
+  const list = exp ? items : items.slice(0, 2);
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", opacity: items.length ? 1 : 0.6 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: items.length ? 8 : 0 }}>
-        {icon} {titulo} {items.length ? <span style={{ color: C.muted, fontWeight: 400 }}>· {items.length}</span> : null}
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: items.length ? 6 : 0 }}>
+        {icon} {titulo}{items.length ? <span style={{ color: tono || C.muted, fontWeight: 700 }}> · {items.length}</span> : null}
       </div>
       {items.length === 0 ? (
-        <div style={{ fontSize: 12, color: C.muted }}>{vacio}</div>
+        <div style={{ fontSize: 11.5, color: C.muted }}>Nadie 👏</div>
       ) : (
         <>
-          <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, color: C.ink, lineHeight: 1.55 }}>
-            {list.map((it, i) => <li key={i}>{render(it)}</li>)}
-          </ul>
-          {items.length > 5 && !expanded && (
-            <div onClick={() => setExpanded(true)} style={{ marginTop: 6, fontSize: 12, color: C.teal, cursor: "pointer" }}>
-              +{items.length - 5} más — tocá para ver
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {list.map((c, i) => (
+              <div key={i} onClick={() => onPick(c)} style={{ fontSize: 12, cursor: "pointer", lineHeight: 1.35 }}>
+                <span style={{ color: C.teal, marginRight: 4 }}>▸</span>{render(c)}
+              </div>
+            ))}
+          </div>
+          {items.length > 2 && (
+            <div onClick={() => setExp((v) => !v)} style={{ marginTop: 6, fontSize: 11.5, color: C.teal, cursor: "pointer" }}>
+              {exp ? "ver menos" : `ver ${items.length - 2} más`}
             </div>
           )}
         </>
@@ -177,6 +182,7 @@ function Card({ icon, titulo, items, render, vacio }) {
     </div>
   );
 }
+
 function CadTip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
   const p = payload[0].payload;
@@ -1025,24 +1031,42 @@ export default function Analisis({ semanas }) {
       {/* 4. Sugerencias (mejores / críticos / reincidentes) — colapsadas detrás de "Ver análisis completo" */}
       <div onClick={() => setVerCompleto((v) => !v)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
         <span style={{ color: C.teal, fontSize: 14 }}>{verCompleto ? "▾" : "▸"}</span>
-        <h3 style={{ fontSize: 14, margin: 0 }}>Ver análisis completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· 7 tarjetas de sugerencias · {periodDesc.toLowerCase()}</span></h3>
+        <h3 style={{ fontSize: 14, margin: 0 }}>Ver análisis completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· por categoría · {periodDesc.toLowerCase()}</span></h3>
       </div>
       {verCompleto && (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 12, marginBottom: 22 }}>
-        <Card icon="🔴" titulo="SLA crítico — hablar hoy" items={sug.criticos} vacio={`Nadie abajo de ${CFG.slaCritico}%. 👏`}
-          render={(c) => <><b>{c.name}</b> — SLA {fmt1(c.sla)}% ({fmtInt(c.dem)} dem. + {fmtInt(c.d21)} repro 21 sobre {fmtInt(c.ml)} ML)</>} />
-        <Card icon="🌙" titulo="Terminan tarde" items={sug.tarde} vacio="Nadie con post-21 alto ni fin de ruta tarde."
-          render={(c) => <><b>{c.name}</b> — {fmt0(c.p21rate * 100)}% post 21{c.fin != null ? " · fin prom. " + fmtHora(c.fin) : ""}</>} />
-        <Card icon="🔁" titulo="Repro 21 recurrente" items={sug.repro} vacio="Sin reincidentes de repro 21 en el período."
-          render={(c) => <><b>{c.name}</b> — repro 21 en {c.dd21} de {c.dias} días ({fmtInt(c.d21)} envíos)</>} />
-        <Card icon="📦" titulo={`Cerca o arriba del tope (${CFG.tope}/día)`} items={sug.sobre} vacio="Nadie pegado al tope."
-          render={(c) => <><b>{c.name}</b> — {fmt1(c.prom)} env/día en {c.dias} días{c.sla != null && c.sla < CFG.slaOk ? " · SLA " + fmt1(c.sla) + "% ⚠️" : ""}</>} />
-        <Card icon="💪" titulo="Caballitos de batalla" items={sug.caballos} vacio={`Ningún alto-volumen con SLA ≥ ${CFG.slaOk}% en el período.`}
-          render={(c) => <><b>{c.name}</b> — {fmtInt(c.cant)} envíos ({fmt1(cur.g.cant > 0 ? c.cant / cur.g.cant * 100 : 0)}% del total) con SLA {fmt1(c.sla)}%</>} />
-        <Card icon="📉" titulo={"En caída vs " + prevLbl} items={sug.caida} vacio={prev ? `Nadie empeoró más de ${CFG.deltaSla} pp.` : "Sin período de comparación."}
-          render={(c) => <><b>{c.name}</b> — SLA {fmt1(c.sla)}% ({fmt1(c.delta)} pp)</>} />
-        <Card icon="📈" titulo="Mejorando" items={sug.mejora} vacio={prev ? "Sin mejoras grandes esta vez." : "Sin período de comparación."}
-          render={(c) => <><b>{c.name}</b> — SLA {fmt1(c.sla)}% (+{fmt1(c.delta)} pp)</>} />
+      <div style={{ marginBottom: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 10 }}>
+          <MiniCat icon="🔴" titulo="Críticos" items={sug.criticos} tono={C.critText} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
+            render={(c) => <><b>{c.name}</b> · SLA {fmt1(c.sla)}% · {fmtInt(c.dem + c.d21)} dem+repro</>} />
+          <MiniCat icon="📦" titulo={`Sobrecarga (>${CFG.sobrecarga}/día)`} items={sug.sobre} tono={C.warn} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
+            render={(c) => <><b>{c.name}</b> · {fmt1(c.prom)}/día · tope {c.tope || CFG.tope}</>} />
+          <MiniCat icon="🌙" titulo="Terminan tarde" items={sug.tarde} tono={C.warn} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
+            render={(c) => <><b>{c.name}</b> · {fmt0(c.p21rate * 100)}% post21{c.fin != null ? " · " + fmtHora(c.fin) : ""}</>} />
+          {sug.repro.length > 0 && (
+            <MiniCat icon="🔁" titulo="Repro 21 recurrente" items={sug.repro} tono={C.warn} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
+              render={(c) => <><b>{c.name}</b> · {fmtInt(c.d21)} repro-21 · {c.dd21}/{c.dias} días</>} />
+          )}
+          {sug.caida.length > 0 && (
+            <MiniCat icon="📉" titulo={"En caída vs " + prevLbl} items={sug.caida} tono={C.critText} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
+              render={(c) => <><b>{c.name}</b> · SLA {fmt1(c.sla)}% · {fmt1(c.delta)}pp</>} />
+          )}
+          {sug.mejora.length > 0 && (
+            <MiniCat icon="📈" titulo="Mejorando" items={sug.mejora} tono={C.goodText} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
+              render={(c) => <><b>{c.name}</b> · SLA {fmt1(c.sla)}% · +{fmt1(c.delta)}pp</>} />
+          )}
+        </div>
+        {sug.caballos.length > 0 && (
+          <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.25)", borderRadius: 12, padding: "9px 12px", marginTop: 10, fontSize: 12, lineHeight: 1.7 }}>
+            <b style={{ color: C.goodText }}>💪 Capacidad disponible</b> ·{" "}
+            {sug.caballos.slice(0, 6).map((c, i) => (
+              <span key={c.name} onClick={() => toggleDrill("cadete", c.name, "cat")} style={{ cursor: "pointer" }}>
+                {i > 0 ? " · " : ""}{c.name} <span style={{ color: C.muted }}>({fmt1(c.sla)}%)</span>
+              </span>
+            ))}
+            {sug.caballos.length > 6 && <span style={{ color: C.muted }}> · +{sug.caballos.length - 6}</span>}
+          </div>
+        )}
+        {drill && drill.src === "cat" && renderDrill(drill)}
       </div>
       )}
 
