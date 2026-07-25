@@ -60,6 +60,15 @@ const mediana = (arr) => { if (!arr.length) return 0; const s = arr.slice().sort
 // Mismo criterio de match localidad↔zona que src/Zonas.js (tolerante, contra los nombres de zonas_cp).
 const normZ = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ");
 const matchZona = (nl, nz) => { if (!nl || nl.length < 4) return false; return nz === nl || nz.includes(nl) || nl.includes(nz); };
+const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MES_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+// Rango compacto de un set de fechas ISO: "20–24 jul" (mismo mes) o "23 jun–19 jul".
+function rangoFechas(fechas) {
+  if (!fechas || !fechas.length) return "";
+  const s = fechas.slice().sort();
+  const [, am, ad] = s[0].split("-"); const [, bm, bd] = s[s.length - 1].split("-");
+  return am === bm ? `${+ad}–${+bd} ${MES[+am - 1]}` : `${+ad} ${MES[+am - 1]}–${+bd} ${MES[+bm - 1]}`;
+}
 
 // Una única fórmula de SLA Meli para toda la pestaña: (ML − demorados − repro 21) / ML.
 function slaMeli(ml, dem, dem21) {
@@ -353,8 +362,8 @@ export default function Analisis({ semanas }) {
     window.addEventListener("resize", onR);
     return () => window.removeEventListener("resize", onR);
   }, []);
-  // default: última semana completa (o la última que haya)
-  const periodW = periodo.w || completas[completas.length - 1] || labels[labels.length - 1] || null;
+  // default: la semana más reciente (la "en curso"); el manejo de parcial ya está resuelto.
+  const periodW = periodo.w || labels[labels.length - 1] || null;
 
   const periodLabels = useMemo(() => {
     if (periodo.t === "sem") return periodW ? [periodW] : [];
@@ -601,14 +610,19 @@ export default function Analisis({ semanas }) {
 
   const periodDesc = periodo.t === "sem" ? "Semana del " + fmtSemLabel(periodW) + (enCursoActual ? " (en curso)" : parcialActual ? " (parcial)" : "")
     : periodo.t === "ult4" ? "Últimas 4 semanas completas"
-      : "Todo el histórico";
+      : "Historial completo";
 
-  const segBtn = (t, txt) => (
-    <button onClick={() => setPeriodo((p) => ({ t, w: t === "sem" ? (p.w || periodW) : p.w }))}
-      style={{ padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", borderRadius: 8, border: `1px solid ${periodo.t === t ? C.teal : C.border}`, background: periodo.t === t ? "rgba(46,207,170,0.14)" : "transparent", color: periodo.t === t ? C.teal : C.muted }}>
-      {txt}
-    </button>
-  );
+  // Rangos de fecha para cada botón del selector + títulos dinámicos por período.
+  const weekByLabel = (l) => weeks.find((w) => w.label === l);
+  const minFecha = (() => { let mn = ""; weeks.forEach((w) => w.fechas.forEach((f) => { if (!mn || f < mn) mn = f; })); return mn; })();
+  const subPeriodo = {
+    sem: weekByLabel(periodW) ? rangoFechas(weekByLabel(periodW).fechas) : "",
+    ult4: rangoFechas(completas.slice(-4).flatMap((l) => weekByLabel(l)?.fechas || [])),
+    todo: minFecha ? `desde ${MES_FULL[+minFecha.split("-")[1] - 1]}` : "todo el histórico",
+  };
+  const tituloBloque = periodo.t === "sem" ? "Decisiones de esta semana" : periodo.t === "ult4" ? "Decisiones de las últimas 4 semanas" : "Patrones históricos";
+  const tituloAtender = periodo.t === "todo" ? "Casos históricos a revisar" : (enCursoActual ? "Atender hoy" : "A atender");
+
   const th = (key, label, right) => (
     <th onClick={() => doSort(key)} style={{ padding: "7px 8px", textAlign: right ? "right" : "left", cursor: "pointer", color: sortCol === key ? C.teal : C.muted, fontWeight: 600, fontSize: 11.5, whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, background: C.cardAlt }}>
       {label}{sortCol === key ? (sortDir < 0 ? " ▼" : " ▲") : ""}
@@ -734,7 +748,7 @@ export default function Analisis({ semanas }) {
   const resumenTexto = () => {
     const L = [`📊 Flexit · ${periodDesc}`];
     if (maxFecha) L.push(`Datos hasta ${fmtDMY(maxFecha)}`);
-    L.push("", "🟠 Atender hoy:");
+    L.push("", `🟠 ${tituloAtender}:`);
     if (alertas.cadetes.length === 0) L.push("• Nadie en rojo 👏");
     else alertas.cadetes.slice(0, 3).forEach((a) => L.push(`• ${a.name} · ${a.accion} — ${a.motivo}`));
     const pos = [];
@@ -755,6 +769,35 @@ export default function Analisis({ semanas }) {
 
   return (
     <div style={{ color: C.ink }}>
+      {/* Selector de período — control segmentado prominente y fijo arriba */}
+      <div style={{ position: "sticky", top: 0, zIndex: 5, background: C.bg, paddingTop: 8, paddingBottom: 10, marginBottom: 12, borderBottom: `1px solid ${C.faint}` }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 7 }}>¿Qué querés revisar?</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[["sem", "Esta semana"], ["ult4", "Últimas 4 semanas"], ["todo", "Historial"]].map(([t, txt]) => {
+            const on = periodo.t === t;
+            return (
+              <button key={t} onClick={() => setPeriodo((p) => ({ t, w: t === "sem" ? (p.w || periodW) : p.w }))}
+                style={{ flex: "1 1 150px", minWidth: 130, padding: "9px 14px", borderRadius: 11, cursor: "pointer", textAlign: "center", border: `1px solid ${on ? C.teal : C.border}`, background: on ? C.teal : C.cardAlt, color: on ? C.bg : C.ink }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{txt}</div>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: on ? "rgba(13,13,43,0.72)" : C.muted, marginTop: 1 }}>{subPeriodo[t] || "—"}</div>
+              </button>
+            );
+          })}
+        </div>
+        {periodo.t === "sem" && (
+          <select value={periodW || ""} onChange={(e) => setPeriodo({ t: "sem", w: e.target.value })}
+            style={{ marginTop: 8, padding: "8px 12px", borderRadius: 9, background: C.cardAlt, color: C.ink, border: `1px solid ${C.border}`, fontSize: 13, fontWeight: 600, width: "100%", maxWidth: 300 }}>
+            {labels.slice().reverse().map((l) => {
+              const w = weekByLabel(l);
+              return <option key={l} value={l}>{"Semana del " + fmtSemLabel(l) + (w?.enCurso ? " (en curso)" : w?.parcial ? " (parcial)" : "")}</option>;
+            })}
+          </select>
+        )}
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
+          {periodDesc}{prevLabels ? " · comparado contra " + (periodo.t === "sem" ? (enCursoActual ? `los mismos ${nCurDias} días de la sem. del ` : "la semana del ") + fmtSemLabel(prevLabels[0]) : "las 4 semanas anteriores") : ""}
+        </div>
+      </div>
+
       {/* Frescura de datos — arriba de todo */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
         <span>📅 Datos hasta <b style={{ color: C.ink }}>{maxFecha ? fmtDMY(maxFecha) : "—"}</b></span>
@@ -784,26 +827,9 @@ export default function Analisis({ semanas }) {
         </div>
       )}
 
-      {/* Selector de período */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
-        {segBtn("sem", "Semana")}{segBtn("ult4", "Últimas 4")}{segBtn("todo", "Todo")}
-        {periodo.t === "sem" && (
-          <select value={periodW || ""} onChange={(e) => setPeriodo({ t: "sem", w: e.target.value })}
-            style={{ padding: "6px 10px", borderRadius: 8, background: C.cardAlt, color: C.ink, border: `1px solid ${C.border}`, fontSize: 12 }}>
-            {labels.slice().reverse().map((l) => {
-              const w = weeks.find((x) => x.label === l);
-              return <option key={l} value={l}>{"Semana del " + fmtSemLabel(l) + (w?.parcial ? " (parcial)" : "")}</option>;
-            })}
-          </select>
-        )}
-      </div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
-        {periodDesc} · {prevLabels ? "comparado contra " + (periodo.t === "sem" ? "la semana del " + fmtSemLabel(prevLabels[0]) : "las 4 semanas anteriores") : "sin período de comparación"}
-      </div>
-
       {/* === Decisiones de la semana (v2) === */}
       <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>Decisiones de la semana <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· {periodDesc.toLowerCase()}</span></h3>
+        <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>{tituloBloque}</h3>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
           <Tile label="SLA Meli (solo ML)" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
           <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
@@ -813,7 +839,7 @@ export default function Analisis({ semanas }) {
         {/* Atender hoy — tarjetas por cadete, la más urgente resaltada */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1 }}>🟠 Atender hoy <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más urgente primero</span></div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1 }}>🟠 {tituloAtender} <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más urgente primero</span></div>
             <button onClick={copiar} title="Copiar resumen para WhatsApp" style={{ background: copiado ? "rgba(46,207,170,0.16)" : C.cardAlt, border: `1px solid ${copiado ? C.teal : C.border}`, borderRadius: 8, color: copiado ? C.teal : C.muted, fontSize: 12, fontWeight: 600, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
               {copiado ? "✓ Copiado" : "💬 Copiar resumen"}
             </button>
