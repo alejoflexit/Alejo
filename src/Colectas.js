@@ -942,8 +942,8 @@ function ColectasInner({ soloArribos = false }) {
                   <React.Fragment key={chofer}>
                     {/* Group header */}
                     <tr onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
-                      style={{ background: isActive ? 'rgba(46,207,170,0.12)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
-                      <td colSpan={7} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${BRAND.teal}` }}>
+                      style={{ background: isActive ? 'rgba(58,143,212,0.14)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
+                      <td colSpan={7} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#3A8FD4'}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
                             <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#FBBF24':'rgba(255,255,255,0.85)' }}>
@@ -1026,7 +1026,7 @@ function ColectasInner({ soloArribos = false }) {
                       return (
                         <tr key={c.id}
                           onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
-                          style={{ background: isActive ? 'rgba(46,207,170,0.09)' : rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1, transition:'background 0.15s' }}>
+                          style={{ background: isActive ? 'rgba(58,143,212,0.10)' : rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1, transition:'background 0.15s' }}>
                           {/* Estado */}
                           <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
                             <button
