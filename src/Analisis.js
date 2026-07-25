@@ -24,6 +24,19 @@ const CFG = {
   sobrecarga: 45,       // promedio diario ≥45 (90% del tope)
   deltaSla: 1.5,        // pp para "en caída" / "mejorando"
   zonaMin: 50,          // envíos mínimos para opinar de una zona (anti-ruido)
+  // --- Decisiones de la semana (v2) ---
+  alertasMax: 5,        // máximo de alertas en "Atención prioritaria"
+  // Severidad por tipo de señal (spec: crítico 3 / caída 2 / al límite–tarde–repro21 1).
+  sev: { critico: 3, caida: 2, limite: 1, tarde: 1, repro: 1, locCritico: 2, locCaida: 1 },
+  // Diccionario de acciones. `hoy` se usa en la semana en curso; `otro` en "Últimas 4"/"Todo".
+  acciones: {
+    critico: { hoy: "hablar hoy", otro: "revisar" },
+    caida: { hoy: "hablar hoy", otro: "revisar" },
+    repro: { hoy: "hablar hoy", otro: "revisar" },
+    tarde: { hoy: "revisar ruta y hora de salida", otro: "revisar ruta y hora de salida" },
+    limite: { hoy: "descargar carga", otro: "descargar carga" },
+    zona: { hoy: "revisar zona", otro: "revisar zona" },
+  },
 };
 
 const C = {
@@ -43,6 +56,7 @@ const fmt0 = (n) => Number(n).toLocaleString("es-AR", { maximumFractionDigits: 0
 const fmtHora = (m) => (m == null ? "—" : String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(Math.round(m % 60)).padStart(2, "0"));
 const hhmmToMin = (s) => { if (!s) return null; const p = String(s).split(":"); if (p.length < 2) return null; const h = +p[0], mi = +p[1]; return (isNaN(h) || isNaN(mi)) ? null : h * 60 + mi; };
 const fmtSemLabel = (label) => (label ? String(label).split("-")[0] : "");
+const mediana = (arr) => { if (!arr.length) return 0; const s = arr.slice().sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 // Una única fórmula de SLA Meli para toda la pestaña: (ML − demorados − repro 21) / ML.
 function slaMeli(ml, dem, dem21) {
@@ -72,12 +86,15 @@ function aggWeeks(semanas, labelSet, topeMap) {
         g.d21 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.ml += m.envios_ml;
         if (esSin(name)) { g.sin += m.cantidad; continue; }
         if (esBasura(name)) { g.basura += m.cantidad; continue; }
-        const c = porCad[name] || (porCad[name] = { name, cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, dias: 0, dd21: 0, finSum: 0, finDias: 0, diasSobreTope: 0 });
+        const c = porCad[name] || (porCad[name] = { name, cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, dias: 0, dd21: 0, finSum: 0, finDias: 0, diasSobreTope: 0, diasDem: 0, diasP21: 0, diasCargaAlta: 0, tope: topeMap[name] || CFG.tope });
         c.cant += m.cantidad; c.pend += m.pendientes; c.dem += m.demorados;
         c.d21 += (m.dem21 || 0); c.p21 += (m.post21 || 0); c.ml += m.envios_ml;
         c.dias += 1;
         if ((m.dem21 || 0) > 0) c.dd21 += 1;
+        if ((m.demorados || 0) > 0 || (m.dem21 || 0) > 0) c.diasDem += 1;
+        if ((m.post21 || 0) > 0) c.diasP21 += 1;
         const tope = topeMap[name] || CFG.tope;
+        if (m.cantidad >= CFG.sobrecarga) c.diasCargaAlta += 1;
         if (m.cantidad > tope) c.diasSobreTope += 1;
         const fm = hhmmToMin(m.fin_ruta);
         if (fm != null) { c.finSum += fm; c.finDias += 1; }
@@ -157,6 +174,23 @@ function CadTip({ active, payload }) {
       <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.name}</div>
       <div style={{ color: C.muted }}>SLA <b style={{ color: C.ink }}>{p.sla != null ? fmt1(p.sla) + "%" : "—"}</b></div>
       <div style={{ color: C.muted }}>Envíos/día <b style={{ color: C.ink }}>{fmt1(p.prom)}</b> · {fmtInt(p.cant)} en {p.dias} días</div>
+    </div>
+  );
+}
+
+// Fila de alerta del bloque "Atención prioritaria". Clickeable → abre el drill-down (Tarea 2).
+function AlertRow({ a, onClick, abierto }) {
+  return (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 6px", borderTop: `1px solid ${C.faint}`, cursor: onClick ? "pointer" : "default", background: abierto ? "rgba(255,255,255,0.03)" : "transparent" }}>
+      <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#F2953F", marginTop: 5, flex: "0 0 auto" }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>
+          {a.kind === "localidad" ? "📍 " : ""}{a.name} <span style={{ color: C.teal, fontWeight: 600 }}>· {a.accion}</span>
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{a.motivo}</div>
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", marginLeft: 8 }}>{a.dato}</div>
+      {onClick && <span style={{ color: C.teal, fontSize: 12, marginLeft: 4, flex: "0 0 auto" }}>{abierto ? "▾" : "▸"}</span>}
     </div>
   );
 }
@@ -270,6 +304,7 @@ export default function Analisis({ semanas }) {
   const completas = weeks.filter((w) => !w.parcial).map((w) => w.label);
 
   const [periodo, setPeriodo] = useState({ t: "sem", w: null });
+  const [verCompleto, setVerCompleto] = useState(false); // 7 tarjetas de Sugerencias colapsadas
   // default: última semana completa (o la última que haya)
   const periodW = periodo.w || completas[completas.length - 1] || labels[labels.length - 1] || null;
 
@@ -358,6 +393,69 @@ export default function Analisis({ semanas }) {
     return { criticos, tarde, repro, sobre, caballos, caida, mejora };
   }, [cur, prev]);
 
+  // Días distintos del período (para la recurrencia del score).
+  const diasPeriodo = useMemo(() => {
+    const set = new Set();
+    weeks.forEach((w) => { if (periodLabels.includes(w.label)) w.fechas.forEach((f) => set.add(f)); });
+    return set.size || 1;
+  }, [weeks, periodLabels]);
+
+  // ---- Decisiones de la semana: alertas priorizadas por score ----
+  // score = severidad (por tipo) × peso por volumen (ML / mediana ML) × recurrencia (días afectados / días del período).
+  const alertas = useMemo(() => {
+    const enCurso = periodo.t === "sem" && !!parcialActual;
+    const acc = (tipo) => CFG.acciones[tipo][enCurso ? "hoy" : "otro"];
+    const mlList = cur.cads.filter((c) => c.ml >= CFG.minML).map((c) => c.ml);
+    const medML = mediana(mlList) || 1;
+    const rec = (diasAfect) => Math.min(1, (diasAfect || 0) / diasPeriodo);
+    const volW = (ml) => (ml || 0) / medML;
+
+    // Un candidato por cadete: el de mayor score entre sus señales.
+    const porCad = {};
+    const push = (c, tipo, motivo, dato, recur) => {
+      const sev = CFG.sev[tipo];
+      const score = sev * volW(c.ml) * rec(recur);
+      if (!(score > 0)) return;
+      const prevC = porCad[c.name];
+      if (!prevC || score > prevC.score) {
+        porCad[c.name] = { kind: "cadete", key: "c:" + c.name, name: c.name, tipo, sev, score, motivo, dato, accion: acc(tipo), c };
+      }
+    };
+    sug.criticos.forEach((c) => push(c, "critico",
+      `SLA ${fmt1(c.sla)}% · ${fmtInt(c.dem)} dem + ${fmtInt(c.d21)} repro 21 sobre ${fmtInt(c.ml)} ML`, fmt1(c.sla) + "%", c.diasDem));
+    sug.caida.forEach((c) => push(c, "caida",
+      `SLA ${fmt1(c.sla)}% · bajó ${fmt1(Math.abs(c.delta))} pp vs ${prevLbl}`, fmt1(c.sla) + "%", c.diasDem));
+    sug.tarde.forEach((c) => push(c, "tarde",
+      `${fmt0(c.p21rate * 100)}% post 21${c.fin != null ? " · fin prom. " + fmtHora(c.fin) : ""}`, fmt0(c.p21rate * 100) + "% post 21", c.diasP21));
+    sug.repro.forEach((c) => push(c, "repro",
+      `repro 21 en ${c.dd21} de ${c.dias} días (${fmtInt(c.d21)} envíos)`, fmtInt(c.d21) + " repro 21", c.dd21));
+    sug.sobre.forEach((c) => push(c, "limite",
+      `${fmt1(c.prom)} env/día en ${c.dias} días (tope ${c.tope || CFG.tope})`, fmt1(c.prom) + " /día", Math.max(c.diasSobreTope, c.diasCargaAlta)));
+
+    // Candidatos por localidad (semanas_zonas). Recurrencia = 1 (sin conteo diario fiable — supuesto marcado).
+    const locs = [];
+    if (zonaData && !zonaData.vacio && zonaData.grandes) {
+      zonaData.grandes.forEach((z) => {
+        if (z.sla == null) return;
+        let tipo = null;
+        if (z.sla < CFG.slaCritico) tipo = "locCritico";
+        else if (z.delta != null && z.delta <= -1) tipo = "locCaida";
+        if (!tipo) return;
+        const score = CFG.sev[tipo] * volW(z.envios_ml) * 1;
+        if (!(score > 0)) return;
+        locs.push({
+          kind: "localidad", key: "l:" + z.localidad, name: z.localidad, tipo: "zona", sev: CFG.sev[tipo], score,
+          motivo: `SLA ${fmt1(z.sla)}%${z.delta != null ? " · " + (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta)) + " pp vs global" : ""} · ${fmtInt(z.cantidad)} envíos`,
+          dato: fmt1(z.sla) + "%", accion: acc("zona"), z,
+        });
+      });
+    }
+
+    const todos = [...Object.values(porCad), ...locs].sort((a, b) => b.score - a.score);
+    const top = todos.slice(0, CFG.alertasMax);
+    return { top, nCad: top.filter((a) => a.kind === "cadete").length, nLoc: top.filter((a) => a.kind === "localidad").length, total: todos.length };
+  }, [cur, sug, zonaData, periodo.t, parcialActual, prevLbl, diasPeriodo]);
+
   // ---- Ranking table ----
   const [sortCol, setSortCol] = useState("cant");
   const [sortDir, setSortDir] = useState(-1);
@@ -418,6 +516,24 @@ export default function Analisis({ semanas }) {
       </div>
       <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
         {periodDesc} · {prevLabels ? "comparado contra " + (periodo.t === "sem" ? "la semana del " + fmtSemLabel(prevLabels[0]) : "las 4 semanas anteriores") : "sin período de comparación"}
+      </div>
+
+      {/* === Decisiones de la semana (v2) === */}
+      <div style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>Decisiones de la semana <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· {periodDesc.toLowerCase()}</span></h3>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+          <Tile label="SLA Meli (solo ML)" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
+          <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
+          <Tile label="Requieren atención" value={fmtInt(alertas.top.length)} delta={<div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{alertas.nCad} cadete{alertas.nCad === 1 ? "" : "s"} · {alertas.nLoc} localidad{alertas.nLoc === 1 ? "" : "es"}</div>} />
+        </div>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 2 }}>🟠 Atención prioritaria <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más importante primero</span></div>
+          {alertas.top.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: C.muted, padding: "8px 6px" }}>Nada urgente en este período. 👏 Mirá "Ver análisis completo" para el detalle.</div>
+          ) : (
+            alertas.top.map((a) => <AlertRow key={a.key} a={a} />)
+          )}
+        </div>
       </div>
 
       {/* 1. Resumen ejecutivo */}
@@ -544,8 +660,12 @@ export default function Analisis({ semanas }) {
         </div>
       </div>
 
-      {/* 4. Sugerencias (mejores / críticos / reincidentes) */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Sugerencias <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· {periodDesc.toLowerCase()}</span></h3>
+      {/* 4. Sugerencias (mejores / críticos / reincidentes) — colapsadas detrás de "Ver análisis completo" */}
+      <div onClick={() => setVerCompleto((v) => !v)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
+        <span style={{ color: C.teal, fontSize: 14 }}>{verCompleto ? "▾" : "▸"}</span>
+        <h3 style={{ fontSize: 14, margin: 0 }}>Ver análisis completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· 7 tarjetas de sugerencias · {periodDesc.toLowerCase()}</span></h3>
+      </div>
+      {verCompleto && (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 12, marginBottom: 22 }}>
         <Card icon="🔴" titulo="SLA crítico — hablar hoy" items={sug.criticos} vacio={`Nadie abajo de ${CFG.slaCritico}%. 👏`}
           render={(c) => <><b>{c.name}</b> — SLA {fmt1(c.sla)}% ({fmtInt(c.dem)} dem. + {fmtInt(c.d21)} repro 21 sobre {fmtInt(c.ml)} ML)</>} />
@@ -562,6 +682,7 @@ export default function Analisis({ semanas }) {
         <Card icon="📈" titulo="Mejorando" items={sug.mejora} vacio={prev ? "Sin mejoras grandes esta vez." : "Sin período de comparación."}
           render={(c) => <><b>{c.name}</b> — SLA {fmt1(c.sla)}% (+{fmt1(c.delta)} pp)</>} />
       </div>
+      )}
 
       {/* Ranking completo */}
       <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Ranking completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(clic en una columna para ordenar)</span></h3>
