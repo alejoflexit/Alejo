@@ -356,6 +356,7 @@ export default function Analisis({ semanas }) {
   const [copiado, setCopiado] = useState(false);
   const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
+  const [verHist, setVerHist] = useState(false); // "ver historial completo" en el drill (modo Historial)
 
   useEffect(() => {
     const onR = () => setIsMobile(window.innerWidth < 640);
@@ -668,13 +669,37 @@ export default function Analisis({ semanas }) {
     }
     dias.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
     const tope = (c && c.tope) || topeMap[name] || CFG.tope;
-    const spark = labels.slice(-4).map((lb) => {
-      let ml = 0, dm = 0, d2 = 0; const ss = semanas.find((x) => x.label === lb);
-      if (ss) for (const dia of ss.dias) for (const m of dia.datos) if (norm(m.cadete) === name) { ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); }
-      return { name: fmtSemLabel(lb), sla: slaMeli(ml, dm, d2) };
-    }).filter((x) => x.sla != null);
+    // Serie por semana del cadete (para modos Últimas 4 / Historial).
+    const serie = weeks.map((w) => {
+      const ss = semanas.find((x) => x.label === w.label);
+      let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, ent = 0, nd = 0;
+      if (ss) for (const dia of ss.dias) for (const m of dia.datos) if (norm(m.cadete) === name) {
+        cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); ent += (m.cantidad - m.pendientes); nd++;
+      }
+      return { label: w.label, name: fmtSemLabel(w.label), cant, ml, dm, d2, sla: slaMeli(ml, dm, d2), prom: nd ? cant / nd : 0, post21: ent > 0 ? p21 / ent * 100 : 0, activa: cant > 0 };
+    }).filter((x) => x.activa);
+    const spark = serie.slice(-4).map((w) => ({ name: w.name, sla: w.sla })).filter((x) => x.sla != null);
+    const s4 = serie.slice(-4);
+    const t4 = s4.reduce((a, w) => ({ ml: a.ml + w.ml, dm: a.dm + w.dm, d2: a.d2 + w.d2 }), { ml: 0, dm: 0, d2: 0 });
+    const sla4 = slaMeli(t4.ml, t4.dm, t4.d2);
+    const ultSem = s4.length ? s4[s4.length - 1] : null;
+    const nPost = s4.filter((w) => w.post21 >= CFG.tarde_post21 * 100).length;
+    const nBajo = s4.filter((w) => w.sla != null && w.sla < CFG.slaCritico).length;
+    const patron = nPost >= 2 ? `post-21 alto (≥${CFG.tarde_post21 * 100}%) en ${nPost} de las últimas ${s4.length} semanas`
+      : nBajo >= 2 ? `SLA <${CFG.slaCritico}% en ${nBajo} de las últimas ${s4.length} semanas`
+        : "sin patrón repetido en las últimas semanas";
+    const peores = serie.filter((w) => w.ml >= 30 && w.sla != null).sort((a, b) => a.sla - b.sla).slice(0, 3);
     const sig = alertas.byCad[name];
     const tdR = { padding: "5px 8px", textAlign: "right" };
+    const thW = (arr) => <thead><tr>{arr.map((h, i) => <th key={i} style={{ padding: "5px 8px", textAlign: i === 0 ? "left" : "right", color: C.muted, fontWeight: 600, fontSize: 11, borderBottom: `1px solid ${C.border}` }}>{h}</th>)}</tr></thead>;
+    const filaSem = (w, i) => (
+      <tr key={i} style={{ borderBottom: `1px solid ${C.faint}` }}>
+        <td style={{ padding: "5px 8px", fontWeight: 600 }}>{w.name}</td>
+        <td style={tdR}>{fmtInt(w.cant)}</td>
+        <td style={{ ...tdR, color: slaColor(w.sla) }}>{w.sla != null ? fmt1(w.sla) + "%" : "—"}</td>
+        <td style={tdR}>{fmt0(w.post21)}%</td>
+      </tr>
+    );
     return (
       <div style={panelStyle}>
         <DrillHead title={name} onClose={() => setDrill(null)} />
@@ -692,14 +717,27 @@ export default function Analisis({ semanas }) {
         ) : (
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Sin alerta activa: está dentro de los umbrales del período.</div>
         )}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
-          <Kv k="Envíos" v={fmtInt(c ? c.cant : 0)} />
-          <Kv k="Envíos/día" v={c ? fmt1(c.prom) : "—"} />
-          <Kv k="Tope real" v={fmtInt(tope)} />
-          <Kv k="SLA Meli" v={c && c.sla != null ? fmt1(c.sla) + "%" : "—"} color={slaColor(c ? c.sla : null)} />
-          <Kv k="Fin de ruta prom." v={c ? fmtHora(c.fin) : "—"} />
-        </div>
-        {c && (
+        {periodo.t === "todo" ? (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 8 }}>
+              <Kv k="SLA histórico" v={c && c.sla != null ? fmt1(c.sla) + "%" : "—"} color={slaColor(c ? c.sla : null)} />
+              <Kv k="Últimas 4 sem." v={sla4 != null ? fmt1(sla4) + "%" : "—"} color={slaColor(sla4)} />
+              <Kv k="Prom/día hist." v={c ? fmt1(c.prom) : "—"} />
+              <Kv k="Última semana" v={ultSem ? fmt1(ultSem.prom) + "/día" : "—"} />
+              <Kv k="Tope real" v={fmtInt(tope)} />
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}><b style={{ color: C.ink }}>Patrón:</b> {patron}</div>
+          </>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
+            <Kv k="Envíos" v={fmtInt(c ? c.cant : 0)} />
+            <Kv k="Envíos/día" v={c ? fmt1(c.prom) : "—"} />
+            <Kv k="Tope real" v={fmtInt(tope)} />
+            <Kv k="SLA Meli" v={c && c.sla != null ? fmt1(c.sla) + "%" : "—"} color={slaColor(c ? c.sla : null)} />
+            <Kv k="Fin de ruta prom." v={c ? fmtHora(c.fin) : "—"} />
+          </div>
+        )}
+        {periodo.t !== "todo" && c && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Carga: {fmt1(c.prom)} env/día vs tope {tope}</div>
             <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
@@ -712,32 +750,69 @@ export default function Analisis({ semanas }) {
             <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>SLA últimas {spark.length} semanas</div>
             <ResponsiveContainer width="100%" height={56}>
               <LineChart data={spark} margin={{ top: 4, right: 8, left: -34, bottom: 0 }}>
-                <YAxis domain={["dataMin - 1", 100]} hide />
+                <YAxis domain={[80, 100]} hide />
                 <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11 }} formatter={(v) => [fmt1(v) + "%", "SLA"]} labelStyle={{ color: C.muted }} />
                 <Line type="monotone" dataKey="sla" stroke={C.teal} strokeWidth={2} dot={{ r: 2, fill: C.teal }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         )}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead><tr>{["Día", "Envíos", "Dem.", "Repro21", "Post21"].map((h, i) => (
-              <th key={i} style={{ padding: "5px 8px", textAlign: i === 0 ? "left" : "right", color: C.muted, fontWeight: 600, fontSize: 11, borderBottom: `1px solid ${C.border}` }}>{h}</th>
-            ))}</tr></thead>
-            <tbody>
-              {dias.map((r, i) => (
-                <tr key={i} style={{ borderBottom: `1px solid ${C.faint}` }}>
-                  <td style={{ padding: "5px 8px", fontWeight: 600 }}>{fmtDDMM(r.fecha)}</td>
-                  <td style={{ ...tdR, color: r.cant > tope ? C.critText : C.ink }}>{fmtInt(r.cant)}</td>
-                  <td style={tdR}>{fmtInt(r.dem)}</td>
-                  <td style={tdR}>{fmtInt(r.d21)}</td>
-                  <td style={tdR}>{fmtInt(r.p21)}</td>
-                </tr>
-              ))}
-              {dias.length === 0 && <tr><td colSpan={5} style={{ padding: 8, color: C.muted }}>Sin días registrados en el período.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        {periodo.t === "sem" ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              {thW(["Día", "Envíos", "Dem.", "Repro21", "Post21"])}
+              <tbody>
+                {dias.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.faint}` }}>
+                    <td style={{ padding: "5px 8px", fontWeight: 600 }}>{fmtDDMM(r.fecha)}</td>
+                    <td style={{ ...tdR, color: r.cant > tope ? C.critText : C.ink }}>{fmtInt(r.cant)}</td>
+                    <td style={tdR}>{fmtInt(r.dem)}</td>
+                    <td style={tdR}>{fmtInt(r.d21)}</td>
+                    <td style={tdR}>{fmtInt(r.p21)}</td>
+                  </tr>
+                ))}
+                {dias.length === 0 && <tr><td colSpan={5} style={{ padding: 8, color: C.muted }}>Sin días registrados en el período.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        ) : periodo.t === "ult4" ? (
+          <div style={{ overflowX: "auto" }}>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Una fila por semana (últimas 4)</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              {thW(["Semana", "Envíos", "SLA", "Post21"])}
+              <tbody>
+                {s4.map(filaSem)}
+                {s4.length === 0 && <tr><td colSpan={4} style={{ padding: 8, color: C.muted }}>Sin semanas registradas.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.ink, marginBottom: 5 }}>Peores semanas</div>
+            {peores.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.muted }}>Sin semanas con muestra suficiente.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {peores.map((w, i) => (
+                  <div key={i} style={{ fontSize: 12.5 }}><span style={{ color: C.muted }}>•</span> <b>{w.name}</b> · <span style={{ color: slaColor(w.sla) }}>SLA {fmt1(w.sla)}%</span> · {fmt0(w.post21)}% post-21</div>
+                ))}
+              </div>
+            )}
+            {serie.length > 3 && (
+              <div onClick={() => setVerHist((v) => !v)} style={{ marginTop: 8, fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600 }}>
+                {verHist ? "▾ ocultar historial completo" : `▸ ver historial completo (${serie.length} semanas)`}
+              </div>
+            )}
+            {verHist && (
+              <div style={{ marginTop: 8, maxHeight: 220, overflowY: "auto", border: `1px solid ${C.faint}`, borderRadius: 8 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  {thW(["Semana", "Envíos", "SLA", "Post21"])}
+                  <tbody>{serie.slice().reverse().map(filaSem)}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
