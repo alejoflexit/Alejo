@@ -57,6 +57,9 @@ const fmtHora = (m) => (m == null ? "—" : String(Math.floor(m / 60)).padStart(
 const hhmmToMin = (s) => { if (!s) return null; const p = String(s).split(":"); if (p.length < 2) return null; const h = +p[0], mi = +p[1]; return (isNaN(h) || isNaN(mi)) ? null : h * 60 + mi; };
 const fmtSemLabel = (label) => (label ? String(label).split("-")[0] : "");
 const mediana = (arr) => { if (!arr.length) return 0; const s = arr.slice().sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+// Mismo criterio de match localidad↔zona que src/Zonas.js (tolerante, contra los nombres de zonas_cp).
+const normZ = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ");
+const matchZona = (nl, nz) => { if (!nl || nl.length < 4) return false; return nz === nl || nz.includes(nl) || nl.includes(nz); };
 
 // Una única fórmula de SLA Meli para toda la pestaña: (ML − demorados − repro 21) / ML.
 function slaMeli(ml, dem, dem21) {
@@ -117,7 +120,7 @@ function aggWeeks(semanas, labelSet, topeMap) {
 }
 
 // ---- subcomponentes chicos ----
-function Tile({ label, value, delta, dot }) {
+function Tile({ label, value, delta, dot, sub }) {
   return (
     <div style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", minWidth: 120, flex: "1 1 130px" }}>
       <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
@@ -125,6 +128,7 @@ function Tile({ label, value, delta, dot }) {
         {label}
       </div>
       <div style={{ fontSize: 24, fontWeight: 700, color: C.ink, marginTop: 4 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{sub}</div>}
       {delta}
     </div>
   );
@@ -292,6 +296,7 @@ function Informes({ informes }) {
 export default function Analisis({ semanas }) {
   const [zonasRaw, setZonasRaw] = useState(null); // null=cargando, []=vacío
   const [topeMap, setTopeMap] = useState({});
+  const [zonaNames, setZonaNames] = useState([]); // nombres de zonas operativas (zonas_cp) para derivar "Zona op."
   const [zonasErr, setZonasErr] = useState("");
   const [informes, setInformes] = useState(null); // null=cargando, []=sin informes
 
@@ -306,6 +311,10 @@ export default function Analisis({ semanas }) {
         const t = await sbGet("cadete_topes?select=cadete,tope&limit=1000");
         if (alive && Array.isArray(t)) { const m = {}; t.forEach((r) => { m[norm(r.cadete)] = r.tope; }); setTopeMap(m); }
       } catch (e) { /* topes best-effort */ }
+      try {
+        const zc = await sbGet("zonas_cp?select=zona&limit=10000");
+        if (alive && Array.isArray(zc)) setZonaNames([...new Set(zc.map((r) => r.zona).filter(Boolean))]);
+      } catch (e) { /* zona op. best-effort */ }
       try {
         const inf = await sbGet("analista_informes?select=id,fecha,tipo,resumen_tg,informe_md,hay_novedad,created_at&order=created_at.desc&limit=30");
         if (alive) setInformes(Array.isArray(inf) ? inf : []);
@@ -326,6 +335,7 @@ export default function Analisis({ semanas }) {
   const [periodo, setPeriodo] = useState({ t: "sem", w: null });
   const [verCompleto, setVerCompleto] = useState(false); // 7 tarjetas de Sugerencias colapsadas
   const [drill, setDrill] = useState(null); // {kind, name, src} — panel de detalle al tocar una alerta o fila
+  const [verChicas, setVerChicas] = useState(false); // desplegar localidades de muestra chica
   // default: última semana completa (o la última que haya)
   const periodW = periodo.w || completas[completas.length - 1] || labels[labels.length - 1] || null;
 
@@ -385,6 +395,7 @@ export default function Analisis({ semanas }) {
       localidad: `Otras (muestra chica, <${CFG.zonaMin} envíos)`, esOtras: true,
       cantidad: chicas.reduce((a, z) => a + z.cantidad, 0),
       nZonas: chicas.length,
+      chicas: chicas.slice().sort((a, b) => b.cantidad - a.cantidad),
     } : null;
     return { vacio: false, slaGlobal, grandes, otras };
   }, [zonasRaw, weeks, periodLabels, cur]);
@@ -493,6 +504,17 @@ export default function Analisis({ semanas }) {
     return out;
   }, [zonasRaw, prevLabels, weeks]);
 
+  // Frescura: última fecha con datos + cuánto histórico tienen las localidades.
+  const maxFecha = useMemo(() => { let mx = ""; semanas.forEach((s) => s.dias.forEach((d) => { if (d.fecha > mx) mx = d.fecha; })); return mx; }, [semanas]);
+  const zonasInfo = useMemo(() => {
+    if (!zonasRaw || !zonasRaw.length) return { weeks: 0, desde: null };
+    const labs = new Set(); let desde = zonasRaw[0].fecha;
+    zonasRaw.forEach((r) => { labs.add(r.label); if (r.fecha < desde) desde = r.fecha; });
+    return { weeks: labs.size, desde };
+  }, [zonasRaw]);
+  // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → "—").
+  const zonaDe = (loc) => { if (!zonaNames.length) return "—"; const nl = normZ(loc); const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : "—"; };
+
   // ---- Ranking table ----
   const [sortCol, setSortCol] = useState("cant");
   const [sortDir, setSortDir] = useState(-1);
@@ -537,7 +559,8 @@ export default function Analisis({ semanas }) {
   const renderDrill = (d) => {
     if (!d) return null;
     if (d.kind === "localidad") {
-      const z = ((zonaData && zonaData.grandes) || []).find((x) => x.localidad === d.name);
+      const pool = [...((zonaData && zonaData.grandes) || []), ...((zonaData && zonaData.otras && zonaData.otras.chicas) || [])];
+      const z = pool.find((x) => x.localidad === d.name);
       if (!z) return null;
       const pv = prevZonaMap[z.localidad_norm];
       const dAnt = (pv != null && z.sla != null) ? z.sla - pv : null;
@@ -640,8 +663,19 @@ export default function Analisis({ semanas }) {
   const toggleDrill = (kind, name, src) => setDrill((d) => (d && d.src === src && d.name === name && d.kind === kind) ? null : { kind, name, src });
   const isOpen = (kind, name, src) => !!drill && drill.src === src && drill.name === name && drill.kind === kind;
 
+  const periodoParcial = periodLabels.some((l) => weeks.find((w) => w.label === l)?.parcial);
+  const pocasZonas = zonasInfo.weeks > 0 && zonasInfo.weeks < 2;
+  const badge = (txt) => <span key={txt} style={{ fontSize: 10.5, fontWeight: 600, color: "#f3c886", background: "rgba(239,159,39,0.12)", border: "1px solid rgba(239,159,39,0.30)", borderRadius: 999, padding: "2px 9px" }}>{txt}</span>;
+
   return (
     <div style={{ color: C.ink }}>
+      {/* Frescura de datos — arriba de todo */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
+        <span>📅 Datos hasta <b style={{ color: C.ink }}>{maxFecha ? fmtDMY(maxFecha) : "—"}</b></span>
+        {periodoParcial && badge("semana en curso · parcial")}
+        {pocasZonas && badge(`localidades: histórico corto${zonasInfo.desde ? " (desde " + fmtDDMM(zonasInfo.desde) + ")" : ""}`)}
+      </div>
+
       {/* Informes del analista (agente del VPS) — arriba de todo */}
       <Informes informes={informes} />
 
@@ -683,8 +717,8 @@ export default function Analisis({ semanas }) {
 
       {/* 1. Resumen ejecutivo */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 22 }}>
-        <Tile label="Total envíos" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
-        <Tile label="SLA Meli" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
+        <Tile label="Total envíos" sub="ML + particulares" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
+        <Tile label="SLA Meli" sub="solo envíos ML" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
         <Tile label="Demorados + Repro 21" value={fmtInt(cur.g.dem + cur.g.d21)} />
         <Tile label="Entregas post 21" value={fmt1(cur.g.p21rate * 100) + "%"} delta={dP21 != null ? <DeltaSpan delta={dP21} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
         <Tile label="% Pendientes" value={fmt1(cur.g.pendRate * 100) + "%"} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
@@ -726,29 +760,29 @@ export default function Analisis({ semanas }) {
         </div>
       </div>
 
-      {/* 2. SLA por zona */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por zona <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
+      {/* 2. SLA por localidad */}
+      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por localidad <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 22 }}>
         {zonaData == null ? (
-          <div style={{ color: C.muted, fontSize: 12 }}>Cargando zonas…</div>
+          <div style={{ color: C.muted, fontSize: 12 }}>Cargando localidades…</div>
         ) : zonaData.vacio ? (
           <div style={{ color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
             {zonaData.desde
-              ? `Todavía no hay datos por zona para este período. La captura arrancó el ${fmtDMY(zonaData.desde)} — elegí un período desde esa fecha.`
-              : "Los datos por zona se empiezan a capturar desde hoy (la Action nocturna guarda la primera foto esta noche). No hay histórico hacia atrás."}
+              ? `Todavía no hay datos por localidad para este período. La captura arrancó el ${fmtDMY(zonaData.desde)} — elegí un período desde esa fecha.`
+              : "Los datos por localidad se empiezan a capturar desde hoy (la Action nocturna guarda la primera foto esta noche). No hay histórico hacia atrás."}
             {zonasErr ? <div style={{ marginTop: 6, color: C.critText, fontSize: 11 }}>({zonasErr})</div> : null}
           </div>
         ) : (
           <>
             <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>
-              SLA por localidad con la misma fórmula que la tabla por cadete. Δ = puntos vs el SLA global del período ({cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"}). Zonas con &lt;{CFG.zonaMin} envíos van agrupadas abajo (muestra chica).
+              SLA por localidad (dato del Excel de LightData) con la misma fórmula que la tabla por cadete. "Zona op." es la zona operativa derivada con el mismo mapeo de la pestaña Zonas (sin cruce único → "—"). Δ = puntos vs el SLA global del período ({cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"}). Localidades con &lt;{CFG.zonaMin} envíos van agrupadas abajo (muestra chica). Tocá una fila para el detalle.
             </div>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead>
                   <tr>
-                    {["Localidad", "Envíos", "SLA", "Δ vs global", "% post 21", "% Nadie"].map((h, i) => (
-                      <th key={i} style={{ padding: "6px 8px", textAlign: i === 0 ? "left" : "right", color: C.muted, fontWeight: 600, fontSize: 11.5, borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                    {["Localidad", "Zona op.", "Envíos", "SLA", "Δ vs global", "% post 21", "% Nadie"].map((h, i) => (
+                      <th key={i} style={{ padding: "6px 8px", textAlign: i <= 1 ? "left" : "right", color: C.muted, fontWeight: 600, fontSize: 11.5, borderBottom: `1px solid ${C.border}` }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -758,6 +792,7 @@ export default function Analisis({ semanas }) {
                     return (
                       <tr key={i} onClick={() => toggleDrill("localidad", z.localidad, "loc")} style={{ background: isOpen("localidad", z.localidad, "loc") ? "rgba(46,207,170,0.08)" : rojo ? "rgba(229,96,77,0.09)" : "transparent", cursor: "pointer" }}>
                         <td style={{ padding: "6px 8px", fontWeight: 600 }}>{slaIcon(z.sla)} {z.localidad}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "left", color: C.muted }}>{zonaDe(z.localidad)}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(z.cantidad)}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(z.sla), fontWeight: 600 }}>{z.sla != null ? fmt1(z.sla) + "%" : "—"}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", color: z.delta == null ? C.muted : z.delta >= 0 ? C.goodText : C.critText }}>{z.delta == null ? "—" : (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta))}</td>
@@ -767,12 +802,24 @@ export default function Analisis({ semanas }) {
                     );
                   })}
                   {zonaData.otras && (
-                    <tr style={{ color: C.muted }}>
-                      <td style={{ padding: "6px 8px", fontStyle: "italic" }}>{zonaData.otras.localidad} · {zonaData.otras.nZonas} localidades</td>
+                    <tr onClick={() => setVerChicas((v) => !v)} style={{ color: C.muted, cursor: "pointer" }}>
+                      <td style={{ padding: "6px 8px", fontStyle: "italic" }}><span style={{ color: C.teal }}>{verChicas ? "▾" : "▸"}</span> {zonaData.otras.localidad} · {zonaData.otras.nZonas} localidades</td>
+                      <td></td>
                       <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(zonaData.otras.cantidad)}</td>
                       <td colSpan={4}></td>
                     </tr>
                   )}
+                  {zonaData.otras && verChicas && zonaData.otras.chicas.map((z, i) => (
+                    <tr key={"chica" + i} onClick={() => toggleDrill("localidad", z.localidad, "loc")} style={{ background: isOpen("localidad", z.localidad, "loc") ? "rgba(46,207,170,0.08)" : "transparent", cursor: "pointer", color: C.muted }}>
+                      <td style={{ padding: "5px 8px 5px 20px", fontSize: 12 }}>{slaIcon(z.sla)} {z.localidad}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "left", fontSize: 12 }}>{zonaDe(z.localidad)}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{fmtInt(z.cantidad)}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12, color: slaColor(z.sla) }}>{z.sla != null ? fmt1(z.sla) + "%" : "—"}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{z.delta == null ? "—" : (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta))}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{fmt0(z.post21Rate)}%</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{fmt0(z.nadieRate)}%</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -871,7 +918,8 @@ export default function Analisis({ semanas }) {
           <p>SLA Meli = (envíos ML − demorados − repro 21) / envíos ML — misma fórmula que la tabla por cadete. Umbrales: ✅ ≥98% · ⚠️ 95–98% · 🔴 &lt;95%.</p>
           <p>Sugerencias (umbrales calibrables): SLA crítico &lt;{CFG.slaCritico}% con ≥{CFG.minML} ML · "termina tarde" = ≥{CFG.tarde_post21 * 100}% post 21 o fin ≥ {fmtHora(CFG.tarde_fin)} (con ≥{CFG.minEntregados} entregas) · "repro 21 recurrente" = ≥{CFG.repro21_min} en ≥{CFG.repro21_frec * 100}% de los días · "cerca del tope" = ≥{CFG.sobrecarga} env/día (tope {CFG.tope}) · caída/mejora = ±{CFG.deltaSla} pp.</p>
           <p>Semanas con * son parciales (&lt;5 días); en parciales no se compara volumen, solo tasas.</p>
-          <p>SLA por zona: tabla semanas_zonas (se captura desde el deploy de hoy, sin histórico hacia atrás). Zonas con &lt;{CFG.zonaMin} envíos van agrupadas como "muestra chica" y no se marcan críticas. Rojo = ≥{CFG.zonaMin} envíos y Δ ≤ −1 pp.</p>
+          <p>SLA por localidad: tabla semanas_zonas (localidad del Excel de LightData, se captura desde el 24/07 sin histórico hacia atrás). "Zona op." = zona operativa derivada con el mapeo tolerante de la pestaña Zonas (contra zonas_cp); sin cruce único queda "—". Localidades con &lt;{CFG.zonaMin} envíos van agrupadas como "muestra chica" (desplegable) y no se marcan críticas. Rojo = ≥{CFG.zonaMin} envíos y Δ ≤ −1 pp.</p>
+          <p>Decisiones de la semana: score = severidad (crítico 3 · caída 2 · al límite/tarde/repro21 1) × peso por volumen (ML del cadete/localidad ÷ mediana de ML) × recurrencia (días afectados ÷ días del período). "Requieren atención: N" = alertas mostradas (máx {CFG.alertasMax}). Los verbos ("hablar hoy" vs "revisar") dependen de si el período es la semana en curso.</p>
         </div>
       </details>
     </div>
