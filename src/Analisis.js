@@ -48,7 +48,9 @@ const C = {
 
 // ---- helpers ----
 const norm = (s) => String(s || "").trim().replace(/\s+/g, " ");
-const esBasura = (n) => /^repro gramar/i.test(n) || /^devuelto deposito/i.test(n);
+// Entradas que NO son cadetes reales (van a "Alertas operativas / calidad de datos", nunca al ranking).
+const esBasura = (n) => /repro ?gramar/i.test(n) || /devuelto dep[oó]sito/i.test(n) || /qued[oó] en dep[oó]sito/i.test(n);
+const claseOper = (n) => esSin(n) ? "sinAsignar" : /devuelto dep[oó]sito/i.test(n) ? "devuelto" : /qued[oó] en dep[oó]sito/i.test(n) ? "quedo" : /repro ?gramar/i.test(n) ? "repro" : "otros";
 const esSin = (n) => n.startsWith("⚠️");
 const fmtInt = (n) => (n == null ? "—" : Number(n).toLocaleString("es-AR"));
 const fmt1 = (n) => Number(n).toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -88,7 +90,7 @@ async function sbGet(path) {
 // Agrega `semanas` (por cadete×día) para un conjunto de labels de semana.
 function aggWeeks(semanas, labelSet, topeMap) {
   const porCad = {};
-  const g = { cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, sin: 0, basura: 0 };
+  const g = { cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, sin: 0, basura: 0, oper: { sinAsignar: 0, devuelto: 0, quedo: 0, repro: 0, otros: 0 } };
   for (const s of semanas) {
     if (!labelSet.has(s.label)) continue;
     for (const dia of s.dias) {
@@ -96,14 +98,14 @@ function aggWeeks(semanas, labelSet, topeMap) {
         const name = norm(m.cadete);
         g.cant += m.cantidad; g.pend += m.pendientes; g.dem += m.demorados;
         g.d21 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.ml += m.envios_ml;
-        if (esSin(name)) { g.sin += m.cantidad; continue; }
-        if (esBasura(name)) { g.basura += m.cantidad; continue; }
-        const c = porCad[name] || (porCad[name] = { name, cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, dias: 0, dd21: 0, finSum: 0, finDias: 0, diasSobreTope: 0, diasDem: 0, diasP21: 0, diasCargaAlta: 0, tope: topeMap[name] || CFG.tope });
+        if (esSin(name)) { g.sin += m.cantidad; g.oper.sinAsignar += m.cantidad; continue; }
+        if (esBasura(name)) { g.basura += m.cantidad; g.oper[claseOper(name)] += m.cantidad; continue; }
+        const c = porCad[name] || (porCad[name] = { name, cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, dias: 0, dd21: 0, finSum: 0, finDias: 0, diasSobreTope: 0, diasDem: 0, diasP21: 0, diasCargaAlta: 0, ultInc: "", tope: topeMap[name] || CFG.tope });
         c.cant += m.cantidad; c.pend += m.pendientes; c.dem += m.demorados;
         c.d21 += (m.dem21 || 0); c.p21 += (m.post21 || 0); c.ml += m.envios_ml;
         c.dias += 1;
         if ((m.dem21 || 0) > 0) c.dd21 += 1;
-        if ((m.demorados || 0) > 0 || (m.dem21 || 0) > 0) c.diasDem += 1;
+        if ((m.demorados || 0) > 0 || (m.dem21 || 0) > 0) { c.diasDem += 1; if (dia.fecha > c.ultInc) c.ultInc = dia.fecha; }
         if ((m.post21 || 0) > 0) c.diasP21 += 1;
         const tope = topeMap[name] || CFG.tope;
         if (m.cantidad >= CFG.sobrecarga) c.diasCargaAlta += 1;
@@ -161,37 +163,6 @@ function DeltaSpan({ delta, unidad, bueno, prevLbl }) {
     </div>
   );
 }
-// Tarjeta compacta de categoría: título + conteo, top 2 casos en una línea, "ver N más".
-function MiniCat({ icon, titulo, items, render, onPick, tono }) {
-  const [exp, setExp] = useState(false);
-  const list = exp ? items : items.slice(0, 2);
-  return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: items.length ? 6 : 0 }}>
-        {icon} {titulo}{items.length ? <span style={{ color: tono || C.muted, fontWeight: 700 }}> · {items.length}</span> : null}
-      </div>
-      {items.length === 0 ? (
-        <div style={{ fontSize: 11.5, color: C.muted }}>Nadie 👏</div>
-      ) : (
-        <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {list.map((c, i) => (
-              <div key={i} onClick={() => onPick(c)} style={{ fontSize: 12, cursor: "pointer", lineHeight: 1.35 }}>
-                <span style={{ color: C.teal, marginRight: 4 }}>▸</span>{render(c)}
-              </div>
-            ))}
-          </div>
-          {items.length > 2 && (
-            <div onClick={() => setExp((v) => !v)} style={{ marginTop: 6, fontSize: 11.5, color: C.teal, cursor: "pointer" }}>
-              {exp ? "ver menos" : `ver ${items.length - 2} más`}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 function CadTip({ active, payload }) {
   if (!active || !payload || !payload.length) return null;
   const p = payload[0].payload;
@@ -348,7 +319,6 @@ export default function Analisis({ semanas }) {
   const completas = weeks.filter((w) => !w.parcial).map((w) => w.label);
 
   const [periodo, setPeriodo] = useState({ t: "sem", w: null });
-  const [verCompleto, setVerCompleto] = useState(false); // 7 tarjetas de Sugerencias colapsadas
   const [drill, setDrill] = useState(null); // {kind, name, src} — panel de detalle al tocar una alerta o fila
   const [verChicas, setVerChicas] = useState(false); // desplegar localidades de muestra chica
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 640);
@@ -357,6 +327,8 @@ export default function Analisis({ semanas }) {
   const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
   const [verHist, setVerHist] = useState(false); // "ver historial completo" en el drill (modo Historial)
+  const [verTodosPat, setVerTodosPat] = useState(false); // Patrones: ver todos
+  const [patSort, setPatSort] = useState("diasDem"); // Patrones: columna de orden
 
   useEffect(() => {
     const onR = () => setIsMobile(window.innerWidth < 640);
@@ -398,10 +370,6 @@ export default function Analisis({ semanas }) {
   }, [semanas, prevLabels, topeMap, enCursoActual, nCurDias]);
 
   // Agregado semanal para los gráficos (todas las semanas).
-  const weekAgg = useMemo(() => weeks.map((w) => {
-    const a = aggWeeks(semanas, new Set([w.label]), topeMap);
-    return { label: w.label, name: fmtSemLabel(w.label) + (w.parcial ? "*" : ""), cant: a.g.cant, ml: a.g.ml, sla: a.g.sla, dem: a.g.dem, d21: a.g.d21, sel: periodLabels.includes(w.label) };
-  }), [weeks, semanas, topeMap, periodLabels]);
 
   // ---- Zonas del período (semanas_zonas) ----
   const zonaData = useMemo(() => {
@@ -590,14 +558,77 @@ export default function Analisis({ semanas }) {
   }, [cur, prev, sortCol, sortDir]);
   const doSort = (key) => { if (sortCol === key) setSortDir((d) => -d); else { setSortCol(key); setSortDir(key === "name" ? 1 : -1); } };
 
-  // Filtros rápidos (chips) sobre el ranking — reusan los mismos criterios que las Sugerencias.
+  // Filtros rápidos (chips) sobre el ranking.
   const chipPred = {
     criticos: (c) => c.sla != null && c.sla < CFG.slaCritico && c.ml >= CFG.minML,
+    riesgo: (c) => c.sla != null && c.sla >= CFG.slaCritico && c.sla < CFG.slaOk,
+    ok: (c) => c.sla != null && c.sla >= CFG.slaOk,
     sobre: (c) => c.prom >= CFG.sobrecarga,
     tarde: (c) => c.entregados >= CFG.minEntregados && (c.p21rate >= CFG.tarde_post21 || (c.fin != null && c.fin >= CFG.tarde_fin)),
     caida: (c) => c.delta != null && c.delta <= -CFG.deltaSla,
   };
   const rankingF = chip ? ranking.filter(chipPred[chip]) : ranking;
+
+  // SLA por cadete en las últimas 4 semanas (columna "Últimas 4 semanas" de Patrones).
+  const hist4 = useMemo(() => {
+    const last4 = labels.slice(-4);
+    const map = {};
+    for (const s of semanas) {
+      if (!last4.includes(s.label)) continue;
+      for (const dia of s.dias) for (const m of dia.datos) {
+        const nm = norm(m.cadete);
+        if (esSin(nm) || esBasura(nm)) continue;
+        const g = map[nm] || (map[nm] = { ml: 0, dm: 0, d2: 0 });
+        g.ml += m.envios_ml; g.dm += m.demorados; g.d2 += (m.dem21 || 0);
+      }
+    }
+    const out = {};
+    for (const [k, g] of Object.entries(map)) out[k] = slaMeli(g.ml, g.dm, g.d2);
+    return out;
+  }, [semanas, labels]);
+
+  // Tendencia adaptativa: diaria (semana) / semanal (últimas 4) / mensual (historial).
+  const tendData = useMemo(() => {
+    if (periodo.t === "sem") {
+      const s = semanas.find((x) => x.label === periodW);
+      if (!s) return { modo: "día", datos: [] };
+      return { modo: "día", datos: s.dias.map((dia) => {
+        let cant = 0, ml = 0, dm = 0, d2 = 0;
+        for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); }
+        return { name: fmtDDMM(dia.fecha), cant, sla: slaMeli(ml, dm, d2) };
+      }) };
+    }
+    if (periodo.t === "ult4") {
+      return { modo: "semana", datos: completas.slice(-4).map((l) => { const a = aggWeeks(semanas, new Set([l]), topeMap); return { name: fmtSemLabel(l), cant: a.g.cant, sla: a.g.sla }; }) };
+    }
+    const byMonth = {};
+    semanas.forEach((s) => s.dias.forEach((dia) => {
+      const mk = dia.fecha.slice(0, 7);
+      const g = byMonth[mk] || (byMonth[mk] = { cant: 0, ml: 0, dm: 0, d2: 0 });
+      for (const m of dia.datos) { g.cant += m.cantidad; g.ml += m.envios_ml; g.dm += m.demorados; g.d2 += (m.dem21 || 0); }
+    }));
+    return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, sla: slaMeli(g.ml, g.dm, g.d2) }; }) };
+  }, [periodo.t, periodW, completas, semanas, topeMap]);
+
+  // Patrones: reincidentes de demora (nunca "Sin asignar" ni basura — esos van a alertas operativas).
+  const patrones = useMemo(() => {
+    const rows = cur.cads.filter((c) => (c.dem + c.d21) > 0).map((c) => {
+      const p = prev && prev.cads.find((x) => x.name === c.name);
+      const delta = (p && p.sla != null && c.sla != null && p.ml >= CFG.minML && c.ml >= CFG.minML) ? c.sla - p.sla : null;
+      return { name: c.name, diasDem: c.diasDem, demoras: c.dem + c.d21, ultInc: c.ultInc, sla4: hist4[c.name] != null ? hist4[c.name] : null, delta, tend: delta == null ? 0 : delta >= CFG.deltaSla ? 1 : delta <= -CFG.deltaSla ? -1 : 0 };
+    });
+    const key = patSort;
+    rows.sort((a, b) => { const va = a[key], vb = b[key]; if (va == null) return 1; if (vb == null) return -1; return typeof va === "string" ? vb.localeCompare(va) : vb - va; });
+    return rows;
+  }, [cur, prev, hist4, patSort]);
+
+  // Mejoras sostenidas (contrapeso en Historial): SLA subió ≥deltaSla y quedó ≥ crítico.
+  const mejorasSost = useMemo(() => {
+    if (!prev) return [];
+    const pm = {}; prev.cads.forEach((c) => { pm[c.name] = c; });
+    return cur.cads.map((c) => { const p = pm[c.name]; const d = (p && p.sla != null && c.sla != null && p.ml >= CFG.minML && c.ml >= CFG.minML) ? c.sla - p.sla : null; return d != null ? { name: c.name, sla: c.sla, delta: d } : null; })
+      .filter((x) => x && x.delta >= CFG.deltaSla && x.sla >= CFG.slaCritico).sort((a, b) => b.delta - a.delta).slice(0, 8);
+  }, [cur, prev]);
 
   if (!semanas || semanas.length === 0) {
     return <div style={{ padding: 24, color: C.muted }}>No hay datos cargados todavía.</div>;
@@ -606,8 +637,6 @@ export default function Analisis({ semanas }) {
   // KPIs deltas
   const dVol = (prev && (!parcialActual || enCursoActual)) ? cur.g.cant - prev.g.cant : null;
   const dSla = (prev && cur.g.sla != null && prev.g.sla != null) ? cur.g.sla - prev.g.sla : null;
-  const dP21 = prev ? (cur.g.p21rate - prev.g.p21rate) * 100 : null;
-  const dPend = prev ? (cur.g.pendRate - prev.g.pendRate) * 100 : null;
 
   const periodDesc = periodo.t === "sem" ? "Semana del " + fmtSemLabel(periodW) + (enCursoActual ? " (en curso)" : parcialActual ? " (parcial)" : "")
     : periodo.t === "ult4" ? "Últimas 4 semanas completas"
@@ -818,6 +847,13 @@ export default function Analisis({ semanas }) {
   };
   const toggleDrill = (kind, name, src) => setDrill((d) => (d && d.src === src && d.name === name && d.kind === kind) ? null : { kind, name, src });
   const isOpen = (kind, name, src) => !!drill && drill.src === src && drill.name === name && drill.kind === kind;
+  const navDrill = (dir) => {
+    if (!drill || drill.kind !== "cadete") return;
+    const list = rankingF.map((c) => c.name);
+    const i = list.indexOf(drill.name);
+    if (i < 0) return;
+    setDrill({ ...drill, name: list[(i + dir + list.length) % list.length] });
+  };
 
   // Texto plano para WhatsApp con las alertas + lo positivo + el resumen (mismos números que la pantalla).
   const resumenTexto = () => {
@@ -902,6 +938,7 @@ export default function Analisis({ semanas }) {
         </div>
       )}
 
+
       {/* === Decisiones de la semana (v2) === */}
       <div style={{ marginBottom: 24 }}>
         <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>{tituloBloque}</h3>
@@ -939,7 +976,6 @@ export default function Analisis({ semanas }) {
                       <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{a.dato}</div>
                       <span style={{ color: C.teal, fontSize: 12, marginLeft: 4, flex: "0 0 auto" }}>{abierto ? "▾" : "▸"}</span>
                     </div>
-                    {abierto && <div style={{ padding: "0 11px 11px" }}>{renderDrill(drill)}</div>}
                   </div>
                 );
               })}
@@ -967,31 +1003,143 @@ export default function Analisis({ semanas }) {
             </div>
           )}
         </div>
+        {/* Alertas operativas / calidad de datos — separadas de los cadetes */}
+        {(() => {
+          const op = cur.g.oper;
+          const items = [
+            ["Sin asignar", op.sinAsignar, "envíos sin cadete"],
+            ["Quedó en depósito", op.quedo, "no salió a reparto"],
+            ["Devuelto a depósito", op.devuelto, "volvió al depósito"],
+            ["Repro gramar", op.repro, "nombre basura en LightData"],
+            ["Otros anómalos", op.otros, "nombres a limpiar"],
+          ].filter(([, n]) => n > 0);
+          if (!items.length) return null;
+          return (
+            <div style={{ marginTop: 12, background: "rgba(226,75,74,0.06)", border: "1px solid rgba(226,75,74,0.22)", borderRadius: 12, padding: "10px 12px" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 6 }}>🧹 Alertas operativas / calidad de datos <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· no son cadetes, revisar carga en LightData</span></div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {items.map(([lbl, n, sub]) => (
+                  <div key={lbl} style={{ flex: "1 1 150px", minWidth: 0, background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: "#F2937F" }}>{lbl}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{fmtInt(n)} envíos · {sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
-      {/* Evolución semanal */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Evolución semanal</h3>
+      {/* === 2 · Cadetes (Semáforo migrado) === */}
+      <h2 style={{ fontSize: 16, margin: "6px 0 10px", borderTop: `1px solid ${C.faint}`, paddingTop: 16 }}>Cadetes <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· ranking, semáforo y filtros</span></h2>
+
+      {/* Ranking completo */}
+      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Ranking completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>{isMobile ? "(tocá una tarjeta para el detalle)" : "(clic en una columna para ordenar · clic en una fila para el detalle)"}</span></h3>
+      {/* chips de filtro rápido */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {[["criticos", "🔴 solo críticos"], ["riesgo", "🟡 en riesgo"], ["ok", "🟢 OK"], ["sobre", "📦 sobre tope"], ["tarde", "🌙 terminan tarde"], ["caida", "📉 en caída"]].map(([k, lbl]) => (
+          <button key={k} onClick={() => setChip((x) => (x === k ? null : k))}
+            style={{ padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", borderRadius: 999, border: `1px solid ${chip === k ? C.teal : C.border}`, background: chip === k ? "rgba(46,207,170,0.14)" : "transparent", color: chip === k ? C.teal : C.muted }}>
+            {lbl}
+          </button>
+        ))}
+        {chip && <span style={{ fontSize: 11.5, color: C.muted, alignSelf: "center" }}>{rankingF.length} de {ranking.length}</span>}
+      </div>
+      {isMobile ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+          {rankingF.map((c, i) => (
+            <div key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ background: C.cardAlt, border: `1px solid ${isOpen("cadete", c.name, "rank") ? C.teal : C.border}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                <span style={{ color: slaColor(c.sla), fontWeight: 700, whiteSpace: "nowrap" }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</span>
+                <span style={{ color: C.teal, flex: "0 0 auto" }}>{isOpen("cadete", c.name, "rank") ? "▾" : "▸"}</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{fmtInt(c.cant)} envíos · {fmt1(c.prom)}/día vs tope {c.tope || CFG.tope} · {fmt0(c.p21rate * 100)}% post 21</div>
+            </div>
+          ))}
+          {rankingF.length === 0 && <div style={{ color: C.muted, fontSize: 12.5, padding: "12px 4px" }}>Nadie cumple ese filtro. 👏</div>}
+        </div>
+      ) : (
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 4, marginBottom: 14, overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {th("name", "Cadete")}{th("cant", "Envíos", 1)}{th("pctVol", "% vol.", 1)}{th("prom", "Prom/día", 1)}
+              {th("sla", "SLA", 1)}{th("delta", "Δ SLA", 1)}{th("dem", "Dem.", 1)}{th("d21", "Repro21", 1)}
+              {th("p21rate", "Post21", 1)}{th("pctSobreTope", "% >tope", 1)}{th("fin", "Fin prom.", 1)}
+            </tr>
+          </thead>
+          <tbody>
+            {rankingF.map((c, i) => (
+              <tr key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ borderBottom: `1px solid ${C.faint}`, cursor: "pointer", background: isOpen("cadete", c.name, "rank") ? "rgba(46,207,170,0.08)" : "transparent" }}>
+                <td style={{ padding: "6px 8px", fontWeight: 600 }}>{c.name}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.cant)}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted }}>{fmt1(c.pctVol)}%</td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt1(c.prom)}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(c.sla), fontWeight: 600 }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right", color: c.delta == null ? C.muted : c.delta >= 0 ? C.goodText : C.critText }}>{c.delta == null ? "—" : (c.delta >= 0 ? "+" : "−") + fmt1(Math.abs(c.delta))}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.dem)}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.d21)}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt0(c.p21rate * 100)}%</td>
+                <td style={{ padding: "6px 8px", textAlign: "right", color: c.pctSobreTope >= 0.3 ? C.critText : C.muted }}>{fmt0(c.pctSobreTope * 100)}%</td>
+                <td style={{ padding: "6px 8px", textAlign: "right", color: c.fin != null && c.fin >= CFG.tarde_fin ? C.critText : C.ink }}>{fmtHora(c.fin)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      )}
+
+      {/* 3. Carga por cadete — scatter */}
+      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Carga vs. SLA <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(cada punto es un cadete)</span></h3>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
+        <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Derecha = muchos paquetes por día. Abajo = SLA flojo. Abajo-derecha necesita que le saques carga; arriba-derecha es tu caballito de batalla. La línea vertical es un tope de referencia ({CFG.tope}/día); el tope real de cada cadete (de <code>cadete_topes</code>) se ve al tocarlo en el ranking.</div>
+        <ResponsiveContainer width="100%" height={300}>
+          <ScatterChart margin={{ top: 10, right: 16, left: -6, bottom: 16 }}>
+            <CartesianGrid stroke={C.faint} />
+            <XAxis type="number" dataKey="prom" name="Envíos/día" tick={{ fontSize: 9, fill: C.muted }} label={{ value: "envíos por día trabajado", position: "insideBottom", offset: -8, fontSize: 10, fill: C.muted }} />
+            <YAxis type="number" dataKey="sla" name="SLA" domain={[80, 100]} ticks={[80, 85, 90, 95, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
+            <Tooltip cursor={{ strokeDasharray: "3 3", stroke: C.border }} content={<CadTip />} />
+            <ReferenceLine y={98} stroke={C.good} strokeDasharray="3 3" />
+            <ReferenceLine y={95} stroke={C.warn} strokeDasharray="3 3" />
+            <ReferenceLine x={CFG.tope} stroke={C.muted} strokeDasharray="4 4" label={{ value: "tope ref.", position: "top", fontSize: 9, fill: C.muted }} />
+            <Scatter data={cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0)}>
+              {cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0).map((p, i) => (
+                <Cell key={i} fill={p.sla < CFG.slaCritico ? C.crit : p.sla < CFG.slaOk ? C.warn : C.good} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: C.muted, marginTop: 4 }}>
+          <span>✅ OK (≥98%)</span><span>⚠️ En riesgo (95–98%)</span><span>🔴 Crítico (&lt;95%)</span>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
+        Calidad de datos del período: {fmtInt(cur.g.sin)} envíos sin cadete asignado{cur.g.basura > 0 ? ` · ${fmtInt(cur.g.basura)} bajo nombres basura ("Repro gramar", "devuelto depósito") que conviene limpiar en LightData` : ""}. Los sin-asignar y basura cuentan en los KPIs pero quedan fuera del ranking de cadetes (ver "Alertas operativas" arriba).
+      </div>
+
+      {/* === 3 · Tendencia (Mensual migrado) — evolución adaptativa por período === */}
+      <h2 style={{ fontSize: 16, margin: "6px 0 10px", borderTop: `1px solid ${C.faint}`, paddingTop: 16 }}>Tendencia <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· evolución {tendData.modo === "día" ? "diaria" : tendData.modo === "semana" ? "semanal" : "mensual"} de SLA y volumen</span></h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14, marginBottom: 22 }}>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>Envíos por semana</div>
-          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>El período elegido en verde; el resto es contexto. * = semana parcial.</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>Volumen por {tendData.modo}</div>
+          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Envíos totales (ML + particulares).</div>
           <ResponsiveContainer width="100%" height={190}>
-            <BarChart data={weekAgg} margin={{ top: 6, right: 8, left: -8, bottom: 0 }}>
+            <BarChart data={tendData.datos} margin={{ top: 6, right: 8, left: -8, bottom: 0 }}>
               <CartesianGrid stroke={C.faint} vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v >= 1000 ? (v / 1000) + "k" : v} />
               <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmtInt(v), "Envíos"]} labelStyle={{ color: C.muted }} />
-              <Bar dataKey="cant" radius={[3, 3, 0, 0]}>
-                {weekAgg.map((d, i) => <Cell key={i} fill={d.sel ? C.teal : C.dim} />)}
-              </Bar>
+              <Bar dataKey="cant" radius={[3, 3, 0, 0]} fill={C.teal} />
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>SLA Meli por semana</div>
-          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Líneas de referencia en 95 y 98.</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>SLA Meli por {tendData.modo}</div>
+          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Escala fija 90–100; líneas de referencia en 95 y 98.</div>
           <ResponsiveContainer width="100%" height={190}>
-            <LineChart data={weekAgg.filter((d) => d.sla != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
+            <LineChart data={tendData.datos.filter((d) => d.sla != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
               <CartesianGrid stroke={C.faint} vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" />
               <YAxis domain={[90, 100]} ticks={[90, 95, 98, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
@@ -1004,10 +1152,50 @@ export default function Analisis({ semanas }) {
         </div>
       </div>
 
-      {/* === Datos aún incompletos (colapsable): localidades + saturación + "a vigilar" del analista === */}
+      {/* === 4 · Patrones (reincidentes — reemplaza las tarjetas masivas de Mensual) === */}
+      <h2 style={{ fontSize: 16, margin: "6px 0 10px", borderTop: `1px solid ${C.faint}`, paddingTop: 16 }}>Patrones <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· reincidentes de demora en {periodDesc.toLowerCase()}</span></h2>
+      {patrones.length === 0 ? (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, color: C.muted, fontSize: 12.5, marginBottom: 22 }}>Sin cadetes con demoras en el período. 👏</div>
+      ) : (
+        <>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 4, marginBottom: 10, overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead><tr>
+                {[["name", "Cadete", 0], ["diasDem", "Días con demora", 1], ["demoras", "Demoras", 1], ["ultInc", "Última incidencia", 1], ["sla4", "Últimas 4 sem.", 1], ["tend", "Tendencia", 1]].map(([k, l, r]) => (
+                  <th key={k} onClick={() => setPatSort(k)} style={{ padding: "7px 8px", textAlign: r ? "right" : "left", cursor: "pointer", color: patSort === k ? C.teal : C.muted, fontWeight: 600, fontSize: 11.5, whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{l}{patSort === k ? " \u25BC" : ""}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {(verTodosPat ? patrones : patrones.slice(0, 10)).map((r, i) => (
+                  <tr key={i} onClick={() => toggleDrill("cadete", r.name, "rank")} style={{ borderBottom: `1px solid ${C.faint}`, cursor: "pointer" }}>
+                    <td style={{ padding: "6px 8px", fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: r.diasDem >= 3 ? C.critText : C.ink }}>{r.diasDem}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(r.demoras)}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted }}>{r.ultInc ? fmtDDMM(r.ultInc) : "\u2014"}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(r.sla4), fontWeight: 600 }}>{r.sla4 != null ? fmt1(r.sla4) + "%" : "\u2014"}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "right", color: r.tend > 0 ? C.goodText : r.tend < 0 ? C.critText : C.muted }}>{r.tend > 0 ? "\u2191 mejora" : r.tend < 0 ? "\u2193 empeora" : "\u2192"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {patrones.length > 10 && (
+            <div onClick={() => setVerTodosPat((v) => !v)} style={{ fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600, marginBottom: 12 }}>{verTodosPat ? "ver menos" : `ver todos (${patrones.length})`}</div>
+          )}
+          {periodo.t === "todo" && mejorasSost.length > 0 && (
+            <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.25)", borderRadius: 12, padding: "9px 12px", marginBottom: 12, fontSize: 12, lineHeight: 1.7 }}>
+              <b style={{ color: C.goodText }}>📈 Mejoras sostenidas</b> ·{" "}
+              {mejorasSost.map((c, i) => <span key={c.name} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ cursor: "pointer" }}>{i > 0 ? " · " : ""}{c.name} <span style={{ color: C.muted }}>(+{fmt1(c.delta)}pp)</span></span>)}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* === 5 · Localidades (SLA por localidad + zona operativa) === */}
+      <h2 style={{ fontSize: 16, margin: "6px 0 6px", borderTop: `1px solid ${C.faint}`, paddingTop: 16 }}>Localidades <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· SLA por localidad y zona operativa</span></h2>
       <div onClick={() => setVerIncompletos((v) => !v)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
         <span style={{ color: C.teal, fontSize: 14 }}>{verIncompletos ? "▾" : "▸"}</span>
-        <h3 style={{ fontSize: 14, margin: 0 }}>Datos aún incompletos <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· localidades y saturación — todavía sin histórico suficiente{alertas.nLoc ? ` · ${alertas.nLoc} a vigilar` : ""}</span></h3>
+        <h3 style={{ fontSize: 13, margin: 0, fontWeight: 600, color: C.muted }}>{verIncompletos ? "Ocultar" : "Ver"} detalle de localidades <span style={{ fontWeight: 400, fontSize: 12 }}>· histórico corto (desde 24/07){alertas.nLoc ? ` · ${alertas.nLoc} a vigilar` : ""}</span></h3>
       </div>
       {verIncompletos && (
       <>
@@ -1021,7 +1209,6 @@ export default function Analisis({ semanas }) {
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>📍 Localidades a vigilar</div>
           {alertas.locs.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
-          {drill && drill.src === "locv" && renderDrill(drill)}
         </div>
       )}
       <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por localidad <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
@@ -1086,153 +1273,12 @@ export default function Analisis({ semanas }) {
                 </tbody>
               </table>
             </div>
-            {drill && drill.src === "loc" && renderDrill(drill)}
           </>
         )}
       </div>
       </>
       )}
 
-      {/* Resumen ejecutivo (secundario) */}
-      <h3 style={{ fontSize: 14, margin: "18px 0 8px" }}>Resumen ejecutivo</h3>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 22 }}>
-        <Tile label="Total envíos" sub="ML + particulares" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
-        <Tile label="SLA Meli" sub="solo envíos ML" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
-        <Tile label="Demorados + Repro 21" value={fmtInt(cur.g.dem + cur.g.d21)} />
-        <Tile label="Entregas post 21" value={fmt1(cur.g.p21rate * 100) + "%"} delta={dP21 != null ? <DeltaSpan delta={dP21} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
-        <Tile label="% Pendientes" value={fmt1(cur.g.pendRate * 100) + "%"} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
-        <Tile label="Cadetes activos" value={fmtInt(cur.g.cadetes)} />
-      </div>
-
-      {/* 3. Carga por cadete — scatter */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Carga vs. SLA <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(cada punto es un cadete)</span></h3>
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Derecha = muchos paquetes por día. Abajo = SLA flojo. Abajo-derecha necesita que le saques carga; arriba-derecha es tu caballito de batalla. La línea vertical es un tope de referencia ({CFG.tope}/día); el tope real de cada cadete (de <code>cadete_topes</code>) se ve al tocarlo en el ranking.</div>
-        <ResponsiveContainer width="100%" height={300}>
-          <ScatterChart margin={{ top: 10, right: 16, left: -6, bottom: 16 }}>
-            <CartesianGrid stroke={C.faint} />
-            <XAxis type="number" dataKey="prom" name="Envíos/día" tick={{ fontSize: 9, fill: C.muted }} label={{ value: "envíos por día trabajado", position: "insideBottom", offset: -8, fontSize: 10, fill: C.muted }} />
-            <YAxis type="number" dataKey="sla" name="SLA" domain={[80, 100]} ticks={[80, 85, 90, 95, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
-            <Tooltip cursor={{ strokeDasharray: "3 3", stroke: C.border }} content={<CadTip />} />
-            <ReferenceLine y={98} stroke={C.good} strokeDasharray="3 3" />
-            <ReferenceLine y={95} stroke={C.warn} strokeDasharray="3 3" />
-            <ReferenceLine x={CFG.tope} stroke={C.muted} strokeDasharray="4 4" label={{ value: "tope ref.", position: "top", fontSize: 9, fill: C.muted }} />
-            <Scatter data={cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0)}>
-              {cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0).map((p, i) => (
-                <Cell key={i} fill={p.sla < CFG.slaCritico ? C.crit : p.sla < CFG.slaOk ? C.warn : C.good} />
-              ))}
-            </Scatter>
-          </ScatterChart>
-        </ResponsiveContainer>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: C.muted, marginTop: 4 }}>
-          <span>✅ OK (≥98%)</span><span>⚠️ En riesgo (95–98%)</span><span>🔴 Crítico (&lt;95%)</span>
-        </div>
-      </div>
-
-      {/* 4. Sugerencias (mejores / críticos / reincidentes) — colapsadas detrás de "Ver análisis completo" */}
-      <div onClick={() => setVerCompleto((v) => !v)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
-        <span style={{ color: C.teal, fontSize: 14 }}>{verCompleto ? "▾" : "▸"}</span>
-        <h3 style={{ fontSize: 14, margin: 0 }}>Ver análisis completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· por categoría · {periodDesc.toLowerCase()}</span></h3>
-      </div>
-      {verCompleto && (
-      <div style={{ marginBottom: 22 }}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 10 }}>
-          <MiniCat icon="🔴" titulo="Críticos" items={sug.criticos} tono={C.critText} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
-            render={(c) => <><b>{c.name}</b> · SLA {fmt1(c.sla)}% · {fmtInt(c.dem + c.d21)} dem+repro</>} />
-          <MiniCat icon="📦" titulo={`Sobrecarga (>${CFG.sobrecarga}/día)`} items={sug.sobre} tono={C.warn} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
-            render={(c) => <><b>{c.name}</b> · {fmt1(c.prom)}/día · tope {c.tope || CFG.tope}</>} />
-          <MiniCat icon="🌙" titulo="Terminan tarde" items={sug.tarde} tono={C.warn} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
-            render={(c) => <><b>{c.name}</b> · {fmt0(c.p21rate * 100)}% post21{c.fin != null ? " · " + fmtHora(c.fin) : ""}</>} />
-          {sug.repro.length > 0 && (
-            <MiniCat icon="🔁" titulo="Repro 21 recurrente" items={sug.repro} tono={C.warn} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
-              render={(c) => <><b>{c.name}</b> · {fmtInt(c.d21)} repro-21 · {c.dd21}/{c.dias} días</>} />
-          )}
-          {sug.caida.length > 0 && (
-            <MiniCat icon="📉" titulo={"En caída vs " + prevLbl} items={sug.caida} tono={C.critText} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
-              render={(c) => <><b>{c.name}</b> · SLA {fmt1(c.sla)}% · {fmt1(c.delta)}pp</>} />
-          )}
-          {sug.mejora.length > 0 && (
-            <MiniCat icon="📈" titulo="Mejorando" items={sug.mejora} tono={C.goodText} onPick={(c) => toggleDrill("cadete", c.name, "cat")}
-              render={(c) => <><b>{c.name}</b> · SLA {fmt1(c.sla)}% · +{fmt1(c.delta)}pp</>} />
-          )}
-        </div>
-        {sug.caballos.length > 0 && (
-          <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.25)", borderRadius: 12, padding: "9px 12px", marginTop: 10, fontSize: 12, lineHeight: 1.7 }}>
-            <b style={{ color: C.goodText }}>💪 Capacidad disponible</b> ·{" "}
-            {sug.caballos.slice(0, 6).map((c, i) => (
-              <span key={c.name} onClick={() => toggleDrill("cadete", c.name, "cat")} style={{ cursor: "pointer" }}>
-                {i > 0 ? " · " : ""}{c.name} <span style={{ color: C.muted }}>({fmt1(c.sla)}%)</span>
-              </span>
-            ))}
-            {sug.caballos.length > 6 && <span style={{ color: C.muted }}> · +{sug.caballos.length - 6}</span>}
-          </div>
-        )}
-        {drill && drill.src === "cat" && renderDrill(drill)}
-      </div>
-      )}
-
-      {/* Ranking completo */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Ranking completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>{isMobile ? "(tocá una tarjeta para el detalle)" : "(clic en una columna para ordenar · clic en una fila para el detalle)"}</span></h3>
-      {/* chips de filtro rápido */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        {[["criticos", "🔴 solo críticos"], ["sobre", "📦 sobre tope"], ["tarde", "🌙 terminan tarde"], ["caida", "📉 en caída"]].map(([k, lbl]) => (
-          <button key={k} onClick={() => setChip((x) => (x === k ? null : k))}
-            style={{ padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", borderRadius: 999, border: `1px solid ${chip === k ? C.teal : C.border}`, background: chip === k ? "rgba(46,207,170,0.14)" : "transparent", color: chip === k ? C.teal : C.muted }}>
-            {lbl}
-          </button>
-        ))}
-        {chip && <span style={{ fontSize: 11.5, color: C.muted, alignSelf: "center" }}>{rankingF.length} de {ranking.length}</span>}
-      </div>
-      {isMobile ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-          {rankingF.map((c, i) => (
-            <div key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ background: C.cardAlt, border: `1px solid ${isOpen("cadete", c.name, "rank") ? C.teal : C.border}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                <span style={{ color: slaColor(c.sla), fontWeight: 700, whiteSpace: "nowrap" }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</span>
-                <span style={{ color: C.teal, flex: "0 0 auto" }}>{isOpen("cadete", c.name, "rank") ? "▾" : "▸"}</span>
-              </div>
-              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{fmtInt(c.cant)} envíos · {fmt1(c.prom)}/día vs tope {c.tope || CFG.tope} · {fmt0(c.p21rate * 100)}% post 21</div>
-              {isOpen("cadete", c.name, "rank") && renderDrill(drill)}
-            </div>
-          ))}
-          {rankingF.length === 0 && <div style={{ color: C.muted, fontSize: 12.5, padding: "12px 4px" }}>Nadie cumple ese filtro. 👏</div>}
-        </div>
-      ) : (
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 4, marginBottom: 14, overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {th("name", "Cadete")}{th("cant", "Envíos", 1)}{th("pctVol", "% vol.", 1)}{th("prom", "Prom/día", 1)}
-              {th("sla", "SLA", 1)}{th("delta", "Δ SLA", 1)}{th("dem", "Dem.", 1)}{th("d21", "Repro21", 1)}
-              {th("p21rate", "Post21", 1)}{th("pctSobreTope", "% >tope", 1)}{th("fin", "Fin prom.", 1)}
-            </tr>
-          </thead>
-          <tbody>
-            {rankingF.map((c, i) => (
-              <tr key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ borderBottom: `1px solid ${C.faint}`, cursor: "pointer", background: isOpen("cadete", c.name, "rank") ? "rgba(46,207,170,0.08)" : "transparent" }}>
-                <td style={{ padding: "6px 8px", fontWeight: 600 }}>{c.name}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.cant)}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted }}>{fmt1(c.pctVol)}%</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt1(c.prom)}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(c.sla), fontWeight: 600 }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: c.delta == null ? C.muted : c.delta >= 0 ? C.goodText : C.critText }}>{c.delta == null ? "—" : (c.delta >= 0 ? "+" : "−") + fmt1(Math.abs(c.delta))}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.dem)}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.d21)}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt0(c.p21rate * 100)}%</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: c.pctSobreTope >= 0.3 ? C.critText : C.muted }}>{fmt0(c.pctSobreTope * 100)}%</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: c.fin != null && c.fin >= CFG.tarde_fin ? C.critText : C.ink }}>{fmtHora(c.fin)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      )}
-      {!isMobile && drill && drill.src === "rank" && <div style={{ marginBottom: 14 }}>{renderDrill(drill)}</div>}
-
-      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
-        Calidad de datos del período: {fmtInt(cur.g.sin)} envíos sin cadete asignado{cur.g.basura > 0 ? ` · ${fmtInt(cur.g.basura)} bajo nombres basura ("Repro gramar", "devuelto depósito") que conviene limpiar en LightData` : ""}. Los sin-asignar y basura cuentan en los KPIs pero quedan fuera del ranking y sugerencias.
-      </div>
       <details style={{ fontSize: 11.5, color: C.muted }}>
         <summary style={{ cursor: "pointer", color: C.teal }}>Metodología y umbrales</summary>
         <div style={{ marginTop: 8, lineHeight: 1.6 }}>
@@ -1243,6 +1289,21 @@ export default function Analisis({ semanas }) {
           <p>Decisiones de la semana: score = severidad (crítico 3 · caída 2 · al límite/tarde/repro21 1) × peso por volumen (ML del cadete/localidad ÷ mediana de ML) × recurrencia (días afectados ÷ días del período). "Requieren atención: N" = alertas mostradas (máx {CFG.alertasMax}). Los verbos ("hablar hoy" vs "revisar") dependen de si el período es la semana en curso.</p>
         </div>
       </details>
+
+      {/* Detalle del cadete/localidad — panel lateral (desktop) / pantalla completa (mobile) */}
+      {drill && (
+        <div onClick={() => setDrill(null)} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: isMobile ? "center" : "flex-end" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.bg, width: isMobile ? "100%" : 470, maxWidth: "100%", height: "100%", overflowY: "auto", padding: 14, boxShadow: "-8px 0 24px rgba(0,0,0,0.35)" }}>
+            {drill.kind === "cadete" && rankingF.some((c) => c.name === drill.name) && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <button onClick={() => navDrill(-1)} style={{ flex: 1, padding: "6px 10px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.border}`, background: C.cardAlt, color: C.muted, cursor: "pointer" }}>‹ anterior</button>
+                <button onClick={() => navDrill(1)} style={{ flex: 1, padding: "6px 10px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.border}`, background: C.cardAlt, color: C.muted, cursor: "pointer" }}>siguiente ›</button>
+              </div>
+            )}
+            {renderDrill(drill)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
