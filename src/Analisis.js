@@ -161,11 +161,85 @@ function CadTip({ active, payload }) {
   );
 }
 
+// ---- Markdown mínimo (sin librerías): ##/# títulos, - listas, **negrita**, _itálica_ ----
+function mdInline(text) {
+  const out = []; let key = 0, last = 0, m;
+  const re = /\*\*(.+?)\*\*|_(.+?)_/g;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m[1] != null) out.push(<b key={key++}>{m[1]}</b>);
+    else out.push(<i key={key++}>{m[2]}</i>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+function Markdown({ md }) {
+  const lines = String(md || "").split("\n");
+  const blocks = []; let list = null;
+  const flush = () => { if (list) { blocks.push(<ul key={"u" + blocks.length} style={{ margin: "4px 0 8px", paddingLeft: 18 }}>{list}</ul>); list = null; } };
+  lines.forEach((ln, i) => {
+    const t = ln.trim();
+    if (!t) { flush(); return; }
+    if (t.startsWith("## ")) { flush(); blocks.push(<div key={i} style={{ fontSize: 13, fontWeight: 700, margin: "10px 0 4px", color: C.ink }}>{mdInline(t.slice(3))}</div>); return; }
+    if (t.startsWith("# ")) { flush(); blocks.push(<div key={i} style={{ fontSize: 15, fontWeight: 700, margin: "10px 0 6px", color: C.ink }}>{mdInline(t.slice(2))}</div>); return; }
+    if (t.startsWith("- ") || t.startsWith("* ")) { if (!list) list = []; list.push(<li key={i} style={{ marginBottom: 3 }}>{mdInline(t.slice(2))}</li>); return; }
+    flush(); blocks.push(<div key={i} style={{ margin: "3px 0", lineHeight: 1.55 }}>{mdInline(t)}</div>);
+  });
+  flush();
+  return <div style={{ fontSize: 12.5, color: C.ink, lineHeight: 1.5 }}>{blocks}</div>;
+}
+
+// Bloque "🧠 Informes" — arriba de la pestaña. Lee analista_informes (lo escribe el agente del VPS).
+function Informes({ informes }) {
+  const [openKey, setOpenKey] = useState(null);
+  if (informes == null) return null;                         // cargando: no reservar espacio
+  const con = informes.filter((r) => r.informe_md);          // solo los que tienen informe (novedad)
+  if (!con.length) return null;                              // sin informes todavía: no mostrar nada
+  const ultimo = con[0], resto = con.slice(1);
+  const kOf = (r) => r.id || r.fecha + r.tipo;
+  const fFecha = (f) => { const p = String(f).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}` : f; };
+  const chip = (t) => (
+    <span style={{ background: "rgba(46,207,170,0.14)", color: C.teal, borderRadius: 6, padding: "2px 8px", fontWeight: 600, fontSize: 11 }}>
+      {t === "semanal" ? "Semanal" : "Diario"}
+    </span>
+  );
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>🧠 Informes del analista <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(qué haría, con los números que lo respaldan)</span></h3>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+          {chip(ultimo.tipo)}<span style={{ fontSize: 11.5, color: C.muted }}>{fFecha(ultimo.fecha)} · último</span>
+        </div>
+        <Markdown md={ultimo.informe_md} />
+      </div>
+      {resto.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {resto.map((r) => {
+            const abierto = openKey === kOf(r);
+            return (
+              <div key={kOf(r)} style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, marginBottom: 6 }}>
+                <div onClick={() => setOpenKey(abierto ? null : kOf(r))} style={{ cursor: "pointer", padding: "8px 12px", display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+                  <span style={{ color: C.teal }}>{abierto ? "▾" : "▸"}</span>
+                  <span style={{ color: C.muted, whiteSpace: "nowrap" }}>{r.tipo === "semanal" ? "Semanal" : "Diario"} · {fFecha(r.fecha)}</span>
+                  <span style={{ color: C.ink, opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(r.resumen_tg || "").split("\n")[0]}</span>
+                </div>
+                {abierto && <div style={{ padding: "0 12px 12px" }}><Markdown md={r.informe_md} /></div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // =================================================================
 export default function Analisis({ semanas }) {
   const [zonasRaw, setZonasRaw] = useState(null); // null=cargando, []=vacío
   const [topeMap, setTopeMap] = useState({});
   const [zonasErr, setZonasErr] = useState("");
+  const [informes, setInformes] = useState(null); // null=cargando, []=sin informes
 
   useEffect(() => {
     let alive = true;
@@ -178,6 +252,10 @@ export default function Analisis({ semanas }) {
         const t = await sbGet("cadete_topes?select=cadete,tope&limit=1000");
         if (alive && Array.isArray(t)) { const m = {}; t.forEach((r) => { m[norm(r.cadete)] = r.tope; }); setTopeMap(m); }
       } catch (e) { /* topes best-effort */ }
+      try {
+        const inf = await sbGet("analista_informes?select=id,fecha,tipo,resumen_tg,informe_md,hay_novedad,created_at&order=created_at.desc&limit=30");
+        if (alive) setInformes(Array.isArray(inf) ? inf : []);
+      } catch (e) { if (alive) setInformes([]); }
     })();
     return () => { alive = false; };
   }, []);
@@ -322,6 +400,9 @@ export default function Analisis({ semanas }) {
 
   return (
     <div style={{ color: C.ink }}>
+      {/* Informes del analista (agente del VPS) — arriba de todo */}
+      <Informes informes={informes} />
+
       {/* Selector de período */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
         {segBtn("sem", "Semana")}{segBtn("ult4", "Últimas 4")}{segBtn("todo", "Todo")}
