@@ -248,48 +248,32 @@ function Markdown({ md }) {
   return <div style={{ fontSize: 12.5, color: C.ink, lineHeight: 1.5 }}>{blocks}</div>;
 }
 
-// Bloque "🧠 Informes" — arriba de la pestaña. Lee analista_informes (lo escribe el agente del VPS).
-function Informes({ informes }) {
-  const [openKey, setOpenKey] = useState(null);
-  if (informes == null) return null;                         // cargando: no reservar espacio
-  const con = informes.filter((r) => r.informe_md);          // solo los que tienen informe (novedad)
-  if (!con.length) return null;                              // sin informes todavía: no mostrar nada
-  const ultimo = con[0], resto = con.slice(1);
-  const kOf = (r) => r.id || r.fecha + r.tipo;
-  const fFecha = (f) => { const p = String(f).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}` : f; };
-  const chip = (t) => (
-    <span style={{ background: "rgba(46,207,170,0.14)", color: C.teal, borderRadius: 6, padding: "2px 8px", fontWeight: 600, fontSize: 11 }}>
-      {t === "semanal" ? "Semanal" : "Diario"}
-    </span>
-  );
-  return (
-    <div style={{ marginBottom: 22 }}>
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>🧠 Informes del analista <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(qué haría, con los números que lo respaldan)</span></h3>
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px" }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-          {chip(ultimo.tipo)}<span style={{ fontSize: 11.5, color: C.muted }}>{fFecha(ultimo.fecha)} · último</span>
-        </div>
-        <Markdown md={ultimo.informe_md} />
-      </div>
-      {resto.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          {resto.map((r) => {
-            const abierto = openKey === kOf(r);
-            return (
-              <div key={kOf(r)} style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, marginBottom: 6 }}>
-                <div onClick={() => setOpenKey(abierto ? null : kOf(r))} style={{ cursor: "pointer", padding: "8px 12px", display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                  <span style={{ color: C.teal }}>{abierto ? "▾" : "▸"}</span>
-                  <span style={{ color: C.muted, whiteSpace: "nowrap" }}>{r.tipo === "semanal" ? "Semanal" : "Diario"} · {fFecha(r.fecha)}</span>
-                  <span style={{ color: C.ink, opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(r.resumen_tg || "").split("\n")[0]}</span>
-                </div>
-                {abierto && <div style={{ padding: "0 12px 12px" }}><Markdown md={r.informe_md} /></div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+// Parseo del informe del analista (markdown con secciones ## Titular / ## Que mirar / ## Zonas / ## A vigilar).
+// Devuelve el titular, los ítems de "Que mirar" (nombre/señal/detalle/acción) y los textos de Zonas y A vigilar.
+function parseInforme(md) {
+  if (!md) return null;
+  const secs = {}; let curSec = null;
+  String(md).split("\n").forEach((line) => {
+    const h = line.match(/^#{1,3}\s+(.+)/);
+    if (h) { curSec = normZ(h[1]); secs[curSec] = []; return; }
+    if (curSec) secs[curSec].push(line);
+  });
+  const get = (k) => (secs[k] || []).join("\n").trim();
+  const qmRaw = get("que mirar") || get("qué mirar");
+  const items = [];
+  qmRaw.split(/\n(?=\d+\.\s)/).forEach((blk) => {
+    const b = blk.trim(); if (!b || !/^\d+\./.test(b)) return;
+    const bold = (b.match(/\*\*(.+?)\*\*/) || [])[1] || "";
+    const partes = bold.split(/\s+[—-]\s+/);
+    const accM = b.match(/Acci[oó]n:\s*([\s\S]+)$/i);
+    const accion = accM ? accM[1].trim().replace(/\s+/g, " ") : "";
+    let detalle = b.replace(/^\d+\.\s*/, "").replace(/\*\*(.+?)\*\*:?/, "").trim();
+    const posAcc = detalle.search(/Acci[oó]n:/i);
+    if (posAcc >= 0) detalle = detalle.slice(0, posAcc).trim();
+    detalle = detalle.replace(/^[:\-\s]+/, "").replace(/\s+/g, " ");
+    items.push({ bold, nombre: (partes[0] || bold).trim(), senal: (partes[1] || "").trim(), accion, detalle });
+  });
+  return { titular: get("titular"), items, zonas: get("zonas"), vigilar: get("a vigilar") };
 }
 
 // =================================================================
@@ -339,6 +323,8 @@ export default function Analisis({ semanas }) {
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 640);
   const [chip, setChip] = useState(null); // filtro rápido del ranking: null | criticos | sobre | tarde | caida
   const [copiado, setCopiado] = useState(false);
+  const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
+  const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
 
   useEffect(() => {
     const onR = () => setIsMobile(window.innerWidth < 640);
@@ -492,9 +478,10 @@ export default function Analisis({ semanas }) {
       });
     }
 
+    const cadetes = Object.values(porCad).sort((a, b) => b.score - a.score).slice(0, CFG.alertasMax);
+    const locsTop = locs.sort((a, b) => b.score - a.score);
     const todos = [...Object.values(porCad), ...locs].sort((a, b) => b.score - a.score);
-    const top = todos.slice(0, CFG.alertasMax);
-    return { top, byCad: porCad, nCad: top.filter((a) => a.kind === "cadete").length, nLoc: top.filter((a) => a.kind === "localidad").length, total: todos.length };
+    return { top: todos.slice(0, CFG.alertasMax), cadetes, locs: locsTop, byCad: porCad, nCad: cadetes.length, nLoc: locsTop.length, total: todos.length };
   }, [cur, sug, zonaData, periodo.t, parcialActual, prevLbl, diasPeriodo]);
 
   // SLA por localidad del período anterior (para el Δ vs período anterior del drill-down).
@@ -523,6 +510,21 @@ export default function Analisis({ semanas }) {
   }, [zonasRaw]);
   // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → "—").
   const zonaDe = (loc) => { if (!zonaNames.length) return "—"; const nl = normZ(loc); const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : "—"; };
+
+  // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
+  const informeStd = useMemo(() => {
+    if (!informes || !informes.length) return null;
+    const row = informes.find((x) => x.informe_md);
+    const p = row ? parseInforme(row.informe_md) : null;
+    if (!p) return null;
+    const porCadete = {}; let capacidad = null;
+    p.items.forEach((it) => {
+      const nm = norm(it.nombre);
+      if (cur.cads.some((c) => c.name === nm)) porCadete[nm] = it;
+      else if (/caball|capacidad|aprovech|redistrib/i.test(it.bold + " " + it.senal)) capacidad = it;
+    });
+    return { row, ...p, porCadete, capacidad };
+  }, [informes, cur]);
 
   // ---- Ranking table ----
   const [sortCol, setSortCol] = useState("cant");
@@ -685,9 +687,9 @@ export default function Analisis({ semanas }) {
   const resumenTexto = () => {
     const L = [`📊 Flexit · ${periodDesc}`];
     if (maxFecha) L.push(`Datos hasta ${fmtDMY(maxFecha)}`);
-    L.push("", "🟠 Atención prioritaria:");
-    if (alertas.top.length === 0) L.push("• Nada urgente 👏");
-    else alertas.top.slice(0, 3).forEach((a) => L.push(`• ${a.kind === "localidad" ? "📍 " : ""}${a.name} · ${a.accion} — ${a.motivo}`));
+    L.push("", "🟠 Atender hoy:");
+    if (alertas.cadetes.length === 0) L.push("• Nadie en rojo 👏");
+    else alertas.cadetes.slice(0, 3).forEach((a) => L.push(`• ${a.name} · ${a.accion} — ${a.motivo}`));
     const pos = [];
     sug.caballos.slice(0, 3).forEach((c) => pos.push(`${c.name} — ${fmtInt(c.cant)} envíos, SLA ${fmt1(c.sla)}%`));
     sug.mejora.slice(0, 3).forEach((c) => pos.push(`${c.name} — SLA ${fmt1(c.sla)}% (+${fmt1(c.delta)} pp)`));
@@ -713,8 +715,19 @@ export default function Analisis({ semanas }) {
         {pocasZonas && badge(`localidades: histórico corto${zonasInfo.desde ? " (desde " + fmtDDMM(zonasInfo.desde) + ")" : ""}`)}
       </div>
 
-      {/* Informes del analista (agente del VPS) — arriba de todo */}
-      <Informes informes={informes} />
+      {/* Titular del analista (agente del VPS) — arriba de todo, con el informe completo colapsable */}
+      {informeStd && informeStd.titular && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 5 }}>🧠 Análisis del {informeStd.row.tipo === "semanal" ? "semanal" : "día"} · {fmtDDMM(informeStd.row.fecha)}</div>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "13px 15px" }}>
+            <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.5, color: C.ink }}>{informeStd.titular}</div>
+            <div onClick={() => setVerInforme((v) => !v)} style={{ marginTop: 9, fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600 }}>
+              {verInforme ? "▾ ocultar informe completo" : "▸ ver informe completo del analista"}
+            </div>
+            {verInforme && <div style={{ marginTop: 8, borderTop: `1px solid ${C.faint}`, paddingTop: 8 }}><Markdown md={informeStd.row.informe_md} /></div>}
+          </div>
+        </div>
+      )}
 
       {/* Selector de período */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
@@ -739,32 +752,65 @@ export default function Analisis({ semanas }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
           <Tile label="SLA Meli (solo ML)" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
           <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
-          <Tile label="Requieren atención" value={fmtInt(alertas.top.length)} delta={<div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{alertas.nCad} cadete{alertas.nCad === 1 ? "" : "s"} · {alertas.nLoc} localidad{alertas.nLoc === 1 ? "" : "es"}</div>} />
+          <Tile label="Requieren atención" value={fmtInt(alertas.nCad)} delta={<div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>cadetes a atender{alertas.nLoc ? ` · ${alertas.nLoc} localidad${alertas.nLoc === 1 ? "" : "es"} a vigilar` : ""}</div>} />
         </div>
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1 }}>🟠 Atención prioritaria <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más importante primero</span></div>
+
+        {/* Atender hoy — tarjetas por cadete, la más urgente resaltada */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1 }}>🟠 Atender hoy <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más urgente primero</span></div>
             <button onClick={copiar} title="Copiar resumen para WhatsApp" style={{ background: copiado ? "rgba(46,207,170,0.16)" : C.cardAlt, border: `1px solid ${copiado ? C.teal : C.border}`, borderRadius: 8, color: copiado ? C.teal : C.muted, fontSize: 12, fontWeight: 600, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
               {copiado ? "✓ Copiado" : "💬 Copiar resumen"}
             </button>
           </div>
-          {alertas.top.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: C.muted, padding: "8px 6px" }}>Nada urgente en este período. 👏 Mirá "Ver análisis completo" para el detalle.</div>
+          {alertas.cadetes.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: C.muted, padding: "6px" }}>Nadie en rojo este período. 👏</div>
           ) : (
-            alertas.top.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "alert")} abierto={isOpen(a.kind, a.name, "alert")} />)
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {alertas.cadetes.map((a, i) => {
+                const enr = informeStd && informeStd.porCadete[a.name];
+                const abierto = isOpen("cadete", a.name, "alert");
+                const urgente = i === 0;
+                return (
+                  <div key={a.key} style={{ border: `1px solid ${urgente ? "rgba(229,96,77,0.55)" : C.border}`, background: urgente ? "rgba(229,96,77,0.07)" : C.cardAlt, borderRadius: 10, overflow: "hidden" }}>
+                    <div onClick={() => toggleDrill("cadete", a.name, "alert")} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 11px", cursor: "pointer" }}>
+                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: urgente ? C.crit : "#F2953F", marginTop: 5, flex: "0 0 auto" }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{a.name} <span style={{ color: C.teal, fontWeight: 600 }}>· {a.accion}</span>{urgente && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: C.critText, background: "rgba(229,96,77,0.16)", borderRadius: 5, padding: "1px 6px" }}>MÁS URGENTE</span>}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{a.motivo}</div>
+                        {enr && enr.accion && <div style={{ fontSize: 12, color: C.goodText, marginTop: 4, lineHeight: 1.45 }}>💡 Analista: {enr.accion}</div>}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{a.dato}</div>
+                      <span style={{ color: C.teal, fontSize: 12, marginLeft: 4, flex: "0 0 auto" }}>{abierto ? "▾" : "▸"}</span>
+                    </div>
+                    {abierto && <div style={{ padding: "0 11px 11px" }}>{renderDrill(drill)}</div>}
+                  </div>
+                );
+              })}
+            </div>
           )}
-          {drill && drill.src === "alert" && renderDrill(drill)}
         </div>
-      </div>
 
-      {/* 1. Resumen ejecutivo */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 22 }}>
-        <Tile label="Total envíos" sub="ML + particulares" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
-        <Tile label="SLA Meli" sub="solo envíos ML" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
-        <Tile label="Demorados + Repro 21" value={fmtInt(cur.g.dem + cur.g.d21)} />
-        <Tile label="Entregas post 21" value={fmt1(cur.g.p21rate * 100) + "%"} delta={dP21 != null ? <DeltaSpan delta={dP21} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
-        <Tile label="% Pendientes" value={fmt1(cur.g.pendRate * 100) + "%"} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
-        <Tile label="Cadetes activos" value={fmtInt(cur.g.cadetes)} />
+        {/* Capacidad para redistribuir — cadetes confiables con lugar */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 4 }}>💪 Capacidad para redistribuir <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· alto volumen y buen SLA, adónde pasar carga</span></div>
+          {informeStd && informeStd.capacidad && informeStd.capacidad.accion && <div style={{ fontSize: 12, color: C.goodText, marginBottom: 8, lineHeight: 1.45 }}>💡 Analista: {informeStd.capacidad.accion}</div>}
+          {sug.caballos.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: C.muted, padding: "6px" }}>Sin caballitos de alto volumen y buen SLA en el período.</div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {sug.caballos.slice(0, 6).map((c) => {
+                const tope = c.tope || CFG.tope; const margen = Math.round(tope - c.prom);
+                return (
+                  <div key={c.name} style={{ flex: "1 1 190px", minWidth: 0, border: `1px solid ${C.border}`, background: C.cardAlt, borderRadius: 10, padding: "9px 11px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>💪 {c.name}</div>
+                    <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>SLA {fmt1(c.sla)}% · {fmtInt(c.cant)} envíos · {fmt1(c.prom)}/día{margen > 3 ? <span style={{ color: C.goodText }}> · margen ~{margen}/día</span> : ""}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Evolución semanal */}
@@ -802,7 +848,26 @@ export default function Analisis({ semanas }) {
         </div>
       </div>
 
-      {/* 2. SLA por localidad */}
+      {/* === Datos aún incompletos (colapsable): localidades + saturación + "a vigilar" del analista === */}
+      <div onClick={() => setVerIncompletos((v) => !v)} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
+        <span style={{ color: C.teal, fontSize: 14 }}>{verIncompletos ? "▾" : "▸"}</span>
+        <h3 style={{ fontSize: 14, margin: 0 }}>Datos aún incompletos <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· localidades y saturación — todavía sin histórico suficiente{alertas.nLoc ? ` · ${alertas.nLoc} a vigilar` : ""}</span></h3>
+      </div>
+      {verIncompletos && (
+      <>
+      {informeStd && (informeStd.zonas || informeStd.vigilar) && (
+        <div style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+          {informeStd.zonas && <div style={{ marginBottom: informeStd.vigilar ? 8 : 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>🗺️ Zonas (analista)</div><div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}><Markdown md={informeStd.zonas} /></div></div>}
+          {informeStd.vigilar && <div><div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>👁️ A vigilar (analista)</div><div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}><Markdown md={informeStd.vigilar} /></div></div>}
+        </div>
+      )}
+      {alertas.locs.length > 0 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>📍 Localidades a vigilar</div>
+          {alertas.locs.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
+          {drill && drill.src === "locv" && renderDrill(drill)}
+        </div>
+      )}
       <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por localidad <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 22 }}>
         {zonaData == null ? (
@@ -868,6 +933,19 @@ export default function Analisis({ semanas }) {
             {drill && drill.src === "loc" && renderDrill(drill)}
           </>
         )}
+      </div>
+      </>
+      )}
+
+      {/* Resumen ejecutivo (secundario) */}
+      <h3 style={{ fontSize: 14, margin: "18px 0 8px" }}>Resumen ejecutivo</h3>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 22 }}>
+        <Tile label="Total envíos" sub="ML + particulares" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
+        <Tile label="SLA Meli" sub="solo envíos ML" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
+        <Tile label="Demorados + Repro 21" value={fmtInt(cur.g.dem + cur.g.d21)} />
+        <Tile label="Entregas post 21" value={fmt1(cur.g.p21rate * 100) + "%"} delta={dP21 != null ? <DeltaSpan delta={dP21} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
+        <Tile label="% Pendientes" value={fmt1(cur.g.pendRate * 100) + "%"} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
+        <Tile label="Cadetes activos" value={fmtInt(cur.g.cadetes)} />
       </div>
 
       {/* 3. Carga por cadete — scatter */}
