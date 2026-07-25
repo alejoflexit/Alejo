@@ -195,6 +195,26 @@ function AlertRow({ a, onClick, abierto }) {
   );
 }
 
+// ---- Drill-down (Tarea 2) ----
+const panelStyle = { background: C.cardAlt, border: `1px solid ${C.teal}`, borderRadius: 12, padding: "12px 14px", marginTop: 8 };
+const fmtDDMM = (iso) => { const p = String(iso || "").split("-"); return p.length === 3 ? `${p[2]}/${p[1]}` : iso; };
+function Kv({ k, v, color }) {
+  return (
+    <div style={{ minWidth: 96 }}>
+      <div style={{ fontSize: 10.5, color: C.muted }}>{k}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: color || C.ink, marginTop: 2 }}>{v}</div>
+    </div>
+  );
+}
+function DrillHead({ title, onClose }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.ink, flex: 1 }}>{title}</div>
+      <button onClick={onClose} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "3px 9px", cursor: "pointer" }}>Cerrar ✕</button>
+    </div>
+  );
+}
+
 // ---- Markdown mínimo (sin librerías): ##/# títulos, - listas, **negrita**, _itálica_ ----
 function mdInline(text) {
   const out = []; let key = 0, last = 0, m;
@@ -305,6 +325,7 @@ export default function Analisis({ semanas }) {
 
   const [periodo, setPeriodo] = useState({ t: "sem", w: null });
   const [verCompleto, setVerCompleto] = useState(false); // 7 tarjetas de Sugerencias colapsadas
+  const [drill, setDrill] = useState(null); // {kind, name, src} — panel de detalle al tocar una alerta o fila
   // default: última semana completa (o la última que haya)
   const periodW = periodo.w || completas[completas.length - 1] || labels[labels.length - 1] || null;
 
@@ -352,7 +373,7 @@ export default function Analisis({ semanas }) {
       const sla = slaMeli(z.envios_ml, z.demorados, z.dem21);
       const baseEnt = z.entregados || z.cantidad;
       return {
-        localidad: label, cantidad: z.cantidad, envios_ml: z.envios_ml, sla,
+        localidad: label, localidad_norm: z.localidad_norm, cantidad: z.cantidad, envios_ml: z.envios_ml, sla,
         delta: sla != null && slaGlobal != null ? sla - slaGlobal : null,
         post21Rate: baseEnt > 0 ? z.post21 / baseEnt * 100 : 0,
         nadieRate: z.cantidad > 0 ? z.nadie / z.cantidad * 100 : 0,
@@ -453,8 +474,24 @@ export default function Analisis({ semanas }) {
 
     const todos = [...Object.values(porCad), ...locs].sort((a, b) => b.score - a.score);
     const top = todos.slice(0, CFG.alertasMax);
-    return { top, nCad: top.filter((a) => a.kind === "cadete").length, nLoc: top.filter((a) => a.kind === "localidad").length, total: todos.length };
+    return { top, byCad: porCad, nCad: top.filter((a) => a.kind === "cadete").length, nLoc: top.filter((a) => a.kind === "localidad").length, total: todos.length };
   }, [cur, sug, zonaData, periodo.t, parcialActual, prevLbl, diasPeriodo]);
+
+  // SLA por localidad del período anterior (para el Δ vs período anterior del drill-down).
+  const prevZonaMap = useMemo(() => {
+    if (!zonasRaw || !prevLabels) return {};
+    const fechasPrev = new Set(weeks.filter((w) => prevLabels.includes(w.label)).flatMap((w) => w.fechas));
+    const map = {};
+    for (const r of zonasRaw) {
+      if (!fechasPrev.has(r.fecha)) continue;
+      const k = r.localidad_norm || "";
+      const g = map[k] || (map[k] = { demorados: 0, dem21: 0, envios_ml: 0 });
+      g.demorados += r.demorados; g.dem21 += r.dem21; g.envios_ml += r.envios_ml;
+    }
+    const out = {};
+    for (const [k, g] of Object.entries(map)) out[k] = slaMeli(g.envios_ml, g.demorados, g.dem21);
+    return out;
+  }, [zonasRaw, prevLabels, weeks]);
 
   // ---- Ranking table ----
   const [sortCol, setSortCol] = useState("cant");
@@ -496,6 +533,113 @@ export default function Analisis({ semanas }) {
     </th>
   );
 
+  // Panel de detalle (drill-down) para un cadete o una localidad.
+  const renderDrill = (d) => {
+    if (!d) return null;
+    if (d.kind === "localidad") {
+      const z = ((zonaData && zonaData.grandes) || []).find((x) => x.localidad === d.name);
+      if (!z) return null;
+      const pv = prevZonaMap[z.localidad_norm];
+      const dAnt = (pv != null && z.sla != null) ? z.sla - pv : null;
+      return (
+        <div style={panelStyle}>
+          <DrillHead title={"📍 " + z.localidad} onClose={() => setDrill(null)} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+            <Kv k="Envíos (total)" v={fmtInt(z.cantidad)} />
+            <Kv k="Envíos ML" v={fmtInt(z.envios_ml)} />
+            <Kv k="SLA Meli" v={z.sla != null ? fmt1(z.sla) + "%" : "—"} color={slaColor(z.sla)} />
+            <Kv k="Δ vs global" v={z.delta == null ? "—" : (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta)) + " pp"} />
+            <Kv k="Δ vs período ant." v={dAnt == null ? "—" : (dAnt >= 0 ? "+" : "−") + fmt1(Math.abs(dAnt)) + " pp"} />
+            <Kv k="% post 21" v={fmt0(z.post21Rate) + "%"} />
+            <Kv k="% Nadie" v={fmt0(z.nadieRate) + "%"} />
+          </div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10, lineHeight: 1.5 }}>Los cadetes que cubren cada localidad se ven en la pestaña <b>Zonas</b> (asignación por territorio, en vivo).</div>
+        </div>
+      );
+    }
+    // cadete
+    const name = d.name;
+    const c = cur.cads.find((x) => x.name === name);
+    const dias = [];
+    const pset = new Set(periodLabels);
+    for (const s of semanas) {
+      if (!pset.has(s.label)) continue;
+      for (const dia of s.dias) for (const m of dia.datos) {
+        if (norm(m.cadete) !== name) continue;
+        dias.push({ fecha: dia.fecha, cant: m.cantidad, dem: m.demorados, d21: m.dem21 || 0, p21: m.post21 || 0 });
+      }
+    }
+    dias.sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    const tope = (c && c.tope) || topeMap[name] || CFG.tope;
+    const spark = labels.slice(-4).map((lb) => {
+      let ml = 0, dm = 0, d2 = 0; const ss = semanas.find((x) => x.label === lb);
+      if (ss) for (const dia of ss.dias) for (const m of dia.datos) if (norm(m.cadete) === name) { ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); }
+      return { name: fmtSemLabel(lb), sla: slaMeli(ml, dm, d2) };
+    }).filter((x) => x.sla != null);
+    const sig = alertas.byCad[name];
+    const tdR = { padding: "5px 8px", textAlign: "right" };
+    return (
+      <div style={panelStyle}>
+        <DrillHead title={name} onClose={() => setDrill(null)} />
+        {sig ? (
+          <div style={{ fontSize: 12.5, color: C.ink, background: "rgba(242,149,63,0.10)", border: "1px solid rgba(242,149,63,0.30)", borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
+            👉 <b>{sig.accion}</b> — {sig.motivo}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Sin alerta activa: está dentro de los umbrales del período.</div>
+        )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
+          <Kv k="Envíos" v={fmtInt(c ? c.cant : 0)} />
+          <Kv k="Envíos/día" v={c ? fmt1(c.prom) : "—"} />
+          <Kv k="Tope real" v={fmtInt(tope)} />
+          <Kv k="SLA Meli" v={c && c.sla != null ? fmt1(c.sla) + "%" : "—"} color={slaColor(c ? c.sla : null)} />
+          <Kv k="Fin de ruta prom." v={c ? fmtHora(c.fin) : "—"} />
+        </div>
+        {c && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Carga: {fmt1(c.prom)} env/día vs tope {tope}</div>
+            <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
+              <div style={{ width: Math.min(100, c.prom / tope * 100).toFixed(1) + "%", height: "100%", borderRadius: 4, background: c.prom >= tope ? C.crit : c.prom >= CFG.sobrecarga ? C.warn : C.good }} />
+            </div>
+          </div>
+        )}
+        {spark.length >= 2 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>SLA últimas {spark.length} semanas</div>
+            <ResponsiveContainer width="100%" height={56}>
+              <LineChart data={spark} margin={{ top: 4, right: 8, left: -34, bottom: 0 }}>
+                <YAxis domain={["dataMin - 1", 100]} hide />
+                <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11 }} formatter={(v) => [fmt1(v) + "%", "SLA"]} labelStyle={{ color: C.muted }} />
+                <Line type="monotone" dataKey="sla" stroke={C.teal} strokeWidth={2} dot={{ r: 2, fill: C.teal }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead><tr>{["Día", "Envíos", "Dem.", "Repro21", "Post21"].map((h, i) => (
+              <th key={i} style={{ padding: "5px 8px", textAlign: i === 0 ? "left" : "right", color: C.muted, fontWeight: 600, fontSize: 11, borderBottom: `1px solid ${C.border}` }}>{h}</th>
+            ))}</tr></thead>
+            <tbody>
+              {dias.map((r, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${C.faint}` }}>
+                  <td style={{ padding: "5px 8px", fontWeight: 600 }}>{fmtDDMM(r.fecha)}</td>
+                  <td style={{ ...tdR, color: r.cant > tope ? C.critText : C.ink }}>{fmtInt(r.cant)}</td>
+                  <td style={tdR}>{fmtInt(r.dem)}</td>
+                  <td style={tdR}>{fmtInt(r.d21)}</td>
+                  <td style={tdR}>{fmtInt(r.p21)}</td>
+                </tr>
+              ))}
+              {dias.length === 0 && <tr><td colSpan={5} style={{ padding: 8, color: C.muted }}>Sin días registrados en el período.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+  const toggleDrill = (kind, name, src) => setDrill((d) => (d && d.src === src && d.name === name && d.kind === kind) ? null : { kind, name, src });
+  const isOpen = (kind, name, src) => !!drill && drill.src === src && drill.name === name && drill.kind === kind;
+
   return (
     <div style={{ color: C.ink }}>
       {/* Informes del analista (agente del VPS) — arriba de todo */}
@@ -531,8 +675,9 @@ export default function Analisis({ semanas }) {
           {alertas.top.length === 0 ? (
             <div style={{ fontSize: 12.5, color: C.muted, padding: "8px 6px" }}>Nada urgente en este período. 👏 Mirá "Ver análisis completo" para el detalle.</div>
           ) : (
-            alertas.top.map((a) => <AlertRow key={a.key} a={a} />)
+            alertas.top.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "alert")} abierto={isOpen(a.kind, a.name, "alert")} />)
           )}
+          {drill && drill.src === "alert" && renderDrill(drill)}
         </div>
       </div>
 
@@ -611,7 +756,7 @@ export default function Analisis({ semanas }) {
                   {zonaData.grandes.map((z, i) => {
                     const rojo = z.cantidad >= CFG.zonaMin && z.delta != null && z.delta <= -1;
                     return (
-                      <tr key={i} style={{ background: rojo ? "rgba(229,96,77,0.09)" : "transparent" }}>
+                      <tr key={i} onClick={() => toggleDrill("localidad", z.localidad, "loc")} style={{ background: isOpen("localidad", z.localidad, "loc") ? "rgba(46,207,170,0.08)" : rojo ? "rgba(229,96,77,0.09)" : "transparent", cursor: "pointer" }}>
                         <td style={{ padding: "6px 8px", fontWeight: 600 }}>{slaIcon(z.sla)} {z.localidad}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(z.cantidad)}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(z.sla), fontWeight: 600 }}>{z.sla != null ? fmt1(z.sla) + "%" : "—"}</td>
@@ -631,6 +776,7 @@ export default function Analisis({ semanas }) {
                 </tbody>
               </table>
             </div>
+            {drill && drill.src === "loc" && renderDrill(drill)}
           </>
         )}
       </div>
@@ -638,7 +784,7 @@ export default function Analisis({ semanas }) {
       {/* 3. Carga por cadete — scatter */}
       <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Carga vs. SLA <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(cada punto es un cadete)</span></h3>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Derecha = muchos paquetes por día. Abajo = SLA flojo. Abajo-derecha necesita que le saques carga; arriba-derecha es tu caballito de batalla. Línea vertical = tope ({CFG.tope}/día).</div>
+        <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Derecha = muchos paquetes por día. Abajo = SLA flojo. Abajo-derecha necesita que le saques carga; arriba-derecha es tu caballito de batalla. La línea vertical es un tope de referencia ({CFG.tope}/día); el tope real de cada cadete (de <code>cadete_topes</code>) se ve al tocarlo en el ranking.</div>
         <ResponsiveContainer width="100%" height={300}>
           <ScatterChart margin={{ top: 10, right: 16, left: -6, bottom: 16 }}>
             <CartesianGrid stroke={C.faint} />
@@ -647,7 +793,7 @@ export default function Analisis({ semanas }) {
             <Tooltip cursor={{ strokeDasharray: "3 3", stroke: C.border }} content={<CadTip />} />
             <ReferenceLine y={98} stroke={C.good} strokeDasharray="3 3" />
             <ReferenceLine y={95} stroke={C.warn} strokeDasharray="3 3" />
-            <ReferenceLine x={CFG.tope} stroke={C.muted} strokeDasharray="4 4" label={{ value: "tope", position: "top", fontSize: 9, fill: C.muted }} />
+            <ReferenceLine x={CFG.tope} stroke={C.muted} strokeDasharray="4 4" label={{ value: "tope ref.", position: "top", fontSize: 9, fill: C.muted }} />
             <Scatter data={cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0)}>
               {cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0).map((p, i) => (
                 <Cell key={i} fill={p.sla < CFG.slaCritico ? C.crit : p.sla < CFG.slaOk ? C.warn : C.good} />
@@ -697,7 +843,7 @@ export default function Analisis({ semanas }) {
           </thead>
           <tbody>
             {ranking.map((c, i) => (
-              <tr key={i} style={{ borderBottom: `1px solid ${C.faint}` }}>
+              <tr key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ borderBottom: `1px solid ${C.faint}`, cursor: "pointer", background: isOpen("cadete", c.name, "rank") ? "rgba(46,207,170,0.08)" : "transparent" }}>
                 <td style={{ padding: "6px 8px", fontWeight: 600 }}>{c.name}</td>
                 <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.cant)}</td>
                 <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted }}>{fmt1(c.pctVol)}%</td>
@@ -714,6 +860,7 @@ export default function Analisis({ semanas }) {
           </tbody>
         </table>
       </div>
+      {drill && drill.src === "rank" && <div style={{ marginBottom: 14 }}>{renderDrill(drill)}</div>}
 
       <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
         Calidad de datos del período: {fmtInt(cur.g.sin)} envíos sin cadete asignado{cur.g.basura > 0 ? ` · ${fmtInt(cur.g.basura)} bajo nombres basura ("Repro gramar", "devuelto depósito") que conviene limpiar en LightData` : ""}. Los sin-asignar y basura cuentan en los KPIs pero quedan fuera del ranking y sugerencias.
