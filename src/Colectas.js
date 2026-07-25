@@ -998,7 +998,7 @@ function ColectasInner({ soloArribos = false }) {
                         ? (esteChoferConfirmado ? 'verde' : estado === 'rojo' ? 'rojo' : estado === 'blanco' ? 'blanco' : 'amarillo')
                         : estado;
 
-                      const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(255,255,255,0.03)':unassigned?'rgba(251,191,36,0.03)':'transparent';
+                      const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(255,197,49,0.06)':unassigned?'rgba(251,191,36,0.03)':'transparent';
 
                       const handleCircleClick = () => {
                         if (esteChoferActivo) {
