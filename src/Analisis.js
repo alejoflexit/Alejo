@@ -852,9 +852,9 @@ export default function Analisis({ semanas }) {
             const on = periodo.t === t;
             return (
               <button key={t} onClick={() => setPeriodo((p) => ({ t, w: t === "sem" ? (p.w || periodW) : p.w }))}
-                style={{ flex: "1 1 150px", minWidth: 130, padding: "9px 14px", borderRadius: 11, cursor: "pointer", textAlign: "center", border: `1px solid ${on ? C.teal : C.border}`, background: on ? C.teal : C.cardAlt, color: on ? C.bg : C.ink }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{txt}</div>
-                <div style={{ fontSize: 10.5, fontWeight: 600, color: on ? "rgba(13,13,43,0.72)" : C.muted, marginTop: 1 }}>{subPeriodo[t] || "—"}</div>
+                style={{ flex: "1 1 150px", minWidth: 130, padding: "7px 12px", borderRadius: 10, cursor: "pointer", textAlign: "left", border: `1px solid ${on ? C.teal : C.border}`, background: on ? "rgba(46,207,170,0.12)" : C.cardAlt, color: on ? "#A5F0DD" : C.ink, boxShadow: on ? `inset 0 3px 0 ${C.teal}` : "none" }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{txt}</div>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: on ? "rgba(165,240,221,0.7)" : C.muted, marginTop: 1 }}>{subPeriodo[t] || "—"}</div>
               </button>
             );
           })}
