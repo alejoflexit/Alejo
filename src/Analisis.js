@@ -119,6 +119,13 @@ function aggWeeks(semanas, labelSet, topeMap) {
   return { g, cads };
 }
 
+// Agrega solo los primeros `nDays` días de una semana (para comparar "mismos días" contra la semana en curso).
+function aggWeekFirstDays(semanas, label, nDays, topeMap) {
+  const s = semanas.find((x) => x.label === label);
+  if (!s) return null;
+  return aggWeeks([{ ...s, dias: s.dias.slice(0, nDays) }], new Set([label]), topeMap);
+}
+
 // ---- subcomponentes chicos ----
 function Tile({ label, value, delta, dot, sub }) {
   return (
@@ -200,6 +207,8 @@ function AlertRow({ a, onClick, abierto }) {
 }
 
 // ---- Drill-down (Tarea 2) ----
+// Acción fuerte (el "siguiente paso") por tipo de señal, para destacarla en el detalle del cadete.
+const ACC_FUERTE = { critico: "🗣️ Hablar con cadete", caida: "🗣️ Hablar con cadete", repro: "🗣️ Revisar reprogramaciones", tarde: "🧭 Revisar ruta", limite: "📦 Redistribuir carga" };
 const panelStyle = { background: C.cardAlt, border: `1px solid ${C.teal}`, borderRadius: 12, padding: "12px 14px", marginTop: 8 };
 const fmtDDMM = (iso) => { const p = String(iso || "").split("-"); return p.length === 3 ? `${p[2]}/${p[1]}` : iso; };
 function Kv({ k, v, color }) {
@@ -308,11 +317,18 @@ export default function Analisis({ semanas }) {
   }, []);
 
   // Semanas ordenadas por fecha real (el array `semanas` ya viene ordenado asc desde App).
-  const weeks = useMemo(() => semanas.map((s) => ({
-    label: s.label,
-    fechas: s.dias.map((d) => d.fecha),
-    parcial: s.dias.length < 5,
-  })), [semanas]);
+  const weeks = useMemo(() => {
+    const arr = semanas.map((s) => ({
+      label: s.label,
+      fechas: s.dias.map((d) => d.fecha),
+      nDias: s.dias.length,
+      parcial: s.dias.length < 5,
+    }));
+    // "en curso" = la última semana tiene menos días cargados que la anterior (todavía se está llenando).
+    const n = arr.length;
+    if (n >= 2 && arr[n - 1].nDias < arr[n - 2].nDias) arr[n - 1].enCurso = true;
+    return arr;
+  }, [semanas]);
   const labels = weeks.map((w) => w.label);
   const completas = weeks.filter((w) => !w.parcial).map((w) => w.label);
 
@@ -346,11 +362,24 @@ export default function Analisis({ semanas }) {
     return null;
   }, [periodo.t, periodW, labels, completas]);
 
-  const parcialActual = periodo.t === "sem" && weeks.find((w) => w.label === periodW)?.parcial;
-  const prevLbl = periodo.t === "sem" ? (prevLabels ? "sem. " + fmtSemLabel(prevLabels[0]) : "") : "4 sem. anteriores";
+  const curWeek = weeks.find((w) => w.label === periodW);
+  const parcialActual = periodo.t === "sem" && !!curWeek?.parcial;
+  const enCursoActual = periodo.t === "sem" && !!curWeek?.enCurso;
+  const nCurDias = curWeek ? curWeek.fechas.length : 0;
+  const prevLbl = periodo.t === "sem"
+    ? (prevLabels ? (enCursoActual ? `mismos ${nCurDias} días de sem. ${fmtSemLabel(prevLabels[0])}` : "sem. " + fmtSemLabel(prevLabels[0])) : "")
+    : "4 sem. anteriores";
 
   const cur = useMemo(() => aggWeeks(semanas, new Set(periodLabels), topeMap), [semanas, periodLabels, topeMap]);
-  const prev = useMemo(() => (prevLabels ? aggWeeks(semanas, new Set(prevLabels), topeMap) : null), [semanas, prevLabels, topeMap]);
+  // Cuando la semana está en curso, la comparación es contra los MISMOS días de la semana anterior (no contra la semana completa).
+  const prev = useMemo(() => {
+    if (!prevLabels) return null;
+    if (enCursoActual && prevLabels.length === 1) {
+      const p = aggWeekFirstDays(semanas, prevLabels[0], nCurDias, topeMap);
+      if (p) return p;
+    }
+    return aggWeeks(semanas, new Set(prevLabels), topeMap);
+  }, [semanas, prevLabels, topeMap, enCursoActual, nCurDias]);
 
   // Agregado semanal para los gráficos (todas las semanas).
   const weekAgg = useMemo(() => weeks.map((w) => {
@@ -508,8 +537,13 @@ export default function Analisis({ semanas }) {
     zonasRaw.forEach((r) => { labs.add(r.label); if (r.fecha < desde) desde = r.fecha; });
     return { weeks: labs.size, desde };
   }, [zonasRaw]);
-  // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → "—").
-  const zonaDe = (loc) => { if (!zonaNames.length) return "—"; const nl = normZ(loc); const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : "—"; };
+  // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → null).
+  const zonaDe = (loc) => { if (!zonaNames.length) return null; const nl = normZ(loc); const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : null; };
+  const zonaCell = (loc) => {
+    if (!zonaNames.length) return <span style={{ color: C.muted }}>—</span>;
+    const z = zonaDe(loc);
+    return z ? z : <span style={{ fontStyle: "italic", color: "#f3c886" }}>Sin zona operativa asignada</span>;
+  };
 
   // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
   const informeStd = useMemo(() => {
@@ -554,12 +588,12 @@ export default function Analisis({ semanas }) {
   }
 
   // KPIs deltas
-  const dVol = (prev && !parcialActual) ? cur.g.cant - prev.g.cant : null;
+  const dVol = (prev && (!parcialActual || enCursoActual)) ? cur.g.cant - prev.g.cant : null;
   const dSla = (prev && cur.g.sla != null && prev.g.sla != null) ? cur.g.sla - prev.g.sla : null;
   const dP21 = prev ? (cur.g.p21rate - prev.g.p21rate) * 100 : null;
   const dPend = prev ? (cur.g.pendRate - prev.g.pendRate) * 100 : null;
 
-  const periodDesc = periodo.t === "sem" ? "Semana del " + fmtSemLabel(periodW) + (parcialActual ? " (parcial)" : "")
+  const periodDesc = periodo.t === "sem" ? "Semana del " + fmtSemLabel(periodW) + (enCursoActual ? " (en curso)" : parcialActual ? " (parcial)" : "")
     : periodo.t === "ult4" ? "Últimas 4 semanas completas"
       : "Todo el histórico";
 
@@ -625,8 +659,15 @@ export default function Analisis({ semanas }) {
       <div style={panelStyle}>
         <DrillHead title={name} onClose={() => setDrill(null)} />
         {sig ? (
-          <div style={{ fontSize: 12.5, color: C.ink, background: "rgba(242,149,63,0.10)", border: "1px solid rgba(242,149,63,0.30)", borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
-            👉 <b>{sig.accion}</b> — {sig.motivo}
+          <div style={{ background: "rgba(242,149,63,0.10)", border: "1px solid rgba(242,149,63,0.30)", borderRadius: 8, padding: "9px 11px", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 5 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.bg, background: C.teal, borderRadius: 8, padding: "5px 12px", whiteSpace: "nowrap" }}>{ACC_FUERTE[sig.tipo] || "Seguir de cerca"}</span>
+              <span style={{ fontSize: 11, color: C.muted }}>siguiente paso</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: C.ink }}>{sig.motivo}</div>
+            {informeStd && informeStd.porCadete[name] && informeStd.porCadete[name].accion && (
+              <div style={{ fontSize: 12, color: C.goodText, marginTop: 5, lineHeight: 1.45 }}>💡 Analista: {informeStd.porCadete[name].accion}</div>
+            )}
           </div>
         ) : (
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>Sin alerta activa: está dentro de los umbrales del período.</div>
@@ -711,9 +752,17 @@ export default function Analisis({ semanas }) {
       {/* Frescura de datos — arriba de todo */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
         <span>📅 Datos hasta <b style={{ color: C.ink }}>{maxFecha ? fmtDMY(maxFecha) : "—"}</b></span>
-        {periodoParcial && badge("semana en curso · parcial")}
+        {periodoParcial && !enCursoActual && badge("semana en curso · parcial")}
         {pocasZonas && badge(`localidades: histórico corto${zonasInfo.desde ? " (desde " + fmtDDMM(zonasInfo.desde) + ")" : ""}`)}
       </div>
+
+      {/* Banner fuerte cuando la semana elegida está en curso (todavía se está llenando) */}
+      {enCursoActual && (
+        <div style={{ background: "rgba(239,159,39,0.12)", border: "1px solid rgba(239,159,39,0.40)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: "#f3c886" }}>⏳ Semana en curso · datos hasta {maxFecha ? fmtDMY(maxFecha) : "—"}</span>
+          <span style={{ fontSize: 12, color: C.muted }}>La comparación es contra los <b style={{ color: C.ink }}>mismos {nCurDias} día{nCurDias === 1 ? "" : "s"}</b> de la semana anterior, no contra la semana completa.</span>
+        </div>
+      )}
 
       {/* Titular del analista (agente del VPS) — arriba de todo, con el informe completo colapsable */}
       {informeStd && informeStd.titular && (
@@ -838,7 +887,7 @@ export default function Analisis({ semanas }) {
             <LineChart data={weekAgg.filter((d) => d.sla != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
               <CartesianGrid stroke={C.faint} vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" />
-              <YAxis domain={["dataMin - 1", 100]} tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
+              <YAxis domain={[90, 100]} ticks={[90, 95, 98, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
               <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt1(v) + "%", "SLA"]} labelStyle={{ color: C.muted }} />
               <ReferenceLine y={98} stroke={C.good} strokeDasharray="3 3" />
               <ReferenceLine y={95} stroke={C.warn} strokeDasharray="3 3" />
@@ -899,7 +948,7 @@ export default function Analisis({ semanas }) {
                     return (
                       <tr key={i} onClick={() => toggleDrill("localidad", z.localidad, "loc")} style={{ background: isOpen("localidad", z.localidad, "loc") ? "rgba(46,207,170,0.08)" : rojo ? "rgba(229,96,77,0.09)" : "transparent", cursor: "pointer" }}>
                         <td style={{ padding: "6px 8px", fontWeight: 600 }}>{slaIcon(z.sla)} {z.localidad}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "left", color: C.muted }}>{zonaDe(z.localidad)}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "left", color: C.muted }}>{zonaCell(z.localidad)}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(z.cantidad)}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(z.sla), fontWeight: 600 }}>{z.sla != null ? fmt1(z.sla) + "%" : "—"}</td>
                         <td style={{ padding: "6px 8px", textAlign: "right", color: z.delta == null ? C.muted : z.delta >= 0 ? C.goodText : C.critText }}>{z.delta == null ? "—" : (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta))}</td>
@@ -919,7 +968,7 @@ export default function Analisis({ semanas }) {
                   {zonaData.otras && verChicas && zonaData.otras.chicas.map((z, i) => (
                     <tr key={"chica" + i} onClick={() => toggleDrill("localidad", z.localidad, "loc")} style={{ background: isOpen("localidad", z.localidad, "loc") ? "rgba(46,207,170,0.08)" : "transparent", cursor: "pointer", color: C.muted }}>
                       <td style={{ padding: "5px 8px 5px 20px", fontSize: 12 }}>{slaIcon(z.sla)} {z.localidad}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "left", fontSize: 12 }}>{zonaDe(z.localidad)}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "left", fontSize: 12 }}>{zonaCell(z.localidad)}</td>
                       <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{fmtInt(z.cantidad)}</td>
                       <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12, color: slaColor(z.sla) }}>{z.sla != null ? fmt1(z.sla) + "%" : "—"}</td>
                       <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{z.delta == null ? "—" : (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta))}</td>
@@ -956,7 +1005,7 @@ export default function Analisis({ semanas }) {
           <ScatterChart margin={{ top: 10, right: 16, left: -6, bottom: 16 }}>
             <CartesianGrid stroke={C.faint} />
             <XAxis type="number" dataKey="prom" name="Envíos/día" tick={{ fontSize: 9, fill: C.muted }} label={{ value: "envíos por día trabajado", position: "insideBottom", offset: -8, fontSize: 10, fill: C.muted }} />
-            <YAxis type="number" dataKey="sla" name="SLA" domain={["dataMin - 1", 100]} tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
+            <YAxis type="number" dataKey="sla" name="SLA" domain={[80, 100]} ticks={[80, 85, 90, 95, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
             <Tooltip cursor={{ strokeDasharray: "3 3", stroke: C.border }} content={<CadTip />} />
             <ReferenceLine y={98} stroke={C.good} strokeDasharray="3 3" />
             <ReferenceLine y={95} stroke={C.warn} strokeDasharray="3 3" />
