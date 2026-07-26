@@ -278,6 +278,7 @@ export default function Analisis({ semanas }) {
   const [topeMap, setTopeMap] = useState({});
   const [zonaNames, setZonaNames] = useState([]); // nombres de zonas operativas (zonas_cp) para derivar "Zona op."
   const [regionMap, setRegionMap] = useState({}); // zona -> región (zonas_regiones), cargado 1 vez
+  const [aliasMap, setAliasMap] = useState({}); // localidad_norm -> zona (localidad_zona_alias), overrides manuales
   const [jerNodos, setJerNodos] = useState(() => new Set()); // acordeón: qué regiones/zonas están abiertas
   const [zonasErr, setZonasErr] = useState("");
   const [informes, setInformes] = useState(null); // null=cargando, []=sin informes
@@ -301,6 +302,10 @@ export default function Analisis({ semanas }) {
         const rr = await sbGet("zonas_regiones?select=zona,region&limit=10000");
         if (alive && Array.isArray(rr)) { const m = {}; rr.forEach((r) => { m[r.zona] = r.region; }); setRegionMap(m); }
       } catch (e) { /* regiones best-effort → todo cae en "Sin clasificar" */ }
+      try {
+        const al = await sbGet("localidad_zona_alias?select=localidad_norm,zona&limit=10000");
+        if (alive && Array.isArray(al)) { const m = {}; al.forEach((r) => { m[r.localidad_norm] = r.zona; }); setAliasMap(m); }
+      } catch (e) { /* alias best-effort */ }
       try {
         const inf = await sbGet("analista_informes?select=id,fecha,tipo,resumen_tg,informe_md,hay_novedad,created_at&order=created_at.desc&limit=30");
         if (alive) setInformes(Array.isArray(inf) ? inf : []);
@@ -528,7 +533,7 @@ export default function Analisis({ semanas }) {
     return { weeks: labs.size, desde };
   }, [zonasRaw]);
   // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → null).
-  const zonaDe = (loc) => { if (!zonaNames.length) return null; const nl = normZ(loc); const ex = zonaNames.find((z) => normZ(z) === nl); if (ex) return ex; const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : null; };
+  const zonaDe = (loc) => { if (!zonaNames.length) return null; const nl = normZ(loc); if (aliasMap[nl]) return aliasMap[nl]; const ex = zonaNames.find((z) => normZ(z) === nl); if (ex) return ex; const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : null; };
   const jerToggle = (k) => setJerNodos((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // Jerarquía Región → Zona → Localidad. Suma envios_ml/demorados/dem21 y recalcula SLA en cada nivel
@@ -574,7 +579,7 @@ export default function Analisis({ semanas }) {
       return reg;
     }).sort((a, b) => REG_ORDEN.indexOf(a.nombre) - REG_ORDEN.indexOf(b.nombre));
     return { vacio: false, regiones: regionesArr, totalML, totalCant, locsSinZona, mlSinZona, nLoc, pctSinZona: totalML > 0 ? mlSinZona / totalML * 100 : 0 };
-  }, [zonasRaw, weeks, periodLabels, regionMap, zonaNames, cur]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [zonasRaw, weeks, periodLabels, regionMap, aliasMap, zonaNames, cur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
   const informeStd = useMemo(() => {
