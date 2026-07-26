@@ -299,7 +299,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
     const loc = String(row["Localidad"] || "").trim();
     const tieneDatos = !!(dirBase || loc);
-    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
     const esDemorado = seriaDemorado && tieneDatos;
     const esSinDatos = seriaDemorado && !tieneDatos; // cliente desvinculado de LightData: sin datos de destino, no se cuenta como demora
     const fechaEstado = String(row["Fecha estado"] || "").trim();
@@ -376,7 +376,7 @@ function calcularZonas(rows, fecha, noEsDemora = new Set()) {
     const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
     const locOrig = String(row["Localidad"] || "").trim();
     const tieneDatos = !!(dirBase || locOrig);
-    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
     const esDemorado = seriaDemorado && tieneDatos;
     const fechaEstado = String(row["Fecha estado"] || "").trim();
     const esEntregado = ["Entregado", "Entregado 2DA visita"].includes(estado);
@@ -765,8 +765,9 @@ export default function App() {
         const origen = String(r["Origen"]||"").trim();
         const estado = String(r["Estado"]||"").trim();
         const idInterno = r["ID (Interno)"];
-        // Solo verificar historial para "En camino" — En planta siempre es demora
-        return origen === "ML" && estado === "En camino al destinatario" && idInterno;
+        // Verificar historial para "En camino" Y "En planta": un Nadie/Repro <21hs también
+        // excusa al que volvió a planta tras la visita (fix 26/07, caso Ecuador 1286).
+        return origen === "ML" && (estado === "En camino al destinatario" || estado === "En planta de procesamiento") && idInterno;
       });
       console.log("En camino ML encontrados:", enCaminoML.length);
 

@@ -98,7 +98,12 @@ async function getLDHistorial(idInterno, ldCookies) {
   } catch(e) { return []; }
 }
 
-async function esDemorReal(idInterno, codCliente, tokens, ldCookies) {
+async function esDemorReal(idInterno, codCliente, tokens, ldCookies, fechasOkISO) {
+  // fechasOkISO: Set de fechas "YYYY-MM-DD" (día procesado y día anterior). Un evento 6/11/12
+  // solo excusa la demora si es de esas fechas — evita que un Nadie viejo excuse para siempre
+  // a un paquete olvidado en planta. Si la fecha del evento no se puede parsear, no se filtra
+  // (comportamiento anterior). Caso que motivó esto: envío 892715, Nadie 24/07 19:00,
+  // vuelto a planta el 25/07 y contado demorado ese día (fix 26/07).
   try {
     // Primero intentar con historial interno de LightData
     const historial = await getLDHistorial(idInterno, ldCookies);
@@ -109,6 +114,8 @@ async function esDemorReal(idInterno, codCliente, tokens, ldCookies) {
       const tuvoNoDemoraAntes21 = historial.some(h => {
         if (!ESTADOS_NO_DEMORA.has(String(h.estado))) return false;
         try {
+          const diaH = fechaEstadoADia(h.fecha);
+          if (fechasOkISO && diaH && !fechasOkISO.has(diaH)) return false;
           const partes = String(h.fecha).split(" ");
           if (partes.length < 2) return false;
           const hora = parseInt(partes[1].split(":")[0]);
@@ -138,6 +145,8 @@ async function esDemorReal(idInterno, codCliente, tokens, ldCookies) {
     const tuvoNadieAntes21 = data.data.estadosHistorial.some(h => {
       const estadoH = String(h.estado).toLowerCase();
       if (!estadoH.includes("nadie") && !estadoH.includes("reprogramado")) return false;
+      const diaH = fechaEstadoADia(h.fecha);
+      if (fechasOkISO && diaH && !fechasOkISO.has(diaH)) return false;
       // Parsear la hora del string (AR local, sin tz) igual que el historial interno — evita depender de la zona horaria del runner.
       try {
         const partes = String(h.fecha).split(" ");
@@ -165,7 +174,7 @@ function calcularDia(rows, fecha, noEsDemora) {
     const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
     const loc = String(row["Localidad"] || "").trim();
     const tieneDatos = !!(dirBase || loc);
-    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
     const esDemorado = seriaDemorado && tieneDatos;
     const esSinDatos = seriaDemorado && !tieneDatos; // cliente desvinculado de LightData: sin datos de destino, no se cuenta como demora
     const fechaEstado = String(row["Fecha estado"] || "").trim();
@@ -233,7 +242,7 @@ function calcularZonas(rows, fecha, noEsDemora) {
     const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
     const locOrig = String(row["Localidad"] || "").trim();
     const tieneDatos = !!(dirBase || locOrig);
-    const seriaDemorado = esML && (esEnPlanta || ((esEnCamino || esReproML) && !noEsDemora.has(idInterno)));
+    const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
     const esDemorado = seriaDemorado && tieneDatos;
     const fechaEstado = String(row["Fecha estado"] || "").trim();
     const esEntregado = ["Entregado", "Entregado 2DA visita"].includes(estado);
@@ -375,14 +384,18 @@ async function main() {
     const horaH = fechaH.split(" ")[1] ? parseInt(fechaH.split(" ")[1].split(":")[0]) : 0;
     const esEnCaminoML = origen === "ML" && estado === "En camino al destinatario";
     const esReproAntes21 = origen === "ML" && estado === "reprogramado por meli" && horaH < 21;
-    return (esEnCaminoML || esReproAntes21) && idInterno;
+    // "En planta" también se verifica: si volvió a planta tras un Nadie/Repro <21hs de hoy/ayer, no es demora (fix 26/07)
+    const esEnPlantaML = origen === "ML" && estado === "En planta de procesamiento";
+    return (esEnCaminoML || esReproAntes21 || esEnPlantaML) && idInterno;
   });
 
   console.log(`Verificando ${enCaminoML.length} envíos...`);
+  const ayerISO = (() => { const d = new Date(fecha + "T12:00:00-03:00"); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+  const fechasOkISO = new Set([fecha, ayerISO]);
   const noEsDemora = new Set();
   for (const row of enCaminoML) {
     const idInterno = String(row["ID (Interno)"]).trim();
-    const esReal = await esDemorReal(idInterno, row["Cod.Cliente"], tokens, ldCookies);
+    const esReal = await esDemorReal(idInterno, row["Cod.Cliente"], tokens, ldCookies, fechasOkISO);
     if (!esReal) noEsDemora.add(idInterno);
   }
   console.log(`No son demora real: ${noEsDemora.size}`);
