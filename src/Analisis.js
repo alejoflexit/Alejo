@@ -337,6 +337,8 @@ export default function Analisis({ semanas }) {
   const [copiado, setCopiado] = useState(false);
   const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
+  const [verCapacidad, setVerCapacidad] = useState(false); // "Capacidad para redistribuir" colapsado por defecto
+  const [verAlertasOp, setVerAlertasOp] = useState(false); // "Alertas operativas / calidad de datos" colapsado por defecto
   const [verHist, setVerHist] = useState(false); // "ver historial completo" en el drill (modo Historial)
   const [verTodosPat, setVerTodosPat] = useState(false); // Patrones: ver todos
   const [patSort, setPatSort] = useState("diasDem"); // Patrones: columna de orden
@@ -1042,7 +1044,11 @@ export default function Analisis({ semanas }) {
 
         {/* Capacidad para redistribuir — cadetes confiables con lugar */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 4 }}>💪 Capacidad para redistribuir <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· alto volumen y buen SLA, adónde pasar carga</span></div>
+          <div onClick={() => setVerCapacidad((v) => !v)} style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: verCapacidad ? 4 : 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ color: C.teal, fontSize: 12 }}>{verCapacidad ? "▾" : "▸"}</span>
+            <span>🔄 Capacidad para redistribuir <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· alto volumen y buen SLA, adónde pasar carga{!verCapacidad && sug.caballos.length ? ` · ${sug.caballos.length}` : ""}</span></span>
+          </div>
+          {verCapacidad && <>
           {informeStd && informeStd.capacidad && informeStd.capacidad.accion && <div style={{ fontSize: 12, color: C.goodText, marginBottom: 8, lineHeight: 1.45 }}>💡 Analista: {informeStd.capacidad.accion}</div>}
           {sug.caballos.length === 0 ? (
             <div style={{ fontSize: 12.5, color: C.muted, padding: "6px" }}>Sin caballitos de alto volumen y buen SLA en el período.</div>
@@ -1059,6 +1065,7 @@ export default function Analisis({ semanas }) {
               })}
             </div>
           )}
+          </>}
         </div>
         {/* Alertas operativas / calidad de datos — separadas de los cadetes */}
         {(() => {
@@ -1073,7 +1080,11 @@ export default function Analisis({ semanas }) {
           if (!items.length) return null;
           return (
             <div style={{ marginTop: 12, background: "rgba(226,75,74,0.06)", border: "1px solid rgba(226,75,74,0.22)", borderRadius: 12, padding: "10px 12px" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 6 }}>🧹 Alertas operativas / calidad de datos <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· no son cadetes, revisar carga en LightData</span></div>
+              <div onClick={() => setVerAlertasOp((v) => !v)} style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: verAlertasOp ? 6 : 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ color: "#F2937F", fontSize: 12 }}>{verAlertasOp ? "▾" : "▸"}</span>
+                <span>🧹 Alertas operativas / calidad de datos <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· no son cadetes, revisar carga en LightData{!verAlertasOp ? ` · ${items.length}` : ""}</span></span>
+              </div>
+              {verAlertasOp && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {items.map(([lbl, n, sub]) => (
                   <div key={lbl} style={{ flex: "1 1 150px", minWidth: 0, background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 10px" }}>
@@ -1082,6 +1093,7 @@ export default function Analisis({ semanas }) {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           );
         })()}
