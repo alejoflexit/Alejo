@@ -583,7 +583,11 @@ export default function Analisis({ semanas }) {
       reg.zonasArr = Object.values(reg.zonas).map((zn) => { fin(zn); zn.localidades.forEach(fin); zn.localidades.sort(peorPrimero); return zn; }).sort(peorPrimero);
       return reg;
     }).sort((a, b) => REG_ORDEN.indexOf(a.nombre) - REG_ORDEN.indexOf(b.nombre));
-    return { vacio: false, regiones: regionesArr, totalML, totalCant, locsSinZona, mlSinZona, nLoc, pctSinZona: totalML > 0 ? mlSinZona / totalML * 100 : 0 };
+    // aviso de cobertura: si el período elegido arranca antes de que exista dato por zona
+    const capturaDesde = zonasRaw.length ? zonasRaw[0].fecha : null;
+    const periodoMin = [...fechasPeriodo].sort()[0] || null;
+    const avisoDesde = (periodoMin && capturaDesde && periodoMin < capturaDesde) ? capturaDesde : null;
+    return { vacio: false, regiones: regionesArr, totalML, totalCant, locsSinZona, mlSinZona, nLoc, pctSinZona: totalML > 0 ? mlSinZona / totalML * 100 : 0, avisoDesde };
   }, [zonasRaw, weeks, periodLabels, regionMap, aliasMap, zonaNames, cur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
@@ -1297,6 +1301,11 @@ export default function Analisis({ semanas }) {
               <span>Tocá una región para ver sus zonas, y una zona para sus localidades. Suma de envíos ML; el SLA se recalcula sobre las sumas (misma fórmula, nunca promedia %). Δ vs SLA global ({cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"}). Peor primero; muestra chica (&lt;{CFG.zonaMin}) agrupada.</span>
               <span style={{ color: jerarquia.pctSinZona >= 10 ? C.critText : C.muted, fontWeight: 600, whiteSpace: "nowrap" }}>Localidades sin zona op.: {fmtInt(jerarquia.locsSinZona)} · {fmt1(jerarquia.pctSinZona)}% del volumen</span>
             </div>
+            {jerarquia.avisoDesde && (
+              <div style={{ fontSize: 11.5, color: C.warn, background: "rgba(232,184,75,0.10)", border: "1px solid rgba(232,184,75,0.28)", borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.45 }}>
+                ⚠️ Los datos por zona se capturan desde el <b>{fmtDMY(jerarquia.avisoDesde)}</b>. El período elegido es más largo, así que el SLA por zona de acá abajo solo refleja <b>desde esa fecha</b> — no todo el período.
+              </div>
+            )}
             {(() => {
               const rows = [];
               const cel = (o, nivel, muted) => (
