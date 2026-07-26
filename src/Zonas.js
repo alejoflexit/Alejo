@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { getSession, authedFetch } from "./auth";
 
 // Zonas — saturación por TERRITORIO y por zona, EN VIVO (spec-zonas-en-vivo).
 // Fuente: bridge del VPS GET /zonas (Excel de ENVIOS con Fecha Flexit = hoy, cache 5 min).
@@ -42,6 +43,88 @@ function matchNombre(nl, nz) {
   return nz === nl || nz.includes(nl) || nl.includes(nz);
 }
 
+// ============ Calibrador de topes (spec-calibrador-topes, C1) ============
+// La app PROPONE con evidencia; una persona aplica. Nada cambia sin click humano.
+const CAL = {
+  ventanaDias: 21,        // últimas 3 semanas
+  minDiasTrab: 8,         // días trabajados en la ventana para opinar
+  minDiasAlta: 4,         // días con carga ≥ tope+buffer y SLA alto para proponer SUBIR
+  bufferAlta: 5,          // "carga alta" = carga ≥ tope + 5
+  minMlDia: 10,           // un día cuenta solo si tuvo ≥10 envíos ML
+  slaAltaMin: 98,         // SLA ≥98 en esos días de carga alta
+  margenMediana: 10,      // tope propuesto ≤ mediana + 10 (anti-outlier)
+  capSobreT: 15,          // tope propuesto ≤ tope + 15
+  lunesPct: 0.70,         // ≥70% de los días de carga alta el mismo día → refuerzo, no suba
+  pct90: 0.90,            // REVISAR: días con carga ≥ 90% del tope
+  revisarSlaMax: 95,      // ...donde el SLA cayó <95%
+  revisarMinDias: 2,      // en ≥2 días
+  operativos: [/^repro gramar/i, /^quedo en el/i, /^devuelto deposito/i, /^⚠️/], // usuarios internos, no cadetes
+};
+const DOW = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const slaMeliDia = (ml, dem, d21) => (ml > 0 ? (ml - dem - (d21 || 0)) / ml * 100 : null);
+const round5 = (x) => Math.round(x / 5) * 5;
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+const percentil = (arr, p) => { if (!arr.length) return 0; const s = arr.slice().sort((a, b) => a - b); const i = (s.length - 1) * p; const lo = Math.floor(i), hi = Math.ceil(i); return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (i - lo); };
+const medianaArr = (arr) => percentil(arr, 0.5);
+function confianza(nAlta, med, p90, nTrab) {
+  const fa = clamp((nAlta - 4) / (8 - 4), 0, 1);                 // cantidad de días de carga alta
+  const fb = med > 0 ? clamp(1 - (p90 - med) / med, 0, 1) : 0;    // estabilidad: p90 cerca de la mediana
+  const fc = clamp((nTrab - 8) / (15 - 8), 0, 1);                // días trabajados
+  const score = (fa + fb + fc) / 3;
+  return { score, label: score >= 0.66 ? "Alta" : score >= 0.33 ? "Media" : "Baja", dots: Math.max(1, Math.round(score * 4)) };
+}
+// Devuelve {subir:[], lunes:[], revisar:[]} desde semanas (ventana) + topes + fleteros.
+function calcularPropuestas(sem, topes, fleteros) {
+  const topeMap = new Map();
+  for (const t of topes) if (t.tope) topeMap.set(norm(t.cadete), { cadete: t.cadete, tope: t.tope });
+  const byCad = new Map();
+  for (const r of sem) {
+    const nombre = String(r.cadete || "");
+    if (CAL.operativos.some((re) => re.test(nombre.trim()))) continue;
+    const k = norm(nombre);
+    if (!topeMap.has(k) || fleteros.has(k)) continue;
+    let c = byCad.get(k);
+    if (!c) { const tm = topeMap.get(k); c = { cadete: tm.cadete, tope: tm.tope, dias: [] }; byCad.set(k, c); }
+    const ml = r.envios_ml || 0;
+    c.dias.push({ carga: r.cantidad || 0, ml, dem: r.demorados || 0, d21: r.dem21 || 0, sla: ml >= CAL.minMlDia ? slaMeliDia(ml, r.demorados || 0, r.dem21 || 0) : null, dow: new Date(r.fecha + "T12:00:00-03:00").getDay(), fecha: r.fecha });
+  }
+  const subir = [], lunes = [], revisar = [];
+  for (const c of byCad.values()) {
+    const T = c.tope, dias = c.dias, nTrab = dias.length;
+    const cargas = dias.map((d) => d.carga);
+    const prom = Math.round(cargas.reduce((a, b) => a + b, 0) / (nTrab || 1));
+    const med = Math.round(medianaArr(cargas)), p90 = Math.round(percentil(cargas, 0.9)), maxc = Math.max(0, ...cargas);
+    const diasSobre = dias.filter((d) => d.carga > T).length;
+    const diasAlta = dias.filter((d) => d.carga >= T + CAL.bufferAlta && d.ml >= CAL.minMlDia && d.sla != null && d.sla >= CAL.slaAltaMin);
+    const ev = { ventana_dias: CAL.ventanaDias, dias_trabajados: nTrab, dias_sobre_tope: diasSobre, promedio: prom, mediana: med, p90, maximo: maxc };
+    // SUBIR / efecto lunes — elegible por días de carga alta
+    if (nTrab >= CAL.minDiasTrab && diasAlta.length >= CAL.minDiasAlta) {
+      // Efecto lunes primero: si la carga alta se concentra en un día, es refuerzo semanal, no suba
+      // de tope permanente — y esto vale aunque el cap (mediana+10) frenaría la suba igual.
+      const dowCount = {}; diasAlta.forEach((d) => { dowCount[d.dow] = (dowCount[d.dow] || 0) + 1; });
+      const top = Object.entries(dowCount).sort((a, b) => b[1] - a[1])[0];
+      if (top && top[1] / diasAlta.length >= CAL.lunesPct) {
+        lunes.push({ cadete: c.cadete, T, dia: DOW[+top[0]], nAlta: diasAlta.length, nDia: top[1], ...ev });
+      } else {
+        const propuesto = round5(Math.min(p90, med + CAL.margenMediana, T + CAL.capSobreT));
+        if (propuesto > T) {
+          const aMl = diasAlta.reduce((a, d) => a + d.ml, 0), aDem = diasAlta.reduce((a, d) => a + d.dem, 0), aD21 = diasAlta.reduce((a, d) => a + d.d21, 0);
+          const slaAlta = slaMeliDia(aMl, aDem, aD21);
+          subir.push({ cadete: c.cadete, T, propuesto, slaAlta: slaAlta != null ? Math.round(slaAlta * 10) / 10 : null, diasAlta: diasAlta.length, conf: confianza(diasAlta.length, med, p90, nTrab), ev: { ...ev, dias_alta: diasAlta.length, sla_carga_alta: slaAlta != null ? Math.round(slaAlta * 10) / 10 : null, tope_anterior: T, tope_propuesto: propuesto } });
+        }
+      }
+    }
+    // REVISAR (nunca propone número)
+    const dias90 = dias.filter((d) => d.carga >= CAL.pct90 * T && d.ml >= CAL.minMlDia && d.sla != null && d.sla < CAL.revisarSlaMax);
+    if (dias90.length >= CAL.revisarMinDias) {
+      revisar.push({ cadete: c.cadete, T, dias: dias90.sort((a, b) => a.fecha < b.fecha ? -1 : 1).map((d) => ({ fecha: d.fecha, carga: d.carga, sla: Math.round(d.sla * 10) / 10 })) });
+    }
+  }
+  subir.sort((a, b) => b.conf.score - a.conf.score);
+  revisar.sort((a, b) => b.dias.length - a.dias.length);
+  return { subir, lunes, revisar };
+}
+
 export default function Zonas() {
   const [vista, setVista] = useState("terr");     // "terr" (territorios = grupos de zonas) | "zona"
   const [terrs, setTerrs] = useState(null);       // [{nombre, cadetes, total, entregados, tope, pct, estado, notas}]
@@ -52,6 +135,12 @@ export default function Zonas() {
   const [sinEndpoint, setSinEndpoint] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("");
+  // Calibrador de topes (independiente del bridge; usa semanas + cadete_topes)
+  const [propuestas, setPropuestas] = useState(null); // null=cargando, {subir,lunes,revisar}
+  const [verProp, setVerProp] = useState(false);      // bloque colapsado por defecto
+  const [sesion] = useState(() => getSession());       // hay usuario logueado? (para el botón Aplicar)
+  const [aplicando, setAplicando] = useState("");     // cadete que se está aplicando
+  const [propErr, setPropErr] = useState("");
   const refMapas = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -204,6 +293,43 @@ export default function Zonas() {
     return () => clearInterval(t);
   }, [cargar]);
 
+  // Calibrador: carga semanas (ventana) + topes + fleteros y calcula las propuestas (1 vez).
+  const cargarPropuestas = useCallback(async () => {
+    try {
+      const cutoff = new Date(Date.now() - CAL.ventanaDias * 86400000).toISOString().slice(0, 10);
+      const [sem, topes, tarifas] = await Promise.all([
+        supa(`semanas?select=fecha,cadete,cantidad,demorados,dem21,envios_ml&fecha=gte.${cutoff}&limit=100000`),
+        supa("cadete_topes?select=cadete,tope&activo=eq.true&limit=1000"),
+        supa("cadetes_tarifas?select=nombre,nombre_lightdata,fletero&limit=2000").catch(() => []),
+      ]);
+      const fleteros = new Set();
+      for (const t of (tarifas || [])) if (t.fletero) { if (t.nombre_lightdata) fleteros.add(norm(t.nombre_lightdata)); if (t.nombre) fleteros.add(norm(t.nombre)); }
+      setPropuestas(calcularPropuestas(sem, topes, fleteros));
+    } catch (e) { setPropErr(String(e.message || e)); setPropuestas({ subir: [], lunes: [], revisar: [] }); }
+  }, []);
+  useEffect(() => { cargarPropuestas(); }, [cargarPropuestas]);
+
+  async function aplicarPropuesta(p) {
+    if (!sesion) return;
+    setAplicando(p.cadete); setPropErr("");
+    try {
+      // 1) registrar el cambio (append-only). Si el registro falla, NO se aplica el tope.
+      const rLog = await authedFetch(`${SUPABASE_URL}/rest/v1/topes_cambios`, {
+        method: "POST", headers: { Prefer: "return=minimal" },
+        body: JSON.stringify([{ cadete: p.cadete, tope_anterior: p.T, tope_nuevo: p.propuesto, usuario: sesion.email, origen: "propuesta", evidencia: p.ev }]),
+      });
+      if (!rLog.ok) throw new Error(`no se pudo registrar el cambio (${rLog.status}) — el tope NO se tocó`);
+      // 2) recién ahora actualizar el tope
+      const rUp = await authedFetch(`${SUPABASE_URL}/rest/v1/cadete_topes?cadete=eq.${encodeURIComponent(p.cadete)}`, {
+        method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ tope: p.propuesto }),
+      });
+      if (!rUp.ok) throw new Error(`se registró el cambio pero no se pudo actualizar el tope (${rUp.status}) — revisar`);
+      refMapas.current = null;
+      await Promise.all([cargarPropuestas(), cargar()]);
+    } catch (e) { setPropErr(String(e.message || e)); }
+    finally { setAplicando(""); }
+  }
+
   const colorEstado = (e) => (e === "saturada" ? C.crit : e === "limite" ? C.warn : e === "sintope" ? C.faint : C.ok);
   const f = norm(filtro);
   const esTerr = vista === "terr";
@@ -258,6 +384,53 @@ export default function Zonas() {
             {cargando ? "…" : "⟳"}
           </button>
         </div>
+      </div>
+
+      {/* === Calibrador de topes: propuestas con evidencia (spec-calibrador-topes, C1) === */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 14 }}>
+        <div onClick={() => setVerProp((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", cursor: "pointer" }}>
+          <span style={{ color: C.ok, fontSize: 13 }}>{verProp ? "▾" : "▸"}</span>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>🎯 Propuestas de tope</span>
+          <span style={{ fontSize: 12, color: C.muted }}>· la app propone con evidencia, vos aplicás</span>
+          {propuestas && (() => { const n = propuestas.subir.length + propuestas.lunes.length + propuestas.revisar.length; return <span style={{ marginLeft: "auto", fontSize: 12, color: n ? C.ok : C.muted, fontWeight: 700 }}>{n ? `${n}` : "sin propuestas"}</span>; })()}
+        </div>
+        {verProp && (
+          <div style={{ padding: "0 14px 12px" }}>
+            {propuestas == null ? (
+              <div style={{ fontSize: 12.5, color: C.muted }}>Calculando…</div>
+            ) : (propuestas.subir.length + propuestas.lunes.length + propuestas.revisar.length) === 0 ? (
+              <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>Sin propuestas por ahora — los topes están bien calibrados para la carga de las últimas 3 semanas. {propErr ? <span style={{ color: C.crit }}>({propErr})</span> : null}</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {!sesion && <div style={{ fontSize: 11.5, color: "#f3c886" }}>Iniciá sesión (Tiquetera/Colectas) para poder aplicar los cambios.</div>}
+                {propErr && <div style={{ fontSize: 11.5, color: C.crit }}>{propErr}</div>}
+                {propuestas.subir.map((p) => (
+                  <div key={"s" + p.cadete} style={{ border: "1px solid rgba(46,207,170,0.35)", background: "rgba(46,207,170,0.06)", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>⬆️ {p.cadete} — subir tope {p.T} → {p.propuesto}</span>
+                      <span style={{ fontSize: 11.5, color: C.muted }}>· Confianza: {"●".repeat(p.conf.dots)}{"○".repeat(4 - p.conf.dots)} {p.conf.label}</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>{p.ev.dias_trabajados} días trabajados · {p.ev.dias_sobre_tope} sobre el tope · promedio {p.ev.promedio} · mediana {p.ev.mediana} · p90 {p.ev.p90} · máximo {p.ev.maximo} · SLA en días de carga alta {p.slaAlta != null ? p.slaAlta + "%" : "—"}</div>
+                    {sesion && <button onClick={() => aplicarPropuesta(p)} disabled={aplicando === p.cadete} style={{ marginTop: 8, background: "rgba(46,207,170,0.16)", border: `1px solid ${C.ok}`, borderRadius: 8, color: C.ok, fontSize: 12.5, fontWeight: 700, padding: "5px 14px", cursor: "pointer" }}>{aplicando === p.cadete ? "Aplicando…" : "Aplicar"}</button>}
+                  </div>
+                ))}
+                {propuestas.lunes.map((p) => (
+                  <div key={"l" + p.cadete} style={{ border: "1px solid rgba(239,159,39,0.35)", background: "rgba(239,159,39,0.06)", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>📅 {p.cadete} — carga alta concentrada los {p.dia}s</div>
+                    <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>{p.nDia} de {p.nAlta} días de carga alta fueron {p.dia}s → un tope general no lo arregla; conviene revisar un refuerzo de {p.dia}s. (Tope {p.T} · promedio {p.ev.promedio} · p90 {p.ev.p90})</div>
+                  </div>
+                ))}
+                {propuestas.revisar.map((p) => (
+                  <div key={"r" + p.cadete} style={{ border: "1px solid rgba(226,75,74,0.35)", background: "rgba(226,75,74,0.06)", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>⚠️ {p.cadete} — revisar: bajar tope o sumar refuerzo</div>
+                    <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>En {p.dias.length} días con carga ≥90% del tope ({p.T}) el SLA cayó &lt;95%: {p.dias.map((d) => `${d.fecha.slice(8, 10)}/${d.fecha.slice(5, 7)} (${d.carga} env, ${d.sla}%)`).join(" · ")}. Bajar el tope es decisión tuya — los datos muestran cuánto llevan, no cuánto aguantan.</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 10.5, color: C.faint, marginTop: 10, lineHeight: 1.5 }}>Ventana: últimas 3 semanas de <code>semanas</code>. SUBIR = días sostenidos por encima del tope con SLA ≥98% (tope propuesto = mín(p90, mediana+10, tope+15)). REVISAR nunca propone número. Fleteros y usuarios internos quedan afuera. Cada cambio aplicado queda registrado en <code>topes_cambios</code>.</div>
+          </div>
+        )}
       </div>
 
       {meta && !meta.finoDisponible && (
