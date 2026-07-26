@@ -339,6 +339,7 @@ export default function Analisis({ semanas }) {
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
   const [verCapacidad, setVerCapacidad] = useState(false); // "Capacidad para redistribuir" colapsado por defecto
   const [verAlertasOp, setVerAlertasOp] = useState(false); // "Alertas operativas / calidad de datos" colapsado por defecto
+  const [verAtender, setVerAtender] = useState(true); // "A atender" colapsable (abierto por defecto, es lo principal)
   const [verHist, setVerHist] = useState(false); // "ver historial completo" en el drill (modo Historial)
   const [verTodosPat, setVerTodosPat] = useState(false); // Patrones: ver todos
   const [patSort, setPatSort] = useState("diasDem"); // Patrones: columna de orden
@@ -1008,18 +1009,20 @@ export default function Analisis({ semanas }) {
             open={verIncompletos}
             onClick={() => { setVerIncompletos(true); setJerNodos(new Set(["CABA", "Norte", "Oeste", "Sur"])); setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80); }} />
           <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
-          <Tile label="Requieren atención" value={fmtInt(alertas.nCad)} delta={<div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>cadetes a atender{alertas.nLoc ? ` · ${alertas.nLoc} localidad${alertas.nLoc === 1 ? "" : "es"} a vigilar` : ""}</div>} />
         </div>
 
         {/* Atender hoy — tarjetas por cadete, la más urgente resaltada */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1 }}>🟠 {tituloAtender} <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· lo más urgente primero</span></div>
-            <button onClick={copiar} title="Copiar resumen para WhatsApp" style={{ background: copiado ? "rgba(46,207,170,0.16)" : C.cardAlt, border: `1px solid ${copiado ? C.teal : C.border}`, borderRadius: 8, color: copiado ? C.teal : C.muted, fontSize: 12, fontWeight: 600, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: verAtender ? 8 : 0 }}>
+            <div onClick={() => setVerAtender((v) => !v)} style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: C.teal, fontSize: 12 }}>{verAtender ? "▾" : "▸"}</span>
+              <span>🟠 {tituloAtender} <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· {alertas.nCad} {alertas.nCad === 1 ? "cadete" : "cadetes"}{alertas.nLoc ? ` · ${alertas.nLoc} localidad${alertas.nLoc === 1 ? "" : "es"} a vigilar` : ""}</span></span>
+            </div>
+            {verAtender && <button onClick={(e) => { e.stopPropagation(); copiar(); }} title="Copiar resumen para WhatsApp" style={{ background: copiado ? "rgba(46,207,170,0.16)" : C.cardAlt, border: `1px solid ${copiado ? C.teal : C.border}`, borderRadius: 8, color: copiado ? C.teal : C.muted, fontSize: 12, fontWeight: 600, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
               {copiado ? "✓ Copiado" : "💬 Copiar resumen"}
-            </button>
+            </button>}
           </div>
-          {alertas.cadetes.length === 0 ? (
+          {verAtender && (alertas.cadetes.length === 0 ? (
             <div style={{ fontSize: 12.5, color: C.muted, padding: "6px" }}>Nadie en rojo este período. 👏</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1043,7 +1046,7 @@ export default function Analisis({ semanas }) {
                 );
               })}
             </div>
-          )}
+          ))}
         </div>
 
         {/* Capacidad para redistribuir — cadetes confiables con lugar */}
