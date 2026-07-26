@@ -138,12 +138,13 @@ function aggWeekFirstDays(semanas, label, nDays, topeMap) {
 }
 
 // ---- subcomponentes chicos ----
-function Tile({ label, value, delta, dot, sub }) {
+function Tile({ label, value, delta, dot, sub, onClick, open }) {
   return (
-    <div style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", minWidth: 120, flex: "1 1 130px" }}>
+    <div onClick={onClick} style={{ background: C.cardAlt, border: `1px solid ${onClick && open ? C.teal : C.border}`, borderRadius: 12, padding: "12px 14px", minWidth: 120, flex: "1 1 130px", cursor: onClick ? "pointer" : "default" }}>
       <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
         {dot && <span style={{ width: 8, height: 8, borderRadius: "50%", background: dot, display: "inline-block" }} />}
         {label}
+        {onClick && <span style={{ marginLeft: "auto", color: C.teal, fontSize: 12 }}>{open ? "▾" : "▸"}</span>}
       </div>
       <div style={{ fontSize: 24, fontWeight: 700, color: C.ink, marginTop: 4 }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{sub}</div>}
@@ -276,6 +277,8 @@ export default function Analisis({ semanas }) {
   const [zonasRaw, setZonasRaw] = useState(null); // null=cargando, []=vacío
   const [topeMap, setTopeMap] = useState({});
   const [zonaNames, setZonaNames] = useState([]); // nombres de zonas operativas (zonas_cp) para derivar "Zona op."
+  const [regionMap, setRegionMap] = useState({}); // zona -> región (zonas_regiones), cargado 1 vez
+  const [jerNodos, setJerNodos] = useState(() => new Set()); // acordeón: qué regiones/zonas están abiertas
   const [zonasErr, setZonasErr] = useState("");
   const [informes, setInformes] = useState(null); // null=cargando, []=sin informes
 
@@ -294,6 +297,10 @@ export default function Analisis({ semanas }) {
         const zc = await sbGet("zonas_cp?select=zona&limit=10000");
         if (alive && Array.isArray(zc)) setZonaNames([...new Set(zc.map((r) => r.zona).filter(Boolean))]);
       } catch (e) { /* zona op. best-effort */ }
+      try {
+        const rr = await sbGet("zonas_regiones?select=zona,region&limit=10000");
+        if (alive && Array.isArray(rr)) { const m = {}; rr.forEach((r) => { m[r.zona] = r.region; }); setRegionMap(m); }
+      } catch (e) { /* regiones best-effort → todo cae en "Sin clasificar" */ }
       try {
         const inf = await sbGet("analista_informes?select=id,fecha,tipo,resumen_tg,informe_md,hay_novedad,created_at&order=created_at.desc&limit=30");
         if (alive) setInformes(Array.isArray(inf) ? inf : []);
@@ -320,7 +327,6 @@ export default function Analisis({ semanas }) {
 
   const [periodo, setPeriodo] = useState({ t: "sem", w: null });
   const [drill, setDrill] = useState(null); // {kind, name, src} — panel de detalle al tocar una alerta o fila
-  const [verChicas, setVerChicas] = useState(false); // desplegar localidades de muestra chica
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 640);
   const [chip, setChip] = useState(null); // filtro rápido del ranking: null | criticos | sobre | tarde | caida
   const [copiado, setCopiado] = useState(false);
@@ -523,11 +529,52 @@ export default function Analisis({ semanas }) {
   }, [zonasRaw]);
   // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → null).
   const zonaDe = (loc) => { if (!zonaNames.length) return null; const nl = normZ(loc); const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : null; };
-  const zonaCell = (loc) => {
-    if (!zonaNames.length) return <span style={{ color: C.muted }}>—</span>;
-    const z = zonaDe(loc);
-    return z ? z : <span style={{ fontStyle: "italic", color: "#f3c886" }}>Sin zona operativa asignada</span>;
-  };
+  const jerToggle = (k) => setJerNodos((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
+
+  // Jerarquía Región → Zona → Localidad. Suma envios_ml/demorados/dem21 y recalcula SLA en cada nivel
+  // (nunca promediar %). Localidad sin match de zona → "Sin zona asignada"; zona sin región → "Sin clasificar".
+  // Se calcula 1 vez por período desde zonasRaw (que ya está en memoria) — abrir/cerrar no pega a Supabase.
+  const REG_ORDEN = ["CABA", "Norte", "Oeste", "Sur", "Sin clasificar", "Sin zona asignada"];
+  const jerarquia = useMemo(() => {
+    if (!zonasRaw) return null;
+    const fechasPeriodo = new Set(weeks.filter((w) => periodLabels.includes(w.label)).flatMap((w) => w.fechas));
+    const filas = zonasRaw.filter((r) => fechasPeriodo.has(r.fecha));
+    if (filas.length === 0) return { vacio: true, desde: zonasRaw.length ? zonasRaw[0].fecha : null };
+    // 1) localidad (mismo agregado que zonaData, pero conservando demorados/dem21)
+    const locMap = {};
+    for (const r of filas) {
+      const k = r.localidad_norm || "";
+      const g = locMap[k] || (locMap[k] = { localidad_norm: k, labels: {}, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0 });
+      if (r.localidad) g.labels[r.localidad] = (g.labels[r.localidad] || 0) + r.cantidad;
+      g.cantidad += r.cantidad; g.entregados += r.entregados; g.demorados += r.demorados; g.dem21 += r.dem21; g.post21 += r.post21; g.envios_ml += r.envios_ml; g.nadie += r.nadie;
+    }
+    const slaG = cur.g.sla;
+    const acc = (o, z) => { o.cantidad += z.cantidad; o.entregados += z.entregados; o.demorados += z.demorados; o.dem21 += z.dem21; o.post21 += z.post21; o.envios_ml += z.envios_ml; o.nadie += z.nadie; };
+    const nuevo = (nombre, extra) => ({ nombre, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, ...extra });
+    const fin = (o) => { o.sla = slaMeli(o.envios_ml, o.demorados, o.dem21); o.delta = (o.sla != null && slaG != null) ? o.sla - slaG : null; o.post21Rate = (o.entregados || o.cantidad) > 0 ? o.post21 / (o.entregados || o.cantidad) * 100 : 0; o.nadieRate = o.cantidad > 0 ? o.nadie / o.cantidad * 100 : 0; return o; };
+
+    const regiones = {}; let totalML = 0, totalCant = 0, locsSinZona = 0, mlSinZona = 0, nLoc = 0;
+    for (const k of Object.keys(locMap)) {
+      const loc = locMap[k];
+      loc.localidad = Object.keys(loc.labels).sort((a, b) => loc.labels[b] - loc.labels[a])[0] || "(sin localidad)";
+      totalML += loc.envios_ml; totalCant += loc.cantidad; nLoc++;
+      const zona = zonaDe(loc.localidad); // nombre de zona op. o null
+      const regionName = !zona ? "Sin zona asignada" : (regionMap[zona] || "Sin clasificar");
+      if (!zona) { locsSinZona++; mlSinZona += loc.envios_ml; }
+      const reg = regiones[regionName] || (regiones[regionName] = nuevo(regionName, { zonas: {} }));
+      acc(reg, loc);
+      const zk = zona || "(sin zona)";
+      const zn = reg.zonas[zk] || (reg.zonas[zk] = nuevo(zona || "Sin zona operativa", { localidades: [] }));
+      acc(zn, loc); zn.localidades.push(loc);
+    }
+    const peorPrimero = (a, b) => { if (a.sla == null && b.sla == null) return b.envios_ml - a.envios_ml; if (a.sla == null) return 1; if (b.sla == null) return -1; return a.sla - b.sla; };
+    const regionesArr = Object.values(regiones).map((reg) => {
+      fin(reg);
+      reg.zonasArr = Object.values(reg.zonas).map((zn) => { fin(zn); zn.localidades.forEach(fin); zn.localidades.sort(peorPrimero); return zn; }).sort(peorPrimero);
+      return reg;
+    }).sort((a, b) => REG_ORDEN.indexOf(a.nombre) - REG_ORDEN.indexOf(b.nombre));
+    return { vacio: false, regiones: regionesArr, totalML, totalCant, locsSinZona, mlSinZona, nLoc, pctSinZona: totalML > 0 ? mlSinZona / totalML * 100 : 0 };
+  }, [zonasRaw, weeks, periodLabels, regionMap, zonaNames, cur]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
   const informeStd = useMemo(() => {
@@ -943,7 +990,9 @@ export default function Analisis({ semanas }) {
       <div style={{ marginBottom: 24 }}>
         <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>{tituloBloque}</h3>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-          <Tile label="SLA Meli (solo ML)" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null} />
+          <Tile label="SLA Meli (solo ML)" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null}
+            open={verIncompletos}
+            onClick={() => { setVerIncompletos(true); setJerNodos(new Set(["CABA", "Norte", "Oeste", "Sur"])); setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80); }} />
           <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
           <Tile label="Requieren atención" value={fmtInt(alertas.nCad)} delta={<div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>cadetes a atender{alertas.nLoc ? ` · ${alertas.nLoc} localidad${alertas.nLoc === 1 ? "" : "es"} a vigilar` : ""}</div>} />
         </div>
@@ -1211,68 +1260,65 @@ export default function Analisis({ semanas }) {
           {alertas.locs.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
         </div>
       )}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por localidad <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
+      <h3 id="jer-sla" style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por región → zona → localidad <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 22 }}>
-        {zonaData == null ? (
-          <div style={{ color: C.muted, fontSize: 12 }}>Cargando localidades…</div>
-        ) : zonaData.vacio ? (
+        {jerarquia == null ? (
+          <div style={{ color: C.muted, fontSize: 12 }}>Cargando…</div>
+        ) : jerarquia.vacio ? (
           <div style={{ color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
-            {zonaData.desde
-              ? `Todavía no hay datos por localidad para este período. La captura arrancó el ${fmtDMY(zonaData.desde)} — elegí un período desde esa fecha.`
+            {jerarquia.desde
+              ? `Todavía no hay datos por localidad para este período. La captura arrancó el ${fmtDMY(jerarquia.desde)} — elegí un período desde esa fecha.`
               : "Los datos por localidad se empiezan a capturar desde hoy (la Action nocturna guarda la primera foto esta noche). No hay histórico hacia atrás."}
             {zonasErr ? <div style={{ marginTop: 6, color: C.critText, fontSize: 11 }}>({zonasErr})</div> : null}
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>
-              SLA por localidad (dato del Excel de LightData) con la misma fórmula que la tabla por cadete. "Zona op." es la zona operativa derivada con el mismo mapeo de la pestaña Zonas (sin cruce único → "—"). Δ = puntos vs el SLA global del período ({cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"}). Localidades con &lt;{CFG.zonaMin} envíos van agrupadas abajo (muestra chica). Tocá una fila para el detalle.
+            <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8, display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <span>Tocá una región para ver sus zonas, y una zona para sus localidades. Suma de envíos ML; el SLA se recalcula sobre las sumas (misma fórmula, nunca promedia %). Δ vs SLA global ({cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"}). Peor primero; muestra chica (&lt;{CFG.zonaMin}) agrupada.</span>
+              <span style={{ color: jerarquia.pctSinZona >= 10 ? C.critText : C.muted, fontWeight: 600, whiteSpace: "nowrap" }}>Localidades sin zona op.: {fmtInt(jerarquia.locsSinZona)} · {fmt1(jerarquia.pctSinZona)}% del volumen</span>
             </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-                <thead>
-                  <tr>
-                    {["Localidad", "Zona op.", "Envíos", "SLA", "Δ vs global", "% post 21", "% Nadie"].map((h, i) => (
-                      <th key={i} style={{ padding: "6px 8px", textAlign: i <= 1 ? "left" : "right", color: C.muted, fontWeight: 600, fontSize: 11.5, borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {zonaData.grandes.map((z, i) => {
-                    const rojo = z.cantidad >= CFG.zonaMin && z.delta != null && z.delta <= -1;
-                    return (
-                      <tr key={i} onClick={() => toggleDrill("localidad", z.localidad, "loc")} style={{ background: isOpen("localidad", z.localidad, "loc") ? "rgba(46,207,170,0.08)" : rojo ? "rgba(229,96,77,0.09)" : "transparent", cursor: "pointer" }}>
-                        <td style={{ padding: "6px 8px", fontWeight: 600 }}>{slaIcon(z.sla)} {z.localidad}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "left", color: C.muted }}>{zonaCell(z.localidad)}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(z.cantidad)}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(z.sla), fontWeight: 600 }}>{z.sla != null ? fmt1(z.sla) + "%" : "—"}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right", color: z.delta == null ? C.muted : z.delta >= 0 ? C.goodText : C.critText }}>{z.delta == null ? "—" : (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta))}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right", color: z.post21Rate >= 15 ? C.critText : C.ink }}>{(z.post21Rate >= 15 ? "🌙 " : "") + fmt0(z.post21Rate) + "%"}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt0(z.nadieRate)}%</td>
-                      </tr>
-                    );
-                  })}
-                  {zonaData.otras && (
-                    <tr onClick={() => setVerChicas((v) => !v)} style={{ color: C.muted, cursor: "pointer" }}>
-                      <td style={{ padding: "6px 8px", fontStyle: "italic" }}><span style={{ color: C.teal }}>{verChicas ? "▾" : "▸"}</span> {zonaData.otras.localidad} · {zonaData.otras.nZonas} localidades</td>
-                      <td></td>
-                      <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(zonaData.otras.cantidad)}</td>
-                      <td colSpan={4}></td>
-                    </tr>
-                  )}
-                  {zonaData.otras && verChicas && zonaData.otras.chicas.map((z, i) => (
-                    <tr key={"chica" + i} onClick={() => toggleDrill("localidad", z.localidad, "loc")} style={{ background: isOpen("localidad", z.localidad, "loc") ? "rgba(46,207,170,0.08)" : "transparent", cursor: "pointer", color: C.muted }}>
-                      <td style={{ padding: "5px 8px 5px 20px", fontSize: 12 }}>{slaIcon(z.sla)} {z.localidad}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "left", fontSize: 12 }}>{zonaCell(z.localidad)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{fmtInt(z.cantidad)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12, color: slaColor(z.sla) }}>{z.sla != null ? fmt1(z.sla) + "%" : "—"}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{z.delta == null ? "—" : (z.delta >= 0 ? "+" : "−") + fmt1(Math.abs(z.delta))}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{fmt0(z.post21Rate)}%</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontSize: 12 }}>{fmt0(z.nadieRate)}%</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {(() => {
+              const rows = [];
+              const cel = (o, nivel, muted) => (
+                <>
+                  <span style={{ flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: nivel === 0 ? 700 : nivel === 1 ? 600 : 400, fontSize: nivel === 0 ? 13 : 12.5, color: muted ? C.muted : C.ink }}>
+                    {nivel === 2 ? slaIcon(o.sla) + " " : ""}{o.nombre || o.localidad}
+                  </span>
+                  <span style={{ flex: "0 0 auto", fontSize: 11, color: C.muted, minWidth: 46, textAlign: "right" }}>{fmtInt(o.envios_ml)}</span>
+                  <span style={{ flex: "0 0 auto", fontSize: 12.5, fontWeight: 600, color: slaColor(o.sla), minWidth: 50, textAlign: "right" }}>{o.sla != null ? fmt1(o.sla) + "%" : "—"}</span>
+                  <span style={{ flex: "0 0 auto", fontSize: 11, minWidth: 42, textAlign: "right", color: o.delta == null ? C.muted : o.delta >= 0 ? C.goodText : C.critText }}>{o.delta == null ? "" : (o.delta >= 0 ? "+" : "−") + fmt1(Math.abs(o.delta))}</span>
+                </>
+              );
+              const fila = (key, nivel, contenido, opts = {}) => rows.push(
+                <div key={key} onClick={opts.onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", paddingLeft: 6 + nivel * 16, borderBottom: `1px solid ${C.faint}`, cursor: opts.onClick ? "pointer" : "default", background: opts.hi ? "rgba(46,207,170,0.07)" : "transparent" }}>
+                  <span style={{ width: 12, flex: "0 0 auto", color: C.teal, fontSize: 12 }}>{opts.chev === undefined ? "" : opts.chev ? "▾" : "▸"}</span>
+                  {contenido}
+                </div>
+              );
+              const resumen = (key, nivel, texto) => rows.push(
+                <div key={key} style={{ padding: "6px 6px", paddingLeft: 6 + nivel * 16 + 20, fontSize: 11.5, fontStyle: "italic", color: C.muted, borderBottom: `1px solid ${C.faint}` }}>{texto}</div>
+              );
+              for (const reg of jerarquia.regiones) {
+                const rAbierto = jerNodos.has(reg.nombre);
+                fila(reg.nombre, 0, cel(reg, 0, false), { chev: rAbierto, hi: rAbierto, onClick: () => jerToggle(reg.nombre) });
+                if (!rAbierto) continue;
+                const zBig = reg.zonasArr.filter((z) => z.envios_ml >= CFG.zonaMin);
+                const zChicas = reg.zonasArr.filter((z) => z.envios_ml < CFG.zonaMin);
+                if (!reg.zonasArr.length) resumen(reg.nombre + "-vacio", 1, "sin localidades en el período");
+                for (const zn of zBig) {
+                  const zKey = reg.nombre + "||" + zn.nombre;
+                  const zAbierto = jerNodos.has(zKey);
+                  fila(zKey, 1, cel(zn, 1, false), { chev: zAbierto, hi: zAbierto, onClick: () => jerToggle(zKey) });
+                  if (!zAbierto) continue;
+                  const lBig = zn.localidades.filter((l) => l.cantidad >= CFG.zonaMin);
+                  const lChicas = zn.localidades.filter((l) => l.cantidad < CFG.zonaMin);
+                  for (const l of lBig) fila(zKey + "||" + l.localidad_norm, 2, cel(l, 2, false), { onClick: () => toggleDrill("localidad", l.localidad, "loc") });
+                  if (lChicas.length) resumen(zKey + "-chicas", 2, `+ ${lChicas.length} localidad${lChicas.length === 1 ? "" : "es"} muestra chica · ${fmtInt(lChicas.reduce((a, l) => a + l.envios_ml, 0))} ML`);
+                }
+                if (zChicas.length) resumen(reg.nombre + "-zchicas", 1, `+ ${zChicas.length} zona${zChicas.length === 1 ? "" : "s"} muestra chica · ${fmtInt(zChicas.reduce((a, z) => a + z.envios_ml, 0))} ML`);
+              }
+              return <div>{rows}</div>;
+            })()}
           </>
         )}
       </div>
