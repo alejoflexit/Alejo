@@ -528,7 +528,7 @@ export default function Analisis({ semanas }) {
     return { weeks: labs.size, desde };
   }, [zonasRaw]);
   // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → null).
-  const zonaDe = (loc) => { if (!zonaNames.length) return null; const nl = normZ(loc); const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : null; };
+  const zonaDe = (loc) => { if (!zonaNames.length) return null; const nl = normZ(loc); const ex = zonaNames.find((z) => normZ(z) === nl); if (ex) return ex; const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : null; };
   const jerToggle = (k) => setJerNodos((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // Jerarquía Región → Zona → Localidad. Suma envios_ml/demorados/dem21 y recalcula SLA en cada nivel
