@@ -29,6 +29,16 @@ const norm = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replac
 const num = (n) => new Intl.NumberFormat("es-AR").format(Math.round(n));
 const horaAR = (iso) => new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 
+// Hora AR real (no la del dispositivo): antes de las 14:30 la pantalla va en vivo; desde las 14:30, la foto del corte.
+const CORTE_HHMM = 14 * 60 + 30; // 14:30 AR (spec-zonas-foto-1430)
+const hoyARISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+function minutosAR() {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+  const h = +(p.find((x) => x.type === "hour").value), m = +(p.find((x) => x.type === "minute").value);
+  return (h % 24) * 60 + m;
+}
+const fechaLargaAR = (iso) => new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "2-digit", month: "2-digit" }).format(new Date(iso + "T12:00:00-03:00"));
+
 async function supa(pathQuery) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${pathQuery}`, {
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
@@ -41,6 +51,63 @@ async function supa(pathQuery) {
 function matchNombre(nl, nz) {
   if (!nl || nl.length < 4) return false;
   return nz === nl || nz.includes(nl) || nl.includes(nz);
+}
+
+// Arma las vistas "Por zona" y "Territorios" desde un mapa zona -> {total, entregados}.
+// Lo usan tanto el modo EN VIVO (porZona del bridge) como el modo FOTO (por_zona del corte).
+function construirVistas(porZona, mapas) {
+  const { topeZona, zonaCadetes, topes } = mapas;
+  // vista POR ZONA
+  const conTope = [], sinTopeArr = [];
+  for (const [zona, v] of Object.entries(porZona)) {
+    const tope = topeZona.get(norm(zona));
+    if (tope) {
+      const pct = v.total / tope;
+      conTope.push({ zona, ...v, tope, pct, estado: pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok", cadetes: zonaCadetes.get(norm(zona)) || [] });
+    } else {
+      sinTopeArr.push({ zona, ...v });
+    }
+  }
+  conTope.sort((a, b) => b.pct - a.pct);
+  sinTopeArr.sort((a, b) => b.total - a.total);
+  // vista TERRITORIOS: grupo de zonas que se hace junto (cadete_topes.zonas). Zona en varios territorios → se reparte en partes iguales.
+  const terrMap = new Map();
+  for (const t of topes) {
+    if (!t.zonas) continue;
+    const lista = String(t.zonas).split(/[,/]/).map((z) => z.trim()).filter(Boolean);
+    if (!lista.length) continue;
+    const clave = lista.map(norm).sort().join("§");
+    const node = terrMap.get(clave) || { zonasList: lista, cadetes: [], tope: 0 };
+    node.cadetes.push(t.cadete);
+    node.tope += t.tope || 0;
+    terrMap.set(clave, node);
+  }
+  const cobertura = new Map();
+  for (const t of terrMap.values()) for (const z of t.zonasList) { const k = norm(z); cobertura.set(k, (cobertura.get(k) || 0) + 1); }
+  const volZona = new Map();
+  for (const [zona, v] of Object.entries(porZona)) volZona.set(norm(zona), v);
+  const terrArr = [];
+  for (const t of terrMap.values()) {
+    let total = 0, entregados = 0; const compartidas = [];
+    for (const z of t.zonasList) {
+      const k = norm(z), v = volZona.get(k), nCob = cobertura.get(k) || 1;
+      if (!v) continue;
+      total += v.total / nCob; entregados += v.entregados / nCob;
+      if (nCob > 1) compartidas.push(z);
+    }
+    if (total === 0 && t.tope === 0) continue;
+    const pct = t.tope ? total / t.tope : null;
+    terrArr.push({
+      nombre: t.zonasList.join(" + "),
+      cadetes: t.cadetes,
+      total, entregados, tope: t.tope || null, pct,
+      estado: pct == null ? "sintope" : pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok",
+      notas: compartidas.length ? `${compartidas.join(", ")} repartida entre varios territorios` : "",
+    });
+  }
+  terrArr.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || b.total - a.total);
+  const asignados = Object.values(porZona).reduce((a, v) => a + v.total, 0);
+  return { conTope, sinTopeArr, terrArr, asignados };
 }
 
 // ============ Calibrador de topes (spec-calibrador-topes, C1) ============
@@ -135,6 +202,10 @@ export default function Zonas() {
   const [sinEndpoint, setSinEndpoint] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState("");
+  // Modo según la hora AR (spec-zonas-foto-1430): "vivo" antes de las 14:30, "foto" del corte desde las 14:30.
+  const [modo, setModo] = useState(() => (minutosAR() >= CORTE_HHMM ? "foto" : "vivo"));
+  const [escapeVivo, setEscapeVivo] = useState(false); // en modo foto, el usuario pidió ver el vivo igual (una consulta, sin refresco)
+  const [fotoVacia, setFotoVacia] = useState(false);   // no hay ningún corte guardado todavía
   // Calibrador de topes (independiente del bridge; usa semanas + cadete_topes)
   const [propuestas, setPropuestas] = useState(null); // null=cargando, {subir,lunes,revisar}
   const [verProp, setVerProp] = useState(false);      // bloque colapsado por defecto
@@ -143,49 +214,53 @@ export default function Zonas() {
   const [propErr, setPropErr] = useState("");
   const refMapas = useRef(null);
 
+  // Mapas (zonas_cp + cadete_topes) — una sola vez por visita, los usan el vivo y la foto.
+  const cargarMapas = useCallback(async () => {
+    if (refMapas.current) return refMapas.current;
+    const [zonasCP, topes] = await Promise.all([
+      supa("zonas_cp?select=cp,zona&limit=10000"),
+      supa("cadete_topes?select=cadete,tope,zonas&activo=eq.true&limit=1000"),
+    ]);
+    const cpZonas = new Map();      // cp (dígitos) -> [zona, zona…]  (48/515 CPs tienen varias)
+    const todasZonas = new Set();
+    for (const z of zonasCP) {
+      const digitos = String(z.cp).replace(/\D/g, "");
+      if (!digitos) continue;
+      const arr = cpZonas.get(digitos) || [];
+      if (!arr.includes(z.zona)) arr.push(z.zona);
+      cpZonas.set(digitos, arr);
+      todasZonas.add(z.zona);
+    }
+    const topeZona = new Map();     // norm(zona) -> tope sumado (para la vista por zona)
+    const zonaCadetes = new Map();  // norm(zona) -> cadetes que la hacen
+    for (const t of topes) {
+      if (!t.zonas) continue;
+      for (const z of String(t.zonas).split(/[,/]/)) {
+        const k = norm(z);
+        if (!k) continue;
+        topeZona.set(k, (topeZona.get(k) || 0) + (t.tope || 0));
+        zonaCadetes.set(k, [...(zonaCadetes.get(k) || []), t.cadete]);
+      }
+    }
+    refMapas.current = { cpZonas, topeZona, zonaCadetes, topes, todasZonas: [...todasZonas] };
+    return refMapas.current;
+  }, []);
+
+  // MODO EN VIVO (antes de las 14:30): carga del día desde el bridge, refresco 5 min.
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      // 1) mapas (una sola vez por visita)
-      if (!refMapas.current) {
-        const [zonasCP, topes] = await Promise.all([
-          supa("zonas_cp?select=cp,zona&limit=10000"),
-          supa("cadete_topes?select=cadete,tope,zonas&activo=eq.true&limit=1000"),
-        ]);
-        const cpZonas = new Map();      // cp (dígitos) -> [zona, zona…]  (48/515 CPs tienen varias)
-        const todasZonas = new Set();
-        for (const z of zonasCP) {
-          const digitos = String(z.cp).replace(/\D/g, "");
-          if (!digitos) continue;
-          const arr = cpZonas.get(digitos) || [];
-          if (!arr.includes(z.zona)) arr.push(z.zona);
-          cpZonas.set(digitos, arr);
-          todasZonas.add(z.zona);
-        }
-        const topeZona = new Map();     // norm(zona) -> tope sumado (para la vista por zona)
-        const zonaCadetes = new Map();  // norm(zona) -> cadetes que la hacen
-        for (const t of topes) {
-          if (!t.zonas) continue;
-          for (const z of String(t.zonas).split(/[,/]/)) {
-            const k = norm(z);
-            if (!k) continue;
-            topeZona.set(k, (topeZona.get(k) || 0) + (t.tope || 0));
-            zonaCadetes.set(k, [...(zonaCadetes.get(k) || []), t.cadete]);
-          }
-        }
-        refMapas.current = { cpZonas, topeZona, zonaCadetes, topes, todasZonas: [...todasZonas] };
-      }
-      // 2) carga del día desde el bridge
+      const mapas = await cargarMapas();
       const r = await fetch(`${BRIDGE_ZONAS_URL}`, { headers: { "x-bridge-key": BRIDGE_KEY } });
       const j = await r.json().catch(() => null);
       if (r.status === 404 || (j && j.error === "ruta desconocida")) { setSinEndpoint(true); setError(null); return; }
       if (!r.ok || !j || (!j.porDet && !j.porCP)) throw new Error((j && j.error) || `bridge → ${r.status}`);
       setSinEndpoint(false);
 
-      const { cpZonas, topeZona, zonaCadetes, topes, todasZonas } = refMapas.current;
+      const { cpZonas, todasZonas } = mapas;
       const finoDisponible = !!j.porDet; // cp|localidad — necesita el bridge re-deployado
 
-      // 3) atribución envío→zona
+      // atribución envío→zona
       const porZona = {}; // zona -> {total, entregados}
       let sinZona = 0, sinCp = 0, ambiguos = 0;
       const suma = (zona, v) => { const n = porZona[zona] || (porZona[zona] = { total: 0, entregados: 0 }); n.total += v.t; n.entregados += v.e; };
@@ -220,78 +295,65 @@ export default function Zonas() {
         suma(zona, v);
       }
 
-      // 4) vista POR ZONA
-      const conTope = [], sinTopeArr = [];
-      for (const [zona, v] of Object.entries(porZona)) {
-        const tope = topeZona.get(norm(zona));
-        if (tope) {
-          const pct = v.total / tope;
-          conTope.push({ zona, ...v, tope, pct, estado: pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok", cadetes: zonaCadetes.get(norm(zona)) || [] });
-        } else {
-          sinTopeArr.push({ zona, ...v });
-        }
-      }
-      conTope.sort((a, b) => b.pct - a.pct);
-      sinTopeArr.sort((a, b) => b.total - a.total);
+      const { conTope, sinTopeArr, terrArr, asignados } = construirVistas(porZona, mapas);
       setZonas(conTope);
       setSinTope(sinTopeArr);
-
-      // 5) vista TERRITORIOS: grupo de zonas que se hace junto (cadete_topes.zonas), estable
-      // aunque falte el titular. Cadetes con la MISMA lista de zonas se fusionan (tope sumado).
-      // Si una zona aparece en varios territorios, su volumen se reparte en partes iguales.
-      const terrMap = new Map(); // clave = lista de zonas normalizada y ordenada
-      for (const t of topes) {
-        if (!t.zonas) continue;
-        const lista = String(t.zonas).split(/[,/]/).map((z) => z.trim()).filter(Boolean);
-        if (!lista.length) continue;
-        const clave = lista.map(norm).sort().join("§");
-        const node = terrMap.get(clave) || { zonasList: lista, cadetes: [], tope: 0 };
-        node.cadetes.push(t.cadete);
-        node.tope += t.tope || 0;
-        terrMap.set(clave, node);
-      }
-      const cobertura = new Map(); // norm(zona) -> en cuántos territorios está
-      for (const t of terrMap.values()) for (const z of t.zonasList) { const k = norm(z); cobertura.set(k, (cobertura.get(k) || 0) + 1); }
-      const volZona = new Map();   // norm(zona) -> {total, entregados}
-      for (const [zona, v] of Object.entries(porZona)) volZona.set(norm(zona), v);
-      const terrArr = [];
-      for (const t of terrMap.values()) {
-        let total = 0, entregados = 0; const compartidas = [];
-        for (const z of t.zonasList) {
-          const k = norm(z), v = volZona.get(k), nCob = cobertura.get(k) || 1;
-          if (!v) continue;
-          total += v.total / nCob; entregados += v.entregados / nCob;
-          if (nCob > 1) compartidas.push(z);
-        }
-        if (total === 0 && t.tope === 0) continue;
-        const pct = t.tope ? total / t.tope : null;
-        terrArr.push({
-          nombre: t.zonasList.join(" + "),
-          cadetes: t.cadetes,
-          total, entregados, tope: t.tope || null, pct,
-          estado: pct == null ? "sintope" : pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok",
-          notas: compartidas.length ? `${compartidas.join(", ")} repartida entre varios territorios` : "",
-        });
-      }
-      terrArr.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || b.total - a.total);
       setTerrs(terrArr);
-
-      const asignados = Object.values(porZona).reduce((a, v) => a + v.total, 0);
-      const cadetesSinZonas = topes.filter((t) => !t.zonas || !String(t.zonas).trim()).length;
-      setMeta({ total: j.total, actualizado: j.actualizado, sinZona, sinCp, ambiguos, asignados, cadetesSinZonas, finoDisponible });
+      const cadetesSinZonas = mapas.topes.filter((t) => !t.zonas || !String(t.zonas).trim()).length;
+      setMeta({ modo: "vivo", total: j.total, actualizado: j.actualizado, sinZona, sinCp, ambiguos, asignados, cadetesSinZonas, finoDisponible });
       setError(null);
     } catch (e) {
       setError(e.message || String(e));
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [cargarMapas]);
+
+  // MODO FOTO (desde las 14:30): lee corte_dia (Supabase), congelado. Sin tocar el bridge.
+  const cargarFoto = useCallback(async () => {
+    setCargando(true);
+    try {
+      const mapas = await cargarMapas();
+      const hoy = hoyARISO();
+      const cols = "fecha,total,por_zona,zonas_alerta,actualizado_at";
+      let filas = await supa(`corte_dia?select=${cols}&fecha=eq.${hoy}`);
+      const esDeHoy = filas.length > 0;
+      if (!esDeHoy) filas = await supa(`corte_dia?select=${cols}&order=fecha.desc&limit=1`);
+      if (!filas.length) { setFotoVacia(true); setSinEndpoint(false); setError(null); return; }
+      setFotoVacia(false);
+      const corte = filas[0];
+      // La foto trae por_zona = {zona: envíos} (enteros). No hay entregados ni detalle por CP.
+      const porZona = {}; let sinZona = 0;
+      for (const [z, n] of Object.entries(corte.por_zona || {})) {
+        if (z === "(sin zona)") { sinZona += n; continue; }
+        porZona[z] = { total: n, entregados: 0 };
+      }
+      const { conTope, sinTopeArr, terrArr, asignados } = construirVistas(porZona, mapas);
+      setZonas(conTope);
+      setSinTope(sinTopeArr);
+      setTerrs(terrArr);
+      setMeta({ modo: "foto", total: corte.total, fecha: corte.fecha, actualizado: corte.actualizado_at, esDeHoy, asignados, sinZona, sinCp: 0, ambiguos: 0, cadetesSinZonas: 0, finoDisponible: true });
+      setError(null);
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setCargando(false);
+    }
+  }, [cargarMapas]);
 
   useEffect(() => {
-    cargar();
-    const t = setInterval(cargar, REFRESH_MS);
-    return () => clearInterval(t);
-  }, [cargar]);
+    if (modo === "vivo") {
+      cargar();
+      // Si mientras la pantalla está abierta cruza las 14:30, el próximo tick pasa a la foto.
+      const t = setInterval(() => { if (minutosAR() >= CORTE_HHMM) setModo("foto"); else cargar(); }, REFRESH_MS);
+      return () => clearInterval(t);
+    }
+    if (escapeVivo) { cargar(); return; } // foto + escape: una sola consulta en vivo, sin refresco
+    cargarFoto();                          // foto: congelada, sin refresco
+  }, [modo, escapeVivo, cargar, cargarFoto]);
+
+  // Refresco manual (botón ⟳): re-lee lo que corresponde al modo actual, nunca el bridge en modo foto.
+  const refrescar = () => ((modo === "vivo" || escapeVivo) ? cargar() : cargarFoto());
 
   // Calibrador: carga semanas (ventana) + topes + fleteros y calcula las propuestas (1 vez).
   const cargarPropuestas = useCallback(async () => {
@@ -361,9 +423,15 @@ export default function Zonas() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
         {meta && (
           <>
-            <span style={{ fontSize: 13, color: C.muted }}>
-              <b style={{ color: C.text }}>{num(meta.total)}</b> envíos hoy (todos los estados, Fecha Flexit) · <b style={{ color: C.text }}>{num(meta.asignados)}</b> ubicados en zonas · dato de las <b style={{ color: C.text }}>{horaAR(meta.actualizado)}</b> · refresco 5 min
-            </span>
+            {meta.modo === "foto" ? (
+              <span style={{ fontSize: 13, color: C.muted }}>
+                📸 <b style={{ color: C.text }}>Foto del corte {fechaLargaAR(meta.fecha)} 14:30</b> · <b style={{ color: C.text }}>{num(meta.total)}</b> envíos (todos los estados) · <b style={{ color: C.text }}>{num(meta.asignados)}</b> ubicados en zonas · congelado, sin refresco
+              </span>
+            ) : (
+              <span style={{ fontSize: 13, color: C.muted }}>
+                <b style={{ color: C.text }}>{num(meta.total)}</b> envíos hoy (todos los estados, Fecha Flexit) · <b style={{ color: C.text }}>{num(meta.asignados)}</b> ubicados en zonas · dato de las <b style={{ color: C.text }}>{horaAR(meta.actualizado)}</b>{escapeVivo ? " · en vivo (una consulta)" : " · refresco 5 min"}
+              </span>
+            )}
             <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(226,75,74,0.12)", color: C.crit, fontWeight: 700 }}>🔴 {saturadas} saturados</span>
             <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(239,159,39,0.12)", color: C.warn, fontWeight: 700 }}>🟠 {alLimite} al límite</span>
           </>
@@ -379,12 +447,30 @@ export default function Zonas() {
           </div>
           <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar zona o cadete…"
             style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, padding: "7px 12px", fontSize: 13, width: 160 }} />
-          <button onClick={cargar} disabled={cargando} title="Actualizar ahora"
+          <button onClick={refrescar} disabled={cargando} title={meta && meta.modo === "foto" && !escapeVivo ? "Volver a leer la foto del corte" : "Actualizar ahora"}
             style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.muted, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
             {cargando ? "…" : "⟳"}
           </button>
         </div>
       </div>
+
+      {/* Modo foto (spec-zonas-foto-1430): banner explicativo + escape a vivo */}
+      {meta && meta.modo === "foto" && (
+        <div style={{ background: "rgba(46,207,170,0.10)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#bfeee0", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ lineHeight: 1.5, flex: 1, minWidth: 220 }}>
+            {meta.esDeHoy
+              ? <>📸 <b>Foto de las 14:30</b> — con esto salieron los cadetes. Los ingresos de la tarde entran como día siguiente, por eso la pantalla queda congelada en el corte.</>
+              : <>📸 Todavía no hay corte de hoy. Te muestro la <b>última foto disponible: {fechaLargaAR(meta.fecha)} 14:30</b>. Los ingresos posteriores son de días siguientes.</>}
+          </span>
+          <button onClick={() => setEscapeVivo(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>ver dato en vivo igual</button>
+        </div>
+      )}
+      {meta && meta.modo === "vivo" && escapeVivo && (
+        <div style={{ background: "rgba(239,159,39,0.10)", border: "1px solid rgba(239,159,39,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ lineHeight: 1.5, flex: 1, minWidth: 220 }}>⚠️ <b>Dato en vivo después del corte.</b> Desde las 14:30 LightData suma ingresos de ecommerce que son del día siguiente — este número ya no representa lo que salió a reparto. Una sola consulta, sin refresco.</span>
+          <button onClick={() => setEscapeVivo(false)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>volver a la foto</button>
+        </div>
+      )}
 
       {/* === Calibrador de topes: propuestas con evidencia (spec-calibrador-topes, C1) === */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 14 }}>
@@ -445,8 +531,15 @@ export default function Zonas() {
         </div>
       )}
 
-      {!zonas && cargando && (
-        <div style={{ color: C.muted, fontSize: 14, padding: "30px 0" }}>Cargando el listado del día… la primera vez puede tardar un minuto (baja el Excel completo de LightData).</div>
+      {fotoVacia && (
+        <div style={{ color: C.muted, fontSize: 14, padding: "20px 0", lineHeight: 1.6 }}>
+          Todavía no hay ningún corte guardado en la base. La foto de las 14:30 aparece cuando corra el primer corte del día.{" "}
+          <button onClick={() => setEscapeVivo(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12.5, padding: "4px 10px", cursor: "pointer" }}>ver dato en vivo</button>
+        </div>
+      )}
+
+      {!zonas && !fotoVacia && cargando && (
+        <div style={{ color: C.muted, fontSize: 14, padding: "30px 0" }}>{modo === "foto" && !escapeVivo ? "Cargando la foto del corte…" : "Cargando el listado del día… la primera vez puede tardar un minuto (baja el Excel completo de LightData)."}</div>
       )}
 
       {zonas && (
@@ -469,7 +562,7 @@ export default function Zonas() {
                     </span>
                     <span style={{ marginLeft: "auto", fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
                       <b>{num(it.total)}</b>{it.tope ? <span style={{ color: C.muted }}> / {num(it.tope)}</span> : null}
-                      <span style={{ color: C.faint, fontSize: 12.5 }}> · {num(it.entregados)} entregados</span>
+                      {meta && meta.modo !== "foto" && <span style={{ color: C.faint, fontSize: 12.5 }}> · {num(it.entregados)} entregados</span>}
                     </span>
                   </div>
                   {sub && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 7 }}>{sub}</div>}
