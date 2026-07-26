@@ -227,9 +227,11 @@ function fechaEstadoADia(fechaEstado) {
   return "";
 }
 
-function calcularZonas(rows, fecha, noEsDemora) {
+function calcularZonas(rows, fecha, noEsDemora, cpZona) {
   const map = {};
   const RESUELTOS = ["Entregado", "Entregado 2DA visita", "Cancelado"];
+  // columna de CP (header "CP" o que contenga "postal") — para resolver la zona por CP (autoritativo)
+  const cpKey = rows.length ? Object.keys(rows[0]).find(k => { const n = String(k).trim().toLowerCase(); return n === "cp" || n.includes("postal"); }) : null;
   for (const row of rows) {
     const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
     const origen = String(row["Origen"] || "").trim();
@@ -256,9 +258,15 @@ function calcularZonas(rows, fecha, noEsDemora) {
     const esSameday = esEntregado && fechaEstadoADia(fechaEstado) === fecha;
 
     const norm = normLoc(locOrig); // "" = sin localidad
-    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0 };
+    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, zonaCp: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0 };
     const g = map[norm];
     if (locOrig) g.labels[locOrig] = (g.labels[locOrig] || 0) + 1;
+    // zona por CP (zonas_cp): acumular para elegir la dominante de la localidad
+    if (cpKey && cpZona) {
+      const cpd = String(row[cpKey] || "").replace(/\D/g, "");
+      const zc = cpd && cpZona.get(cpd);
+      if (zc) g.zonaCp[zc] = (g.zonaCp[zc] || 0) + 1;
+    }
     g.cantidad++;
     if (esEntregado) g.entregados++;
     if (esPendiente) g.pendientes++;
@@ -271,8 +279,9 @@ function calcularZonas(rows, fecha, noEsDemora) {
   }
   return Object.values(map).map(g => {
     const labelTop = Object.keys(g.labels).sort((a, b) => g.labels[b] - g.labels[a])[0] || "(sin localidad)";
-    const { labels, ...rest } = g;
-    return { ...rest, localidad: labelTop };
+    const zonaCpTop = Object.keys(g.zonaCp).sort((a, b) => g.zonaCp[b] - g.zonaCp[a])[0] || null;
+    const { labels, zonaCp, ...rest } = g;
+    return { ...rest, localidad: labelTop, zona_cp: zonaCpTop };
   });
 }
 
@@ -437,7 +446,13 @@ async function main() {
 
   // --- semanas_zonas: mismo día, agregado por localidad. No es crítico: si falla, no rompe el pipeline de semanas. ---
   try {
-    const zonas = calcularZonas(rows, fecha, noEsDemora);
+    // mapa CP(digits)→zona desde zonas_cp, para resolver la zona por CP (autoritativo, no por nombre)
+    const cpZona = new Map();
+    try {
+      const zc = await supabaseGet("zonas_cp", "select=cp,zona&limit=10000");
+      if (Array.isArray(zc)) for (const z of zc) { const d = String(z.cp || "").replace(/\D/g, ""); if (d && !cpZona.has(d)) cpZona.set(d, z.zona); }
+    } catch (e) { console.error(`⚠️ zonas_cp no cargó (zona_cp quedará por nombre): ${e.message}`); }
+    const zonas = calcularZonas(rows, fecha, noEsDemora, cpZona);
     // Guard anti día-en-blanco: solo borrar si hay zonas nuevas para insertar.
     if (zonas.length > 0) {
       await supabaseDelete("semanas_zonas", `fecha=eq.${fecha}`);

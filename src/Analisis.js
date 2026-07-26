@@ -287,7 +287,7 @@ export default function Analisis({ semanas }) {
     let alive = true;
     (async () => {
       try {
-        const z = await sbGet("semanas_zonas?select=fecha,label,localidad,localidad_norm,cantidad,entregados,pendientes,demorados,dem21,post21,envios_ml,nadie,sameday&order=fecha.asc&limit=100000");
+        const z = await sbGet("semanas_zonas?select=fecha,label,localidad,localidad_norm,cantidad,entregados,pendientes,demorados,dem21,post21,envios_ml,nadie,sameday,zona_cp&order=fecha.asc&limit=100000");
         if (alive) setZonasRaw(Array.isArray(z) ? z : []);
       } catch (e) { if (alive) { setZonasRaw([]); setZonasErr(String(e.message || e)); } }
       try {
@@ -549,8 +549,9 @@ export default function Analisis({ semanas }) {
     const locMap = {};
     for (const r of filas) {
       const k = r.localidad_norm || "";
-      const g = locMap[k] || (locMap[k] = { localidad_norm: k, labels: {}, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0 });
+      const g = locMap[k] || (locMap[k] = { localidad_norm: k, labels: {}, zonaCp: {}, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0 });
       if (r.localidad) g.labels[r.localidad] = (g.labels[r.localidad] || 0) + r.cantidad;
+      if (r.zona_cp) g.zonaCp[r.zona_cp] = (g.zonaCp[r.zona_cp] || 0) + r.cantidad;
       g.cantidad += r.cantidad; g.entregados += r.entregados; g.demorados += r.demorados; g.dem21 += r.dem21; g.post21 += r.post21; g.envios_ml += r.envios_ml; g.nadie += r.nadie;
     }
     const slaG = cur.g.sla;
@@ -563,7 +564,9 @@ export default function Analisis({ semanas }) {
       const loc = locMap[k];
       loc.localidad = Object.keys(loc.labels).sort((a, b) => loc.labels[b] - loc.labels[a])[0] || "(sin localidad)";
       totalML += loc.envios_ml; totalCant += loc.cantidad; nLoc++;
-      const zona = zonaDe(loc.localidad); // nombre de zona op. o null
+      // zona autoritativa por CP (zona_cp de la carga); fallback al match por nombre para filas viejas sin CP
+      const zonaCpTop = Object.keys(loc.zonaCp).sort((a, b) => loc.zonaCp[b] - loc.zonaCp[a])[0];
+      const zona = zonaCpTop || zonaDe(loc.localidad); // nombre de zona op. o null
       const regionName = !zona ? "Sin zona asignada" : (regionMap[zona] || "Sin clasificar");
       if (!zona) { locsSinZona++; mlSinZona += loc.envios_ml; }
       const reg = regiones[regionName] || (regiones[regionName] = nuevo(regionName, { zonas: {} }));
