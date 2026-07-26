@@ -189,59 +189,44 @@ function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
 // que en Firefox y algunos móviles se veía mal o no abría el selector.
 const ETA_DEFAULT = '15:00';
 
-// Círculo de llegada con "mantené presionado ~0,45s para confirmar" (evita marcar/desmarcar sin querer).
-// Solo el círculo dispara: el resto de la fila ya no marca. Se cancela si arrastrás/scrolleás.
-// Anillo teal al marcar; rojo al desmarcar (borra la hora, el error caro).
-function LlegadaCircle({ llego, onConfirm }) {
-  const HOLD = 450, R = 18, C = 2 * Math.PI * R;
-  const [progress, setProgress] = useState(0);
-  const timerRef = useRef(null);
-  const rafRef = useRef(null);
-  const startRef = useRef(null);
-  const posRef = useRef(null);
+// Marcar/desmarcar llegada con DOBLE TOQUE (evita el toque accidental; robusto en iPhone porque son taps normales).
+// 1er toque (círculo o su fila) arma y muestra el botón "Confirmar"; 2º toque confirma. Se cancela solo a los 4s.
+// Verde "✓ Confirmar" al marcar; rojo "Sacar llegada" al desmarcar (eso borra la hora, el error caro).
+function LlegadaConfirm({ llego, cerca, nombre, subtitle, onToggle }) {
+  const [armed, setArmed] = useState(false);
+  const t = useRef(null);
+  const arm = () => { setArmed(true); if (t.current) clearTimeout(t.current); t.current = setTimeout(() => setArmed(false), 4000); };
+  const cancel = () => { if (t.current) clearTimeout(t.current); setArmed(false); };
+  const confirm = () => { if (t.current) clearTimeout(t.current); setArmed(false); onToggle(); };
+  useEffect(() => () => { if (t.current) clearTimeout(t.current); }, []);
 
-  const clear = () => {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    startRef.current = null; posRef.current = null; setProgress(0);
-  };
-  const start = (e) => {
-    e.preventDefault(); e.stopPropagation();
-    const p = e.touches ? e.touches[0] : e;
-    posRef.current = { x: p.clientX, y: p.clientY };
-    startRef.current = Date.now();
-    const tick = () => {
-      if (startRef.current == null) return;
-      const pr = Math.min(1, (Date.now() - startRef.current) / HOLD);
-      setProgress(pr);
-      if (pr < 1) rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    timerRef.current = setTimeout(() => { clear(); onConfirm(); }, HOLD);
-  };
-  const move = (e) => {
-    if (startRef.current == null || !posRef.current) return;
-    const p = e.touches ? e.touches[0] : e;
-    if (Math.hypot(p.clientX - posRef.current.x, p.clientY - posRef.current.y) > 10) clear();
-  };
-  useEffect(() => () => clear(), []);
+  const borderColor = armed ? '#FBBF24' : (llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)');
 
   return (
-    <div onMouseDown={start} onMouseUp={clear} onMouseLeave={clear} onMouseMove={move}
-      onTouchStart={start} onTouchEnd={clear} onTouchCancel={clear} onTouchMove={move}
-      onContextMenu={e => e.preventDefault()}
-      title={llego ? 'Mantené presionado para sacar la llegada' : 'Mantené presionado para marcar la llegada'}
-      style={{ position:'relative', width:32, height:32, flexShrink:0, cursor:'pointer', touchAction:'none', WebkitUserSelect:'none', userSelect:'none' }}>
-      <div style={{ width:32, height:32, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-        border:`2px solid ${llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)'}`, background: llego ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17, transition:'all 0.15s' }}>
-        {llego ? '✓' : ''}
+    <div style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0 }}>
+      <div onClick={armed ? confirm : arm}
+        title={llego ? 'Tocar para sacar la llegada' : 'Tocar para marcar la llegada'}
+        style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', touchAction:'manipulation', WebkitUserSelect:'none', userSelect:'none',
+          border:`2px ${armed ? 'dashed' : 'solid'} ${borderColor}`, background: (llego && !armed) ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17, transition:'all 0.15s' }}>
+        {(llego && !armed) ? '✓' : ''}
       </div>
-      {progress > 0 && (
-        <svg width="40" height="40" viewBox="0 0 40 40" style={{ position:'absolute', top:-4, left:-4, pointerEvents:'none' }}>
-          <circle cx="20" cy="20" r={R} fill="none" stroke={llego ? '#E24B4A' : '#2ECFAA'} strokeWidth="2.5"
-            strokeDasharray={C} strokeDashoffset={(1 - progress) * C} strokeLinecap="round" transform="rotate(-90 20 20)" />
-        </svg>
-      )}
+      <div style={{ flex:1, minWidth:0 }}>
+        <div onClick={armed ? undefined : arm}
+          style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', cursor:'pointer' }}>
+          {cerca && <span title="está por llegar" style={{ marginRight:6 }}>🚚</span>}{nombre}
+        </div>
+        {armed ? (
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
+            <button onClick={confirm}
+              style={{ display:'flex', alignItems:'center', gap:4, height:30, padding:'0 12px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:700, whiteSpace:'nowrap', touchAction:'manipulation',
+                border:`1px solid ${llego ? '#E24B4A' : '#2ECFAA'}`, background: llego ? 'rgba(226,75,74,0.15)' : 'rgba(46,207,170,0.15)', color: llego ? '#ff9b9a' : '#2ECFAA' }}>
+              {llego ? 'Sacar llegada' : '✓ Confirmar'}
+            </button>
+            <button onClick={cancel} title="Cancelar"
+              style={{ width:30, height:30, borderRadius:8, cursor:'pointer', touchAction:'manipulation', border:'1px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.6)', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>✕</button>
+          </div>
+        ) : subtitle}
+      </div>
     </div>
   );
 }
@@ -1590,20 +1575,15 @@ function ColectasInner({ soloArribos = false }) {
                       background: llego ? 'rgba(46,207,170,0.08)' : cerca ? 'rgba(251,191,36,0.07)' : BRAND.faint,
                       animation: cerca ? 'flexitTiemble 3s ease-in-out infinite' : 'none', transition:'all 0.15s' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10, width:'100%' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0 }}>
-                      <LlegadaCircle llego={llego} onConfirm={() => toggleLlego(c.cadete)} />
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:15, fontWeight:600, color: llego ? BRAND.white : 'rgba(255,255,255,0.9)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                          {cerca && <span title="está por llegar" style={{ marginRight:6 }}>🚚</span>}{c.cadete}
-                        </div>
+                    <LlegadaConfirm llego={llego} cerca={cerca} nombre={c.cadete} onToggle={() => toggleLlego(c.cadete)}
+                      subtitle={
                         <div style={{ fontSize:12, color: llego ? '#2ECFAA' : cerca ? '#FBBF24' : BRAND.muted }}>
                           {llego ? `llegó ${hora}`
                             : cercaGps ? `está por llegar · a ${gp.dist < 1000 ? gp.dist + ' m' : (gp.dist/1000).toFixed(1) + ' km'} del depósito`
                             : cercaEta ? `está por llegar · ETA ${eta}`
                             : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
                         </div>
-                      </div>
-                    </div>
+                      } />
 
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6, flexShrink:0 }}>
                       {/* Slot central para la hora estimada. En desktop tiene ancho fijo (nada se desplaza);
