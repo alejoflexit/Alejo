@@ -22,3 +22,10 @@ select option {
   background-color: #141a2e;
   color: #fff;
 }
+
+/* Scrollbar oscura para contenedores con scroll interno (ranking, drill-down) — la nativa clara no pega con el tema */
+.flexit-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+.flexit-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.flexit-scroll::-webkit-scrollbar-track { background: transparent; }
+.flexit-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 4px; }
+.flexit-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }

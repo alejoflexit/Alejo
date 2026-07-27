@@ -28,7 +28,6 @@ const CFG = {
   alertasMax: 5,        // máximo de alertas en "Atención prioritaria"
   regionFlecha: 0.5,    // pp de Δ vs período anterior para flecha ↑/↓ en las tarjetas de región
   regionFlecha2: 2,     // pp de caída para ↓↓ (región hundiéndose)
-  saturadoPct: 0.85,    // "saturado" = envíos/día ≥ 85% del tope real del cadete
   // Severidad por tipo de señal (spec: crítico 3 / caída 2 / al límite–tarde–repro21 1).
   sev: { critico: 3, caida: 2, limite: 1, tarde: 1, repro: 1, locCritico: 2, locCaida: 1 },
   // Diccionario de acciones. `hoy` se usa en la semana en curso; `otro` en "Últimas 4"/"Todo".
@@ -926,7 +925,7 @@ export default function Analisis({ semanas }) {
               </div>
             )}
             {verHist && (
-              <div style={{ marginTop: 8, maxHeight: 220, overflowY: "auto", border: `1px solid ${C.faint}`, borderRadius: 8 }}>
+              <div className="flexit-scroll" style={{ marginTop: 8, maxHeight: 220, overflowY: "auto", border: `1px solid ${C.faint}`, borderRadius: 8 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                   {thW(["Semana", "Envíos", "SLA", "Post21"])}
                   <tbody>{serie.slice().reverse().map(filaSem)}</tbody>
@@ -1230,7 +1229,7 @@ export default function Analisis({ semanas }) {
           {rankingF.length === 0 && <div style={{ color: C.muted, fontSize: 12.5, padding: "12px 4px" }}>Nadie cumple ese filtro. 👏</div>}
         </div>
       ) : (
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 4, marginBottom: 14, overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
+      <div className="flexit-scroll" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 4, marginBottom: 14, overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
@@ -1264,48 +1263,6 @@ export default function Analisis({ semanas }) {
       </div>
       )}
 
-      {/* 3. ¿Quién está saturado? — SOLO excepciones: ≥85% del tope real o pasado. Sin nadie → una línea y listo. */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>¿Quién está saturado? <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· solo los que están al {fmt0(CFG.saturadoPct * 100)}% de su tope real o lo pasaron</span></h3>
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
-        {(() => {
-          const conVol = cur.cads.filter((c) => c.cant >= 20 && c.dias > 0);
-          const ratio = (c) => c.prom / (c.tope || CFG.tope);
-          const sat = conVol.filter((c) => ratio(c) >= CFG.saturadoPct).sort((a, b) => ratio(b) - ratio(a));
-          if (!sat.length) {
-            const top = conVol.length ? conVol.reduce((a, b) => (ratio(b) > ratio(a) ? b : a), conVol[0]) : null;
-            return (
-              <div style={{ color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
-                Nadie está cerca de su tope en este período. 👏
-                {top && <span> El más cargado es <b style={{ color: C.ink }}>{top.name}</b> al {fmt0(ratio(top) * 100)}% ({fmt1(top.prom)}/{top.tope || CFG.tope} por día).</span>}
-              </div>
-            );
-          }
-          return (
-            <>
-              <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Barra llena = al tope (el real de cada uno, de <code>cadete_topes</code>). Roja = lo pasó. El SLA de la derecha dice si además viene entregando bien: barra roja + SLA rojo = sacarle carga ya. Tocá una fila para el detalle.</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {sat.map((c) => {
-                  const tope = c.tope || CFG.tope;
-                  const pct = Math.min(100, ratio(c) * 100);
-                  const sobre = ratio(c) >= 1;
-                  return (
-                    <div key={c.name} onClick={() => toggleDrill("cadete", c.name, "carga")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "2px 2px", background: isOpen("cadete", c.name, "carga") ? "rgba(46,207,170,0.08)" : "transparent", borderRadius: 6, flexWrap: isMobile ? "wrap" : "nowrap" }}>
-                      <span style={{ flex: `0 0 ${isMobile ? 96 : 130}px`, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                      <div style={{ flex: 1, minWidth: 90, height: 14, borderRadius: 7, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
-                        <div style={{ width: pct.toFixed(1) + "%", height: "100%", borderRadius: 7, background: sobre ? C.crit : C.warn }} />
-                      </div>
-                      <span style={{ flex: "0 0 84px", fontSize: 11.5, color: sobre ? C.critText : C.muted, textAlign: "right", whiteSpace: "nowrap" }}>{fmt1(c.prom)} / {tope}</span>
-                      <span style={{ flex: "0 0 130px", fontSize: 11, color: c.diasSobreTope > 0 ? C.critText : C.muted, textAlign: "right", whiteSpace: "nowrap" }}>{c.diasSobreTope > 0 ? `${c.diasSobreTope} de ${c.dias} días sobre tope` : `${fmt0(ratio(c) * 100)}% del tope`}</span>
-                      <span style={{ flex: "0 0 64px", fontSize: 12, fontWeight: 700, color: slaColor(c.sla), textAlign: "right", whiteSpace: "nowrap" }}>{c.sla != null ? fmt1(c.sla) + "%" : "—"}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          );
-        })()}
-      </div>
-
       <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
         Calidad de datos del período: {fmtInt(cur.g.sin)} envíos sin cadete asignado{cur.g.basura > 0 ? ` · ${fmtInt(cur.g.basura)} bajo nombres basura ("Repro gramar", "devuelto depósito") que conviene limpiar en LightData` : ""}. Los sin-asignar y basura cuentan en los KPIs pero quedan fuera del ranking de cadetes (ver "Alertas operativas" arriba).
       </div>
@@ -1328,7 +1285,7 @@ export default function Analisis({ semanas }) {
               <CartesianGrid stroke={C.faint} vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v >= 1000 ? (v / 1000) + "k" : v} />
-              <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmtInt(v), "Envíos"]} labelStyle={{ color: C.muted }} />
+              <Tooltip cursor={{ fill: "rgba(255,255,255,0.05)" }} contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmtInt(v), "Envíos"]} labelStyle={{ color: C.muted }} />
               <Bar dataKey="cant" radius={[3, 3, 0, 0]}>
                 {tendData.datos.map((d, i) => (
                   <Cell key={i} fill={volHead && d.cant === volHead.cant ? C.blue : C.teal} />
@@ -1344,7 +1301,7 @@ export default function Analisis({ semanas }) {
             <LineChart data={tendData.datos.filter((d) => d.sla != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" axisLine={{ stroke: C.faint }} tickLine={false} />
               <YAxis domain={[90, 100]} ticks={[90, 95, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt1(v) + "%", "SLA"]} labelStyle={{ color: C.muted }} />
+              <Tooltip cursor={{ stroke: C.border }} contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt1(v) + "%", "SLA"]} labelStyle={{ color: C.muted }} />
               <ReferenceLine y={98} stroke={C.good} strokeOpacity={0.45} strokeDasharray="4 4" />
               <Line type="monotone" dataKey="sla" stroke={C.teal} strokeWidth={2.5} dot={{ r: 2.5, fill: C.teal }} />
             </LineChart>
@@ -1482,7 +1439,7 @@ export default function Analisis({ semanas }) {
           <p>Sugerencias (umbrales calibrables): SLA crítico &lt;{CFG.slaCritico}% con ≥{CFG.minML} ML · "termina tarde" = ≥{CFG.tarde_post21 * 100}% post 21 o fin ≥ {fmtHora(CFG.tarde_fin)} (con ≥{CFG.minEntregados} entregas) · "repro 21 recurrente" = ≥{CFG.repro21_min} en ≥{CFG.repro21_frec * 100}% de los días · "cerca del tope" = ≥{CFG.sobrecarga} env/día (tope {CFG.tope}) · caída/mejora = ±{CFG.deltaSla} pp.</p>
           <p>Semanas con * son parciales (&lt;5 días); en parciales no se compara volumen, solo tasas.</p>
           <p>SLA por localidad: tabla semanas_zonas (localidad del Excel de LightData, se captura desde el 24/07 sin histórico hacia atrás). "Zona op." = zona operativa derivada con el mapeo tolerante de la pestaña Zonas (contra zonas_cp); sin cruce único queda "—". Localidades con &lt;{CFG.zonaMin} envíos van agrupadas como "muestra chica" (desplegable) y no se marcan críticas. Rojo = ≥{CFG.zonaMin} envíos y Δ ≤ −1 pp.</p>
-          <p>Regiones (tarjetas del resumen): mismas sumas que la jerarquía Región → Zona → Localidad de abajo; la flecha compara contra el período anterior (↑/↓ = ±{CFG.regionFlecha} pp · ↓↓ = caída ≥{CFG.regionFlecha2} pp; sin flecha = sin datos comparables). "¿Quién está saturado?": solo excepciones — cadetes con envíos/día ≥{fmt0(CFG.saturadoPct * 100)}% de su tope real de <code>cadete_topes</code> (barra roja = lo pasó · amarilla = cerca); sin nadie, se dice y listo.</p>
+          <p>Regiones (tarjetas del resumen): mismas sumas que la jerarquía Región → Zona → Localidad de abajo; la flecha compara contra el período anterior (↑/↓ = ±{CFG.regionFlecha} pp · ↓↓ = caída ≥{CFG.regionFlecha2} pp; sin flecha = sin datos comparables). La carga vs tope real de cada cadete se ve en su drill-down y en el chip "sobre tope" del ranking.</p>
           <p>Decisiones de la semana: score = severidad (crítico 3 · caída 2 · al límite/tarde/repro21 1) × peso por volumen (ML del cadete/localidad ÷ mediana de ML) × recurrencia (días afectados ÷ días del período). "Requieren atención: N" = alertas mostradas (máx {CFG.alertasMax}). Los verbos ("hablar hoy" vs "revisar") dependen de si el período es la semana en curso.</p>
         </div>
       </details>
@@ -1490,7 +1447,7 @@ export default function Analisis({ semanas }) {
       {/* Detalle del cadete/localidad — panel lateral (desktop) / pantalla completa (mobile) */}
       {drill && (
         <div onClick={() => setDrill(null)} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: isMobile ? "center" : "flex-end" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.bg, width: isMobile ? "100%" : 470, maxWidth: "100%", height: "100%", overflowY: "auto", padding: 14, boxShadow: "-8px 0 24px rgba(0,0,0,0.35)" }}>
+          <div className="flexit-scroll" onClick={(e) => e.stopPropagation()} style={{ background: C.bg, width: isMobile ? "100%" : 470, maxWidth: "100%", height: "100%", overflowY: "auto", padding: 14, boxShadow: "-8px 0 24px rgba(0,0,0,0.35)" }}>
             {drill.kind === "cadete" && rankingF.some((c) => c.name === drill.name) && (
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                 <button onClick={() => navDrill(-1)} style={{ flex: 1, padding: "6px 10px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.border}`, background: C.cardAlt, color: C.muted, cursor: "pointer" }}>‹ anterior</button>
