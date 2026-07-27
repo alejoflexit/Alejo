@@ -103,7 +103,7 @@ export default function PagosPagador({ tarifas }) {
   const [filtroMedio, setFiltroMedio] = useState('todos'); // en Pagados: todos | galicia | mercadopago
 
   useEffect(() => {
-    sb('pagos_cierres?select=semana_label')
+    sb('pagos_cierres?select=semana_label&estado=eq.confirmado')
       .then(rows => {
         const unicas = Array.from(new Set((rows || []).map(r => r.semana_label))).sort().reverse();
         setSemanas(unicas);
@@ -116,7 +116,7 @@ export default function PagosPagador({ tarifas }) {
   const cargarCierres = useCallback((semana) => {
     if (!semana) { setCierres([]); setLoading(false); return; }
     setLoading(true); setError('');
-    sb(`pagos_cierres?select=*&semana_label=eq.${semana}`)
+    sb(`pagos_cierres?select=*&semana_label=eq.${semana}&estado=eq.confirmado`)
       .then(rows => setCierres(rows || []))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -136,10 +136,11 @@ export default function PagosPagador({ tarifas }) {
       const alias = t.alias || '', cbu = t.cbu || '';
       return {
         id: c.id,
-        nombre: t.nombre || c.cadete,
+        nombre: c.cadete || t.nombre || '', // Tarea 4: nombre completo de LightData (no el apodo)
         total: c.total,
         metodo: c.metodo,
         factura: c.metodo === 'transferencia',
+        facturaOk: !!c.factura_ok, // Tarea 3: la transferencia se traba hasta que Alejo marque "mandó factura"
         pagado: !!c.pagado,
         pagadoVia: c.pagado_via || null,
         alias, cuil: t.cuil || '', cbu,
@@ -151,10 +152,14 @@ export default function PagosPagador({ tarifas }) {
     });
   }, [cierres, tarifaByLD]);
 
+  // "Falta factura" = transferencia confirmada que todavía no pasó factura y no está pagada.
+  const faltaFactura = f => f.factura && !f.facturaOk && !f.pagado;
+
   const filasFiltradas = useMemo(() => {
     let r = filas;
     if (filtro === 'pagados') r = r.filter(f => f.pagado);
     else if (filtro === 'pendientes') r = r.filter(f => !f.pagado);
+    else if (filtro === 'falta_factura') r = r.filter(faltaFactura);
     if (filtroMetodo === 'factura') r = r.filter(f => f.factura);
     else if (filtroMetodo === 'efectivo') r = r.filter(f => !f.factura);
     if (filtro === 'pagados' && filtroMedio !== 'todos') r = r.filter(f => f.pagadoVia === filtroMedio);
@@ -164,6 +169,7 @@ export default function PagosPagador({ tarifas }) {
   const counts = useMemo(() => ({
     pendientes: filas.filter(f => !f.pagado).length,
     pagados: filas.filter(f => f.pagado).length,
+    falta_factura: filas.filter(faltaFactura).length,
     todos: filas.length,
     factura: filas.filter(f => f.factura).length,
     efectivo: filas.filter(f => !f.factura).length,
@@ -174,12 +180,14 @@ export default function PagosPagador({ tarifas }) {
   const resumen = useMemo(() => {
     const pagados = filas.filter(f => f.pagado).length;
     const faltan = filas.filter(f => !f.pagado).reduce((s, f) => s + (f.total || 0), 0);
-    const faltanFactura = filas.filter(f => !f.pagado && f.factura).reduce((s, f) => s + (f.total || 0), 0);
+    const sinFactura = filas.filter(faltaFactura);
+    const faltaFacturaN = sinFactura.length;
+    const faltaFacturaMonto = sinFactura.reduce((s, f) => s + (f.total || 0), 0);
     const pct = filas.length ? Math.round(pagados / filas.length * 100) : 0;
     // total transferido/pagado por cada medio
     const porMedio = {};
     Object.keys(MEDIOS).forEach(k => { porMedio[k] = filas.filter(f => f.pagado && f.pagadoVia === k).reduce((s, f) => s + (f.total || 0), 0); });
-    return { pagados, total: filas.length, faltan, faltanFactura, pct, porMedio };
+    return { pagados, total: filas.length, faltan, faltaFacturaN, faltaFacturaMonto, pct, porMedio };
   }, [filas]);
 
   // marcar pagado eligiendo el medio (galicia | mercadopago); queda guardado en pagos_cierres.pagado_via
@@ -232,7 +240,7 @@ export default function PagosPagador({ tarifas }) {
           <div style={{ ...cardSt, marginBottom: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <span style={{ fontSize: 14, fontWeight: 700 }}>Pagados {resumen.pagados} de {resumen.total} <span style={{ color: BRAND.muted, fontWeight: 600 }}>· {resumen.pct}%</span></span>
-              <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: resumen.faltan ? BRAND.amber : BRAND.teal }}>{money(resumen.faltan)}</b>{resumen.faltanFactura > 0 && <> · factura <b style={{ color: BRAND.white }}>{money(resumen.faltanFactura)}</b></>}</span>
+              <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: resumen.faltan ? BRAND.amber : BRAND.teal }}>{money(resumen.faltan)}</b>{resumen.faltaFacturaN > 0 && <> · <span style={{ color: BRAND.amber }}>Falta factura: {resumen.faltaFacturaN} chofer{resumen.faltaFacturaN === 1 ? '' : 'es'} · <b>{money(resumen.faltaFacturaMonto)}</b></span></>}</span>
             </div>
             <div style={{ height: 10, borderRadius: 20, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
               <div style={{ width: `${resumen.pct}%`, height: '100%', borderRadius: 20, background: resumen.pct === 100 ? BRAND.teal : 'linear-gradient(90deg,#FFB020,#2ECFAA)', transition: 'width 0.3s' }} />
@@ -254,7 +262,7 @@ export default function PagosPagador({ tarifas }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
-              {[['pendientes', 'Pendientes', BRAND.amber], ['pagados', 'Pagados', BRAND.teal]].map(([k, l, c]) => (
+              {[['pendientes', 'Pendientes', BRAND.amber], ['pagados', 'Pagados', BRAND.teal], ['falta_factura', 'Falta factura', BRAND.amber]].map(([k, l, c]) => (
                 <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k, c)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
               ))}
             </div>
@@ -286,12 +294,14 @@ export default function PagosPagador({ tarifas }) {
             {filasFiltradas.map(f => {
               const chipColor = f.factura ? BRAND.teal : BRAND.amber;
               const chipBg = f.factura ? 'rgba(46,207,170,0.10)' : 'rgba(255,176,32,0.10)';
+              const bloqueada = faltaFactura(f); // transferencia sin factura → no se puede pagar desde acá
               return (
-                <div key={f.id} style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : BRAND.border }}>
+                <div key={f.id} style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : bloqueada ? 'rgba(255,176,32,0.4)' : BRAND.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, color: chipColor, background: chipBg, border: `1px solid ${chipColor}33`, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                       {f.factura ? 'Factura' : 'Efectivo'}
                     </span>
+                    {bloqueada && <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', border: '1px solid rgba(255,176,32,0.4)' }}>FALTA FACTURA</span>}
                     <span style={{ fontWeight: 700, fontSize: 15, minWidth: 130, textDecoration: f.pagado ? 'line-through' : 'none' }}>{f.nombre}</span>
                     <span style={{ marginLeft: 'auto', fontSize: 17, fontWeight: 800, color: f.pagado ? BRAND.muted : BRAND.white }}>{money(f.total)}</span>
                     {f.pagado ? (() => {
@@ -305,7 +315,16 @@ export default function PagosPagador({ tarifas }) {
                             style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: busyId === f.id ? 'wait' : 'pointer', fontSize: 14, marginLeft: 2, lineHeight: 1 }}>✕</button>
                         </span>
                       );
-                    })() : pickId === f.id ? (
+                    })() : bloqueada ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {Object.entries(MEDIOS).map(([k, m]) => (
+                          <button key={k} disabled title="Todavía no pasó factura — se habilita desde Liquidaciones → Semana"
+                            style={{ height: 36, padding: '0 13px', borderRadius: 10, fontSize: 12.5, fontWeight: 800, cursor: 'not-allowed', opacity: 0.4, color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}`, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                            <img src={m.logo} alt="" width="22" height="22" style={{ display: 'block' }} /> {m.nombre}
+                          </button>
+                        ))}
+                      </span>
+                    ) : pickId === f.id ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         {Object.entries(MEDIOS).map(([k, m]) => (
                           <button key={k} onClick={() => marcarPagado(f, k)} disabled={busyId === f.id} title={`Marcar pagado por ${m.nombre}`}
