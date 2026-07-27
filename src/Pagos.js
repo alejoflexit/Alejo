@@ -71,6 +71,14 @@ function fmtSemanaLabel(lunes) {
   return `${f(lunes)} al ${f(sab)}`;
 }
 
+// Solo el fin de semana (sábado): el selector de fecha ya muestra el lunes, así que
+// mostrar el rango completo repetía el inicio. Acá va únicamente "→ sáb 25/07".
+function fmtSemanaFin(lunes) {
+  if (!lunes) return '';
+  const p = addDays(lunes, 5).split('-'); // lunes+5 = sábado
+  return `→ sáb ${p[2]}/${p[1]}`;
+}
+
 function money(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return '$' + Math.round(n).toLocaleString('es-AR');
@@ -1558,7 +1566,7 @@ function PagosInner({ session }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
             <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
-            <span style={{ fontSize: 13, color: BRAND.white, fontWeight: 600 }}>{fmtSemanaLabel(semanaLunes)}</span>
+            <span style={{ fontSize: 13, color: BRAND.muted, fontWeight: 600 }} title="fin de la semana (sábado)">{fmtSemanaFin(semanaLunes)}</span>
             {nEdiciones > 0 && (
               <span style={{ position: 'relative' }}>
                 <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades y colectas editadas a mano; se guardan en este navegador y en Supabase, y sobreviven a confirmar"
