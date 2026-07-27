@@ -1408,20 +1408,39 @@ function PagosInner({ session }) {
     finally { setBusyAccion(false); }
   }
 
-  async function agregarAjuste(nombreLD) {
+  // Si el chofer ya está confirmado (pero no pagado), el total del cierre está congelado y la vista Pagar
+  // lo lee tal cual. Al cargar/borrar un descuento hay que ajustar ese total congelado por el delta del
+  // descuento (sin recalcular la base, para no arrastrar cambios de LightData posteriores a la confirmación).
+  async function syncCierrePorDescuento(cierre, delta) {
+    if (!cierre || !cierre.id || cierre.estado !== 'confirmado' || cierre.pagado) return;
+    const nuevoTotal = (Number(cierre.total) || 0) + delta; // delta negativo al descontar, positivo al borrar
+    const nuevoAjuste = (Number(cierre.detalle?.ajuste) || 0) - delta;
+    await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ total: nuevoTotal, detalle: { ...(cierre.detalle || {}), ajuste: nuevoAjuste } }) });
+  }
+
+  async function agregarAjuste(f, cierre) {
     if (!ajusteForm.concepto.trim() || !ajusteForm.monto) return;
+    const monto = Math.abs(Number(ajusteForm.monto));
+    if (!monto) return;
+    if (cierre?.estado === 'confirmado' && !cierre.pagado && cierre.factura_ok &&
+        !window.confirm(`Este chofer ya tiene la factura marcada por ${money(cierre.total)}. Si le cargás este descuento, el total pasa a ${money((Number(cierre.total) || 0) - monto)} y la factura que mandó no va a coincidir. ¿Cargar igual?`)) return;
     setBusyAccion(true); setError('');
     try {
-      await sb('pagos_ajustes', { method: 'POST', body: JSON.stringify([{ semana_label: semanaLunes, cadete: nombreLD, concepto: ajusteForm.concepto.trim(), monto: Math.abs(Number(ajusteForm.monto)) }]) });
+      await sb('pagos_ajustes', { method: 'POST', body: JSON.stringify([{ semana_label: semanaLunes, cadete: f.nombre, concepto: ajusteForm.concepto.trim(), monto }]) });
+      await syncCierrePorDescuento(cierre, -monto);
       setAjusteForm({ concepto: '', monto: '' });
       await refreshSemana(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
   }
 
-  async function borrarAjuste(id) {
+  async function borrarAjuste(a, cierre) {
     setBusyAccion(true); setError('');
-    try { await sb(`pagos_ajustes?id=eq.${id}`, { method: 'DELETE' }); await refreshSemana(semanaLunes); }
+    try {
+      await sb(`pagos_ajustes?id=eq.${a.id}`, { method: 'DELETE' });
+      await syncCierrePorDescuento(cierre, Number(a.monto) || 0);
+      await refreshSemana(semanaLunes);
+    }
     catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
   }
@@ -1624,6 +1643,8 @@ function PagosInner({ session }) {
                       const open = expandido === f.key;
                       const cierre = cierrePorCadete.get(norm(f.nombre));
                       const trabada = cierre?.estado === 'confirmado';
+                      // Los descuentos se pueden cargar aunque el chofer esté confirmado; solo se bloquean si ya se pagó.
+                      const descLock = !!cierre?.pagado;
                       const montoCong = trabada ? (cierre.detalle?.monto ?? f.monto) : f.monto;
                       // Solo avisa si ENTRARON entregas nuevas después de confirmar (auto de hoy > auto congelado).
                       // Las filas viejas (cierres sin rastro `auto`) no muestran ⚠️.
@@ -1768,13 +1789,13 @@ function PagosInner({ session }) {
                                   <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '9px 12px', borderRadius: 10, background: 'rgba(0,0,0,0.18)', marginBottom: 7, maxWidth: 640 }}>
                                     <span style={{ flex: 1 }}>{a.concepto}</span>
                                     <span style={{ fontWeight: 800, color: BRAND.red, fontVariantNumeric: 'tabular-nums' }}>−{money(a.monto)}</span>
-                                    <button onClick={() => borrarAjuste(a.id)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : 'borrar descuento'} style={{ fontSize: 14, lineHeight: 1, color: BRAND.muted, background: 'none', border: 'none', cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1, padding: '2px 4px', borderRadius: 6 }}>✕</button>
+                                    <button onClick={() => borrarAjuste(a, cierre)} disabled={busyAccion || descLock} title={descLock ? 'chofer ya pagado — no se puede editar' : 'borrar descuento'} style={{ fontSize: 14, lineHeight: 1, color: BRAND.muted, background: 'none', border: 'none', cursor: descLock ? 'not-allowed' : 'pointer', opacity: descLock ? 0.5 : 1, padding: '2px 4px', borderRadius: 6 }}>✕</button>
                                   </div>
                                 ))}
                                 <div style={{ display: 'flex', gap: 8, marginTop: 12, maxWidth: 640 }}>
-                                  <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} disabled={trabada} style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 13.5, outline: 'none', opacity: trabada ? 0.55 : 1 }} />
-                                  <input className="no-spin" placeholder="Monto" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} disabled={trabada} style={{ width: 130, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontWeight: 700, fontSize: 13.5, textAlign: 'right', outline: 'none', opacity: trabada ? 0.55 : 1 }} />
-                                  <button onClick={() => agregarAjuste(f.nombre)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : ''} style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, borderRadius: 10, cursor: trabada ? 'not-allowed' : 'pointer', border: `1px solid rgba(226,75,74,0.4)`, background: 'rgba(226,75,74,0.12)', color: BRAND.red, opacity: trabada ? 0.5 : 1, whiteSpace: 'nowrap' }}>Descontar</button>
+                                  <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} disabled={descLock} style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 13.5, outline: 'none', opacity: descLock ? 0.55 : 1 }} />
+                                  <input className="no-spin" placeholder="Monto" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} disabled={descLock} style={{ width: 130, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontWeight: 700, fontSize: 13.5, textAlign: 'right', outline: 'none', opacity: descLock ? 0.55 : 1 }} />
+                                  <button onClick={() => agregarAjuste(f, cierre)} disabled={busyAccion || descLock} title={descLock ? 'chofer ya pagado — no se puede editar' : ''} style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, borderRadius: 10, cursor: descLock ? 'not-allowed' : 'pointer', border: `1px solid rgba(226,75,74,0.4)`, background: 'rgba(226,75,74,0.12)', color: BRAND.red, opacity: descLock ? 0.5 : 1, whiteSpace: 'nowrap' }}>Descontar</button>
                                 </div>
                                 {f.ajusteRows.length > 0 && (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BRAND.border}`, fontSize: 13, maxWidth: 640 }}>
