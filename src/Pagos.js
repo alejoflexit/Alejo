@@ -977,11 +977,11 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
 // ───────────────────────── input de cantidad (Tarea 1) ─────────────────────────
 // Editable sin spinners: se tipea directo, Enter/blur confirma, inválido/negativo vuelve
 // al valor actual. El ↺ restaura al valor original de LightData (borra el override).
-function CantidadInput({ value, original, editado, onCommit, onRestore }) {
+function CantidadInput({ value, original, editado, onCommit, onRestore, disabled }) {
   const [text, setText] = useState(String(value));
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setText(String(value)); }, [value, focused]);
-  const inpSt = { padding: '4px 8px', width: 80, fontSize: 13, textAlign: 'right', border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield' };
+  const inpSt = { padding: '4px 8px', width: 80, fontSize: 13, textAlign: 'right', border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield', opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' };
   const commit = () => {
     const t = text.trim();
     const n = Number(t);
@@ -993,13 +993,14 @@ function CantidadInput({ value, original, editado, onCommit, onRestore }) {
       <input
         type="text" inputMode="numeric"
         value={text}
+        disabled={disabled}
         onFocus={e => { setFocused(true); e.target.select(); }}
         onBlur={() => { setFocused(false); commit(); }}
         onChange={e => setText(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
         style={inpSt}
       />
-      {editado && (
+      {editado && !disabled && (
         <button title={`volver a ${original}`} onClick={onRestore}
           style={{ background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 15, padding: 0, lineHeight: 1 }}>↺</button>
       )}
@@ -1009,7 +1010,7 @@ function CantidadInput({ value, original, editado, onCommit, onRestore }) {
 
 // input de colecta (pesos): en reposo muestra el monto plano; al hacer clic recién aparece
 // el cuadro para editar (evita el "cajón" siempre visible). Se confirma con Enter o al salir.
-function ColectaInput({ value, editado, onCommit, onRestore }) {
+function ColectaInput({ value, editado, onCommit, onRestore, disabled }) {
   const [text, setText] = useState(String(Math.round(value || 0)));
   const [open, setOpen] = useState(false);
   useEffect(() => { if (!open) setText(String(Math.round(value || 0))); }, [value, open]);
@@ -1020,6 +1021,9 @@ function ColectaInput({ value, editado, onCommit, onRestore }) {
     if (digits === '') return;
     if (Number(digits) !== Math.round(value || 0)) onCommit(Number(digits));
   };
+  if (disabled) {
+    return <span style={{ color: editado ? BRAND.amber : 'rgba(255,255,255,0.82)', opacity: 0.75 }}>{money(value || 0)}</span>;
+  }
   if (!open) {
     return (
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
@@ -1293,30 +1297,70 @@ function PagosInner({ session }) {
   const thSt = { padding: '10px 12px', position: 'sticky', top: 0, zIndex: 3, background: BRAND.navyCard }; // Tarea 6: header sticky
   const thNum = { ...thSt, textAlign: 'right' };
 
-  const yaCerrada = cierres.length > 0;
+  // Cierre por cadete (normalizado): cada fila se cuelga su cierre para saber si está trabada.
+  const cierrePorCadete = useMemo(() => new Map(cierres.map(c => [norm(c.cadete), c])), [cierres]);
+  const avance = useMemo(() => {
+    let confirmados = 0, faltaConfirmarMonto = 0;
+    filasEfectivas.forEach(f => {
+      const c = cierrePorCadete.get(norm(f.nombre));
+      if (c && c.estado === 'confirmado') confirmados++;
+      else faltaConfirmarMonto += (f.total || 0);
+    });
+    const ff = cierres.filter(c => c.estado === 'confirmado' && c.metodo === 'transferencia' && !c.factura_ok && !c.pagado);
+    return { confirmados, total: filasEfectivas.length, faltaConfirmarMonto, faltaFacturaN: ff.length, faltaFacturaMonto: ff.reduce((s, c) => s + (c.total || 0), 0) };
+  }, [filasEfectivas, cierrePorCadete, cierres]);
   // La columna Ajuste solo se muestra si alguna fila visible tiene ajuste; el descuento se agrega desde el detalle del cadete
   const hayAjustes = filasVisibles.some(f => f.ajusteTotal);
-  const nCols = hayAjustes ? 8 : 7; // columna "Pagado" removida — el pago se marca en la vista "Pagar"
+  const nCols = hayAjustes ? 9 : 8; // Cadete,Cant,Precio,Monto,Colecta,[Ajuste],TOTAL,Método,Estado
+  const chipTeal = { fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: BRAND.teal, background: 'rgba(46,207,170,0.14)', whiteSpace: 'nowrap' };
+  const chipAmber = { fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', whiteSpace: 'nowrap' };
 
-  async function cerrarSemana() {
-    if (!window.confirm(`¿Cerrar la semana ${fmtSemanaLabel(semanaLunes)}? Esto congela los montos actuales en pagos_cierres (se puede volver a cerrar y se pisa).`)) return;
+  // Confirmar un chofer congela ESA fila sola (por fila, nunca delete masivo). No toca overrides,
+  // ni pagado/pagado_via/factura_ok (si venía de un reabrir, se conservan). Guarda el rastro `auto`.
+  async function confirmarChofer(f, cierre) {
     setBusyAccion(true); setError('');
     try {
-      // Tarea 3: preservar los pagos ya marcados (y su medio de pago) al re-cerrar (matchear por cadete antes del delete+insert)
-      const pagadoPrev = new Set(cierres.filter(c => c.pagado).map(c => norm(c.cadete)));
-      const viaPrev = new Map(cierres.filter(c => c.pagado).map(c => [norm(c.cadete), c.pagado_via || null]));
-      await sb(`pagos_cierres?semana_label=eq.${semanaLunes}`, { method: 'DELETE' });
-      const rows = filasEfectivas.map(f => ({
+      const payload = {
         semana_label: semanaLunes, cadete: f.nombre,
-        detalle: { cantidad: f.cantidad, monto: f.monto, colecta: f.colecta, ajuste: f.ajusteTotal, modo: f.modo, falta_precio: f.faltaPrecio },
-        total: f.total, metodo: f.factura ? 'transferencia' : 'efectivo', pagado: pagadoPrev.has(norm(f.nombre)),
-        pagado_via: viaPrev.get(norm(f.nombre)) || null,
-      }));
-      if (rows.length) await sb('pagos_cierres', { method: 'POST', body: JSON.stringify(rows) });
-      // Tarea 2: al cerrar, las ediciones quedan congeladas en el cierre -> limpiar el borrador
-      saveOverrides(semanaLunes, {}); setOverrides({});
-      saveColectaOv(semanaLunes, {}); setColectaOv({});
-      saveSplitOv(semanaLunes, {}); setSplitOv({});
+        detalle: {
+          cantidad: f.cantidad, monto: f.monto, colecta: f.colecta,
+          ajuste: f.ajusteTotal, modo: f.modo, falta_precio: f.faltaPrecio,
+          auto: { cantidad: f.cantidadOriginal, colecta: f.colectaOriginal },
+        },
+        total: f.total, metodo: f.factura ? 'transferencia' : 'efectivo',
+        editado: !!f.editado,
+        estado: 'confirmado', confirmado_at: new Date().toISOString(),
+      };
+      if (cierre && cierre.id) {
+        // reabierto (borrador) -> vuelve a confirmado sobre la misma fila (conserva id/factura_ok/pagado)
+        await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      } else {
+        await sb('pagos_cierres', { method: 'POST', body: JSON.stringify([payload]) });
+      }
+      await refreshSemana(semanaLunes);
+    } catch (e) { setError(e.message); }
+    finally { setBusyAccion(false); }
+  }
+
+  // Reabrir devuelve la fila a 'borrador' (editable). Nunca borra la fila; conserva factura_ok/id/histórico.
+  // Un chofer pagado NO se puede reabrir por ningún camino.
+  async function reabrirChofer(cierre) {
+    if (!cierre || cierre.pagado) return; // pagado es el final del camino
+    if (cierre.factura_ok && !window.confirm('Este chofer ya tiene la factura marcada. Si lo reabrís y le cambiás el monto, la factura que mandó era por el monto viejo. ¿Reabrir igual?')) return;
+    setBusyAccion(true); setError('');
+    try {
+      await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ estado: 'borrador' }) });
+      await refreshSemana(semanaLunes);
+    } catch (e) { setError(e.message); }
+    finally { setBusyAccion(false); }
+  }
+
+  // "Mandó factura" — solo transferencia, lo marca Alejo en Semana. Habilita el pago en la vista Pagar.
+  async function marcarFactura(cierre, valor) {
+    if (!cierre || cierre.metodo !== 'transferencia') return;
+    setBusyAccion(true); setError('');
+    try {
+      await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ factura_ok: valor, factura_ok_at: valor ? new Date().toISOString() : null }) });
       await refreshSemana(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -1458,17 +1502,23 @@ function PagosInner({ session }) {
             <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
             <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
             <span style={{ fontSize: 13, color: BRAND.teal, fontWeight: 600 }}>{fmtSemanaLabel(semanaLunes)}</span>
-            {yaCerrada && <span style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px' }}>Semana cerrada</span>}
+            <span style={{ fontSize: 12, color: BRAND.muted }}>
+              Confirmados <b style={{ color: BRAND.teal }}>{avance.confirmados}</b> de {avance.total}
+              {avance.faltaConfirmarMonto > 0 && <> · falta confirmar <b style={{ color: BRAND.amber }}>{money(avance.faltaConfirmarMonto)}</b></>}
+            </span>
+            {avance.faltaFacturaN > 0 && (
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px' }}>Falta factura: {avance.faltaFacturaN} · {money(avance.faltaFacturaMonto)}</span>
+            )}
             {nEdiciones > 0 && (
               <span style={{ position: 'relative' }}>
-                <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades editadas a mano; se guardan en este navegador hasta que cierres la semana"
+                <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades y colectas editadas a mano; se guardan en este navegador y en Supabase, y sobreviven a confirmar"
                   style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}>
-                  &#9999;&#65039; {nEdiciones} {nEdiciones === 1 ? 'edición' : 'ediciones'} sin cerrar &#9662;
+                  &#9999;&#65039; {nEdiciones} {nEdiciones === 1 ? 'edición' : 'ediciones'} a mano &#9662;
                 </button>
                 {menuEdiciones && (
                   <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 10, minWidth: 270, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: BRAND.white }}>Ediciones sin cerrar</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: BRAND.white }}>Ediciones a mano</span>
                       <button onClick={() => { setOverridesPersist({}); setColectaOvPersist({}); setMenuEdiciones(false); }} style={{ fontSize: 11, color: BRAND.amber, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>restaurar todo</button>
                     </div>
                     {filasEfectivas.filter(f => f.editado).map(f => (
@@ -1493,11 +1543,6 @@ function PagosInner({ session }) {
                   <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} /> Exportar Excel
                 </button>
               )}
-              <button disabled={busyAccion || cargando} onClick={cerrarSemana}
-                title={yaCerrada ? 'Vuelve a congelar los montos actuales, pisando el cierre anterior de esta semana' : 'Congela los montos actuales para pagarlos (se puede volver a cerrar si algo cambia)'}
-                style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, border: '1px solid rgba(255,176,32,0.4)', borderRadius: 8, cursor: 'pointer', background: 'rgba(255,176,32,0.1)', color: BRAND.amber }}>
-                {yaCerrada ? 'Re-cerrar semana' : 'Cerrar semana'}
-              </button>
             </div>
           </div>
 
@@ -1540,12 +1585,17 @@ function PagosInner({ session }) {
                       {hayAjustes && <th style={thNum}>Ajuste</th>}
                       <th style={thNum}>TOTAL</th>
                       <th style={thSt}>Método</th>
+                      <th style={thSt}>Estado</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filasVisibles.map((f, i) => {
                       const precioUnit = f.cantidad ? (f.monto || 0) / f.cantidad : (f.precioFijo || 0);
                       const open = expandido === f.key;
+                      const cierre = cierrePorCadete.get(norm(f.nombre));
+                      const trabada = cierre?.estado === 'confirmado';
+                      const montoCong = trabada ? (cierre.detalle?.monto ?? f.monto) : f.monto;
+                      const desvio = trabada && Math.round(montoCong) !== Math.round(f.monto || 0);
                       return (
                         <React.Fragment key={f.key}>
                           <tr
@@ -1567,17 +1617,24 @@ function PagosInner({ session }) {
                                 value={f.cantidad}
                                 original={f.cantidadOriginal}
                                 editado={f.cantEditado}
+                                disabled={trabada}
                                 onCommit={n => setOverridesPersist(o => { const nn = { ...o }; if (n === f.cantidadOriginal) delete nn[f.key]; else nn[f.key] = n; return nn; })}
                                 onRestore={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
                               />
                               )}
                             </td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : <>{money(precioUnit)}{f.modo === 'cp' && <span style={{ fontSize: 10, color: BRAND.muted }}> (CP)</span>}</>}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : money(f.monto)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
+                                {money(montoCong)}
+                                {desvio && <span title={`el automático ahora dice ${money(f.monto)} — reabrí si querés actualizarlo`} style={{ color: BRAND.amber, cursor: 'help' }}>⚠️</span>}
+                              </span>
+                            )}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', background: f.colectaEditado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
                               <ColectaInput
                                 value={f.colecta}
                                 editado={f.colectaEditado}
+                                disabled={trabada}
                                 onCommit={n => setColectaOvPersist(o => { const nn = { ...o }; if (n === Math.round(f.colectaOriginal || 0)) delete nn[f.key]; else nn[f.key] = n; return nn; })}
                                 onRestore={() => setColectaOvPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })}
                               />
@@ -1599,6 +1656,32 @@ function PagosInner({ session }) {
                               </button>
                               {f.modo === 'cp' && (
                                 <button onClick={() => setExpandido(open ? null : f.key)} style={{ marginLeft: 8, fontSize: 11, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>detalle</button>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 12px' }}>
+                              {(!cierre || cierre.estado === 'borrador') ? (
+                                <button disabled={busyAccion} onClick={() => confirmarChofer(f, cierre)}
+                                  style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
+                              ) : cierre.pagado ? (
+                                <span title="ya se pagó — no se puede reabrir" style={chipTeal}>Pagado{({ galicia: ' · Galicia', mercadopago: ' · Mercado Pago' })[cierre.pagado_via] || ''}</span>
+                              ) : (cierre.metodo === 'transferencia' && !cierre.factura_ok) ? (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={chipAmber}>Falta factura</span>
+                                  <button disabled={busyAccion} onClick={() => marcarFactura(cierre, true)}
+                                    style={{ padding: '3px 9px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal }}>Mandó factura</button>
+                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
+                                    style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
+                                </span>
+                              ) : (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={chipTeal}>Listo para pagar</span>
+                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
+                                    style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
+                                  {cierre.metodo === 'transferencia' && cierre.factura_ok && (
+                                    <button disabled={busyAccion} onClick={() => marcarFactura(cierre, false)}
+                                      style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 10.5, textDecoration: 'underline', padding: 0 }}>quitar factura</button>
+                                  )}
+                                </span>
                               )}
                             </td>
                           </tr>
@@ -1636,9 +1719,9 @@ function PagosInner({ session }) {
                                           <div key={t} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                                             <span style={{ fontSize: 12, fontWeight: 800, color: c }}>{lbl} <span style={{ fontSize: 10, color: BRAND.muted, fontWeight: 400 }}>× {money(Math.round(f.split.amts[t]))}</span></span>
                                             <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 8, overflow: 'hidden', background: 'rgba(0,0,0,0.22)' }}>
-                                              <button onClick={() => setSplitCount(f, t, (cur[t] || 0) - 1)} style={stepBtn}>−</button>
-                                              <input type="text" inputMode="numeric" value={cur[t] || 0} onChange={e => setSplitCount(f, t, e.target.value.replace(/[^\d]/g, ''))} style={stepInp} />
-                                              <button onClick={() => setSplitCount(f, t, (cur[t] || 0) + 1)} style={stepBtn}>+</button>
+                                              <button disabled={trabada} onClick={() => setSplitCount(f, t, (cur[t] || 0) - 1)} style={{ ...stepBtn, cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1 }}>−</button>
+                                              <input type="text" inputMode="numeric" disabled={trabada} value={cur[t] || 0} onChange={e => setSplitCount(f, t, e.target.value.replace(/[^\d]/g, ''))} style={stepInp} />
+                                              <button disabled={trabada} onClick={() => setSplitCount(f, t, (cur[t] || 0) + 1)} style={{ ...stepBtn, cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1 }}>+</button>
                                             </div>
                                           </div>
                                         ))}
@@ -1655,13 +1738,13 @@ function PagosInner({ session }) {
                                   <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 4 }}>
                                     <span style={{ flex: 1 }}>{a.concepto}</span>
                                     <span>{money(a.monto)}</span>
-                                    <button onClick={() => borrarAjuste(a.id)} disabled={busyAccion} style={{ fontSize: 11, color: BRAND.red, background: 'none', border: 'none', cursor: 'pointer' }}>borrar</button>
+                                    <button onClick={() => borrarAjuste(a.id)} disabled={busyAccion || trabada} style={{ fontSize: 11, color: BRAND.red, background: 'none', border: 'none', cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1 }}>borrar</button>
                                   </div>
                                 ))}
                                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                                   <input placeholder="Concepto (ej. doble bulto)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} style={{ ...inpSt, flex: 1, padding: '4px 8px' }} />
                                   <input placeholder="Monto a descontar" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} style={{ ...inpSt, width: 130, padding: '4px 8px' }} />
-                                  <button onClick={() => agregarAjuste(f.nombre)} disabled={busyAccion} style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal }}>+ Ajuste</button>
+                                  <button onClick={() => agregarAjuste(f.nombre)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : ''} style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: trabada ? 'not-allowed' : 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal, opacity: trabada ? 0.5 : 1 }}>+ Ajuste</button>
                                 </div>
                                 <div style={{ fontSize: 10.5, color: BRAND.muted, marginTop: 6 }}>La colecta se edita en la pestaña Colectas. Acá se muestra solo lectura.</div>
                               </td>
@@ -1685,7 +1768,7 @@ function PagosInner({ session }) {
                         {hayAjustes && <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.red }}>{totalesVisibles.ajuste ? money(-totalesVisibles.ajuste) : '—'}</td>}
                         <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.teal }}>{money(totalesVisibles.total)}</td>
                         <td></td>
-                        {yaCerrada && <td></td>}
+                        <td></td>
                       </tr>
                     </tfoot>
                   )}
