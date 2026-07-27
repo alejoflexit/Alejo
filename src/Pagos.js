@@ -1412,7 +1412,7 @@ function PagosInner({ session }) {
     if (!ajusteForm.concepto.trim() || !ajusteForm.monto) return;
     setBusyAccion(true); setError('');
     try {
-      await sb('pagos_ajustes', { method: 'POST', body: JSON.stringify([{ semana_label: semanaLunes, cadete: nombreLD, concepto: ajusteForm.concepto.trim(), monto: Number(ajusteForm.monto) }]) });
+      await sb('pagos_ajustes', { method: 'POST', body: JSON.stringify([{ semana_label: semanaLunes, cadete: nombreLD, concepto: ajusteForm.concepto.trim(), monto: Math.abs(Number(ajusteForm.monto)) }]) });
       setAjusteForm({ concepto: '', monto: '' });
       await refreshSemana(semanaLunes);
     } catch (e) { setError(e.message); }
@@ -1766,19 +1766,28 @@ function PagosInner({ session }) {
                                   );
                                 })()}
                                 {f.fallbackInfo && <div style={{ fontSize: 11.5, color: BRAND.amber, marginBottom: 8 }}>⚠ {f.fallbackInfo}</div>}
-                                <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 4 }}>Ajustes de la semana</div>
+                                <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Descuentos de la semana</div>
                                 {f.ajusteRows.map(a => (
-                                  <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, marginBottom: 4 }}>
+                                  <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '9px 12px', borderRadius: 10, background: 'rgba(0,0,0,0.18)', marginBottom: 7 }}>
                                     <span style={{ flex: 1 }}>{a.concepto}</span>
-                                    <span>{money(a.monto)}</span>
-                                    <button onClick={() => borrarAjuste(a.id)} disabled={busyAccion || trabada} style={{ fontSize: 11, color: BRAND.red, background: 'none', border: 'none', cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1 }}>borrar</button>
+                                    <span style={{ fontWeight: 800, color: BRAND.red, fontVariantNumeric: 'tabular-nums' }}>−{money(a.monto)}</span>
+                                    <button onClick={() => borrarAjuste(a.id)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : 'borrar descuento'} style={{ fontSize: 14, lineHeight: 1, color: BRAND.muted, background: 'none', border: 'none', cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1, padding: '2px 4px', borderRadius: 6 }}>✕</button>
                                   </div>
                                 ))}
-                                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                                  <input placeholder="Concepto (ej. doble bulto)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} style={{ ...inpSt, flex: 1, padding: '4px 8px' }} />
-                                  <input placeholder="Monto a descontar" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} style={{ ...inpSt, width: 130, padding: '4px 8px' }} />
-                                  <button onClick={() => agregarAjuste(f.nombre)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : ''} style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: trabada ? 'not-allowed' : 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal, opacity: trabada ? 0.5 : 1 }}>+ Ajuste</button>
+                                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                                  <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} disabled={trabada} style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 13.5, outline: 'none', opacity: trabada ? 0.55 : 1 }} />
+                                  <div style={{ position: 'relative', width: 150 }}>
+                                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: BRAND.red, fontWeight: 800, fontSize: 13.5, pointerEvents: 'none' }}>−$</span>
+                                    <input className="no-spin" placeholder="0" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} disabled={trabada} style={{ width: '100%', padding: '10px 12px 10px 30px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.red, fontWeight: 800, fontSize: 13.5, textAlign: 'right', outline: 'none', opacity: trabada ? 0.55 : 1 }} />
+                                  </div>
+                                  <button onClick={() => agregarAjuste(f.nombre)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : ''} style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, borderRadius: 10, cursor: trabada ? 'not-allowed' : 'pointer', border: `1px solid rgba(226,75,74,0.4)`, background: 'rgba(226,75,74,0.12)', color: BRAND.red, opacity: trabada ? 0.5 : 1, whiteSpace: 'nowrap' }}>− Descontar</button>
                                 </div>
+                                {f.ajusteRows.length > 0 && (
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BRAND.border}`, fontSize: 13 }}>
+                                    <span style={{ color: BRAND.muted }}>Total descuentos de la semana</span>
+                                    <span style={{ fontWeight: 800, color: BRAND.red, fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>−{money(f.ajusteTotal)}</span>
+                                  </div>
+                                )}
                                 <div style={{ fontSize: 10.5, color: BRAND.muted, marginTop: 6 }}>La colecta se edita en la pestaña Colectas. Acá se muestra solo lectura.</div>
                               </td>
                             </tr>
