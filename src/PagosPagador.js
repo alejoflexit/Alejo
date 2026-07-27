@@ -100,6 +100,7 @@ export default function PagosPagador({ tarifas }) {
   const [copiado, setCopiado] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [pickId, setPickId] = useState(null); // fila cuyo selector de medio (Galicia/MP) está abierto
+  const [menuId, setMenuId] = useState(null); // fila con el menú "⋯" (acciones secundarias) abierto
   const [filtroMedio, setFiltroMedio] = useState('todos'); // en Pagados: todos | galicia | mercadopago
 
   useEffect(() => {
@@ -343,11 +344,25 @@ export default function PagosPagador({ tarifas }) {
                         <button onClick={() => setPickId(null)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
                       </span>
                     ) : (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      {f.factura && f.facturaOk && <button onClick={() => marcarFactura(f, false)} disabled={busyId === f.id} title="sacar la marca de factura (vuelve a Falta factura)" style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>quitar factura</button>}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {f.factura && f.facturaOk && (
+                        <span style={{ position: 'relative' }}>
+                          <button onClick={() => setMenuId(menuId === f.id ? null : f.id)} title="más acciones"
+                            style={{ height: 36, width: 34, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>⋯</button>
+                          {menuId === f.id && (
+                            <>
+                              <div onClick={() => setMenuId(null)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+                              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: 4, minWidth: 190, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
+                                <button onClick={() => { marcarFactura(f, false); setMenuId(null); }} disabled={busyId === f.id}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 8 }}>🗑 Quitar factura</button>
+                              </div>
+                            </>
+                          )}
+                        </span>
+                      )}
                       <button onClick={() => setPickId(f.id)}
                         style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: BRAND.teal, color: '#06231b', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                        Marcar pagado
+                        ✓ Marcar pagado
                       </button>
                       </span>
                     )}
