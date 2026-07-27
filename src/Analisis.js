@@ -1200,7 +1200,7 @@ export default function Analisis({ semanas }) {
       <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Ranking completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>{isMobile ? "(tocá una tarjeta para el detalle)" : "(clic en una columna para ordenar · clic en una fila para el detalle)"}</span></h3>
       {/* chips de filtro rápido */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        {[["criticos", "🔴 solo críticos"], ["riesgo", "🟡 en riesgo"], ["ok", "🟢 OK"], ["sobre", "📦 sobre tope"], ["tarde", "🌙 terminan tarde"], ["caida", "📉 en caída"]].map(([k, lbl]) => (
+        {[["criticos", "🔴 Solo críticos"], ["riesgo", "🟡 En riesgo"], ["ok", "🟢 OK"], ["sobre", "📦 Sobre tope"], ["tarde", "🌙 Terminan tarde"], ["caida", "📉 En caída"]].map(([k, lbl]) => (
           <button key={k} onClick={() => setChip((x) => (x === k ? null : k))}
             style={{ padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", borderRadius: 999, border: `1px solid ${chip === k ? C.teal : C.border}`, background: chip === k ? "rgba(46,207,170,0.14)" : "transparent", color: chip === k ? C.teal : C.muted }}>
             {lbl}
@@ -1210,7 +1210,7 @@ export default function Analisis({ semanas }) {
         {!isMobile && (
           <button onClick={() => setVerAvanzadas((v) => !v)}
             style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", borderRadius: 999, border: `1px solid ${verAvanzadas ? C.teal : C.border}`, background: verAvanzadas ? "rgba(46,207,170,0.14)" : "transparent", color: verAvanzadas ? C.teal : C.muted }}>
-            {verAvanzadas ? "− ocultar métricas avanzadas" : "⚙️ métricas avanzadas"}
+            {verAvanzadas ? "− Ocultar métricas avanzadas" : "⚙️ Métricas avanzadas"}
           </button>
         )}
       </div>
@@ -1220,7 +1220,7 @@ export default function Analisis({ semanas }) {
             <div key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ background: C.cardAlt, border: `1px solid ${isOpen("cadete", c.name, "rank") ? C.teal : C.border}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                <span style={{ color: slaColor(c.sla), fontWeight: 700, whiteSpace: "nowrap" }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</span>
+                <span style={{ color: slaColor(c.sla), fontWeight: 700, whiteSpace: "nowrap" }}>{c.sla != null ? fmt1(c.sla) + "%" : "—"}</span>
                 <span style={{ color: C.teal, flex: "0 0 auto" }}>{isOpen("cadete", c.name, "rank") ? "▾" : "▸"}</span>
               </div>
               <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{fmtInt(c.cant)} envíos · {fmt1(c.prom)}/día vs tope {c.tope || CFG.tope} · {fmt0(c.p21rate * 100)}% post 21</div>
@@ -1249,7 +1249,7 @@ export default function Analisis({ semanas }) {
                 <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.cant)}</td>
                 {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted }}>{fmt1(c.pctVol)}%</td>}
                 {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt1(c.prom)}</td>}
-                <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(c.sla), fontWeight: 600 }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(c.sla), fontWeight: 600 }}>{c.sla != null ? fmt1(c.sla) + "%" : "—"}</td>
                 {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right", color: c.delta == null ? C.muted : c.delta >= 0 ? C.goodText : C.critText }}>{c.delta == null ? "—" : (c.delta >= 0 ? "+" : "−") + fmt1(Math.abs(c.delta))}</td>}
                 {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.dem)}</td>}
                 {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.d21)}</td>}
