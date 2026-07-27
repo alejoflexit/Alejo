@@ -71,14 +71,6 @@ function fmtSemanaLabel(lunes) {
   return `${f(lunes)} al ${f(sab)}`;
 }
 
-// Solo el fin de semana (sábado): el selector de fecha ya muestra el lunes, así que
-// mostrar el rango completo repetía el inicio. Acá va únicamente "→ sáb 25/07".
-function fmtSemanaFin(lunes) {
-  if (!lunes) return '';
-  const p = addDays(lunes, 5).split('-'); // lunes+5 = sábado
-  return `→ sáb ${p[2]}/${p[1]}`;
-}
-
 function money(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return '$' + Math.round(n).toLocaleString('es-AR');
@@ -1126,7 +1118,6 @@ function PagosInner({ session }) {
   const isAdmin = session && session.email === ADMIN_EMAIL;
 
   const [vista, setVista] = useState('tabla'); // 'tabla' | 'config' | 'pagador'
-  const [fecha, setFecha] = useState(todayStr);
   const [semanaLunes, setSemanaLunes] = useState(null); // se resuelve al cargar
 
   const [tarifas, setTarifas] = useState([]);
@@ -1192,7 +1183,7 @@ function PagosInner({ session }) {
   // resolver semana por defecto: la última que tenga datos en pagos_entregados
   useEffect(() => {
     sb('pagos_entregados?select=semana_lunes&order=semana_lunes.desc&limit=1')
-      .then(rows => { if (rows && rows[0]) { setSemanaLunes(rows[0].semana_lunes); setFecha(rows[0].semana_lunes); } else { setSemanaLunes(mondayOf(todayStr())); } })
+      .then(rows => { if (rows && rows[0]) { setSemanaLunes(rows[0].semana_lunes); } else { setSemanaLunes(mondayOf(todayStr())); } })
       .catch(() => setSemanaLunes(mondayOf(todayStr())));
   }, []);
 
@@ -1332,7 +1323,17 @@ function PagosInner({ session }) {
   }, [filasEfectivas]);
 
   const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '1rem 1.1rem' };
-  const inpSt = { padding: '6px 10px', fontSize: 13, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none' };
+  // Selector de semana como desplegable: muestra el rango completo ("20/07 al 25/07") con flechita.
+  const selSt = { padding: '6px 32px 6px 12px', fontSize: 13, fontWeight: 600, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-opacity='0.6' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center' };
+  // Últimas ~26 semanas (lunes), más la seleccionada si quedara fuera del rango.
+  const semanasOpts = useMemo(() => {
+    const arr = [];
+    let cur = mondayOf(todayStr());
+    for (let i = 0; i < 26; i++) { arr.push(cur); cur = addDays(cur, -7); }
+    if (semanaLunes && !arr.includes(semanaLunes)) arr.push(semanaLunes);
+    return arr.sort((a, b) => (a < b ? 1 : -1));
+  }, [semanaLunes]);
+  const onSemana = (v) => { setSemanaLunes(v); };
   const btnPill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.blue : BRAND.border}`, background: active ? 'rgba(76,141,255,0.15)' : BRAND.faint, color: active ? BRAND.blue : BRAND.muted });
   // Botón del segmented control (Semana / Pagar): activo = fondo azul, inactivo = transparente.
   const segBtn = (active) => ({ padding: '7px 18px', fontSize: 12.5, fontWeight: 700, border: 'none', borderRadius: 9, cursor: 'pointer', background: active ? BRAND.blue : 'transparent', color: active ? '#0d1b2a' : BRAND.muted });
@@ -1510,7 +1511,9 @@ function PagosInner({ session }) {
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
-            <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
+            <select value={semanaLunes || ''} onChange={e => onSemana(e.target.value)} style={selSt}>
+              {semanasOpts.map(lu => <option key={lu} value={lu}>{fmtSemanaLabel(lu)}</option>)}
+            </select>
           </div>
           {cargando && <div style={{ color: BRAND.muted, padding: '2rem', textAlign: 'center' }}>Calculando...</div>}
           {!cargando && (() => {
@@ -1565,8 +1568,9 @@ function PagosInner({ session }) {
           {/* Selector de semana */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
-            <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
-            <span style={{ fontSize: 13, color: BRAND.muted, fontWeight: 600 }} title="fin de la semana (sábado)">{fmtSemanaFin(semanaLunes)}</span>
+            <select value={semanaLunes || ''} onChange={e => onSemana(e.target.value)} style={selSt}>
+              {semanasOpts.map(lu => <option key={lu} value={lu}>{fmtSemanaLabel(lu)}</option>)}
+            </select>
             {nEdiciones > 0 && (
               <span style={{ position: 'relative' }}>
                 <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades y colectas editadas a mano; se guardan en este navegador y en Supabase, y sobreviven a confirmar"
