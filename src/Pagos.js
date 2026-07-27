@@ -1224,6 +1224,19 @@ function PagosInner({ session }) {
     catch (e) { setError(e.message); }
   }, []);
 
+  // Refresco liviano para descuentos: solo re-descarga pagos_ajustes (+ cierres, que se ajustan al descontar
+  // sobre un chofer confirmado). No toca loadingSemana, así que no muestra "Calculando liquidación".
+  const refreshDescuentos = useCallback(async (lunes) => {
+    if (!lunes) return;
+    try {
+      const [aj, ci] = await Promise.all([
+        sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
+        sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`),
+      ]);
+      setAjustes(aj || []); setCierres(ci || []);
+    } catch (e) { setError(e.message); }
+  }, []);
+
   const calc = useMemo(() => {
     if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map(), porDarAlta: [] };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes });
@@ -1429,7 +1442,7 @@ function PagosInner({ session }) {
       await sb('pagos_ajustes', { method: 'POST', body: JSON.stringify([{ semana_label: semanaLunes, cadete: f.nombre, concepto: ajusteForm.concepto.trim(), monto }]) });
       await syncCierrePorDescuento(cierre, -monto);
       setAjusteForm({ concepto: '', monto: '' });
-      await refreshSemana(semanaLunes);
+      await refreshDescuentos(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
   }
@@ -1439,7 +1452,7 @@ function PagosInner({ session }) {
     try {
       await sb(`pagos_ajustes?id=eq.${a.id}`, { method: 'DELETE' });
       await syncCierrePorDescuento(cierre, Number(a.monto) || 0);
-      await refreshSemana(semanaLunes);
+      await refreshDescuentos(semanaLunes);
     }
     catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
