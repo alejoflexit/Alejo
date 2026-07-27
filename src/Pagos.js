@@ -1685,12 +1685,8 @@ function PagosInner({ session }) {
                               ) : (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                                   <span style={chipTeal}>{cierre.metodo === 'transferencia' ? 'En Pagar' : 'Listo para pagar'}</span>
-                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
+                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado; lo saca de Pagar)"
                                     style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
-                                  {cierre.metodo === 'transferencia' && cierre.factura_ok && (
-                                    <button disabled={busyAccion} onClick={() => marcarFactura(cierre, false)} title="sacar de Pagar (marcar que todavía no mandó factura)"
-                                      style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 10.5, textDecoration: 'underline', padding: 0 }}>deshacer</button>
-                                  )}
                                 </span>
                               )}
                             </td>
