@@ -1122,6 +1122,7 @@ function PagosInner({ session }) {
   const [colectas, setColectas] = useState([]);
   const [ajustes, setAjustes] = useState([]);
   const [cierres, setCierres] = useState([]);
+  const [avisados, setAvisados] = useState(() => new Set()); // norm(cadete) que ya recibieron el mensaje (pagos_avisos)
 
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [loadingSemana, setLoadingSemana] = useState(true);
@@ -1184,15 +1185,17 @@ function PagosInner({ session }) {
     setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes)); setColectaOv(loadColectaOv(lunes)); setSplitOv(loadSplitOv(lunes));
     try {
       const sabado = addDays(lunes, 5);
-      const [ent, col, aj, ci, remoteOv] = await Promise.all([
+      const [ent, col, aj, ci, remoteOv, av] = await Promise.all([
         sbAll(`pagos_entregados?select=cadete,localidad,cp,fecha_estado&semana_lunes=eq.${lunes}`),
         sbAll(`colectas_registros?select=fecha,choferes,monto,estado,confirmado_por,colectas_clientes(monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
         sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
         sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`),
         loadOverridesRemote(lunes),
+        sbAll(`pagos_avisos?select=cadete&semana_label=eq.${lunes}`),
       ]);
       setEntregados(ent || []); setColectas(col || []); setAjustes(aj || []);
       setCierres(ci || []);
+      setAvisados(new Set((av || []).map(r => norm(r.cadete))));
       // Overrides: si el remoto (Supabase) está disponible es la fuente de verdad y se espeja al navegador;
       // si no se pudo leer (remoteOv === null), se conserva lo que ya cargó el localStorage arriba.
       if (remoteOv) {
@@ -1314,9 +1317,8 @@ function PagosInner({ session }) {
       if (c && c.estado === 'confirmado') confirmados++;
       else faltaConfirmarMonto += (f.total || 0);
     });
-    const ff = cierres.filter(c => c.estado === 'confirmado' && c.metodo === 'transferencia' && !c.factura_ok && !c.pagado);
-    return { confirmados, total: filasEfectivas.length, faltaConfirmarMonto, faltaFacturaN: ff.length, faltaFacturaMonto: ff.reduce((s, c) => s + (c.total || 0), 0) };
-  }, [filasEfectivas, cierrePorCadete, cierres]);
+    return { confirmados, total: filasEfectivas.length, faltaConfirmarMonto };
+  }, [filasEfectivas, cierrePorCadete]);
   // La columna Ajuste solo se muestra si alguna fila visible tiene ajuste; el descuento se agrega desde el detalle del cadete
   const hayAjustes = filasVisibles.some(f => f.ajusteTotal);
   const nCols = hayAjustes ? 9 : 8; // Cadete,Cant,Precio,Monto,Colecta,[Ajuste],TOTAL,Método,Estado
@@ -1362,15 +1364,18 @@ function PagosInner({ session }) {
     finally { setBusyAccion(false); }
   }
 
-  // "Mandó factura" — solo transferencia, lo marca Alejo en Semana. Habilita el pago en la vista Pagar.
-  async function marcarFactura(cierre, valor) {
-    if (!cierre || cierre.metodo !== 'transferencia') return;
-    setBusyAccion(true); setError('');
+  // Marcador interno: "ya le mandé el mensaje al chofer" (pagos_avisos, por fila). No afecta el pago.
+  async function toggleAviso(f) {
+    const key = norm(f.nombre);
+    const yaAvisado = avisados.has(key);
+    setAvisados(prev => { const n = new Set(prev); if (yaAvisado) n.delete(key); else n.add(key); return n; });
     try {
-      await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ factura_ok: valor, factura_ok_at: valor ? new Date().toISOString() : null }) });
-      await refreshCierres(semanaLunes);
-    } catch (e) { setError(e.message); }
-    finally { setBusyAccion(false); }
+      if (yaAvisado) await sb(`pagos_avisos?semana_label=eq.${semanaLunes}&cadete=eq.${encodeURIComponent(f.nombre)}`, { method: 'DELETE' });
+      else await sb('pagos_avisos', { method: 'POST', body: JSON.stringify([{ semana_label: semanaLunes, cadete: f.nombre }]) });
+    } catch (e) {
+      setAvisados(prev => { const n = new Set(prev); if (yaAvisado) n.add(key); else n.delete(key); return n; });
+      setError(e.message);
+    }
   }
 
   // dar de alta un chofer con su tarifa completa desde el panel "A revisar".
@@ -1513,9 +1518,6 @@ function PagosInner({ session }) {
               Confirmados <b style={{ color: BRAND.teal }}>{avance.confirmados}</b> de {avance.total}
               {avance.faltaConfirmarMonto > 0 && <> · falta confirmar <b style={{ color: BRAND.amber }}>{money(avance.faltaConfirmarMonto)}</b></>}
             </span>
-            {avance.faltaFacturaN > 0 && (
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px' }}>Falta factura: {avance.faltaFacturaN} · {money(avance.faltaFacturaMonto)}</span>
-            )}
             {nEdiciones > 0 && (
               <span style={{ position: 'relative' }}>
                 <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades y colectas editadas a mano; se guardan en este navegador y en Supabase, y sobreviven a confirmar"
@@ -1665,6 +1667,13 @@ function PagosInner({ session }) {
                                 style={{ marginLeft: 6, fontSize: 14, padding: '4px 8px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
                                 {copiadoKey === f.key ? '✓ copiado' : '💬'}
                               </button>
+                              {(() => { const av = avisados.has(norm(f.nombre)); return (
+                                <button onClick={e => { e.stopPropagation(); toggleAviso(f); }}
+                                  title={av ? 'ya le avisaste — tocá para desmarcar' : 'marcá que ya le mandaste el mensaje al chofer'}
+                                  style={{ marginLeft: 4, fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 20, cursor: 'pointer', border: `1px solid ${av ? BRAND.teal : BRAND.border}`, background: av ? 'rgba(46,207,170,0.12)' : 'transparent', color: av ? BRAND.teal : BRAND.muted }}>
+                                  {av ? '✓ avisado' : 'avisar'}
+                                </button>
+                              ); })()}
                               {f.modo === 'cp' && (
                                 <button onClick={() => setExpandido(open ? null : f.key)} style={{ marginLeft: 8, fontSize: 11, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>detalle</button>
                               )}
@@ -1675,17 +1684,10 @@ function PagosInner({ session }) {
                                   style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
                               ) : cierre.pagado ? (
                                 <span title="ya se pagó — no se puede reabrir" style={chipTeal}>Pagado{({ galicia: ' · Galicia', mercadopago: ' · Mercado Pago' })[cierre.pagado_via] || ''}</span>
-                              ) : (cierre.metodo === 'transferencia' && !cierre.factura_ok) ? (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                  <button disabled={busyAccion} onClick={() => marcarFactura(cierre, true)} title="cuando mandó la factura: recién ahí aparece en la vista Pagar"
-                                    style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Mandó factura</button>
-                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
-                                    style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
-                                </span>
                               ) : (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                  <span style={chipTeal}>{cierre.metodo === 'transferencia' ? 'En Pagar' : 'Listo para pagar'}</span>
-                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado; lo saca de Pagar)"
+                                  <span style={chipTeal}>Confirmado</span>
+                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
                                     style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
                                 </span>
                               )}
