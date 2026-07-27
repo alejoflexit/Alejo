@@ -17,6 +17,7 @@ const BRAND = {
   red:      "#E24B4A",
   amber:    "#FFB020",
   azul:     "#3A8FD4",
+  blue:     "#4C8DFF",
   white:    "#FFFFFF",
   muted:    "rgba(255,255,255,0.58)",
   faint:    "rgba(255,255,255,0.06)",
@@ -251,16 +252,16 @@ export default function PagosPagador({ tarifas }) {
           <div style={{ ...cardSt, marginBottom: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
               <span style={{ fontSize: 14, fontWeight: 700 }}>Pagados {resumen.pagados} de {resumen.total} <span style={{ color: BRAND.muted, fontWeight: 600 }}>· {resumen.pct}%</span></span>
-              <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: resumen.faltan ? BRAND.amber : BRAND.teal }}>{money(resumen.faltan)}</b>{resumen.faltaFacturaN > 0 && <> · <span style={{ color: BRAND.amber }}>Falta factura: {resumen.faltaFacturaN} · <b>{money(resumen.faltaFacturaMonto)}</b></span></>}</span>
+              <span style={{ fontSize: 13, color: BRAND.muted }}>Faltan <b style={{ color: BRAND.white }}>{money(resumen.faltan)}</b>{resumen.faltaFacturaN > 0 && <> · <span style={{ color: BRAND.amber }}>⚠</span> Falta factura {resumen.faltaFacturaN} · <b style={{ color: BRAND.white }}>{money(resumen.faltaFacturaMonto)}</b></>}</span>
             </div>
-            <div style={{ height: 10, borderRadius: 20, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
-              <div style={{ width: `${resumen.pct}%`, height: '100%', borderRadius: 20, background: resumen.pct === 100 ? BRAND.teal : 'linear-gradient(90deg,#FFB020,#2ECFAA)', transition: 'width 0.3s' }} />
+            <div style={{ height: 10, borderRadius: 20, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
+              <div style={{ width: `${resumen.pct}%`, height: '100%', borderRadius: 20, background: BRAND.teal, transition: 'width 0.3s' }} />
             </div>
             {(resumen.porMedio.galicia > 0 || resumen.porMedio.mercadopago > 0) && (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
                 <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', alignSelf: 'center' }}>Pagado por</span>
                 {Object.entries(MEDIOS).map(([k, m]) => (
-                  <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, padding: '5px 11px', borderRadius: 10, background: `${m.color}1f`, border: `1px solid ${m.color}55` }}>
+                  <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, padding: '5px 11px', borderRadius: 10, background: BRAND.faint, border: `1px solid ${BRAND.border}` }}>
                     <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block' }} />
                     <span style={{ color: BRAND.muted }}>{m.nombre}</span>
                     <b style={{ color: m.color }}>{money(resumen.porMedio[k] || 0)}</b>
@@ -273,14 +274,14 @@ export default function PagosPagador({ tarifas }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
-              {[['pendientes', 'Pendientes', BRAND.amber], ['pagados', 'Pagados', BRAND.teal], ['falta_factura', 'Falta factura', BRAND.amber]].map(([k, l, c]) => (
-                <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k, c)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
+              {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['falta_factura', 'Falta factura']].map(([k, l]) => (
+                <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k, BRAND.blue)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Método</span>
               {[['factura', 'Factura'], ['efectivo', 'Efectivo']].map(([k, l]) => (
-                <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)} style={pill(filtroMetodo === k, k === 'efectivo' ? BRAND.amber : BRAND.azul)}>{l} <span style={{ opacity: 0.7 }}>({counts[k]})</span></button>
+                <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)} style={pill(filtroMetodo === k, BRAND.blue)}>{l} <span style={{ opacity: 0.7 }}>({counts[k]})</span></button>
               ))}
             </div>
             {filtro === 'pagados' && (counts.galicia > 0 || counts.mercadopago > 0) && (
