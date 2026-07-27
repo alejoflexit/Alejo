@@ -1187,12 +1187,6 @@ export default function App() {
                 </button>
               ))}
             </div>
-            {xlsxReady && (
-              <button onClick={()=>exportarExcel(acumulado,semanaActiva,diasLabels)}
-                style={{ padding:"6px 14px", fontSize:12, fontWeight:600, border:"1px solid #2ECFAA", borderRadius:8, cursor:"pointer", background:"rgba(46,207,170,0.1)", color:"#2ECFAA", display:"flex", alignItems:"center", gap:6 }}>
-                <i className="ti ti-file-spreadsheet" style={{ fontSize:15 }} /> Exportar Excel
-              </button>
-            )}
           </div>
           )}
           {/* Bottom nav — solo mobile */}
@@ -1204,12 +1198,6 @@ export default function App() {
                   {label}
                 </button>
               ))}
-              {xlsxReady && (
-                <button onClick={()=>exportarExcel(acumulado,semanaActiva,diasLabels)} style={{ flex:1, padding:"10px 4px 8px", fontSize:10, fontWeight:600, cursor:"pointer", border:"none", background:"none", color:BRAND.muted, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderTop:"2px solid transparent" }}>
-                  <i className="ti ti-file-spreadsheet" style={{ fontSize:20 }} />
-                  Excel
-                </button>
-              )}
             </div>
           )}
 
