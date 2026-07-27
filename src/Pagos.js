@@ -25,6 +25,12 @@ const BRAND = {
   chipBg:   "rgba(255,255,255,0.06)",
 };
 
+// Identidad de cada medio de pago (banco/billetera). El color diferencia de un vistazo.
+const MEDIOS_PAGO = {
+  galicia:     { nombre: 'Galicia',      color: '#FF6A13', text: '#FFB078' },
+  mercadopago: { nombre: 'Mercado Pago', color: '#009EE3', text: '#7FD4F4' },
+};
+
 // ───────────────────────── helpers ─────────────────────────
 
 // '2026-07-06' -> '06/07' (formato local para mostrar fechas)
@@ -1336,7 +1342,7 @@ function PagosInner({ session }) {
   }, [filasEfectivas, cierrePorCadete]);
   // La columna Ajuste solo se muestra si alguna fila visible tiene ajuste; el descuento se agrega desde el detalle del cadete
   const hayAjustes = filasVisibles.some(f => f.ajusteTotal);
-  const nCols = hayAjustes ? 9 : 8; // Cadete,Cant,Precio,Monto,Colecta,[Ajuste],TOTAL,Método,Estado
+  const nCols = hayAjustes ? 10 : 9; // Cadete,Cant,Precio,Monto,Colecta,[Ajuste],TOTAL,Método,Medio,Estado
 
   // Confirmar un chofer congela ESA fila sola (por fila, nunca delete masivo). No toca overrides,
   // ni pagado/pagado_via/factura_ok (si venía de un reabrir, se conservan). Guarda el rastro `auto`.
@@ -1647,6 +1653,7 @@ function PagosInner({ session }) {
                       {hayAjustes && <th style={thNum}>Ajuste</th>}
                       <th style={thNum}>TOTAL</th>
                       <th style={thSt}>Método</th>
+                      <th style={thSt}>Medio</th>
                       <th style={thSt}>Estado</th>
                     </tr>
                   </thead>
@@ -1732,16 +1739,32 @@ function PagosInner({ session }) {
                                 <button onClick={() => setExpandido(open ? null : f.key)} title="ver detalle por CP" style={{ marginLeft: 2, fontSize: 13, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>👁</button>
                               )}
                             </td>
+                            {/* Medio: identidad del banco/billetera, solo cuando ya se pagó por transferencia */}
+                            <td style={{ padding: '8px 12px' }}>
+                              {(() => {
+                                const m = cierre?.pagado ? MEDIOS_PAGO[cierre.pagado_via] : null;
+                                if (!m) return <span style={{ color: 'rgba(255,255,255,0.28)' }}>—</span>;
+                                return (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 600, color: m.text, whiteSpace: 'nowrap' }}>
+                                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: m.color, display: 'inline-block', flexShrink: 0 }} />
+                                    {m.nombre}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            {/* Estado: neutro (el verde queda solo para el botón Confirmar) */}
                             <td style={{ padding: '8px 12px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
                                 {(!cierre || cierre.estado === 'borrador') ? (
                                   <button disabled={busyAccion} onClick={() => confirmarChofer(f, cierre)}
                                     style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
                                 ) : cierre.pagado ? (
-                                  <span title="ya se pagó — no se puede reabrir" style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: '#0d1b2a', background: BRAND.teal, whiteSpace: 'nowrap' }}>✓ Pagado{({ galicia: ' · Galicia', mercadopago: ' · Mercado Pago' })[cierre.pagado_via] || ''}</span>
+                                  <span title="ya se pagó — no se puede reabrir" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.white, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                                    <span style={{ color: BRAND.teal }}>✓</span> Pagado
+                                  </span>
                                 ) : (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: BRAND.teal, background: BRAND.chipBg, border: '1px solid rgba(46,207,170,0.45)', whiteSpace: 'nowrap' }}>✓ Confirmado</span>
+                                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.muted, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>✓ Confirmado</span>
                                     <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="reabrir para editar (mientras no esté pagado)"
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 6px', lineHeight: 1.4 }}>↺</button>
                                   </span>
@@ -1837,6 +1860,7 @@ function PagosInner({ session }) {
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.colecta)}</td>
                         {hayAjustes && <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.red }}>{totalesVisibles.ajuste ? money(-totalesVisibles.ajuste) : '—'}</td>}
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: BRAND.white }}>{money(totalesVisibles.total)}</td>
+                        <td></td>
                         <td></td>
                         <td></td>
                       </tr>
