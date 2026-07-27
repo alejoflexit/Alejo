@@ -1688,6 +1688,12 @@ function PagosInner({ session }) {
                                 style={{ marginLeft: 6, fontSize: 14, padding: '4px 7px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
                                 {copiadoKey === f.key ? '✓' : '💬'}
                               </button>
+                              {(() => { const av = avisados.has(norm(f.nombre)); return (
+                                <button onClick={e => { e.stopPropagation(); toggleAviso(f); }} title={av ? 'ya le avisaste — tocá para desmarcar' : 'marcá que ya le mandaste el mensaje al chofer'}
+                                  style={{ marginLeft: 4, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: av ? 'rgba(46,207,170,0.12)' : 'none', border: `1px solid ${av ? 'rgba(46,207,170,0.45)' : BRAND.border}`, borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: av ? BRAND.teal : BRAND.muted }}>
+                                  {av ? '✓ Avisado' : 'Avisar'}
+                                </button>
+                              ); })()}
                               {f.modo === 'cp' && (
                                 <button onClick={() => setExpandido(open ? null : f.key)} title="ver detalle por CP" style={{ marginLeft: 2, fontSize: 13, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>👁</button>
                               )}
@@ -1706,15 +1712,6 @@ function PagosInner({ session }) {
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 6px', lineHeight: 1.4 }}>↺</button>
                                   </span>
                                 )}
-                                {(() => { const av = avisados.has(norm(f.nombre)); return (
-                                  <button onClick={e => { e.stopPropagation(); toggleAviso(f); }} title={av ? 'ya le avisaste — tocá para desmarcar' : 'marcá que ya le mandaste el mensaje al chofer'}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11, color: av ? BRAND.teal : BRAND.muted }}>
-                                    <span style={{ width: 26, height: 15, borderRadius: 20, background: av ? BRAND.teal : 'rgba(255,255,255,0.15)', position: 'relative', display: 'inline-block', transition: 'background .2s' }}>
-                                      <span style={{ position: 'absolute', top: 2, left: av ? 13 : 2, width: 11, height: 11, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
-                                    </span>
-                                    Avisado
-                                  </button>
-                                ); })()}
                               </div>
                             </td>
                           </tr>
@@ -1768,14 +1765,14 @@ function PagosInner({ session }) {
                                 {f.fallbackInfo && <div style={{ fontSize: 11.5, color: BRAND.amber, marginBottom: 8 }}>⚠ {f.fallbackInfo}</div>}
                                 <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Descuentos de la semana</div>
                                 {f.ajusteRows.map(a => (
-                                  <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '9px 12px', borderRadius: 10, background: 'rgba(0,0,0,0.18)', marginBottom: 7 }}>
+                                  <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '9px 12px', borderRadius: 10, background: 'rgba(0,0,0,0.18)', marginBottom: 7, maxWidth: 640 }}>
                                     <span style={{ flex: 1 }}>{a.concepto}</span>
                                     <span style={{ fontWeight: 800, color: BRAND.red, fontVariantNumeric: 'tabular-nums' }}>−{money(a.monto)}</span>
                                     <button onClick={() => borrarAjuste(a.id)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : 'borrar descuento'} style={{ fontSize: 14, lineHeight: 1, color: BRAND.muted, background: 'none', border: 'none', cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1, padding: '2px 4px', borderRadius: 6 }}>✕</button>
                                   </div>
                                 ))}
-                                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                                  <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} disabled={trabada} style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 13.5, outline: 'none', opacity: trabada ? 0.55 : 1 }} />
+                                <div style={{ display: 'flex', gap: 8, marginTop: 12, maxWidth: 640 }}>
+                                  <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} disabled={trabada} style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 13.5, outline: 'none', opacity: trabada ? 0.55 : 1 }} />
                                   <div style={{ position: 'relative', width: 150 }}>
                                     <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: BRAND.red, fontWeight: 800, fontSize: 13.5, pointerEvents: 'none' }}>−$</span>
                                     <input className="no-spin" placeholder="0" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} disabled={trabada} style={{ width: '100%', padding: '10px 12px 10px 30px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.red, fontWeight: 800, fontSize: 13.5, textAlign: 'right', outline: 'none', opacity: trabada ? 0.55 : 1 }} />
@@ -1783,7 +1780,7 @@ function PagosInner({ session }) {
                                   <button onClick={() => agregarAjuste(f.nombre)} disabled={busyAccion || trabada} title={trabada ? 'chofer confirmado — reabrí para editar' : ''} style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, borderRadius: 10, cursor: trabada ? 'not-allowed' : 'pointer', border: `1px solid rgba(226,75,74,0.4)`, background: 'rgba(226,75,74,0.12)', color: BRAND.red, opacity: trabada ? 0.5 : 1, whiteSpace: 'nowrap' }}>− Descontar</button>
                                 </div>
                                 {f.ajusteRows.length > 0 && (
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BRAND.border}`, fontSize: 13 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BRAND.border}`, fontSize: 13, maxWidth: 640 }}>
                                     <span style={{ color: BRAND.muted }}>Total descuentos de la semana</span>
                                     <span style={{ fontWeight: 800, color: BRAND.red, fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>−{money(f.ajusteTotal)}</span>
                                   </div>
