@@ -1211,6 +1211,14 @@ function PagosInner({ session }) {
 
   useEffect(() => { if (semanaLunes) refreshSemana(semanaLunes); }, [semanaLunes, refreshSemana]);
 
+  // Refresco liviano: confirmar/reabrir/factura solo tocan pagos_cierres. No re-descarga entregas
+  // ni recalcula la liquidación entera (eso era lo que ponía "Calculando liquidación" y tardaba).
+  const refreshCierres = useCallback(async (lunes) => {
+    if (!lunes) return;
+    try { const ci = await sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`); setCierres(ci || []); }
+    catch (e) { setError(e.message); }
+  }, []);
+
   const calc = useMemo(() => {
     if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map(), porDarAlta: [] };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes });
@@ -1313,7 +1321,6 @@ function PagosInner({ session }) {
   const hayAjustes = filasVisibles.some(f => f.ajusteTotal);
   const nCols = hayAjustes ? 9 : 8; // Cadete,Cant,Precio,Monto,Colecta,[Ajuste],TOTAL,Método,Estado
   const chipTeal = { fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: BRAND.teal, background: 'rgba(46,207,170,0.14)', whiteSpace: 'nowrap' };
-  const chipAmber = { fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', whiteSpace: 'nowrap' };
 
   // Confirmar un chofer congela ESA fila sola (por fila, nunca delete masivo). No toca overrides,
   // ni pagado/pagado_via/factura_ok (si venía de un reabrir, se conservan). Guarda el rastro `auto`.
@@ -1337,7 +1344,7 @@ function PagosInner({ session }) {
       } else {
         await sb('pagos_cierres', { method: 'POST', body: JSON.stringify([payload]) });
       }
-      await refreshSemana(semanaLunes);
+      await refreshCierres(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
   }
@@ -1350,7 +1357,7 @@ function PagosInner({ session }) {
     setBusyAccion(true); setError('');
     try {
       await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ estado: 'borrador' }) });
-      await refreshSemana(semanaLunes);
+      await refreshCierres(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
   }
@@ -1361,7 +1368,7 @@ function PagosInner({ session }) {
     setBusyAccion(true); setError('');
     try {
       await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ factura_ok: valor, factura_ok_at: valor ? new Date().toISOString() : null }) });
-      await refreshSemana(semanaLunes);
+      await refreshCierres(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
   }
@@ -1595,7 +1602,11 @@ function PagosInner({ session }) {
                       const cierre = cierrePorCadete.get(norm(f.nombre));
                       const trabada = cierre?.estado === 'confirmado';
                       const montoCong = trabada ? (cierre.detalle?.monto ?? f.monto) : f.monto;
-                      const desvio = trabada && Math.round(montoCong) !== Math.round(f.monto || 0);
+                      // Solo avisa si ENTRARON entregas nuevas después de confirmar (auto de hoy > auto congelado).
+                      // Las filas viejas (cierres sin rastro `auto`) no muestran ⚠️.
+                      const autoConf = cierre?.detalle?.auto?.cantidad;
+                      const nuevas = (autoConf != null && !f.esFletero) ? (f.cantidadOriginal - autoConf) : 0;
+                      const desvio = trabada && nuevas > 0;
                       return (
                         <React.Fragment key={f.key}>
                           <tr
@@ -1627,7 +1638,7 @@ function PagosInner({ session }) {
                             <td style={{ padding: '8px 12px', textAlign: 'right', color: 'rgba(255,255,255,0.6)' }}>{f.esFletero ? '—' : f.faltaPrecio ? <span style={{ color: BRAND.red, fontWeight: 700 }}>FALTA PRECIO</span> : (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, justifyContent: 'flex-end' }}>
                                 {money(montoCong)}
-                                {desvio && <span title={`el automático ahora dice ${money(f.monto)} — reabrí si querés actualizarlo`} style={{ color: BRAND.amber, cursor: 'help' }}>⚠️</span>}
+                                {desvio && <span title={`entraron ${nuevas} entrega(s) nueva(s) después de confirmar — el automático ahora da ${money(f.monto)}. Reabrí si querés actualizarlo`} style={{ color: BRAND.amber, cursor: 'help' }}>⚠️</span>}
                               </span>
                             )}</td>
                             <td style={{ padding: '8px 12px', textAlign: 'right', background: f.colectaEditado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
@@ -1665,21 +1676,20 @@ function PagosInner({ session }) {
                               ) : cierre.pagado ? (
                                 <span title="ya se pagó — no se puede reabrir" style={chipTeal}>Pagado{({ galicia: ' · Galicia', mercadopago: ' · Mercado Pago' })[cierre.pagado_via] || ''}</span>
                               ) : (cierre.metodo === 'transferencia' && !cierre.factura_ok) ? (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                  <span style={chipAmber}>Falta factura</span>
-                                  <button disabled={busyAccion} onClick={() => marcarFactura(cierre, true)}
-                                    style={{ padding: '3px 9px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.1)', color: BRAND.teal }}>Mandó factura</button>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                  <button disabled={busyAccion} onClick={() => marcarFactura(cierre, true)} title="cuando mandó la factura: recién ahí aparece en la vista Pagar"
+                                    style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Mandó factura</button>
                                   <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
                                     style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
                                 </span>
                               ) : (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                  <span style={chipTeal}>Listo para pagar</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                  <span style={chipTeal}>{cierre.metodo === 'transferencia' ? 'En Pagar' : 'Listo para pagar'}</span>
                                   <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
                                     style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
                                   {cierre.metodo === 'transferencia' && cierre.factura_ok && (
-                                    <button disabled={busyAccion} onClick={() => marcarFactura(cierre, false)}
-                                      style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 10.5, textDecoration: 'underline', padding: 0 }}>quitar factura</button>
+                                    <button disabled={busyAccion} onClick={() => marcarFactura(cierre, false)} title="sacar de Pagar (marcar que todavía no mandó factura)"
+                                      style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 10.5, textDecoration: 'underline', padding: 0 }}>deshacer</button>
                                   )}
                                 </span>
                               )}
