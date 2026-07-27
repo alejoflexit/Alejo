@@ -88,6 +88,19 @@ async function sbGet(path) {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+// Escrituras (seguimiento de decisiones). POST devuelve la fila creada; DELETE devuelve null.
+async function sbWrite(path, method, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method,
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+// Fecha de HOY en Argentina (ISO YYYY-MM-DD) — no usar toISOString (es UTC y de noche salta de día).
+const hoyAR = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" });
 
 // Agrega `semanas` (por cadete×día) para un conjunto de labels de semana.
 function aggWeeks(semanas, labelSet, topeMap) {
@@ -167,7 +180,7 @@ function DeltaSpan({ delta, unidad, bueno, prevLbl }) {
   );
 }
 // Fila de alerta del bloque "Atención prioritaria". Clickeable → abre el drill-down (Tarea 2).
-function AlertRow({ a, onClick, abierto }) {
+function AlertRow({ a, onClick, abierto, seg }) {
   return (
     <div onClick={onClick} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 6px", borderTop: `1px solid ${C.faint}`, cursor: onClick ? "pointer" : "default", background: abierto ? "rgba(255,255,255,0.03)" : "transparent" }}>
       <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#F2953F", marginTop: 5, flex: "0 0 auto" }} />
@@ -176,6 +189,7 @@ function AlertRow({ a, onClick, abierto }) {
           {a.kind === "localidad" ? "📍 " : ""}{a.name} <span style={{ color: C.teal, fontWeight: 600 }}>· {a.accion}</span>
         </div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{a.motivo}</div>
+        {seg}
       </div>
       <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", marginLeft: 8 }}>{a.dato}</div>
       {onClick && <span style={{ color: C.teal, fontSize: 12, marginLeft: 4, flex: "0 0 auto" }}>{abierto ? "▾" : "▸"}</span>}
@@ -272,6 +286,7 @@ export default function Analisis({ semanas }) {
   const [jerNodos, setJerNodos] = useState(() => new Set()); // acordeón: qué regiones/zonas están abiertas
   const [zonasErr, setZonasErr] = useState("");
   const [informes, setInformes] = useState(null); // null=cargando, []=sin informes
+  const [seguim, setSeguim] = useState(null); // seguimiento de decisiones (marcas "hecho"); null=cargando
 
   useEffect(() => {
     let alive = true;
@@ -300,6 +315,10 @@ export default function Analisis({ semanas }) {
         const inf = await sbGet("analista_informes?select=id,fecha,tipo,resumen_tg,informe_md,hay_novedad,created_at&order=created_at.desc&limit=30");
         if (alive) setInformes(Array.isArray(inf) ? inf : []);
       } catch (e) { if (alive) setInformes([]); }
+      try {
+        const sg = await sbGet("decisiones_seguimiento?select=id,fecha,nombre,kind,tipo,sla_al_marcar&order=created_at.desc&limit=500");
+        if (alive) setSeguim(Array.isArray(sg) ? sg : []);
+      } catch (e) { if (alive) setSeguim([]); }
     })();
     return () => { alive = false; };
   }, []);
@@ -670,21 +689,22 @@ export default function Analisis({ semanas }) {
       const s = semanas.find((x) => x.label === periodW);
       if (!s) return { modo: "día", datos: [] };
       return { modo: "día", datos: s.dias.map((dia) => {
-        let cant = 0, ml = 0, dm = 0, d2 = 0;
-        for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); }
-        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, sla: slaMeli(ml, dm, d2) };
+        let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, pend = 0;
+        for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); pend += m.pendientes; }
+        const ent = cant - pend;
+        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null };
       }) };
     }
     if (periodo.t === "ult4") {
-      return { modo: "semana", datos: completas.slice(-4).map((l) => { const a = aggWeeks(semanas, new Set([l]), topeMap); return { name: fmtSemLabel(l), cant: a.g.cant, sla: a.g.sla }; }) };
+      return { modo: "semana", datos: completas.slice(-4).map((l) => { const a = aggWeeks(semanas, new Set([l]), topeMap); return { name: fmtSemLabel(l), cant: a.g.cant, sla: a.g.sla, p21r: a.g.entregados > 0 ? a.g.p21rate * 100 : null }; }) };
     }
     const byMonth = {};
     semanas.forEach((s) => s.dias.forEach((dia) => {
       const mk = dia.fecha.slice(0, 7);
-      const g = byMonth[mk] || (byMonth[mk] = { cant: 0, ml: 0, dm: 0, d2: 0 });
-      for (const m of dia.datos) { g.cant += m.cantidad; g.ml += m.envios_ml; g.dm += m.demorados; g.d2 += (m.dem21 || 0); }
+      const g = byMonth[mk] || (byMonth[mk] = { cant: 0, ml: 0, dm: 0, d2: 0, p21: 0, pend: 0 });
+      for (const m of dia.datos) { g.cant += m.cantidad; g.ml += m.envios_ml; g.dm += m.demorados; g.d2 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.pend += m.pendientes; }
     }));
-    return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, sla: slaMeli(g.ml, g.dm, g.d2) }; }) };
+    return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); const ent = g.cant - g.pend; return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, sla: slaMeli(g.ml, g.dm, g.d2), p21r: ent > 0 ? g.p21 / ent * 100 : null }; }) };
   }, [periodo.t, periodW, completas, semanas, topeMap]);
 
   // Titular del gráfico de volumen: el pico del período contado como historia ("⬆ viernes 25/07 · 1.820 envíos").
@@ -729,6 +749,8 @@ export default function Analisis({ semanas }) {
   // KPIs deltas
   const dVol = (prev && (!parcialActual || enCursoActual)) ? cur.g.cant - prev.g.cant : null;
   const dSla = (prev && cur.g.sla != null && prev.g.sla != null) ? cur.g.sla - prev.g.sla : null;
+  const dPend = (prev && (!parcialActual || enCursoActual)) ? cur.g.pend - prev.g.pend : null;
+  const dP21 = (prev && cur.g.entregados > 0 && prev.g.entregados > 0) ? (cur.g.p21rate - prev.g.p21rate) * 100 : null;
 
   const periodDesc = periodo.t === "sem" ? "Semana del " + fmtSemLabel(periodW) + (enCursoActual ? " (en curso)" : parcialActual ? " (parcial)" : "")
     : periodo.t === "ult4" ? "Últimas 4 semanas completas"
@@ -937,6 +959,40 @@ export default function Analisis({ semanas }) {
       </div>
     );
   };
+  // ---- Seguimiento de decisiones: marcar "hecho" cierra el loop decidir → actuar → ¿mejoró? ----
+  const marcar = async (a) => {
+    try {
+      const rows = await sbWrite("decisiones_seguimiento", "POST", { nombre: a.name, kind: a.kind, tipo: a.tipo, dato: a.dato, sla_al_marcar: a.c ? a.c.sla : (a.z ? a.z.sla : null) });
+      if (rows && rows.length) setSeguim((s) => [...rows, ...(s || [])]);
+    } catch (e) { /* best effort: sin conexión no rompe la pantalla */ }
+  };
+  const desmarcar = async (id) => {
+    try { await sbWrite(`decisiones_seguimiento?id=eq.${id}`, "DELETE"); setSeguim((s) => (s || []).filter((r) => r.id !== id)); } catch (e) { }
+  };
+  // Línea de seguimiento para una alerta: botón "✔ Hecho" / badge de hoy (con deshacer) / "hecho el DD/MM" + ¿mejoró?
+  const segNode = (a) => {
+    if (!seguim) return null;
+    const marks = seguim.filter((r) => r.nombre === a.name);
+    const last = marks[0];
+    const esHoy = last && last.fecha === hoyAR();
+    const slaNow = a.c ? a.c.sla : (a.z ? a.z.sla : null);
+    return (
+      <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
+        {esHoy ? (
+          <span onClick={() => desmarcar(last.id)} title="Tocá para deshacer" style={{ fontSize: 11, fontWeight: 700, color: C.teal, background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 999, padding: "2px 9px", cursor: "pointer" }}>✔ marcado hoy</span>
+        ) : (
+          <button onClick={() => marcar(a)} title="Marcar que ya lo hiciste (hablaste / redistribuiste / revisaste)" style={{ fontSize: 11, fontWeight: 700, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 999, padding: "2px 9px", cursor: "pointer" }}>✔ Hecho</button>
+        )}
+        {last && !esHoy && (
+          <span style={{ fontSize: 11, color: C.muted }}>
+            ✔ hecho el {fmtDDMM(last.fecha)}
+            {last.sla_al_marcar != null && slaNow != null ? <> · SLA {fmt1(last.sla_al_marcar)} → <b style={{ color: slaNow >= last.sla_al_marcar ? C.goodText : C.critText }}>{fmt1(slaNow)}% {slaNow >= last.sla_al_marcar ? "↑" : "↓"}</b></> : null}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   const toggleDrill = (kind, name, src) => setDrill((d) => (d && d.src === src && d.name === name && d.kind === kind) ? null : { kind, name, src });
   const isOpen = (kind, name, src) => !!drill && drill.src === src && drill.name === name && drill.kind === kind;
   const navDrill = (dir) => {
@@ -1039,6 +1095,8 @@ export default function Analisis({ semanas }) {
             open={verIncompletos}
             onClick={() => { setVerIncompletos(true); setJerNodos(new Set(["CABA", "Norte", "Oeste", "Sur"])); setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80); }} />
           <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
+          <Tile label="Pendientes" value={fmtInt(cur.g.pend)} dot={cur.g.pendRate >= 0.05 ? C.warn : null} sub={`${fmt1(cur.g.pendRate * 100)}% del total`} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="" bueno="down" prevLbl={prevLbl} /> : null} />
+          <Tile label="Post-21 (flota)" value={cur.g.entregados > 0 ? fmt1(cur.g.p21rate * 100) + "%" : "—"} dot={cur.g.p21rate >= CFG.tarde_post21 ? C.crit : cur.g.p21rate >= CFG.tarde_post21 / 2 ? C.warn : C.good} sub="de las entregas, después de las 21" delta={dP21 != null ? <DeltaSpan delta={dP21} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
         </div>
 
         {/* Regiones — la geografía primero: el problema suele empezar en una zona, no en una persona */}
@@ -1117,6 +1175,7 @@ export default function Analisis({ semanas }) {
                         <div style={{ fontSize: 13, fontWeight: 700 }}>{a.name} <span style={{ color: C.teal, fontWeight: 600 }}>· {a.accion}</span>{urgente && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: C.critText, background: "rgba(229,96,77,0.16)", borderRadius: 5, padding: "1px 6px" }}>MÁS URGENTE</span>}</div>
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{a.motivo}</div>
                         {enr && enr.accion && <div style={{ fontSize: 12, color: C.goodText, marginTop: 4, lineHeight: 1.45 }}>💡 Analista: {enr.accion}</div>}
+                        {segNode(a)}
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{a.dato}</div>
                       <span style={{ color: C.teal, fontSize: 12, marginLeft: 4, flex: "0 0 auto" }}>{abierto ? "▾" : "▸"}</span>
@@ -1132,7 +1191,7 @@ export default function Analisis({ semanas }) {
         {alertas.locs.length > 0 && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>📍 Localidades a vigilar</div>
-            {alertas.locs.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
+            {alertas.locs.map((a) => <AlertRow key={a.key} a={a} seg={segNode(a)} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
           </div>
         )}
 
@@ -1307,6 +1366,19 @@ export default function Analisis({ semanas }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>Post-21 por {tendData.modo}</div>
+          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>% de entregas después de las 21 — ¿la operación se está corriendo a la noche? La punteada es el umbral de "tarde" ({CFG.tarde_post21 * 100}%).</div>
+          <ResponsiveContainer width="100%" height={190}>
+            <LineChart data={tendData.datos.filter((d) => d.p21r != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" axisLine={{ stroke: C.faint }} tickLine={false} />
+              <YAxis domain={[0, "auto"]} tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ stroke: C.border }} contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt1(v) + "%", "Post-21"]} labelStyle={{ color: C.muted }} />
+              <ReferenceLine y={CFG.tarde_post21 * 100} stroke={C.warn} strokeOpacity={0.5} strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="p21r" stroke={C.warn} strokeWidth={2.5} dot={{ r: 2.5, fill: C.warn }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* === 4 · Patrones (reincidentes — reemplaza las tarjetas masivas de Mensual) === */}
@@ -1440,6 +1512,7 @@ export default function Analisis({ semanas }) {
           <p>Semanas con * son parciales (&lt;5 días); en parciales no se compara volumen, solo tasas.</p>
           <p>SLA por localidad: tabla semanas_zonas (localidad del Excel de LightData, se captura desde el 24/07 sin histórico hacia atrás). "Zona op." = zona operativa derivada con el mapeo tolerante de la pestaña Zonas (contra zonas_cp); sin cruce único queda "—". Localidades con &lt;{CFG.zonaMin} envíos van agrupadas como "muestra chica" (desplegable) y no se marcan críticas. Rojo = ≥{CFG.zonaMin} envíos y Δ ≤ −1 pp.</p>
           <p>Regiones (tarjetas del resumen): mismas sumas que la jerarquía Región → Zona → Localidad de abajo; la flecha compara contra el período anterior (↑/↓ = ±{CFG.regionFlecha} pp · ↓↓ = caída ≥{CFG.regionFlecha2} pp; sin flecha = sin datos comparables). La carga vs tope real de cada cadete se ve en su drill-down y en el chip "sobre tope" del ranking.</p>
+          <p>KPIs: "Pendientes" = sin entregar del período (% sobre el total); "Post-21 (flota)" = entregas después de las 21 sobre entregados (puntito rojo si ≥{CFG.tarde_post21 * 100}%). Seguimiento: el botón "✔ Hecho" de una alerta guarda la fecha y el SLA del momento en <code>decisiones_seguimiento</code>; cuando la alerta reaparece, muestra "hecho el DD/MM · SLA antes → ahora" para ver si la acción funcionó.</p>
           <p>Decisiones de la semana: score = severidad (crítico 3 · caída 2 · al límite/tarde/repro21 1) × peso por volumen (ML del cadete/localidad ÷ mediana de ML) × recurrencia (días afectados ÷ días del período). "Requieren atención: N" = alertas mostradas (máx {CFG.alertasMax}). Los verbos ("hablar hoy" vs "revisar") dependen de si el período es la semana en curso.</p>
         </div>
       </details>
