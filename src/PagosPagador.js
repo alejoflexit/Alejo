@@ -303,16 +303,19 @@ export default function PagosPagador({ tarifas }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {filasFiltradas.map(f => {
-              const chipColor = f.factura ? BRAND.teal : BRAND.amber;
-              const chipBg = f.factura ? 'rgba(46,207,170,0.10)' : 'rgba(255,176,32,0.10)';
               const sinFactura = faltaFactura(f); // transferencia confirmada que todavía no mandó factura
               return (
                 <div key={f.id} style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : sinFactura ? 'rgba(255,176,32,0.4)' : BRAND.border }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, color: chipColor, background: chipBg, border: `1px solid ${chipColor}33`, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                      {f.factura ? 'Factura' : 'Efectivo'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    {/* Método de pago (cómo se le paga) — badge neutro */}
+                    <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 10.5, fontWeight: 600, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'rgba(255,255,255,0.06)', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                      {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
                     </span>
-                    {sinFactura && <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', border: '1px solid rgba(255,176,32,0.4)' }}>FALTA FACTURA</span>}
+                    {/* Estado de la factura (requisito, separado del método) — solo transferencia */}
+                    {f.factura && (f.facturaOk
+                      ? <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.teal, background: 'rgba(46,207,170,0.12)', border: '1px solid rgba(46,207,170,0.4)', whiteSpace: 'nowrap' }}>✅ Factura recibida</span>
+                      : <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', border: '1px solid rgba(255,176,32,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
+                    )}
                     <span style={{ fontWeight: 700, fontSize: 15, minWidth: 130, textDecoration: f.pagado ? 'line-through' : 'none' }}>{f.nombre}</span>
                     <span style={{ marginLeft: 'auto', fontSize: 17, fontWeight: 800, color: f.pagado ? BRAND.muted : BRAND.white }}>{money(f.total)}</span>
                     {f.pagado ? (() => {
