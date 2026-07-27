@@ -21,6 +21,8 @@ const BRAND = {
   muted:    "rgba(255,255,255,0.62)",
   faint:    "rgba(255,255,255,0.06)",
   border:   "rgba(255,255,255,0.09)",
+  blue:     "#4C8DFF",
+  chipBg:   "rgba(255,255,255,0.06)",
 };
 
 // ───────────────────────── helpers ─────────────────────────
@@ -1304,7 +1306,7 @@ function PagosInner({ session }) {
 
   const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '1rem 1.1rem' };
   const inpSt = { padding: '6px 10px', fontSize: 13, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none' };
-  const btnPill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.teal : BRAND.border}`, background: active ? 'rgba(46,207,170,0.15)' : BRAND.faint, color: active ? BRAND.teal : BRAND.muted });
+  const btnPill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.blue : BRAND.border}`, background: active ? 'rgba(76,141,255,0.15)' : BRAND.faint, color: active ? BRAND.blue : BRAND.muted });
   const thSt = { padding: '10px 12px', position: 'sticky', top: 0, zIndex: 3, background: BRAND.navyCard }; // Tarea 6: header sticky
   const thNum = { ...thSt, textAlign: 'right' };
 
@@ -1322,7 +1324,6 @@ function PagosInner({ session }) {
   // La columna Ajuste solo se muestra si alguna fila visible tiene ajuste; el descuento se agrega desde el detalle del cadete
   const hayAjustes = filasVisibles.some(f => f.ajusteTotal);
   const nCols = hayAjustes ? 9 : 8; // Cadete,Cant,Precio,Monto,Colecta,[Ajuste],TOTAL,Método,Estado
-  const chipTeal = { fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: BRAND.teal, background: 'rgba(46,207,170,0.14)', whiteSpace: 'nowrap' };
 
   // Confirmar un chofer congela ESA fila sola (por fila, nunca delete masivo). No toca overrides,
   // ni pagado/pagado_via/factura_ok (si venía de un reabrir, se conservan). Guarda el rastro `auto`.
@@ -1485,14 +1486,14 @@ function PagosInner({ session }) {
                             <td style={{ padding: '9px 12px', fontWeight: 600 }}>{r.chofer}</td>
                             <td style={{ padding: '9px 12px', color: BRAND.muted }}>{r.cadete}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'right' }}>{r.cantidad}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.teal }}>{money(r.monto)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.white }}>{money(r.monto)}</td>
                           </tr>
                         ))}
                         <tr>
                           <td style={{ padding: '10px 12px', fontWeight: 700 }}>TOTAL</td>
                           <td />
                           <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>{totCant}</td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.teal }}>{money(totMonto)}</td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.white }}>{money(totMonto)}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -1513,11 +1514,7 @@ function PagosInner({ session }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
             <input type="date" value={fecha} onChange={e => { const v = e.target.value; setFecha(v); setSemanaLunes(mondayOf(v)); }} style={inpSt} />
-            <span style={{ fontSize: 13, color: BRAND.teal, fontWeight: 600 }}>{fmtSemanaLabel(semanaLunes)}</span>
-            <span style={{ fontSize: 12, color: BRAND.muted }}>
-              Confirmados <b style={{ color: BRAND.teal }}>{avance.confirmados}</b> de {avance.total}
-              {avance.faltaConfirmarMonto > 0 && <> · falta confirmar <b style={{ color: BRAND.amber }}>{money(avance.faltaConfirmarMonto)}</b></>}
-            </span>
+            <span style={{ fontSize: 13, color: BRAND.white, fontWeight: 600 }}>{fmtSemanaLabel(semanaLunes)}</span>
             {nEdiciones > 0 && (
               <span style={{ position: 'relative' }}>
                 <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades y colectas editadas a mano; se guardan en este navegador y en Supabase, y sobreviven a confirmar"
@@ -1571,14 +1568,38 @@ function PagosInner({ session }) {
                   <button key={k} onClick={() => setFiltroMetodo(k)} style={btnPill(filtroMetodo === k)}>{l}</button>
                 ))}
               </div>
-              {/* Subtotales como tarjetas de métrica */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-                {[['TOTAL', subtotales.total, BRAND.white], ['Transferencia', subtotales.transferencia, BRAND.teal], ['Efectivo', subtotales.efectivo, BRAND.amber]].map(([lbl, val, color]) => (
-                  <div key={lbl} style={{ ...cardSt, padding: '12px 14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
-                    <div style={{ fontSize: 19, fontWeight: 800, color }}>{money(val)}</div>
-                  </div>
-                ))}
+              {/* KPIs ejecutivos — números en blanco, sin verde de fondo */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 12 }}>
+                {(() => {
+                  const nTransf = filasEfectivas.filter(f => f.factura).length;
+                  const nEfec = filasEfectivas.length - nTransf;
+                  const pctT = subtotales.total ? Math.round(subtotales.transferencia / subtotales.total * 100) : 0;
+                  const pctE = subtotales.total ? Math.round(subtotales.efectivo / subtotales.total * 100) : 0;
+                  const pend = Math.max(0, avance.total - avance.confirmados);
+                  const kpi = (lbl, val, sub, subColor) => (
+                    <div key={lbl} style={{ ...cardSt, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 10.5, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{lbl}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: BRAND.white, marginTop: 4 }}>{val}</div>
+                      {sub && <div style={{ fontSize: 11.5, color: subColor || BRAND.muted, marginTop: 2 }}>{sub}</div>}
+                    </div>
+                  );
+                  return [
+                    kpi('Liquidado', money(subtotales.total), `${filasEfectivas.length} cadetes`),
+                    kpi('Transferencia', money(subtotales.transferencia), `${nTransf} pagos · ${pctT}%`),
+                    kpi('Efectivo', money(subtotales.efectivo), `${nEfec} pagos · ${pctE}%`),
+                    kpi('Pendientes', pend, pend === 0 ? '✓ todo confirmado' : 'falta confirmar', pend === 0 ? BRAND.teal : BRAND.amber),
+                  ];
+                })()}
+              </div>
+              {/* Progreso de confirmación */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: BRAND.muted, marginBottom: 5 }}>
+                  <span>Confirmación de la semana</span>
+                  <span><b style={{ color: BRAND.white }}>{avance.confirmados}</b> / {avance.total}{avance.faltaConfirmarMonto > 0 ? ` · falta ${money(avance.faltaConfirmarMonto)}` : ''}</span>
+                </div>
+                <div style={{ height: 8, borderRadius: 20, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                  <div style={{ width: `${avance.total ? Math.round(avance.confirmados / avance.total * 100) : 0}%`, height: '100%', borderRadius: 20, background: BRAND.teal, transition: 'width 0.3s' }} />
+                </div>
               </div>
 
               {/* Tabla principal */}
@@ -1657,40 +1678,44 @@ function PagosInner({ session }) {
                                 {f.ajusteTotal ? <span style={{ color: BRAND.red, textDecoration: 'underline dotted' }}>{money(-f.ajusteTotal)}</span> : null}
                               </td>
                             )}
-                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 800, color: BRAND.teal }}>{money(f.total)}</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.white }}>{money(f.total)}</td>
                             <td style={{ padding: '8px 12px' }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, color: f.factura ? BRAND.teal : BRAND.amber, background: f.factura ? 'rgba(46,207,170,0.12)' : 'rgba(255,176,32,0.12)' }}>
-                                {f.factura ? 'Transferencia' : 'Efectivo'}
+                              <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, color: BRAND.muted, background: BRAND.chipBg, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                                {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
                               </span>
                               <button onClick={e => { e.stopPropagation(); copiarMensaje(f); }}
                                 title={'copiar mensaje para el cadete: "Hola ..., esta semana me figuran X envíos y $Y de colecta"'}
-                                style={{ marginLeft: 6, fontSize: 14, padding: '4px 8px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
-                                {copiadoKey === f.key ? '✓ copiado' : '💬'}
+                                style={{ marginLeft: 6, fontSize: 14, padding: '4px 7px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
+                                {copiadoKey === f.key ? '✓' : '💬'}
                               </button>
-                              {(() => { const av = avisados.has(norm(f.nombre)); return (
-                                <button onClick={e => { e.stopPropagation(); toggleAviso(f); }}
-                                  title={av ? 'ya le avisaste — tocá para desmarcar' : 'marcá que ya le mandaste el mensaje al chofer'}
-                                  style={{ marginLeft: 4, fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 20, cursor: 'pointer', border: `1px solid ${av ? BRAND.teal : BRAND.border}`, background: av ? 'rgba(46,207,170,0.12)' : 'transparent', color: av ? BRAND.teal : BRAND.muted }}>
-                                  {av ? '✓ avisado' : 'avisar'}
-                                </button>
-                              ); })()}
                               {f.modo === 'cp' && (
-                                <button onClick={() => setExpandido(open ? null : f.key)} style={{ marginLeft: 8, fontSize: 11, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>detalle</button>
+                                <button onClick={() => setExpandido(open ? null : f.key)} title="ver detalle por CP" style={{ marginLeft: 2, fontSize: 13, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>👁</button>
                               )}
                             </td>
                             <td style={{ padding: '8px 12px' }}>
-                              {(!cierre || cierre.estado === 'borrador') ? (
-                                <button disabled={busyAccion} onClick={() => confirmarChofer(f, cierre)}
-                                  style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
-                              ) : cierre.pagado ? (
-                                <span title="ya se pagó — no se puede reabrir" style={chipTeal}>Pagado{({ galicia: ' · Galicia', mercadopago: ' · Mercado Pago' })[cierre.pagado_via] || ''}</span>
-                              ) : (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                  <span style={chipTeal}>Confirmado</span>
-                                  <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="volver a editar (mientras no esté pagado)"
-                                    style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>reabrir</button>
-                                </span>
-                              )}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                                {(!cierre || cierre.estado === 'borrador') ? (
+                                  <button disabled={busyAccion} onClick={() => confirmarChofer(f, cierre)}
+                                    style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
+                                ) : cierre.pagado ? (
+                                  <span title="ya se pagó — no se puede reabrir" style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: '#0d1b2a', background: BRAND.teal, whiteSpace: 'nowrap' }}>✓ Pagado{({ galicia: ' · Galicia', mercadopago: ' · Mercado Pago' })[cierre.pagado_via] || ''}</span>
+                                ) : (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: BRAND.teal, background: BRAND.chipBg, border: '1px solid rgba(46,207,170,0.45)', whiteSpace: 'nowrap' }}>✓ Confirmado</span>
+                                    <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="reabrir para editar (mientras no esté pagado)"
+                                      style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 6px', lineHeight: 1.4 }}>↺</button>
+                                  </span>
+                                )}
+                                {(() => { const av = avisados.has(norm(f.nombre)); return (
+                                  <button onClick={e => { e.stopPropagation(); toggleAviso(f); }} title={av ? 'ya le avisaste — tocá para desmarcar' : 'marcá que ya le mandaste el mensaje al chofer'}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11, color: av ? BRAND.teal : BRAND.muted }}>
+                                    <span style={{ width: 26, height: 15, borderRadius: 20, background: av ? BRAND.teal : 'rgba(255,255,255,0.15)', position: 'relative', display: 'inline-block', transition: 'background .2s' }}>
+                                      <span style={{ position: 'absolute', top: 2, left: av ? 13 : 2, width: 11, height: 11, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
+                                    </span>
+                                    Avisado
+                                  </button>
+                                ); })()}
+                              </div>
                             </td>
                           </tr>
                           {open && (
@@ -1733,7 +1758,7 @@ function PagosInner({ session }) {
                                             </div>
                                           </div>
                                         ))}
-                                        <div style={{ fontSize: 12, color: BRAND.muted }}>Total: <b style={{ color: BRAND.white, fontSize: 14 }}>{totalEnv}</b> env · <b style={{ color: BRAND.teal, fontSize: 14 }}>{money(f.monto)}</b></div>
+                                        <div style={{ fontSize: 12, color: BRAND.muted }}>Total: <b style={{ color: BRAND.white, fontSize: 14 }}>{totalEnv}</b> env · <b style={{ color: BRAND.white, fontSize: 14 }}>{money(f.monto)}</b></div>
                                         {editadoSplit && <button onClick={() => revertSplit(f)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>↩ volver al automático</button>}
                                       </div>
                                       <div style={{ fontSize: 10.5, color: BRAND.muted, marginTop: 6 }}>La base (qué CP es cada tarifa) se define en Config. Este ajuste vale solo para esta semana y se congela al cerrar.</div>
@@ -1774,7 +1799,7 @@ function PagosInner({ session }) {
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.monto)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.colecta)}</td>
                         {hayAjustes && <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.red }}>{totalesVisibles.ajuste ? money(-totalesVisibles.ajuste) : '—'}</td>}
-                        <td style={{ padding: '10px 12px', textAlign: 'right', color: BRAND.teal }}>{money(totalesVisibles.total)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: BRAND.white }}>{money(totalesVisibles.total)}</td>
                         <td></td>
                         <td></td>
                       </tr>
