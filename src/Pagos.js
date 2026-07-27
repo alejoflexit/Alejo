@@ -1326,6 +1326,8 @@ function PagosInner({ session }) {
   const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '1rem 1.1rem' };
   const inpSt = { padding: '6px 10px', fontSize: 13, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none' };
   const btnPill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.blue : BRAND.border}`, background: active ? 'rgba(76,141,255,0.15)' : BRAND.faint, color: active ? BRAND.blue : BRAND.muted });
+  // Botón del segmented control (Semana / Pagar): activo = fondo azul, inactivo = transparente.
+  const segBtn = (active) => ({ padding: '7px 18px', fontSize: 12.5, fontWeight: 700, border: 'none', borderRadius: 9, cursor: 'pointer', background: active ? BRAND.blue : 'transparent', color: active ? '#0d1b2a' : BRAND.muted });
   const thSt = { padding: '10px 12px', position: 'sticky', top: 0, zIndex: 3, background: BRAND.navyCard }; // Tarea 6: header sticky
   const thNum = { ...thSt, textAlign: 'right' };
 
@@ -1471,11 +1473,15 @@ function PagosInner({ session }) {
       <style>{`@keyframes pagos-spin{to{transform:rotate(360deg)}} .no-spin::-webkit-inner-spin-button,.no-spin::-webkit-outer-spin-button{-webkit-appearance:none;margin:0} .no-spin{-moz-appearance:textfield}`}</style>
       {/* Header interno + navegación tabla/config */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => setVista('tabla')} style={btnPill(vista === 'tabla')}>Semana</button>
-          <button onClick={() => setVista('colectas')} title="Resumen de lo que se paga por colectas (la gestión del día está en la sección Colectas del menú)" style={btnPill(vista === 'colectas')}>Resumen colectas</button>
-          {isAdmin && <button onClick={() => setVista('config')} style={btnPill(vista === 'config')}>Config de cadetes</button>}
-          {isAdmin && <button onClick={() => setVista('pagador')} style={btnPill(vista === 'pagador')}>Pagar</button>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Flujos principales: Semana / Pagar en un segmented control */}
+          <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.22)', border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 3 }}>
+            <button onClick={() => setVista('tabla')} style={segBtn(vista === 'tabla')}>Semana</button>
+            {isAdmin && <button onClick={() => setVista('pagador')} style={segBtn(vista === 'pagador')}>Pagar</button>}
+          </div>
+          {/* Secundarios: Colectas (referencia) y Config (engranaje) */}
+          <button onClick={() => setVista('colectas')} title="Resumen de lo que se paga por colectas (la gestión del día está en la sección Colectas del menú)" style={{ background: 'none', border: 'none', color: vista === 'colectas' ? BRAND.blue : BRAND.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 8px', borderRadius: 8 }}>📋 Colectas</button>
+          {isAdmin && <button onClick={() => setVista('config')} title="Config de cadetes" style={{ width: 34, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: `1px solid ${vista === 'config' ? BRAND.blue : BRAND.border}`, background: vista === 'config' ? 'rgba(76,141,255,0.12)' : BRAND.faint, color: vista === 'config' ? BRAND.blue : BRAND.muted, cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>⚙</button>}
         </div>
         <div style={{ fontSize: 12, color: BRAND.muted }}>
           {session?.nombre} {isAdmin && <span style={{ color: BRAND.teal }}>(admin)</span>} · <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => { logout(); window.location.reload(); }}>Salir</span>
