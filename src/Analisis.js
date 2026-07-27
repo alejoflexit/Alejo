@@ -28,6 +28,7 @@ const CFG = {
   alertasMax: 5,        // máximo de alertas en "Atención prioritaria"
   regionFlecha: 0.5,    // pp de Δ vs período anterior para flecha ↑/↓ en las tarjetas de región
   regionFlecha2: 2,     // pp de caída para ↓↓ (región hundiéndose)
+  saturadoPct: 0.85,    // "saturado" = envíos/día ≥ 85% del tope real del cadete
   // Severidad por tipo de señal (spec: crítico 3 / caída 2 / al límite–tarde–repro21 1).
   sev: { critico: 3, caida: 2, limite: 1, tarde: 1, repro: 1, locCritico: 2, locCaida: 1 },
   // Diccionario de acciones. `hoy` se usa en la semana en curso; `otro` en "Últimas 4"/"Todo".
@@ -326,7 +327,6 @@ export default function Analisis({ semanas }) {
   const [chip, setChip] = useState(null); // filtro rápido del ranking: null | criticos | sobre | tarde | caida
   const [copiado, setCopiado] = useState(false);
   const [verAvanzadas, setVerAvanzadas] = useState(false); // ranking: columnas avanzadas ocultas por defecto
-  const [verTodaCarga, setVerTodaCarga] = useState(false); // barras de carga: top 10 por defecto
   const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
   const [verCapacidad, setVerCapacidad] = useState(false); // "Capacidad para redistribuir" colapsado por defecto
@@ -1264,45 +1264,43 @@ export default function Analisis({ semanas }) {
       </div>
       )}
 
-      {/* 3. ¿Quién está saturado? — barras de carga vs tope real + SLA al lado (reemplaza el scatter) */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>¿Quién está saturado? <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· envíos/día vs tope real de cada cadete</span></h3>
+      {/* 3. ¿Quién está saturado? — SOLO excepciones: ≥85% del tope real o pasado. Sin nadie → una línea y listo. */}
+      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>¿Quién está saturado? <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· solo los que están al {fmt0(CFG.saturadoPct * 100)}% de su tope real o lo pasaron</span></h3>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
         {(() => {
-          const todos = cur.cads.filter((c) => c.cant >= 20 && c.dias > 0)
-            .sort((a, b) => (b.prom / (b.tope || CFG.tope)) - (a.prom / (a.tope || CFG.tope)));
-          if (!todos.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>Sin cadetes con volumen suficiente en el período.</div>;
-          const lista = verTodaCarga ? todos : todos.slice(0, 10);
+          const conVol = cur.cads.filter((c) => c.cant >= 20 && c.dias > 0);
+          const ratio = (c) => c.prom / (c.tope || CFG.tope);
+          const sat = conVol.filter((c) => ratio(c) >= CFG.saturadoPct).sort((a, b) => ratio(b) - ratio(a));
+          if (!sat.length) {
+            const top = conVol.length ? conVol.reduce((a, b) => (ratio(b) > ratio(a) ? b : a), conVol[0]) : null;
+            return (
+              <div style={{ color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
+                Nadie está cerca de su tope en este período. 👏
+                {top && <span> El más cargado es <b style={{ color: C.ink }}>{top.name}</b> al {fmt0(ratio(top) * 100)}% ({fmt1(top.prom)}/{top.tope || CFG.tope} por día).</span>}
+              </div>
+            );
+          }
           return (
             <>
-              <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Barra llena = al tope (el real de cada uno, de <code>cadete_topes</code>). Ordenado del más cargado al menos. El SLA de la derecha dice si además viene entregando bien: barra roja + SLA rojo = sacarle carga ya. Tocá una fila para el detalle.</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 2px 4px", fontSize: 10, color: C.muted, fontWeight: 600 }}>
-                <span style={{ flex: `0 0 ${isMobile ? 96 : 130}px` }}>Cadete</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ flex: "0 0 84px", textAlign: "right" }}>env/día / tope</span>
-                <span style={{ flex: "0 0 64px", textAlign: "right" }}>SLA</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {lista.map((c) => {
+              <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Barra llena = al tope (el real de cada uno, de <code>cadete_topes</code>). Roja = lo pasó. El SLA de la derecha dice si además viene entregando bien: barra roja + SLA rojo = sacarle carga ya. Tocá una fila para el detalle.</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {sat.map((c) => {
                   const tope = c.tope || CFG.tope;
-                  const pct = Math.min(100, c.prom / tope * 100);
-                  const colorBar = c.prom >= tope ? C.crit : c.prom >= CFG.sobrecarga ? C.warn : C.teal;
+                  const pct = Math.min(100, ratio(c) * 100);
+                  const sobre = ratio(c) >= 1;
                   return (
-                    <div key={c.name} onClick={() => toggleDrill("cadete", c.name, "carga")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "2px 2px", background: isOpen("cadete", c.name, "carga") ? "rgba(46,207,170,0.08)" : "transparent", borderRadius: 6 }}>
+                    <div key={c.name} onClick={() => toggleDrill("cadete", c.name, "carga")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "2px 2px", background: isOpen("cadete", c.name, "carga") ? "rgba(46,207,170,0.08)" : "transparent", borderRadius: 6, flexWrap: isMobile ? "wrap" : "nowrap" }}>
                       <span style={{ flex: `0 0 ${isMobile ? 96 : 130}px`, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                      <div style={{ flex: 1, height: 14, borderRadius: 7, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
-                        <div style={{ width: pct.toFixed(1) + "%", height: "100%", borderRadius: 7, background: colorBar }} />
+                      <div style={{ flex: 1, minWidth: 90, height: 14, borderRadius: 7, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
+                        <div style={{ width: pct.toFixed(1) + "%", height: "100%", borderRadius: 7, background: sobre ? C.crit : C.warn }} />
                       </div>
-                      <span style={{ flex: "0 0 84px", fontSize: 11.5, color: c.prom >= tope ? C.critText : C.muted, textAlign: "right", whiteSpace: "nowrap" }}>{fmt1(c.prom)} / {tope}</span>
+                      <span style={{ flex: "0 0 84px", fontSize: 11.5, color: sobre ? C.critText : C.muted, textAlign: "right", whiteSpace: "nowrap" }}>{fmt1(c.prom)} / {tope}</span>
+                      <span style={{ flex: "0 0 130px", fontSize: 11, color: c.diasSobreTope > 0 ? C.critText : C.muted, textAlign: "right", whiteSpace: "nowrap" }}>{c.diasSobreTope > 0 ? `${c.diasSobreTope} de ${c.dias} días sobre tope` : `${fmt0(ratio(c) * 100)}% del tope`}</span>
                       <span style={{ flex: "0 0 64px", fontSize: 12, fontWeight: 700, color: slaColor(c.sla), textAlign: "right", whiteSpace: "nowrap" }}>{c.sla != null ? fmt1(c.sla) + "%" : "—"}</span>
                     </div>
                   );
                 })}
               </div>
-              {todos.length > 10 && (
-                <div onClick={() => setVerTodaCarga((v) => !v)} style={{ marginTop: 8, fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600 }}>
-                  {verTodaCarga ? "▾ ver solo los 10 más cargados" : `▸ ver todos (${todos.length})`}
-                </div>
-              )}
             </>
           );
         })()}
@@ -1484,7 +1482,7 @@ export default function Analisis({ semanas }) {
           <p>Sugerencias (umbrales calibrables): SLA crítico &lt;{CFG.slaCritico}% con ≥{CFG.minML} ML · "termina tarde" = ≥{CFG.tarde_post21 * 100}% post 21 o fin ≥ {fmtHora(CFG.tarde_fin)} (con ≥{CFG.minEntregados} entregas) · "repro 21 recurrente" = ≥{CFG.repro21_min} en ≥{CFG.repro21_frec * 100}% de los días · "cerca del tope" = ≥{CFG.sobrecarga} env/día (tope {CFG.tope}) · caída/mejora = ±{CFG.deltaSla} pp.</p>
           <p>Semanas con * son parciales (&lt;5 días); en parciales no se compara volumen, solo tasas.</p>
           <p>SLA por localidad: tabla semanas_zonas (localidad del Excel de LightData, se captura desde el 24/07 sin histórico hacia atrás). "Zona op." = zona operativa derivada con el mapeo tolerante de la pestaña Zonas (contra zonas_cp); sin cruce único queda "—". Localidades con &lt;{CFG.zonaMin} envíos van agrupadas como "muestra chica" (desplegable) y no se marcan críticas. Rojo = ≥{CFG.zonaMin} envíos y Δ ≤ −1 pp.</p>
-          <p>Regiones (tarjetas del resumen): mismas sumas que la jerarquía Región → Zona → Localidad de abajo; la flecha compara contra el período anterior (↑/↓ = ±{CFG.regionFlecha} pp · ↓↓ = caída ≥{CFG.regionFlecha2} pp; sin flecha = sin datos comparables). "¿Quién está saturado?": barra = envíos/día vs el tope real de <code>cadete_topes</code> (roja = al tope · amarilla = ≥{CFG.sobrecarga}/día).</p>
+          <p>Regiones (tarjetas del resumen): mismas sumas que la jerarquía Región → Zona → Localidad de abajo; la flecha compara contra el período anterior (↑/↓ = ±{CFG.regionFlecha} pp · ↓↓ = caída ≥{CFG.regionFlecha2} pp; sin flecha = sin datos comparables). "¿Quién está saturado?": solo excepciones — cadetes con envíos/día ≥{fmt0(CFG.saturadoPct * 100)}% de su tope real de <code>cadete_topes</code> (barra roja = lo pasó · amarilla = cerca); sin nadie, se dice y listo.</p>
           <p>Decisiones de la semana: score = severidad (crítico 3 · caída 2 · al límite/tarde/repro21 1) × peso por volumen (ML del cadete/localidad ÷ mediana de ML) × recurrencia (días afectados ÷ días del período). "Requieren atención: N" = alertas mostradas (máx {CFG.alertasMax}). Los verbos ("hablar hoy" vs "revisar") dependen de si el período es la semana en curso.</p>
         </div>
       </details>
