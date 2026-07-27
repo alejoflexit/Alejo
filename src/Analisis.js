@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ScatterChart, Scatter, ReferenceLine, Cell,
+  ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
 
 // Pestaña "Análisis" — port del prototipo prototipos/panel-analisis.html a React.
@@ -26,6 +26,8 @@ const CFG = {
   zonaMin: 50,          // envíos mínimos para opinar de una zona (anti-ruido)
   // --- Decisiones de la semana (v2) ---
   alertasMax: 5,        // máximo de alertas en "Atención prioritaria"
+  regionFlecha: 0.5,    // pp de Δ vs período anterior para flecha ↑/↓ en las tarjetas de región
+  regionFlecha2: 2,     // pp de caída para ↓↓ (región hundiéndose)
   // Severidad por tipo de señal (spec: crítico 3 / caída 2 / al límite–tarde–repro21 1).
   sev: { critico: 3, caida: 2, limite: 1, tarde: 1, repro: 1, locCritico: 2, locCaida: 1 },
   // Diccionario de acciones. `hoy` se usa en la semana en curso; `otro` en "Últimas 4"/"Todo".
@@ -164,18 +166,6 @@ function DeltaSpan({ delta, unidad, bueno, prevLbl }) {
     </div>
   );
 }
-function CadTip({ active, payload }) {
-  if (!active || !payload || !payload.length) return null;
-  const p = payload[0].payload;
-  return (
-    <div style={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 12, color: C.ink }}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.name}</div>
-      <div style={{ color: C.muted }}>SLA <b style={{ color: C.ink }}>{p.sla != null ? fmt1(p.sla) + "%" : "—"}</b></div>
-      <div style={{ color: C.muted }}>Envíos/día <b style={{ color: C.ink }}>{fmt1(p.prom)}</b> · {fmtInt(p.cant)} en {p.dias} días</div>
-    </div>
-  );
-}
-
 // Fila de alerta del bloque "Atención prioritaria". Clickeable → abre el drill-down (Tarea 2).
 function AlertRow({ a, onClick, abierto }) {
   return (
@@ -335,6 +325,8 @@ export default function Analisis({ semanas }) {
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 640);
   const [chip, setChip] = useState(null); // filtro rápido del ranking: null | criticos | sobre | tarde | caida
   const [copiado, setCopiado] = useState(false);
+  const [verAvanzadas, setVerAvanzadas] = useState(false); // ranking: columnas avanzadas ocultas por defecto
+  const [verTodaCarga, setVerTodaCarga] = useState(false); // barras de carga: top 10 por defecto
   const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
   const [verCapacidad, setVerCapacidad] = useState(false); // "Capacidad para redistribuir" colapsado por defecto
@@ -591,6 +583,30 @@ export default function Analisis({ semanas }) {
     return { vacio: false, regiones: regionesArr, totalML, totalCant, locsSinZona, mlSinZona, nLoc, pctSinZona: totalML > 0 ? mlSinZona / totalML * 100 : 0, avisoDesde };
   }, [zonasRaw, weeks, periodLabels, regionMap, aliasMap, zonaNames, cur]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // SLA por región del período ANTERIOR (para la flecha de las tarjetas de región).
+  // Misma comparación que los KPIs: si la semana está en curso, contra los mismos N días de la semana anterior.
+  const prevRegiones = useMemo(() => {
+    if (!zonasRaw || !zonasRaw.length || !prevLabels) return null;
+    let fechasPrev;
+    if (enCursoActual && prevLabels.length === 1) {
+      const w = weeks.find((x) => x.label === prevLabels[0]);
+      fechasPrev = new Set(w ? w.fechas.slice(0, nCurDias) : []);
+    } else {
+      fechasPrev = new Set(weeks.filter((w) => prevLabels.includes(w.label)).flatMap((w) => w.fechas));
+    }
+    const map = {};
+    for (const r of zonasRaw) {
+      if (!fechasPrev.has(r.fecha)) continue;
+      const zona = r.zona_cp || zonaDe(r.localidad);
+      const region = !zona ? "Sin zona asignada" : (regionMap[zona] || "Sin clasificar");
+      const g = map[region] || (map[region] = { ml: 0, dm: 0, d2: 0 });
+      g.ml += r.envios_ml; g.dm += r.demorados; g.d2 += r.dem21;
+    }
+    const out = {};
+    for (const [k, g] of Object.entries(map)) out[k] = g.ml >= CFG.zonaMin ? slaMeli(g.ml, g.dm, g.d2) : null;
+    return out;
+  }, [zonasRaw, prevLabels, weeks, regionMap, enCursoActual, nCurDias]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
   const informeStd = useMemo(() => {
     if (!informes || !informes.length) return null;
@@ -657,7 +673,7 @@ export default function Analisis({ semanas }) {
       return { modo: "día", datos: s.dias.map((dia) => {
         let cant = 0, ml = 0, dm = 0, d2 = 0;
         for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); }
-        return { name: fmtDDMM(dia.fecha), cant, sla: slaMeli(ml, dm, d2) };
+        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, sla: slaMeli(ml, dm, d2) };
       }) };
     }
     if (periodo.t === "ult4") {
@@ -671,6 +687,21 @@ export default function Analisis({ semanas }) {
     }));
     return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, sla: slaMeli(g.ml, g.dm, g.d2) }; }) };
   }, [periodo.t, periodW, completas, semanas, topeMap]);
+
+  // Titular del gráfico de volumen: el pico del período contado como historia ("⬆ viernes 25/07 · 1.820 envíos").
+  const volHead = useMemo(() => {
+    const ds = tendData.datos || [];
+    if (ds.length < 2) return null;
+    const max = ds.reduce((a, b) => (b.cant > a.cant ? b : a), ds[0]);
+    const rest = ds.filter((d) => d !== max);
+    const avg = rest.length ? rest.reduce((a, d) => a + d.cant, 0) / rest.length : 0;
+    const pct = avg > 0 ? (max.cant / avg - 1) * 100 : null;
+    const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+    let lbl = max.name;
+    if (tendData.modo === "día" && max.fecha) lbl = DIAS[new Date(max.fecha + "T12:00:00").getDay()] + " " + max.name;
+    else if (tendData.modo === "semana") lbl = "semana del " + max.name;
+    return { lbl, cant: max.cant, pct };
+  }, [tendData]);
 
   // Patrones: reincidentes de demora (nunca "Sin asignar" ni basura — esos van a alertas operativas).
   const patrones = useMemo(() => {
@@ -713,7 +744,7 @@ export default function Analisis({ semanas }) {
     todo: minFecha ? `desde ${MES_FULL[+minFecha.split("-")[1] - 1]}` : "todo el histórico",
   };
   const tituloBloque = periodo.t === "sem" ? "Decisiones de esta semana" : periodo.t === "ult4" ? "Decisiones de las últimas 4 semanas" : "Patrones históricos";
-  const tituloAtender = periodo.t === "todo" ? "Casos históricos a revisar" : (enCursoActual ? "Atender hoy" : "A atender");
+  const tituloAtender = periodo.t === "todo" ? "Casos históricos a revisar" : (enCursoActual ? "Atención inmediata" : "A atender");
 
   const th = (key, label, right) => (
     <th onClick={() => doSort(key)} style={{ padding: "7px 8px", textAlign: right ? "right" : "left", cursor: "pointer", color: sortCol === key ? C.teal : C.muted, fontWeight: 600, fontSize: 11.5, whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, background: C.cardAlt }}>
@@ -1011,12 +1042,61 @@ export default function Analisis({ semanas }) {
           <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
         </div>
 
+        {/* Regiones — la geografía primero: el problema suele empezar en una zona, no en una persona */}
+        {jerarquia && !jerarquia.vacio && (() => {
+          const regs = jerarquia.regiones.filter((r) => !r.nombre.startsWith("Sin") && r.envios_ml > 0);
+          if (!regs.length) return null;
+          const sinML = jerarquia.regiones.filter((r) => r.nombre.startsWith("Sin")).reduce((a, r) => a + r.envios_ml, 0);
+          const flecha = (d) => d == null ? null
+            : d <= -CFG.regionFlecha2 ? { t: "↓↓", c: C.crit }
+              : d <= -CFG.regionFlecha ? { t: "↓", c: C.critText }
+                : d >= CFG.regionFlecha ? { t: "↑", c: C.goodText }
+                  : { t: "→", c: C.muted };
+          const abrirRegion = (nombre) => {
+            setVerIncompletos(true);
+            setJerNodos((s) => new Set([...s, nombre]));
+            setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
+          };
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>🗺️ Regiones</span>
+                <span style={{ fontSize: 11, color: C.muted }}>¿qué zona se está rompiendo? · tocá una región para el detalle</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                {regs.map((r) => {
+                  const pv = prevRegiones ? prevRegiones[r.nombre] : null;
+                  const d = (pv != null && r.sla != null) ? r.sla - pv : null;
+                  const f = flecha(d);
+                  return (
+                    <div key={r.nombre} onClick={() => abrirRegion(r.nombre)}
+                      style={{ flex: "1 1 125px", minWidth: 115, background: C.cardAlt, border: `1px solid ${C.border}`, borderLeft: `3px solid ${slaColor(r.sla)}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
+                      <div style={{ fontSize: 11.5, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: slaColor(r.sla), display: "inline-block", flex: "0 0 auto" }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nombre}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 3 }}>
+                        <span style={{ fontSize: 19, fontWeight: 700, color: slaColor(r.sla) }}>{r.sla != null ? fmt1(r.sla) + "%" : "—"}</span>
+                        {f && <span style={{ fontSize: 14, fontWeight: 700, color: f.c }}>{f.t}</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{fmtInt(r.envios_ml)} ML{d != null ? " · " + (d >= 0 ? "+" : "−") + fmt1(Math.abs(d)) + " pp" : ""}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              {sinML > 0 && jerarquia.pctSinZona >= 5 && (
+                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>+ {fmtInt(sinML)} envíos ML sin zona asignada — no entran en las tarjetas de región</div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Atender hoy — tarjetas por cadete, la más urgente resaltada */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: verAtender ? 8 : 0 }}>
             <div onClick={() => setVerAtender((v) => !v)} style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: 1, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ color: C.teal, fontSize: 12 }}>{verAtender ? "▾" : "▸"}</span>
-              <span>🟠 {tituloAtender} <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· {alertas.nCad} {alertas.nCad === 1 ? "cadete" : "cadetes"}{alertas.nLoc ? ` · ${alertas.nLoc} localidad${alertas.nLoc === 1 ? "" : "es"} a vigilar` : ""}</span></span>
+              <span>{enCursoActual ? "🔥" : "🟠"} {tituloAtender} <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· {alertas.nCad} {alertas.nCad === 1 ? "cadete" : "cadetes"}{alertas.nLoc ? ` · ${alertas.nLoc} localidad${alertas.nLoc === 1 ? "" : "es"} a vigilar` : ""}</span></span>
             </div>
             {verAtender && <button onClick={(e) => { e.stopPropagation(); copiar(); }} title="Copiar resumen para WhatsApp" style={{ background: copiado ? "rgba(46,207,170,0.16)" : C.cardAlt, border: `1px solid ${copiado ? C.teal : C.border}`, borderRadius: 8, color: copiado ? C.teal : C.muted, fontSize: 12, fontWeight: 600, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
               {copiado ? "✓ Copiado" : "💬 Copiar resumen"}
@@ -1048,6 +1128,14 @@ export default function Analisis({ semanas }) {
             </div>
           ))}
         </div>
+
+        {/* Localidades a vigilar — al lado de los cadetes críticos: son parte de las acciones, no del detalle */}
+        {alertas.locs.length > 0 && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>📍 Localidades a vigilar</div>
+            {alertas.locs.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
+          </div>
+        )}
 
         {/* Capacidad para redistribuir — cadetes confiables con lugar */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px" }}>
@@ -1120,6 +1208,12 @@ export default function Analisis({ semanas }) {
           </button>
         ))}
         {chip && <span style={{ fontSize: 11.5, color: C.muted, alignSelf: "center" }}>{rankingF.length} de {ranking.length}</span>}
+        {!isMobile && (
+          <button onClick={() => setVerAvanzadas((v) => !v)}
+            style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", borderRadius: 999, border: `1px solid ${verAvanzadas ? C.teal : C.border}`, background: verAvanzadas ? "rgba(46,207,170,0.14)" : "transparent", color: verAvanzadas ? C.teal : C.muted }}>
+            {verAvanzadas ? "− ocultar métricas avanzadas" : "⚙️ métricas avanzadas"}
+          </button>
+        )}
       </div>
       {isMobile ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
@@ -1140,9 +1234,13 @@ export default function Analisis({ semanas }) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {th("name", "Cadete")}{th("cant", "Envíos", 1)}{th("pctVol", "% vol.", 1)}{th("prom", "Prom/día", 1)}
-              {th("sla", "SLA", 1)}{th("delta", "Δ SLA", 1)}{th("dem", "Dem.", 1)}{th("d21", "Repro21", 1)}
-              {th("p21rate", "Post21", 1)}{th("pctSobreTope", "% >tope", 1)}{th("fin", "Fin prom.", 1)}
+              {th("name", "Cadete")}{th("cant", "Envíos", 1)}
+              {verAvanzadas && th("pctVol", "% vol.", 1)}{verAvanzadas && th("prom", "Prom/día", 1)}
+              {th("sla", "SLA", 1)}
+              {verAvanzadas && th("delta", "Δ SLA", 1)}{verAvanzadas && th("dem", "Dem.", 1)}{verAvanzadas && th("d21", "Repro21", 1)}
+              {th("p21rate", "Post21", 1)}
+              {verAvanzadas && th("pctSobreTope", "% >tope", 1)}
+              {th("fin", "Fin prom.", 1)}
             </tr>
           </thead>
           <tbody>
@@ -1150,14 +1248,14 @@ export default function Analisis({ semanas }) {
               <tr key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ borderBottom: `1px solid ${C.faint}`, cursor: "pointer", background: isOpen("cadete", c.name, "rank") ? "rgba(46,207,170,0.08)" : "transparent" }}>
                 <td style={{ padding: "6px 8px", fontWeight: 600 }}>{c.name}</td>
                 <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.cant)}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted }}>{fmt1(c.pctVol)}%</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt1(c.prom)}</td>
+                {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted }}>{fmt1(c.pctVol)}%</td>}
+                {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt1(c.prom)}</td>}
                 <td style={{ padding: "6px 8px", textAlign: "right", color: slaColor(c.sla), fontWeight: 600 }}>{c.sla != null ? slaIcon(c.sla) + " " + fmt1(c.sla) + "%" : "—"}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: c.delta == null ? C.muted : c.delta >= 0 ? C.goodText : C.critText }}>{c.delta == null ? "—" : (c.delta >= 0 ? "+" : "−") + fmt1(Math.abs(c.delta))}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.dem)}</td>
-                <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.d21)}</td>
+                {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right", color: c.delta == null ? C.muted : c.delta >= 0 ? C.goodText : C.critText }}>{c.delta == null ? "—" : (c.delta >= 0 ? "+" : "−") + fmt1(Math.abs(c.delta))}</td>}
+                {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.dem)}</td>}
+                {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmtInt(c.d21)}</td>}
                 <td style={{ padding: "6px 8px", textAlign: "right" }}>{fmt0(c.p21rate * 100)}%</td>
-                <td style={{ padding: "6px 8px", textAlign: "right", color: c.pctSobreTope >= 0.3 ? C.critText : C.muted }}>{fmt0(c.pctSobreTope * 100)}%</td>
+                {verAvanzadas && <td style={{ padding: "6px 8px", textAlign: "right", color: c.pctSobreTope >= 0.3 ? C.critText : C.muted }}>{fmt0(c.pctSobreTope * 100)}%</td>}
                 <td style={{ padding: "6px 8px", textAlign: "right", color: c.fin != null && c.fin >= CFG.tarde_fin ? C.critText : C.ink }}>{fmtHora(c.fin)}</td>
               </tr>
             ))}
@@ -1166,29 +1264,48 @@ export default function Analisis({ semanas }) {
       </div>
       )}
 
-      {/* 3. Carga por cadete — scatter */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Carga vs. SLA <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(cada punto es un cadete)</span></h3>
+      {/* 3. ¿Quién está saturado? — barras de carga vs tope real + SLA al lado (reemplaza el scatter) */}
+      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>¿Quién está saturado? <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· envíos/día vs tope real de cada cadete</span></h3>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Derecha = muchos paquetes por día. Abajo = SLA flojo. Abajo-derecha necesita que le saques carga; arriba-derecha es tu caballito de batalla. La línea vertical es un tope de referencia ({CFG.tope}/día); el tope real de cada cadete (de <code>cadete_topes</code>) se ve al tocarlo en el ranking.</div>
-        <ResponsiveContainer width="100%" height={300}>
-          <ScatterChart margin={{ top: 10, right: 16, left: -6, bottom: 16 }}>
-            <CartesianGrid stroke={C.faint} />
-            <XAxis type="number" dataKey="prom" name="Envíos/día" tick={{ fontSize: 9, fill: C.muted }} label={{ value: "envíos por día trabajado", position: "insideBottom", offset: -8, fontSize: 10, fill: C.muted }} />
-            <YAxis type="number" dataKey="sla" name="SLA" domain={[80, 100]} ticks={[80, 85, 90, 95, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
-            <Tooltip cursor={{ strokeDasharray: "3 3", stroke: C.border }} content={<CadTip />} />
-            <ReferenceLine y={98} stroke={C.good} strokeDasharray="3 3" />
-            <ReferenceLine y={95} stroke={C.warn} strokeDasharray="3 3" />
-            <ReferenceLine x={CFG.tope} stroke={C.muted} strokeDasharray="4 4" label={{ value: "tope ref.", position: "top", fontSize: 9, fill: C.muted }} />
-            <Scatter data={cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0)}>
-              {cur.cads.filter((c) => c.cant >= 20 && c.sla != null && c.dias > 0).map((p, i) => (
-                <Cell key={i} fill={p.sla < CFG.slaCritico ? C.crit : p.sla < CFG.slaOk ? C.warn : C.good} />
-              ))}
-            </Scatter>
-          </ScatterChart>
-        </ResponsiveContainer>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: C.muted, marginTop: 4 }}>
-          <span>✅ OK (≥98%)</span><span>⚠️ En riesgo (95–98%)</span><span>🔴 Crítico (&lt;95%)</span>
-        </div>
+        {(() => {
+          const todos = cur.cads.filter((c) => c.cant >= 20 && c.dias > 0)
+            .sort((a, b) => (b.prom / (b.tope || CFG.tope)) - (a.prom / (a.tope || CFG.tope)));
+          if (!todos.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>Sin cadetes con volumen suficiente en el período.</div>;
+          const lista = verTodaCarga ? todos : todos.slice(0, 10);
+          return (
+            <>
+              <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Barra llena = al tope (el real de cada uno, de <code>cadete_topes</code>). Ordenado del más cargado al menos. El SLA de la derecha dice si además viene entregando bien: barra roja + SLA rojo = sacarle carga ya. Tocá una fila para el detalle.</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 2px 4px", fontSize: 10, color: C.muted, fontWeight: 600 }}>
+                <span style={{ flex: `0 0 ${isMobile ? 96 : 130}px` }}>Cadete</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ flex: "0 0 84px", textAlign: "right" }}>env/día / tope</span>
+                <span style={{ flex: "0 0 64px", textAlign: "right" }}>SLA</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {lista.map((c) => {
+                  const tope = c.tope || CFG.tope;
+                  const pct = Math.min(100, c.prom / tope * 100);
+                  const colorBar = c.prom >= tope ? C.crit : c.prom >= CFG.sobrecarga ? C.warn : C.teal;
+                  return (
+                    <div key={c.name} onClick={() => toggleDrill("cadete", c.name, "carga")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "2px 2px", background: isOpen("cadete", c.name, "carga") ? "rgba(46,207,170,0.08)" : "transparent", borderRadius: 6 }}>
+                      <span style={{ flex: `0 0 ${isMobile ? 96 : 130}px`, fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                      <div style={{ flex: 1, height: 14, borderRadius: 7, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
+                        <div style={{ width: pct.toFixed(1) + "%", height: "100%", borderRadius: 7, background: colorBar }} />
+                      </div>
+                      <span style={{ flex: "0 0 84px", fontSize: 11.5, color: c.prom >= tope ? C.critText : C.muted, textAlign: "right", whiteSpace: "nowrap" }}>{fmt1(c.prom)} / {tope}</span>
+                      <span style={{ flex: "0 0 64px", fontSize: 12, fontWeight: 700, color: slaColor(c.sla), textAlign: "right", whiteSpace: "nowrap" }}>{c.sla != null ? fmt1(c.sla) + "%" : "—"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {todos.length > 10 && (
+                <div onClick={() => setVerTodaCarga((v) => !v)} style={{ marginTop: 8, fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600 }}>
+                  {verTodaCarga ? "▾ ver solo los 10 más cargados" : `▸ ver todos (${todos.length})`}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
@@ -1200,29 +1317,38 @@ export default function Analisis({ semanas }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 14, marginBottom: 22 }}>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>Volumen por {tendData.modo}</div>
-          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Envíos totales (ML + particulares).</div>
+          {volHead ? (
+            <div style={{ fontSize: 12, color: C.ink, marginBottom: 8 }}>
+              <span style={{ color: C.blue, fontWeight: 700 }}>⬆ pico:</span> <b>{volHead.lbl}</b> · {fmtInt(volHead.cant)} envíos
+              {volHead.pct != null && volHead.pct >= 1 ? <span style={{ color: C.muted }}> · +{fmt0(volHead.pct)}% vs el resto</span> : null}
+            </div>
+          ) : (
+            <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Envíos totales (ML + particulares).</div>
+          )}
           <ResponsiveContainer width="100%" height={190}>
             <BarChart data={tendData.datos} margin={{ top: 6, right: 8, left: -8, bottom: 0 }}>
               <CartesianGrid stroke={C.faint} vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v >= 1000 ? (v / 1000) + "k" : v} />
               <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmtInt(v), "Envíos"]} labelStyle={{ color: C.muted }} />
-              <Bar dataKey="cant" radius={[3, 3, 0, 0]} fill={C.teal} />
+              <Bar dataKey="cant" radius={[3, 3, 0, 0]}>
+                {tendData.datos.map((d, i) => (
+                  <Cell key={i} fill={volHead && d.cant === volHead.cant ? C.blue : C.teal} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>SLA Meli por {tendData.modo}</div>
-          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Escala fija 90–100; líneas de referencia en 95 y 98.</div>
+          <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 8 }}>Una línea. La punteada es el objetivo (98%).</div>
           <ResponsiveContainer width="100%" height={190}>
             <LineChart data={tendData.datos.filter((d) => d.sla != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
-              <CartesianGrid stroke={C.faint} vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" />
-              <YAxis domain={[90, 100]} ticks={[90, 95, 98, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} />
+              <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" axisLine={{ stroke: C.faint }} tickLine={false} />
+              <YAxis domain={[90, 100]} ticks={[90, 95, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt1(v) + "%", "SLA"]} labelStyle={{ color: C.muted }} />
-              <ReferenceLine y={98} stroke={C.good} strokeDasharray="3 3" />
-              <ReferenceLine y={95} stroke={C.warn} strokeDasharray="3 3" />
-              <Line type="monotone" dataKey="sla" stroke={C.teal} strokeWidth={2} dot={{ r: 3, fill: C.teal }} />
+              <ReferenceLine y={98} stroke={C.good} strokeOpacity={0.45} strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="sla" stroke={C.teal} strokeWidth={2.5} dot={{ r: 2.5, fill: C.teal }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1279,12 +1405,6 @@ export default function Analisis({ semanas }) {
         <div style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
           {informeStd.zonas && <div style={{ marginBottom: informeStd.vigilar ? 8 : 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>🗺️ Zonas (analista)</div><div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}><Markdown md={informeStd.zonas} /></div></div>}
           {informeStd.vigilar && <div><div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>👁️ A vigilar (analista)</div><div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}><Markdown md={informeStd.vigilar} /></div></div>}
-        </div>
-      )}
-      {alertas.locs.length > 0 && (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>📍 Localidades a vigilar</div>
-          {alertas.locs.map((a) => <AlertRow key={a.key} a={a} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
         </div>
       )}
       <h3 id="jer-sla" style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por región → zona → localidad <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
@@ -1364,6 +1484,7 @@ export default function Analisis({ semanas }) {
           <p>Sugerencias (umbrales calibrables): SLA crítico &lt;{CFG.slaCritico}% con ≥{CFG.minML} ML · "termina tarde" = ≥{CFG.tarde_post21 * 100}% post 21 o fin ≥ {fmtHora(CFG.tarde_fin)} (con ≥{CFG.minEntregados} entregas) · "repro 21 recurrente" = ≥{CFG.repro21_min} en ≥{CFG.repro21_frec * 100}% de los días · "cerca del tope" = ≥{CFG.sobrecarga} env/día (tope {CFG.tope}) · caída/mejora = ±{CFG.deltaSla} pp.</p>
           <p>Semanas con * son parciales (&lt;5 días); en parciales no se compara volumen, solo tasas.</p>
           <p>SLA por localidad: tabla semanas_zonas (localidad del Excel de LightData, se captura desde el 24/07 sin histórico hacia atrás). "Zona op." = zona operativa derivada con el mapeo tolerante de la pestaña Zonas (contra zonas_cp); sin cruce único queda "—". Localidades con &lt;{CFG.zonaMin} envíos van agrupadas como "muestra chica" (desplegable) y no se marcan críticas. Rojo = ≥{CFG.zonaMin} envíos y Δ ≤ −1 pp.</p>
+          <p>Regiones (tarjetas del resumen): mismas sumas que la jerarquía Región → Zona → Localidad de abajo; la flecha compara contra el período anterior (↑/↓ = ±{CFG.regionFlecha} pp · ↓↓ = caída ≥{CFG.regionFlecha2} pp; sin flecha = sin datos comparables). "¿Quién está saturado?": barra = envíos/día vs el tope real de <code>cadete_topes</code> (roja = al tope · amarilla = ≥{CFG.sobrecarga}/día).</p>
           <p>Decisiones de la semana: score = severidad (crítico 3 · caída 2 · al límite/tarde/repro21 1) × peso por volumen (ML del cadete/localidad ÷ mediana de ML) × recurrencia (días afectados ÷ días del período). "Requieren atención: N" = alertas mostradas (máx {CFG.alertasMax}). Los verbos ("hablar hoy" vs "revisar") dependen de si el período es la semana en curso.</p>
         </div>
       </details>
