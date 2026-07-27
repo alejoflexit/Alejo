@@ -53,11 +53,10 @@ function matchNombre(nl, nz) {
   return nz === nl || nz.includes(nl) || nl.includes(nz);
 }
 
-// Arma las vistas "Por zona" y "Territorios" desde un mapa zona -> {total, entregados}.
-// Lo usan tanto el modo EN VIVO (porZona del bridge) como el modo FOTO (por_zona del corte).
+// Arma la vista "Por zona" desde un mapa zona -> {total, entregados}. (La vista principal ahora es Recorridos.)
+// La usan tanto el modo EN VIVO (porZona del bridge) como el modo FOTO (por_zona del corte).
 function construirVistas(porZona, mapas) {
-  const { topeZona, zonaCadetes, topes } = mapas;
-  // vista POR ZONA
+  const { topeZona, zonaCadetes } = mapas;
   const conTope = [], sinTopeArr = [];
   for (const [zona, v] of Object.entries(porZona)) {
     const tope = topeZona.get(norm(zona));
@@ -70,45 +69,8 @@ function construirVistas(porZona, mapas) {
   }
   conTope.sort((a, b) => b.pct - a.pct);
   sinTopeArr.sort((a, b) => b.total - a.total);
-  // vista TERRITORIOS: grupo de zonas que se hace junto (cadete_topes.zonas). Zona en varios territorios → se reparte en partes iguales.
-  const terrMap = new Map();
-  for (const t of topes) {
-    if (!t.zonas) continue;
-    const lista = String(t.zonas).split(/[,/]/).map((z) => z.trim()).filter(Boolean);
-    if (!lista.length) continue;
-    const clave = lista.map(norm).sort().join("§");
-    const node = terrMap.get(clave) || { zonasList: lista, cadetes: [], tope: 0 };
-    node.cadetes.push(t.cadete);
-    node.tope += t.tope || 0;
-    terrMap.set(clave, node);
-  }
-  const cobertura = new Map();
-  for (const t of terrMap.values()) for (const z of t.zonasList) { const k = norm(z); cobertura.set(k, (cobertura.get(k) || 0) + 1); }
-  const volZona = new Map();
-  for (const [zona, v] of Object.entries(porZona)) volZona.set(norm(zona), v);
-  const terrArr = [];
-  for (const t of terrMap.values()) {
-    let total = 0, entregados = 0; const compartidas = [];
-    for (const z of t.zonasList) {
-      const k = norm(z), v = volZona.get(k), nCob = cobertura.get(k) || 1;
-      if (!v) continue;
-      total += v.total / nCob; entregados += v.entregados / nCob;
-      if (nCob > 1) compartidas.push(z);
-    }
-    if (total === 0 && t.tope === 0) continue;
-    const pct = t.tope ? total / t.tope : null;
-    terrArr.push({
-      nombre: t.zonasList.join(" + "),
-      zonasList: t.zonasList,
-      cadetes: t.cadetes,
-      total, entregados, tope: t.tope || null, pct,
-      estado: pct == null ? "sintope" : pct >= 1 ? "saturada" : pct >= UMBRAL_LIMITE ? "limite" : "ok",
-      notas: compartidas.length ? `${compartidas.join(", ")} repartida entre varios territorios` : "",
-    });
-  }
-  terrArr.sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1) || b.total - a.total);
   const asignados = Object.values(porZona).reduce((a, v) => a + v.total, 0);
-  return { conTope, sinTopeArr, terrArr, asignados };
+  return { conTope, sinTopeArr, asignados };
 }
 
 // ============ Calibrador de topes (spec-calibrador-topes, C1) ============
@@ -193,73 +155,58 @@ function calcularPropuestas(sem, topes, fleteros) {
   return { subir, lunes, revisar };
 }
 
-// ============ Copiloto de Zonas, fase 1 (spec-zonas-copiloto-fase1) ============
+// ============ Copiloto de Zonas (spec-zonas-copiloto-fase1 + spec-zonas-fijas) ============
 // Determinístico: reglas + umbrales acá, textos por plantilla con números reales. Sin Claude API.
+// El riesgo es por RECORRIDO contra su tope propio (el titular ya no existe como concepto).
 const COP = {
   altoUtil: 1.00,          // 🔴 carga ≥ 100% del tope
   medioUtil: 0.85,         // 🟡 carga ≥ 85% del tope
-  slaMalo: 95,             // titular con SLA < 95% en sus días de carga alta ⇒ agrava a ALTO
-  minDiasAltaSla: 3,       // ...si tiene ≥3 días de carga alta con ≥10 ML para que el SLA sea usable
-  sobrePromedio: 1.25,     // 🟡 sale con ≥25% más que su promedio histórico
-  minDiasProm: 8,          // ...con ≥8 días trabajados para tener promedio
-  cargaAltaPct: 0.90,      // "día de carga alta" del titular = carga ≥ 90% de SU tope (para el SLA)
   vecinoUtilMax: 0.60,     // vecino "libre" para redistribuir: utilización < 60%
   vecinoMargenMin: 10,     // ...y con al menos 10 de margen (tope − carga)
 };
-const r1 = (x) => Math.round(x * 10) / 10;
-// Histórico por cadete (21 días de semanas): promedio de envíos/día + SLA en sus días de carga alta.
-// Excluye fleteros y usuarios operativos (mismo criterio que el calibrador).
-function calcularHistorico(sem, topesArr, fleteros) {
-  const topeMap = new Map();
-  for (const t of topesArr) if (t.tope) topeMap.set(norm(t.cadete), t.tope);
-  const byCad = new Map();
-  for (const r of sem) {
-    const nombre = String(r.cadete || "");
-    if (CAL.operativos.some((re) => re.test(nombre.trim()))) continue;
-    const k = norm(nombre);
-    if (fleteros.has(k)) continue;
-    let c = byCad.get(k); if (!c) { c = { cargas: [], mlA: 0, demA: 0, d21A: 0, nAlta: 0 }; byCad.set(k, c); }
-    const carga = r.cantidad || 0, ml = r.envios_ml || 0;
-    c.cargas.push(carga);
-    const tope = topeMap.get(k);
-    if (tope && carga >= COP.cargaAltaPct * tope && ml >= CAL.minMlDia) { c.mlA += ml; c.demA += r.demorados || 0; c.d21A += r.dem21 || 0; c.nAlta += 1; }
-  }
-  const hist = new Map();
-  for (const [k, c] of byCad) {
-    const nDias = c.cargas.length;
-    hist.set(k, { promedio: nDias ? c.cargas.reduce((a, b) => a + b, 0) / nDias : 0, nDias, mlA: c.mlA, demA: c.demA, d21A: c.d21A, nDiasAlta: c.nAlta });
-  }
-  return hist;
-}
-// Región de un territorio = región dominante entre sus zonas (zonas_regiones).
-function regionDe(zonasList, regionZona) {
-  const c = {};
-  for (const z of zonasList || []) { const rg = regionZona.get(norm(z)); if (rg) c[rg] = (c[rg] || 0) + 1; }
-  const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
-  return top ? top[0] : null;
-}
-// Riesgo de un territorio (ya enriquecido con hist agregado del/los titular/es). Gana la primera regla.
-function riesgoTerr(t) {
+// Riesgo por RECORRIDO (spec-zonas-fijas): solo utilización contra su tope propio. Sin historial de titular.
+function riesgoReco(t) {
   const util = t.tope ? t.total / t.tope : null;
-  const utilPct = util != null ? Math.round(util * 100) : null;
-  const cargaTxt = `${Math.round(t.total)}/${t.tope} (${utilPct}% del tope)`;
-  const slaUsable = t.nDiasAlta >= COP.minDiasAltaSla && t.slaAlta != null;
-  if (!t.tope) return { nivel: "sindatos", util, razones: ["sin tope configurado — no se puede medir utilización"] };
+  if (!t.tope) return { nivel: "sindatos", util, razones: ["sin tope configurado"] };
+  const cargaTxt = `${Math.round(t.total)}/${t.tope} envíos (${Math.round(util * 100)}% del tope)`;
   if (util >= COP.altoUtil) return { nivel: "alto", util, razones: [cargaTxt] };
-  if (util >= COP.medioUtil && slaUsable && t.slaAlta < COP.slaMalo)
-    return { nivel: "alto", util, razones: [cargaTxt, `SLA del titular en días de carga alta: ${r1(t.slaAlta)}% (${t.nDiasAlta} días)`] };
   if (util >= COP.medioUtil) return { nivel: "medio", util, razones: [cargaTxt] };
-  if (t.conHist && t.promedioHist > 0 && t.total >= t.promedioHist * COP.sobrePromedio) {
-    const pct = Math.round((t.total / t.promedioHist - 1) * 100);
-    return { nivel: "medio", util, razones: [`titular promedia ${Math.round(t.promedioHist)}/día, hoy sale con ${Math.round(t.total)} (+${pct}%)`] };
+  return { nivel: "bajo", util, razones: [] };
+}
+// Arma las barras por recorrido desde un mapa zona -> {total, entregados}. Zona en N recorridos → reparto en partes iguales.
+// Devuelve las barras + las zonas con volumen que no caen en ningún recorrido activo (el agujero a vigilar).
+function construirRecorridos(porZona, mapas) {
+  const { recos, coberturaReco } = mapas;
+  const cubiertas = new Set();
+  const barras = recos.map((r) => {
+    let total = 0, entregados = 0;
+    for (const z of r.zonasList) {
+      const k = norm(z); cubiertas.add(k);
+      const v = porZona[z] || buscarZona(porZona, k); // porZona viene indexado por nombre exacto de zonas_cp
+      if (!v) continue;
+      const nCob = coberturaReco.get(k) || 1;      // zona en N recorridos → reparto en partes iguales
+      total += v.total / nCob; entregados += (v.entregados || 0) / nCob;
+    }
+    return { ...r, total, entregados };
+  });
+  const zonasSinRecorrido = [];
+  for (const [zona, v] of Object.entries(porZona)) {
+    if ((v.total || 0) <= 0) continue;
+    if (!cubiertas.has(norm(zona))) zonasSinRecorrido.push({ zona, total: v.total });
   }
-  if (t.conHist) return { nivel: "bajo", util, razones: [] };
-  return { nivel: "sindatos", util, razones: ["sin historial del titular para confirmar"] };
+  zonasSinRecorrido.sort((a, b) => b.total - a.total);
+  return { barras, zonasSinRecorrido };
+}
+// porZona está indexado por el nombre exacto de zona (igual que en zonas_cp); resolvemos por norm por las dudas.
+function buscarZona(porZona, k) {
+  for (const [zona, v] of Object.entries(porZona)) if (norm(zona) === k) return v;
+  return null;
 }
 
 export default function Zonas() {
-  const [vista, setVista] = useState("terr");     // "terr" (territorios = grupos de zonas) | "zona"
-  const [terrs, setTerrs] = useState(null);       // [{nombre, cadetes, total, entregados, tope, pct, estado, notas}]
+  const [vista, setVista] = useState("recorrido"); // "recorrido" (carrito por zona) | "zona"
+  const [recos, setRecos] = useState(null);        // barras por recorrido [{...recorrido, total, entregados}]
+  const [zonasSinReco, setZonasSinReco] = useState([]); // zonas con volumen sin recorrido activo (el agujero)
   const [zonas, setZonas] = useState(null);       // [{zona, total, entregados, tope, pct, estado, cadetes}]
   const [sinTope, setSinTope] = useState([]);     // zonas con envíos pero sin tope configurado
   const [meta, setMeta] = useState(null);
@@ -273,8 +220,7 @@ export default function Zonas() {
   const [fotoVacia, setFotoVacia] = useState(false);   // no hay ningún corte guardado todavía
   // Calibrador de topes (independiente del bridge; usa semanas + cadete_topes)
   const [propuestas, setPropuestas] = useState(null); // null=cargando, {subir,lunes,revisar}
-  const [histCadete, setHistCadete] = useState(null); // Map norm(cadete)->{promedio,nDias,...} (copiloto, misma consulta)
-  const [verVerdes, setVerVerdes] = useState(false);  // territorios 🟢 colapsados por defecto (spec-zonas-copiloto-fase1)
+  const [verVerdes, setVerVerdes] = useState(false);  // recorridos 🟢 colapsados por defecto
   const [verProp, setVerProp] = useState(false);      // bloque colapsado por defecto
   const [sesion] = useState(() => getSession());       // hay usuario logueado? (para el botón Aplicar)
   const [aplicando, setAplicando] = useState("");     // cadete que se está aplicando
@@ -284,13 +230,18 @@ export default function Zonas() {
   // Mapas (zonas_cp + cadete_topes) — una sola vez por visita, los usan el vivo y la foto.
   const cargarMapas = useCallback(async () => {
     if (refMapas.current) return refMapas.current;
-    const [zonasCP, topes, regiones] = await Promise.all([
+    const [zonasCP, topes, regiones, recorridos] = await Promise.all([
       supa("zonas_cp?select=cp,zona&limit=10000"),
       supa("cadete_topes?select=cadete,tope,zonas&activo=eq.true&limit=1000"),
       supa("zonas_regiones?select=zona,region&limit=1000").catch(() => []),
+      supa("recorridos?select=id,nombre,zonas,grupo,region,colecta,tope,chofer_ref&activo=eq.true&order=grupo.asc,nombre.asc&limit=1000").catch(() => []),
     ]);
     const regionZona = new Map(); // norm(zona) -> región (para la vecindad gruesa del copiloto)
     for (const z of (regiones || [])) regionZona.set(norm(z.zona), z.region);
+    // Recorridos (spec-zonas-fijas): la unidad de la pantalla. Zonas parseadas + cobertura (zona en N recorridos → reparto en partes iguales).
+    const recos = (recorridos || []).map((r) => ({ ...r, zonasList: String(r.zonas || "").split(/[,/]/).map((z) => z.trim()).filter(Boolean) }));
+    const coberturaReco = new Map(); // norm(zona) -> en cuántos recorridos activos está
+    for (const r of recos) for (const z of r.zonasList) { const k = norm(z); coberturaReco.set(k, (coberturaReco.get(k) || 0) + 1); }
     const cpZonas = new Map();      // cp (dígitos) -> [zona, zona…]  (48/515 CPs tienen varias)
     const todasZonas = new Set();
     for (const z of zonasCP) {
@@ -312,7 +263,9 @@ export default function Zonas() {
         zonaCadetes.set(k, [...(zonaCadetes.get(k) || []), t.cadete]);
       }
     }
-    refMapas.current = { cpZonas, topeZona, zonaCadetes, topes, todasZonas: [...todasZonas], regionZona };
+    // Etiquetas de recorrido que no existen en zonas_cp (lista de calidad de datos a): con el seed actual = ninguna.
+    const labelsSinMatch = [...new Set(recos.flatMap((r) => r.zonasList).filter((z) => !todasZonas.has(z)))];
+    refMapas.current = { cpZonas, topeZona, zonaCadetes, topes, todasZonas: [...todasZonas], regionZona, recos, coberturaReco, labelsSinMatch };
     return refMapas.current;
   }, []);
 
@@ -365,10 +318,12 @@ export default function Zonas() {
         suma(zona, v);
       }
 
-      const { conTope, sinTopeArr, terrArr, asignados } = construirVistas(porZona, mapas);
+      const { conTope, sinTopeArr, asignados } = construirVistas(porZona, mapas);
+      const { barras, zonasSinRecorrido } = construirRecorridos(porZona, mapas);
       setZonas(conTope);
       setSinTope(sinTopeArr);
-      setTerrs(terrArr);
+      setRecos(barras);
+      setZonasSinReco(zonasSinRecorrido);
       const cadetesSinZonas = mapas.topes.filter((t) => !t.zonas || !String(t.zonas).trim()).length;
       setMeta({ modo: "vivo", total: j.total, actualizado: j.actualizado, sinZona, sinCp, ambiguos, asignados, cadetesSinZonas, finoDisponible });
       setError(null);
@@ -398,10 +353,12 @@ export default function Zonas() {
         if (z === "(sin zona)") { sinZona += n; continue; }
         porZona[z] = { total: n, entregados: 0 };
       }
-      const { conTope, sinTopeArr, terrArr, asignados } = construirVistas(porZona, mapas);
+      const { conTope, sinTopeArr, asignados } = construirVistas(porZona, mapas);
+      const { barras, zonasSinRecorrido } = construirRecorridos(porZona, mapas);
       setZonas(conTope);
       setSinTope(sinTopeArr);
-      setTerrs(terrArr);
+      setRecos(barras);
+      setZonasSinReco(zonasSinRecorrido);
       setMeta({ modo: "foto", total: corte.total, fecha: corte.fecha, actualizado: corte.actualizado_at, esDeHoy, asignados, sinZona, sinCp: 0, ambiguos: 0, cadetesSinZonas: 0, finoDisponible: true });
       setError(null);
     } catch (e) {
@@ -431,14 +388,14 @@ export default function Zonas() {
       const cutoff = new Date(Date.now() - CAL.ventanaDias * 86400000).toISOString().slice(0, 10);
       const [sem, topes, tarifas] = await Promise.all([
         supa(`semanas?select=fecha,cadete,cantidad,demorados,dem21,envios_ml&fecha=gte.${cutoff}&limit=100000`),
-        supa("cadete_topes?select=cadete,tope&activo=eq.true&limit=1000"),
+        supa("cadete_topes?select=cadete,tope,backup&activo=eq.true&limit=1000"),
         supa("cadetes_tarifas?select=nombre,nombre_lightdata,fletero&limit=2000").catch(() => []),
       ]);
-      const fleteros = new Set();
-      for (const t of (tarifas || [])) if (t.fletero) { if (t.nombre_lightdata) fleteros.add(norm(t.nombre_lightdata)); if (t.nombre) fleteros.add(norm(t.nombre)); }
-      setPropuestas(calcularPropuestas(sem, topes, fleteros));
-      setHistCadete(calcularHistorico(sem, topes, fleteros)); // copiloto: misma consulta, sin fetch extra
-    } catch (e) { setPropErr(String(e.message || e)); setPropuestas({ subir: [], lunes: [], revisar: [] }); setHistCadete(new Map()); }
+      const excluir = new Set(); // fleteros + suplentes (backup): no se les propone tocar el tope personal
+      for (const t of (tarifas || [])) if (t.fletero) { if (t.nombre_lightdata) excluir.add(norm(t.nombre_lightdata)); if (t.nombre) excluir.add(norm(t.nombre)); }
+      for (const t of (topes || [])) if (t.backup) excluir.add(norm(t.cadete));
+      setPropuestas(calcularPropuestas(sem, topes, excluir));
+    } catch (e) { setPropErr(String(e.message || e)); setPropuestas({ subir: [], lunes: [], revisar: [] }); }
   }, []);
   useEffect(() => { cargarPropuestas(); }, [cargarPropuestas]);
 
@@ -463,24 +420,11 @@ export default function Zonas() {
     finally { setAplicando(""); }
   }
 
-  // Copiloto fase 1: enriquece los territorios con riesgo + región + recomendación (determinístico).
+  // Copiloto: enriquece los RECORRIDOS con riesgo (util vs su tope) + recomendación (determinístico).
   const copiloto = useMemo(() => {
-    if (!terrs || !histCadete) return null;
-    const regionZona = (refMapas.current && refMapas.current.regionZona) || new Map();
-    const base = terrs.map((t) => {
-      let promedioHist = 0, mlA = 0, demA = 0, d21A = 0, nDiasAlta = 0, conHist = false;
-      for (const cad of t.cadetes) {
-        const h = histCadete.get(norm(cad));
-        if (!h) continue;
-        promedioHist += h.promedio; mlA += h.mlA; demA += h.demA; d21A += h.d21A; nDiasAlta += h.nDiasAlta;
-        if (h.nDias >= COP.minDiasProm) conHist = true;
-      }
-      const slaAlta = mlA > 0 ? slaMeliDia(mlA, demA, d21A) : null;
-      const e = { ...t, promedioHist, slaAlta, nDiasAlta, conHist, region: regionDe(t.zonasList, regionZona) };
-      e.riesgo = riesgoTerr(e);
-      return e;
-    });
-    // recomendación: necesita todos los utils/regiones para hallar vecino libre en la misma región
+    if (!recos) return null;
+    const base = recos.map((t) => ({ ...t, riesgo: riesgoReco(t) }));
+    // recomendación: necesita todos los utils/regiones para hallar recorrido vecino libre en la misma región
     const libres = base.filter((x) => x.tope && x.riesgo.util != null && x.riesgo.util < COP.vecinoUtilMax && (x.tope - x.total) >= COP.vecinoMargenMin);
     for (const t of base) {
       if (t.riesgo.nivel === "alto") {
@@ -488,7 +432,7 @@ export default function Zonas() {
           .sort((a, b) => (b.tope - b.total) - (a.tope - a.total)).slice(0, 2);
         t.reco = cands.length ? `Redistribuir hacia ${cands.map((c) => c.nombre).join(" o ")}` : "Sin capacidad libre en la región — evaluar refuerzo o segundo recorrido";
       } else if (t.riesgo.nivel === "medio") {
-        t.reco = "Vigilar; confirmar con el titular antes de la salida";
+        t.reco = "Vigilar de cerca antes de la salida";
       } else t.reco = null;
     }
     const capList = base.filter((x) => x.tope && x.riesgo.util != null && x.riesgo.util < COP.vecinoUtilMax);
@@ -496,49 +440,40 @@ export default function Zonas() {
     const orden = { alto: 0, medio: 1 };
     const decisiones = base.filter((t) => t.riesgo.nivel === "alto" || t.riesgo.nivel === "medio")
       .sort((a, b) => (orden[a.riesgo.nivel] - orden[b.riesgo.nivel]) || ((b.riesgo.util ?? 0) - (a.riesgo.util ?? 0)));
-    return { terrs: base, decisiones, capLibre };
-  }, [terrs, histCadete]);
+    return { recos: base, decisiones, capLibre };
+  }, [recos]);
 
   const colorEstado = (e) => (e === "saturada" ? C.crit : e === "limite" ? C.warn : e === "sintope" ? C.faint : C.ok);
   const f = norm(filtro);
-  const esTerr = vista === "terr";
+  const esReco = vista === "recorrido";
   const zonasConSin = zonas ? [...zonas, ...sinTope.map((z) => ({ ...z, tope: null, pct: null, estado: "sintope", cadetes: [] }))] : [];
-  const listaBase = esTerr ? (terrs || []) : zonasConSin;
-  const items = listaBase.filter((it) => {
-    if (!f) return true;
-    const nombre = esTerr ? it.nombre : it.zona;
-    const gente = esTerr ? it.cadetes : it.cadetes;
-    return norm(nombre).includes(f) || gente.some((c) => norm(c).includes(f));
-  });
-  const saturadas = listaBase.filter((x) => x.estado === "saturada").length;
-  const alLimite = listaBase.filter((x) => x.estado === "limite").length;
+  const items = esReco ? [] : zonasConSin.filter((it) => !f || norm(it.zona).includes(f) || it.cadetes.some((c) => norm(c).includes(f)));
+  const saturadas = esReco ? (copiloto ? copiloto.decisiones.filter((d) => d.riesgo.nivel === "alto").length : 0) : zonasConSin.filter((x) => x.estado === "saturada").length;
+  const alLimite = esReco ? (copiloto ? copiloto.decisiones.filter((d) => d.riesgo.nivel === "medio").length : 0) : zonasConSin.filter((x) => x.estado === "limite").length;
 
-  // Territorios del copiloto filtrados por el buscador (para el detalle de abajo en vista Territorios).
-  const terrCop = copiloto ? copiloto.terrs.filter((t) => !f || norm(t.nombre).includes(f) || t.cadetes.some((c) => norm(c).includes(f))) : [];
-  const terrSinDatos = terrCop.filter((t) => t.riesgo.nivel === "sindatos");
-  const terrVerdes = terrCop.filter((t) => t.riesgo.nivel === "bajo");
+  // Recorridos del copiloto filtrados por el buscador (para el detalle de abajo en la vista Recorridos).
+  const recoCop = copiloto ? copiloto.recos.filter((t) => !f || norm(t.nombre).includes(f) || norm(t.chofer_ref || "").includes(f)) : [];
+  const recoVerdes = recoCop.filter((t) => t.riesgo.nivel === "bajo");
+  const recoSinDatos = recoCop.filter((t) => t.riesgo.nivel === "sindatos");
+  const labelsSinMatch = (refMapas.current && refMapas.current.labelsSinMatch) || []; // calidad de datos (a)
 
-  const badgeRiesgo = (nivel) => nivel === "alto" ? { t: "🔴 ALTO", c: C.crit } : nivel === "medio" ? { t: "🟡 MEDIO", c: C.warn } : nivel === "bajo" ? { t: "🟢 OK", c: C.ok } : { t: "⚪ sin datos", c: C.faint };
-  // Tarjeta de territorio enriquecida (riesgo + utilización del titular + recomendación).
-  const tarjetaTerr = (it) => {
+  const badgeRiesgo = (nivel) => nivel === "alto" ? { t: "🔴 ALTO", c: C.crit } : nivel === "medio" ? { t: "🟡 MEDIO", c: C.warn } : nivel === "bajo" ? { t: "🟢 OK", c: C.ok } : { t: "⚪ sin tope", c: C.faint };
+  // Tarjeta de recorrido enriquecida (riesgo por utilización + recomendación). El cadete es circunstancial: solo referencia de planilla.
+  const tarjetaReco = (it) => {
     const rz = it.riesgo, badge = badgeRiesgo(rz.nivel), col = badge.c;
     const ancho = Math.min(rz.util ?? 0, 1.2) / 1.2;
-    const utilHigh = it.conHist && it.promedioHist > 0 && it.total >= it.promedioHist * COP.sobrePromedio;
-    const razones = rz.razones.filter((r) => !r.startsWith("titular promedia")); // el +% ya va en la línea de utilización
     return (
       <div key={it.nombre} style={{ background: C.card, border: `1px solid ${rz.nivel === "alto" ? "rgba(226,75,74,0.45)" : C.border}`, borderRadius: 12, padding: "12px 16px" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
           <span style={{ fontSize: 15, fontWeight: 700 }}>{it.nombre}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{badge.t}</span>
+          {it.colecta === false && <span style={{ fontSize: 10.5, color: C.faint, border: `1px solid ${C.border}`, borderRadius: 999, padding: "1px 7px" }}>sin colecta</span>}
           <span style={{ marginLeft: "auto", fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
             <b>{num(it.total)}</b>{it.tope ? <span style={{ color: C.muted }}> / {num(it.tope)}</span> : null}
           </span>
         </div>
-        <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 5 }}>Titular{it.cadetes.length > 1 ? "es" : ""}: {it.cadetes.join(" · ")}{it.notas ? " — " + it.notas : ""}</div>
-        {it.conHist
-          ? <div style={{ fontSize: 11.5, marginBottom: 4, color: utilHigh ? C.warn : C.muted }}>Sale con {num(it.total)} · su promedio: {num(it.promedioHist)}/día{utilHigh ? ` (+${Math.round((it.total / it.promedioHist - 1) * 100)}%)` : ""}</div>
-          : <div style={{ fontSize: 11.5, marginBottom: 4, color: C.faint }}>Sin promedio del titular (fletero, operativo o pocos días)</div>}
-        {razones.length > 0 && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4, lineHeight: 1.5 }}>{razones.join(" · ")}</div>}
+        {it.chofer_ref && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 5 }}>ref. planilla: {it.chofer_ref}</div>}
+        {rz.razones.length > 0 && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4, lineHeight: 1.5 }}>{rz.razones.join(" · ")}</div>}
         {it.reco && <div style={{ fontSize: 12, color: rz.nivel === "alto" ? "#f1a2a1" : "#f3c886", marginBottom: 6, fontWeight: 600 }}>→ {it.reco}</div>}
         {it.tope ? (
           <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
@@ -582,7 +517,7 @@ export default function Zonas() {
         )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
-            {[["terr", "Territorios"], ["zona", "Por zona"]].map(([k, lbl]) => (
+            {[["recorrido", "Recorridos"], ["zona", "Por zona"]].map(([k, lbl]) => (
               <button key={k} onClick={() => setVista(k)}
                 style={{ background: vista === k ? "rgba(46,207,170,0.15)" : "none", border: "none", color: vista === k ? C.ok : C.muted, padding: "7px 12px", fontSize: 13, fontWeight: vista === k ? 700 : 500, cursor: "pointer" }}>
                 {lbl}
@@ -616,24 +551,31 @@ export default function Zonas() {
         </div>
       )}
 
-      {/* === Centro de decisiones (spec-zonas-copiloto-fase1) — arriba de todo === */}
+      {/* === Zonas con volumen sin recorrido (spec-zonas-fijas) — el agujero, siempre visible arriba === */}
+      {zonasSinReco.length > 0 && (
+        <div style={{ background: "rgba(226,75,74,0.10)", border: "1px solid rgba(226,75,74,0.40)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14, lineHeight: 1.5 }}>
+          ⚠️ <b>Volumen sin recorrido asignado</b> ({num(zonasSinReco.reduce((a, z) => a + z.total, 0))} envíos en {zonasSinReco.length} {zonasSinReco.length === 1 ? "zona" : "zonas"}): {zonasSinReco.map((z) => `${z.zona} (${num(z.total)})`).join(" · ")}. No le corresponde a ningún carrito — hay que crear el recorrido o sumarla a uno.
+        </div>
+      )}
+
+      {/* === Centro de decisiones (spec-zonas-copiloto-fase1 / recableado a recorridos) — arriba de todo === */}
       {copiloto && (
         <div style={{ background: C.card, border: `1px solid ${copiloto.decisiones.length ? "rgba(239,159,39,0.35)" : "rgba(46,207,170,0.30)"}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>
               {copiloto.decisiones.length
                 ? `${copiloto.decisiones.length} ${copiloto.decisiones.length === 1 ? "decisión" : "decisiones"} hoy: ${copiloto.decisiones.map((d) => `${d.nombre} (${d.riesgo.nivel})`).join(" · ")}`
-                : "✅ Sin decisiones pendientes: todos los territorios en orden"}
+                : "✅ Sin decisiones pendientes: todos los recorridos en orden"}
             </span>
             {copiloto.capLibre.n > 0 && (
               <span style={{ marginLeft: "auto", fontSize: 12, color: C.muted, padding: "3px 10px", borderRadius: 999, background: "rgba(46,207,170,0.10)" }}>
-                Capacidad libre: ~{num(copiloto.capLibre.envios)} envíos en {copiloto.capLibre.n} territorios <span style={{ color: C.faint }}>(aprox.)</span>
+                Capacidad libre: ~{num(copiloto.capLibre.envios)} envíos en {copiloto.capLibre.n} recorridos <span style={{ color: C.faint }}>(aprox.)</span>
               </span>
             )}
           </div>
           {copiloto.decisiones.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-              {copiloto.decisiones.map((it) => tarjetaTerr(it))}
+              {copiloto.decisiones.map((it) => tarjetaReco(it))}
             </div>
           )}
         </div>
@@ -681,7 +623,7 @@ export default function Zonas() {
                 ))}
               </div>
             )}
-            <div style={{ fontSize: 10.5, color: C.faint, marginTop: 10, lineHeight: 1.5 }}>Ventana: últimas 3 semanas de <code>semanas</code>. SUBIR = días sostenidos por encima del tope con SLA ≥98% (tope propuesto = mín(p90, mediana+10, tope+15)). REVISAR nunca propone número. Fleteros y usuarios internos quedan afuera. Cada cambio aplicado queda registrado en <code>topes_cambios</code>.</div>
+            <div style={{ fontSize: 10.5, color: C.faint, marginTop: 10, lineHeight: 1.5 }}>Ventana: últimas 3 semanas de <code>semanas</code>. SUBIR = días sostenidos por encima del tope con SLA ≥98% (tope propuesto = mín(p90, mediana+10, tope+15)). REVISAR nunca propone número. Fleteros, suplentes (backup) y usuarios internos quedan afuera. Cada cambio aplicado queda registrado en <code>topes_cambios</code>. Ojo: este es el <b>tope personal del cadete</b> (para su rendimiento) — no es el tope del recorrido/carrito, que se ajusta aparte.</div>
           </div>
         )}
       </div>
@@ -694,7 +636,7 @@ export default function Zonas() {
 
       {error && (
         <div style={{ background: "rgba(226,75,74,0.10)", border: "1px solid rgba(226,75,74,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14 }}>
-          No pude actualizar recién ({error}). {listaBase.length ? "Muestro el último dato bueno." : "Reintento solo en unos minutos."}
+          No pude actualizar recién ({error}). {(recos && recos.length) || zonasConSin.length ? "Muestro el último dato bueno." : "Reintento solo en unos minutos."}
         </div>
       )}
 
@@ -711,27 +653,25 @@ export default function Zonas() {
 
       {zonas && (
         <>
-          {esTerr && copiloto ? (
-            /* Vista Territorios con copiloto: las decisiones (ALTO/MEDIO) ya están arriba; acá el resto. */
+          {esReco && copiloto ? (
+            /* Vista Recorridos: las decisiones (ALTO/MEDIO) ya están arriba; acá el resto. */
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {terrSinDatos.map((it) => tarjetaTerr(it))}
-              {terrVerdes.length > 0 && (
+              {recoSinDatos.map((it) => tarjetaReco(it))}
+              {recoVerdes.length > 0 && (
                 <details open={verVerdes} onToggle={(e) => setVerVerdes(e.currentTarget.open)}>
                   <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text, padding: "6px 2px" }}>
-                    🟢 {terrVerdes.length} territorios sin intervención (ver)
+                    🟢 {recoVerdes.length} recorridos sin intervención (ver)
                   </summary>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>{terrVerdes.map((it) => tarjetaTerr(it))}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>{recoVerdes.map((it) => tarjetaReco(it))}</div>
                 </details>
               )}
-              {terrCop.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 4px" }}>Nada coincide con la búsqueda.</div>}
+              {recoCop.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: "16px 4px" }}>Nada coincide con la búsqueda.</div>}
             </div>
           ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {items.map((it) => {
-              const nombre = esTerr ? it.nombre : it.zona;
-              const sub = esTerr
-                ? `Titular${it.cadetes.length > 1 ? "es" : ""}: ${it.cadetes.join(" · ")}${it.notas ? " — " + it.notas : ""}`
-                : (it.cadetes.length ? "La hacen: " + it.cadetes.join(" · ") : "");
+              const nombre = it.zona;
+              const sub = (it.cadetes.length ? "La hacen: " + it.cadetes.join(" · ") : "");
               const col = colorEstado(it.estado);
               const pct = it.pct ?? 0;
               const ancho = Math.min(pct, 1.2) / 1.2;
@@ -761,19 +701,19 @@ export default function Zonas() {
           </div>
           )}
 
-          {(sinTope.length > 0 || (meta && (meta.sinZona > 0 || meta.sinCp > 0 || meta.ambiguos > 0))) && (
+          {(sinTope.length > 0 || labelsSinMatch.length > 0 || (meta && (meta.sinZona > 0 || meta.sinCp > 0 || meta.ambiguos > 0))) && (
             <details style={{ marginTop: 18, color: C.muted }}>
               <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }}>
                 Datos sueltos ({num(sinTope.reduce((s, z) => s + z.total, 0) + (meta ? meta.sinZona + meta.sinCp + meta.ambiguos : 0))} envíos)
               </summary>
               <div style={{ fontSize: 12.5, lineHeight: 1.7, marginTop: 8 }}>
+                {labelsSinMatch.length > 0 && <div>⚠️ Etiquetas de recorrido que no existen en <code>zonas_cp</code> (no reciben volumen): {labelsSinMatch.join(", ")}.</div>}
                 {sinTope.length > 0 && (
-                  <div>Zonas sin tope (aparecen grises en "Por zona"): {sinTope.length} zonas, {num(sinTope.reduce((s2, z) => s2 + z.total, 0))} envíos.</div>
+                  <div>Zonas sin tope de cadete (aparecen grises en "Por zona"): {sinTope.length} zonas, {num(sinTope.reduce((s2, z) => s2 + z.total, 0))} envíos.</div>
                 )}
                 {meta && meta.ambiguos > 0 && <div>Envíos en CPs compartidos cuya localidad no alcanzó para decidir la zona: {num(meta.ambiguos)} (quedan fuera de las barras — mejor faltar que inflar).</div>}
                 {meta && meta.sinZona > 0 && <div>CPs que no matchean ninguna zona de <code>zonas_cp</code>: {num(meta.sinZona)} envíos.</div>}
                 {meta && meta.sinCp > 0 && <div>Envíos sin CP en LightData: {num(meta.sinCp)}.</div>}
-                {meta && meta.cadetesSinZonas > 0 && <div>⚠️ {meta.cadetesSinZonas} cadetes activos sin zonas cargadas en <code>cadete_topes</code> — no suman capacidad en ninguna zona ni forman territorio (por eso faltan topes y territorios).</div>}
               </div>
             </details>
           )}
