@@ -764,7 +764,7 @@ export default function Analisis({ semanas }) {
     ult4: rangoFechas(completas.slice(-4).flatMap((l) => weekByLabel(l)?.fechas || [])),
     todo: minFecha ? `desde ${MES_FULL[+minFecha.split("-")[1] - 1]}` : "todo el histórico",
   };
-  const tituloBloque = periodo.t === "sem" ? "Decisiones de esta semana" : periodo.t === "ult4" ? "Decisiones de las últimas 4 semanas" : "Patrones históricos";
+  const tituloBloque = periodo.t === "sem" ? "Resumen de la semana" : periodo.t === "ult4" ? "Resumen de las últimas 4 semanas" : "Resumen histórico";
   const tituloAtender = periodo.t === "todo" ? "Casos históricos a revisar" : (enCursoActual ? "Atención inmediata" : "A atender");
 
   const th = (key, label, right) => (
