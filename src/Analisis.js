@@ -65,6 +65,7 @@ const mediana = (arr) => { if (!arr.length) return 0; const s = arr.slice().sort
 const normZ = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ");
 const matchZona = (nl, nz) => { if (!nl || nl.length < 4) return false; return nz === nl || nz.includes(nl) || nl.includes(nz); };
 const MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const DIAS_SEM = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 const MES_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 // Rango compacto de un set de fechas ISO: "20–24 jul" (mismo mes) o "23 jun–19 jul".
 function rangoFechas(fechas) {
@@ -722,6 +723,21 @@ export default function Analisis({ semanas }) {
     return { lbl, cant: max.cant, pct };
   }, [tendData]);
 
+  // Calendario del histórico: stats por fecha (todas las semanas cargadas) para la vista mensual.
+  const calStats = useMemo(() => {
+    const map = {}; let max = 0;
+    semanas.forEach((sw) => sw.dias.forEach((dia) => {
+      let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, pend = 0;
+      for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); pend += m.pendientes; }
+      const ent = cant - pend;
+      map[dia.fecha] = { cant, dem: dm + d2, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null, pend };
+      if (cant > max) max = cant;
+    }));
+    const meses = [...new Set(Object.keys(map).map((f) => f.slice(0, 7)))].sort();
+    return { map, max, meses };
+  }, [semanas]);
+  const [calSel, setCalSel] = useState(null); // día seleccionado del calendario: {fecha, s}
+
   // Patrones: reincidentes de demora (nunca "Sin asignar" ni basura — esos van a alertas operativas).
   const patrones = useMemo(() => {
     const rows = cur.cads.filter((c) => (c.dem + c.d21) > 0).map((c) => {
@@ -1378,6 +1394,53 @@ export default function Analisis({ semanas }) {
               <Line type="monotone" dataKey="p21r" stroke={C.warn} strokeWidth={2.5} dot={{ r: 2.5, fill: C.warn }} />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Calendario — todo el histórico de un vistazo: color = volumen del día, puntito = SLA flojo */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, marginBottom: 22 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>Calendario</div>
+        <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 10 }}>Más verde = más envíos ese día · puntito = SLA flojo (🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%). Pasá el mouse o tocá un día y el detalle aparece abajo.</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+          {calStats.meses.map((mk) => {
+            const [y, mo] = mk.split("-").map(Number);
+            const off = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // lunes = 0
+            const nd = new Date(y, mo, 0).getDate();
+            const cells = Array.from({ length: off }, () => null).concat(Array.from({ length: nd }, (_, i) => i + 1));
+            return (
+              <div key={mk}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: C.ink, marginBottom: 5, textTransform: "capitalize" }}>{MES_FULL[mo - 1]} {y}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 30px)", gap: 3 }}>
+                  {["L", "M", "X", "J", "V", "S", "D"].map((d, i) => <div key={d + i} style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>{d}</div>)}
+                  {cells.map((d, i) => {
+                    if (d == null) return <div key={"e" + i} />;
+                    const iso = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                    const s = calStats.map[iso];
+                    const alpha = s && calStats.max ? 0.12 + 0.5 * (s.cant / calStats.max) : 0;
+                    const sel = calSel && calSel.fecha === iso;
+                    return (
+                      <div key={iso} onMouseEnter={s ? () => setCalSel({ fecha: iso, s }) : undefined} onClick={s ? () => setCalSel({ fecha: iso, s }) : undefined}
+                        style={{ height: 30, borderRadius: 6, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: s ? "pointer" : "default", background: s ? `rgba(46,207,170,${alpha.toFixed(2)})` : "transparent", border: `1px solid ${sel ? C.teal : "transparent"}` }}>
+                        <span style={{ fontSize: 10.5, fontWeight: s ? 700 : 400, color: s ? C.ink : C.dim, lineHeight: 1 }}>{d}</span>
+                        {s && s.sla != null && s.sla < CFG.slaOk && <span style={{ width: 5, height: 5, borderRadius: "50%", background: slaColor(s.sla), marginTop: 2 }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 10, borderTop: `1px solid ${C.faint}`, paddingTop: 8, fontSize: 12.5, minHeight: 22 }}>
+          {calSel ? (() => {
+            const s = calSel.s;
+            const dw = DIAS_SEM[new Date(calSel.fecha + "T12:00:00").getDay()];
+            return (
+              <span>
+                <b style={{ textTransform: "capitalize" }}>{dw} {fmtDMY(calSel.fecha)}</b> · {fmtInt(s.cant)} envíos · SLA <b style={{ color: slaColor(s.sla) }}>{s.sla != null ? fmt1(s.sla) + "%" : "—"}</b> · {fmtInt(s.dem)} demoras{s.p21r != null ? <> · {fmt1(s.p21r)}% post-21</> : null}{s.pend > 0 ? <> · {fmtInt(s.pend)} pendientes</> : null}
+              </span>
+            );
+          })() : <span style={{ color: C.muted, fontSize: 11.5 }}>Elegí un día para ver su detalle acá.</span>}
         </div>
       </div>
 
