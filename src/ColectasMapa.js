@@ -18,16 +18,41 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // arreglan editando el cliente o poniendo el pin a mano.
 const JUNK_DIRECCION = /\b(entre|piso|pisos|p\.?b\.?|timbre|depto|dpto|dto|departamento|local|oficina|of|uf|casa|esquina|esq|consultar|puerta|torre|interno|planta|altura|cochera|frente|fondo|galpon|nave|lote|manzana|mza)\d*\b/i;
 
-export function limpiarDireccion(dir) {
-  let s = String(dir || '').split(',')[0].split('(')[0];
+// Extrae "calle + altura" de UN tramo (entre comas) de la dirección, o '' si el tramo no sirve.
+// Reglas: sin número → no sirve ("ESC", "entre Conde y Superí"); si la basura aparece DESPUÉS de
+// la altura se corta ahí ("Constitución 121 piso 2" → "Constitución 121"); si aparece ANTES,
+// el tramo es una referencia ("piso 3") y se descarta — salvo "entre", que puede ser el nombre
+// de la calle ("Av. Entre Ríos 1500", bug real de la auditoría 28/07).
+function nucleoConAltura(tramo) {
+  let s = String(tramo || '').trim();
+  const num = s.match(/\d/);
+  if (!num) return '';
   const m = s.match(JUNK_DIRECCION);
-  if (m) s = s.slice(0, m.index);
+  if (m && m.index > num.index) s = s.slice(0, m.index);
+  else if (m && !/^entre$/i.test(m[0])) return '';
   s = s.replace(/\bcaba\b/ig, ' ').replace(/\s+/g, ' ').trim();
+  if (!/[a-záéíóúñ]/i.test(s)) return '';
   // cortar después de la última altura suelta ("directorio 314 2D" → "directorio 314";
   // "Av. 9 de Julio 1000" se conserva entero porque el último número suelto es la altura)
   const nums = [...s.matchAll(/\b\d+\b/g)];
   if (nums.length) { const u = nums[nums.length - 1]; s = s.slice(0, u.index + u[0].length); }
   return s.replace(/[\s.-]+$/, '').trim();
+}
+
+export function limpiarDireccion(dir) {
+  // La calle con altura no siempre está antes de la primera coma: "ESC, Constitución 121, Villa
+  // Centenario" geocodificaba "ESC" y el pin caía en cualquier lado (caso real Nuvanta, 28/07).
+  // Se elige el PRIMER tramo que tenga calle + altura.
+  const tramos = String(dir || '').split('(')[0].split(',');
+  for (const t of tramos) {
+    const n = nucleoConAltura(t);
+    if (n) return n;
+  }
+  // Sin altura en ningún tramo (ej. "San Martín s/n"): comportamiento anterior sobre el primero.
+  let s = (tramos[0] || '').trim();
+  const m = s.match(JUNK_DIRECCION);
+  if (m) s = s.slice(0, m.index);
+  return s.replace(/\bcaba\b/ig, ' ').replace(/\s+/g, ' ').replace(/[\s.-]+$/, '').trim();
 }
 
 // Cercos geográficos: sin esto, una calle homónima manda el pin a otra ciudad (pasó de verdad:
