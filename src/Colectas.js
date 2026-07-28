@@ -327,6 +327,7 @@ function ColectasInner({ soloArribos = false }) {
   const [dirEdit, setDirEdit] = useState(null); // { id, valor } — dirección puntual del día
   const [zonaEdit, setZonaEdit] = useState(null); // { id, valor } — zona puntual del día
   const [filtroEstado, setFiltroEstado] = useState(null); // null = todos | verde/amarillo/blanco/rojo
+  const [rojasOpen, setRojasOpen] = useState({}); // grupos con las canceladas desplegadas
   const [busqueda, setBusqueda] = useState(''); // buscador de cliente o chofer
   const [clientes, setClientes] = useState([]);
   const [registros, setRegistros] = useState({});
@@ -799,6 +800,9 @@ function ColectasInner({ soloArribos = false }) {
   // Helpers
   const seccionClientes = clientes.filter(c => c.activo && (tab === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === tab));
 
+  // Estado efectivo de un cliente hoy (los fijos sin estado cuentan como amarillo).
+  const estEf = (c) => { const reg = registros[c.id]; return (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco'); };
+
   function getGroups(list) {
     const groups = {}, order = [];
     list.forEach(c => {
@@ -997,6 +1001,11 @@ function ColectasInner({ soloArribos = false }) {
               {order.map(chofer => {
                 const isWarn = chofer === 'A coordinar';
                 const rows = groups[chofer];
+                // Único cambio (28/07): las canceladas del grupo se pliegan en "▸ N sin envíos".
+                // Con filtro o búsqueda activa NO se pliega nada (para poder verlas/des-cancelarlas planas).
+                const compactar = !filtroEstado && !busqueda;
+                const rojas = compactar ? rows.filter(c => estEf(c) === 'rojo') : [];
+                const activasRows = compactar ? rows.filter(c => estEf(c) !== 'rojo') : rows;
                 const amarillosConf = isWarn ? 0 : seccionClientes.filter(c => {
                   const reg = registros[c.id];
                   const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
@@ -1048,7 +1057,7 @@ function ColectasInner({ soloArribos = false }) {
                       </td>
                     </tr>
                     {/* Data rows */}
-                    {rows.map(c => {
+                    {(() => { const renderRow = (c) => {
                       const reg = registros[c.id] || { choferes:['A coordinar'], estado:'blanco', confirmado_por:[] };
                       const chs = reg.choferes?.length ? reg.choferes : ['A coordinar'];
                       const estado = (c.fija && (!reg.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg.estado || 'blanco');
@@ -1198,7 +1207,21 @@ function ColectasInner({ soloArribos = false }) {
                           </td>
                         </tr>
                       );
-                    })}
+                    };
+                    return (
+                      <>
+                        {activasRows.map(renderRow)}
+                        {compactar && rojas.length > 0 && (
+                          <tr onClick={() => setRojasOpen(p => ({ ...p, [chofer]: !p[chofer] }))} style={{ cursor:'pointer' }}>
+                            <td colSpan={7} style={{ padding:'7px 14px 7px 44px', fontSize:11.5, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
+                              <span style={{ color:'#E5604D', opacity:0.75, marginRight:7, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
+                              {rojas.length} sin envíos
+                            </td>
+                          </tr>
+                        )}
+                        {compactar && rojasOpen[chofer] && rojas.map(renderRow)}
+                      </>
+                    ); })()}
                   </React.Fragment>
                 );
               })}
