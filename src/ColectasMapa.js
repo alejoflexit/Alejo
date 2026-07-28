@@ -27,7 +27,7 @@ export function limpiarDireccion(dir) {
   // "Av. 9 de Julio 1000" se conserva entero porque el último número suelto es la altura)
   const nums = [...s.matchAll(/\b\d+\b/g)];
   if (nums.length) { const u = nums[nums.length - 1]; s = s.slice(0, u.index + u[0].length); }
-  return s.replace(/[\s.\-]+$/, '').trim();
+  return s.replace(/[\s.-]+$/, '').trim();
 }
 
 // Devuelve {lat,lng} o null. Intento 1 con el barrio/localidad (necesario en GBA), intento 2
