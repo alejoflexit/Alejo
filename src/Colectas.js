@@ -1056,8 +1056,8 @@ function ColectasInner({ soloArribos = false }) {
                       const unassigned = chs.every(x => x === 'A coordinar');
                       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
 
-                      const ECOLOR  = { blanco:'transparent', amarillo:'#FBBF24', rojo:'#E24B4A', verde:'#2ECFAA' };
-                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#FBBF24', rojo:'#E24B4A', verde:'#2ECFAA' };
+                      const ECOLOR  = { blanco:'transparent', amarillo:'#FBBF24', rojo:'#E5604D', verde:'#2ECFAA' };
+                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#FBBF24', rojo:'#E5604D', verde:'#2ECFAA' };
                       const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
 
                       // Para divididas: el círculo muestra el estado del chofer de ESTA sección
@@ -1067,7 +1067,9 @@ function ColectasInner({ soloArribos = false }) {
                         ? (esteChoferConfirmado ? 'verde' : estado === 'rojo' ? 'rojo' : estado === 'blanco' ? 'blanco' : 'amarillo')
                         : estado;
 
-                      const rowBg = estado==='rojo'?'rgba(226,75,74,0.05)':estado==='verde'?'rgba(46,207,170,0.05)':estado==='amarillo'?'rgba(255,197,49,0.06)':unassigned?'rgba(251,191,36,0.03)':'transparent';
+                      // Opción A (2026-07-28): sin lavados de color en las filas — semitransparentes sobre fondo oscuro
+                      // se ensuciaban (rojo→bordó, amarillo→verdoso). El estado vive en el círculo; fondo gris parejo.
+                      const rowBg = 'transparent';
 
                       const handleCircleClick = () => {
                         if (esteChoferActivo) {
@@ -1095,7 +1097,7 @@ function ColectasInner({ soloArribos = false }) {
                       return (
                         <tr key={c.id}
                           onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
-                          style={{ background: isActive ? 'rgba(58,143,212,0.10)' : rowBg, borderBottom:`1px solid ${BRAND.border}`, opacity:estado==='rojo'?0.6:1, transition:'background 0.15s' }}>
+                          style={{ background: isActive ? 'rgba(58,143,212,0.10)' : rowBg, borderBottom:`1px solid ${BRAND.border}`, transition:'background 0.15s' }}>
                           {/* Estado */}
                           <td style={{ padding:'8px 8px 8px 10px', width:36 }}>
                             <button
@@ -1106,7 +1108,7 @@ function ColectasInner({ soloArribos = false }) {
                             </button>
                           </td>
                           {/* Nombre */}
-                          <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none' }}>
+                          <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none', color:estado==='rojo'?BRAND.muted:undefined }}>
                             {c.nombre}
                             {tab === 'SABADOS' && (
                               <span title={c.seccion==='SABADOS' ? 'Sin zona de semana asignada — editá el cliente para ponerle CABA/SUR/NOROESTE' : `Zona: ${c.seccion}`}
@@ -1178,7 +1180,7 @@ function ColectasInner({ soloArribos = false }) {
                             {c.horario || (c.hora_habitual ? `${c.hora_habitual}:00` : '—')}
                           </td>
                           {/* Monto — click para editar el precio del día (default: monto del cliente) */}
-                          <td style={{ padding:'8px 10px 8px 8px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>
+                          <td style={{ padding:'8px 10px 8px 8px', fontWeight:500, fontSize:13, whiteSpace:'nowrap', color:estado==='rojo'?BRAND.muted:undefined }}>
                             {montoEdit?.id === c.id ? (
                               <input autoFocus type="number" className="monto-edit" value={montoEdit.valor}
                                 onChange={e => setMontoEdit({ id:c.id, valor:e.target.value })}
