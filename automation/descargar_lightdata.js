@@ -334,7 +334,7 @@ async function main() {
   // Descargar Excel via URL directa
   const [year, month, day] = fecha.split('-');
   const fechaFmt = `${day}/${month}/${year}`;
-  const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&cantidadColumnas=1`;
+  const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
 
   console.log("Descargando Excel via fetch...");
   const response = await page.evaluate(async (url) => {
