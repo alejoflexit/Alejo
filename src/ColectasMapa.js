@@ -101,13 +101,25 @@ async function buscarUbicacion(direccion, zonaBarrio, seccion) {
 // Escape mínimo para meter texto de clientes/direcciones dentro del HTML del tooltip
 const escHtml = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
-// Color estable por chofer (mismo nombre → mismo color en todas las sesiones)
+// Color estable por chofer (hash del nombre). Problema real (28/07): hay más choferes que
+// colores distinguibles, y el hash encima choca fácil. Por eso los colores del MAPA se asignan
+// desde PALETA_CHOFER entre los choferes visibles del día (ver mapaColores en el componente):
+// únicos en pantalla garantizado. Este hash queda solo como fallback (ej. el buscador del panel
+// de asignación, que lista choferes que hoy no están en el mapa).
 function colorChofer(nombre) {
   const n = normNombre(nombre);
   let h = 0;
   for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360;
   return `hsl(${h}, 72%, 58%)`;
 }
+
+// 24 colores bien separados entre sí y visibles sobre el mapa claro.
+const PALETA_CHOFER = [
+  '#E24B4A', '#3A8FD4', '#2ECFAA', '#F5A623', '#9B59B6', '#E91E8C',
+  '#16A085', '#D4703A', '#5C6BC0', '#7CB342', '#C2185B', '#00ACC1',
+  '#8E24AA', '#43A047', '#FF7043', '#1E88E5', '#F9A825', '#6D4C41',
+  '#26C6DA', '#AB47BC', '#9E9D24', '#EC407A', '#3949AB', '#00897B',
+];
 
 const COLOR_ESTADO = {
   blanco:   'rgba(255,255,255,0.45)',
@@ -299,6 +311,21 @@ export default function ColectasMapa({
     [registros]
   );
 
+  // Colores ÚNICOS entre los choferes del día en esta pestaña (orden alfabético → la asignación
+  // es estable mientras no cambie el plantel del día). Hay más choferes que colores en total,
+  // pero nunca más de ~15 visibles a la vez — acá los 24 de la paleta alcanzan siempre.
+  const mapaColores = useMemo(() => {
+    const lista = [];
+    activos.forEach(c => choferesDe(c).forEach(ch => {
+      if (ch && ch !== 'A coordinar' && !lista.includes(ch)) lista.push(ch);
+    }));
+    lista.sort((a, b) => a.localeCompare(b, 'es'));
+    const m = new Map();
+    lista.forEach((ch, i) => m.set(ch, PALETA_CHOFER[i % PALETA_CHOFER.length]));
+    return m;
+  }, [activos, choferesDe]);
+  const colorDe = useCallback(ch => mapaColores.get(ch) || colorChofer(ch), [mapaColores]);
+
   // Ubicar un cliente eligiendo un resultado del buscador de direcciones
   const elegirUbicacion = useCallback(async (c, cand) => {
     await onGeoUpdate(c.id, { lat: cand.lat, lng: cand.lng, geo_fuente: 'manual', geo_direccion: c.direccion });
@@ -399,7 +426,7 @@ export default function ColectasMapa({
       const emoji = VEHICULOS[c.vehiculo]?.emoji || '📦';
       const dirDelDia = reg?.direccion || c.direccion;
       const choferesTxt = sinAsignar ? 'A coordinar' : chs.filter(x => x !== 'A coordinar').join(' + ');
-      const key = [est, choferesTxt, atenuado ? 'a' : '', enSeleccion ? 's' : '', emoji, c.lat, c.lng, dirDelDia].join('|');
+      const key = [est, choferesTxt, chofer ? colorDe(chofer) : '-', atenuado ? 'a' : '', enSeleccion ? 's' : '', emoji, c.lat, c.lng, dirDelDia].join('|');
 
       let entry = markersRef.current.get(c.id);
       if (!entry) {
@@ -431,9 +458,11 @@ export default function ColectasMapa({
       if (entry.key !== key) {
         const borde = COLOR_ESTADO[est] || COLOR_ESTADO.blanco;
         const fondo = est === 'blanco' ? 'rgba(148,155,166,0.92)' : est === 'verde' ? 'rgba(46,207,170,0.22)' : 'rgba(251,191,36,0.20)';
+        // Puntito con la INICIAL del chofer: segunda pista además del color (los colores son
+        // únicos por día/pestaña, pero pueden variar entre días — la letra ancla la identidad).
         const punto = sinAsignar
           ? `<span style="width:11px;height:11px;border-radius:50%;border:2px dashed rgba(255,255,255,0.55);background:transparent;display:block"></span>`
-          : `<span style="width:11px;height:11px;border-radius:50%;background:${colorChofer(chofer)};border:1.5px solid rgba(0,0,0,0.45);display:block"></span>`;
+          : `<span style="width:14px;height:14px;border-radius:50%;background:${colorDe(chofer)};border:1.5px solid rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:8px;font-weight:700;color:#fff;line-height:1;text-shadow:0 0 2px rgba(0,0,0,0.8)">${escHtml((chofer[0] || '').toUpperCase())}</span>`;
         const html = `
           <div style="position:relative;opacity:${atenuado ? 0.28 : 1};transition:opacity .15s">
             <div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -449,7 +478,7 @@ export default function ColectasMapa({
             `<span style="width:9px;height:9px;border-radius:50%;border:2px dashed rgba(255,255,255,0.55);flex-shrink:0;box-sizing:border-box"></span>A coordinar</div>`
           : chs.filter(x => x !== 'A coordinar').map(ch =>
               `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-weight:600">` +
-              `<span style="width:9px;height:9px;border-radius:50%;background:${colorChofer(ch)};flex-shrink:0"></span>${escHtml(ch)}</div>`
+              `<span style="width:9px;height:9px;border-radius:50%;background:${colorDe(ch)};flex-shrink:0"></span>${escHtml(ch)}</div>`
             ).join('');
         entry.marker.setTooltipContent(
           `<div style="width:200px;white-space:normal;overflow-wrap:break-word;font-size:12px;line-height:1.45">` +
@@ -469,7 +498,7 @@ export default function ColectasMapa({
     markersRef.current.forEach((entry, id) => {
       if (!vivos.has(id)) { capaRef.current.removeLayer(entry.marker); markersRef.current.delete(id); }
     });
-  }, [listo, conPin, registros, choferFoco, seleccion, ajustando, choferesDe, onGeoUpdate]);
+  }, [listo, conPin, registros, choferFoco, seleccion, ajustando, choferesDe, colorDe, onGeoUpdate]);
 
   // ── Encuadre inicial por pestaña/fecha ──
   useEffect(() => {
@@ -693,7 +722,7 @@ export default function ColectasMapa({
                 <div key={ch} onClick={() => setChoferFoco(activo ? null : ch)}
                   title={activo ? 'Quitar resaltado' : `Resaltar las de ${ch}`}
                   style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 4px', cursor: 'pointer', minHeight: 26, opacity: choferFoco && !activo ? 0.45 : 1 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: ch === 'A coordinar' ? 'transparent' : colorChofer(ch), border: ch === 'A coordinar' ? '2px dashed rgba(255,255,255,0.55)' : '1px solid rgba(0,0,0,0.4)' }} />
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: ch === 'A coordinar' ? 'transparent' : colorDe(ch), border: ch === 'A coordinar' ? '2px dashed rgba(255,255,255,0.55)' : '1px solid rgba(0,0,0,0.4)' }} />
                   <span style={{ fontSize: 12, color: ch === 'A coordinar' ? '#FBBF24' : '#fff', whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch}</span>
                   <span style={{ fontSize: 11, color: BRAND.muted, marginLeft: 'auto' }}>{n}</span>
                 </div>
@@ -806,7 +835,7 @@ export default function ColectasMapa({
               .map(ch => (
                 <button key={ch} onClick={() => asignarBloque(ch)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px', borderRadius: 20, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', fontSize: 13, cursor: 'pointer', touchAction: 'manipulation' }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: colorChofer(ch) }} />
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: colorDe(ch) }} />
                   Asignar {seleccion.ids.filter(id => !seleccion.excluidos.has(id)).length} a {ch}
                 </button>
               ))}
