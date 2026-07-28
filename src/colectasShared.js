@@ -17,7 +17,7 @@ export const BRAND = {
 // Vehículo que necesita la colecta de ese cliente — atributo FIJO del cliente (como el horario).
 // NULL = sin definir: no se muestra emoji en la tabla y el pin del mapa cae al genérico 📦.
 export const VEHICULOS = {
-  bici:   { emoji: '🚲', label: 'Bici' },
+  moto:   { emoji: '🏍️', label: 'Moto' },
   auto:   { emoji: '🚗', label: 'Auto' },
   kangoo: { emoji: '🚐', label: 'Kangoo' },
 };
