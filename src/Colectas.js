@@ -176,6 +176,30 @@ function EtaInput({ value, onChange, editing, onEditingChange }) {
   );
 }
 
+// Aísla la vista Mapa: si algo revienta ahí adentro, se muestra un aviso y la tabla sigue viva
+// (sin esto, un TypeError del mapa desmonta todo el árbol y Colectas queda en pantalla negra).
+class MapaBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error) { console.error('Error en la vista Mapa:', error); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding:'2rem', textAlign:'center', color:BRAND.muted, border:`1px solid rgba(226,75,74,0.3)`, background:'rgba(226,75,74,0.07)', borderRadius:12 }}>
+          <div style={{ fontSize:28, marginBottom:8 }}>🗺️</div>
+          <div style={{ fontSize:14, color:'#E24B4A', marginBottom:6 }}>El mapa se cayó.</div>
+          <div style={{ fontSize:12.5, marginBottom:12 }}>{String(this.state.error?.message || this.state.error)}</div>
+          <button onClick={() => { this.setState({ error: null }); this.props.onVolver?.(); }}
+            style={{ padding:'7px 16px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:13 }}>
+            Volver a la tabla
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function LoginColectas({ onOk }) {
   const [em, setEm] = useState('');
   const [pw, setPw] = useState('');
@@ -1786,6 +1810,7 @@ function ColectasInner({ soloArribos = false }) {
         {navView === 'colectas' && <>
           {zoneTabs}
           {vistaColectas === 'mapa' ? (
+            <MapaBoundary onVolver={() => setVistaColectas('tabla')}>
             <Suspense fallback={<div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>Cargando mapa…</div>}>
               <ColectasMapa
                 clientes={seccionClientes}
@@ -1799,6 +1824,7 @@ function ColectasInner({ soloArribos = false }) {
                 esMovil={esMovil}
               />
             </Suspense>
+            </MapaBoundary>
           ) : renderZona()}
         </>}
         {navView === 'arribos'  && renderArribos()}

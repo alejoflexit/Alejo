@@ -108,9 +108,9 @@ export default function ColectasMapa({
     capaRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     setListo(true);
-    setTimeout(() => map.invalidateSize(), 50);
+    const t = setTimeout(() => { if (mapRef.current === map) map.invalidateSize(); }, 50);
     const markers = markersRef.current;
-    return () => { map.remove(); mapRef.current = null; markers.clear(); };
+    return () => { clearTimeout(t); map.remove(); mapRef.current = null; markers.clear(); };
   }, []);
 
   // ── Geocodificación (Nominatim, 1 req/s, cache en la base) ──
@@ -191,10 +191,11 @@ export default function ColectasMapa({
 
       let entry = markersRef.current.get(c.id);
       if (!entry) {
-        // Nacen draggable y arrancan deshabilitados: Leaflet solo crea marker.dragging si el
-        // marker nació draggable, así que el toggle "Ajustar pines" es enable()/disable().
+        // Nacen draggable para que Leaflet les cree el handler de arrastre, pero arrancan
+        // deshabilitados. OJO: `marker.dragging` NO existe hasta que el marker está agregado al
+        // mapa (se crea en _initInteraction, dentro de onAdd) — desactivarlo antes tira
+        // TypeError y, sin error boundary, se lleva puesta toda la pantalla de Colectas.
         const marker = L.marker([c.lat, c.lng], { draggable: true, riseOnHover: true });
-        marker.dragging.disable();
         marker.on('click', () => { setSel(c.id); });
         marker.on('dragend', async ev => {
           const { lat, lng } = ev.target.getLatLng();
@@ -204,6 +205,7 @@ export default function ColectasMapa({
           setTimeout(() => setGuardado(g => (g === actual.nombre ? '' : g)), 1800);
         });
         marker.addTo(capaRef.current);
+        if (marker.dragging) marker.dragging.disable();
         entry = { marker, key: null };
         markersRef.current.set(c.id, entry);
       }
@@ -227,7 +229,9 @@ export default function ColectasMapa({
         entry.key = key;
       }
 
-      if (ajustando) entry.marker.dragging.enable(); else entry.marker.dragging.disable();
+      if (entry.marker.dragging) {
+        if (ajustando) entry.marker.dragging.enable(); else entry.marker.dragging.disable();
+      }
     });
 
     markersRef.current.forEach((entry, id) => {
