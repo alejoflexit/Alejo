@@ -442,7 +442,7 @@ export default function ColectasMapa({
           </div>`;
         entry.marker.setIcon(L.divIcon({ html, className: 'flexit-pin', iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18] }));
         entry.marker.setTooltipContent(
-          `<div style="font-size:12px;line-height:1.45;max-width:230px">` +
+          `<div style="font-size:12px;line-height:1.45;max-width:230px;white-space:normal;overflow-wrap:break-word">` +
           `<b>${escHtml(c.nombre)}</b><br>📍 ${escHtml(dirDelDia)}<br>` +
           (sinAsignar
             ? `<span style="color:#b45309">⚠ A coordinar</span>`
