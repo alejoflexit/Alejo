@@ -108,6 +108,39 @@ function dentroDePoligono(punto, poligono) {
   return dentro;
 }
 
+// Dos buscadores de direcciones. Nominatim tiene un límite duro de 1 consulta/segundo por IP:
+// si la cola de geocoding está corriendo (o corrió mucho hoy), una búsqueda manual encima puede
+// caer bloqueada ("Failed to fetch", sin CORS en la respuesta de bloqueo). Photon (komoot) es el
+// respaldo: mismo mapa OSM, sin ese límite, y además tolera mejor los typos.
+const dentroAMBA = r =>
+  r.lat >= LIMITE_AMBA.latMin && r.lat <= LIMITE_AMBA.latMax &&
+  r.lng >= LIMITE_AMBA.lngMin && r.lng <= LIMITE_AMBA.lngMax;
+
+async function candidatosNominatim(texto) {
+  const res = await fetch(`${NOMINATIM}?format=json&limit=5&countrycodes=ar&viewbox=${CAJA_AMBA}&bounded=1&q=${enc(texto + ', Argentina')}`);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  return (json || [])
+    .map(r => ({ lat: Number(r.lat), lng: Number(r.lon), nombre: String(r.display_name || '').split(',').slice(0, 3).join(',') }))
+    .filter(dentroAMBA);
+}
+
+async function candidatosPhoton(texto) {
+  // bbox de Photon: lngMin,latMin,lngMax,latMax (el AMBA)
+  const res = await fetch(`https://photon.komoot.io/api/?limit=5&lang=default&bbox=-59.8,-35.4,-57.8,-33.8&q=${enc(texto)}`);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  return (json?.features || [])
+    .map(f => {
+      const [lng, lat] = f.geometry?.coordinates || [];
+      const p = f.properties || {};
+      const calle = [p.street || p.name, p.housenumber].filter(Boolean).join(' ');
+      const nombre = [calle, p.district, p.city || p.county, p.state].filter(Boolean).slice(0, 3).join(', ');
+      return { lat: Number(lat), lng: Number(lng), nombre: nombre || 'Resultado sin nombre' };
+    })
+    .filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lng) && dentroAMBA(r));
+}
+
 // Buscador de direcciones estilo Google Maps: escribís → 🔍 → candidatos → elegís uno.
 // El pin elegido por búsqueda se guarda como manual (el geocoding automático nunca lo pisa).
 function BuscadorDireccion({ inicial, onElegir }) {
@@ -118,18 +151,23 @@ function BuscadorDireccion({ inicial, onElegir }) {
 
   const buscar = async () => {
     if (!texto.trim() || buscando) return;
+    const t = texto.trim();
     setBuscando(true); setError(''); setCandidatos(null);
-    try {
-      const res = await fetch(`${NOMINATIM}?format=json&limit=5&countrycodes=ar&viewbox=${CAJA_AMBA}&bounded=1&q=${enc(texto.trim() + ', Argentina')}`);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      const lista = (json || [])
-        .map(r => ({ lat: Number(r.lat), lng: Number(r.lon), nombre: String(r.display_name || '').split(',').slice(0, 3).join(',') }))
-        .filter(r => r.lat >= LIMITE_AMBA.latMin && r.lat <= LIMITE_AMBA.latMax && r.lng >= LIMITE_AMBA.lngMin && r.lng <= LIMITE_AMBA.lngMax);
-      setCandidatos(lista);
-    } catch (e) {
-      setError('No se pudo buscar (' + (e.message || e) + ')');
+    let lista = null;
+    let falloNominatim = '';
+    try { lista = await candidatosNominatim(t); } catch (e) { falloNominatim = e.message || String(e); }
+    if (!lista || !lista.length) {
+      // Nominatim falló o no encontró nada → probar con el respaldo
+      try { lista = await candidatosPhoton(t); } catch (e) {
+        if (falloNominatim) {
+          setError('Los dos buscadores fallaron (' + falloNominatim + '). Esperá unos segundos y probá de nuevo, o poné el pin a mano.');
+          setBuscando(false);
+          return;
+        }
+        lista = [];
+      }
     }
+    setCandidatos(lista || []);
     setBuscando(false);
   };
 
