@@ -327,7 +327,6 @@ function ColectasInner({ soloArribos = false }) {
   const [dirEdit, setDirEdit] = useState(null); // { id, valor } — dirección puntual del día
   const [zonaEdit, setZonaEdit] = useState(null); // { id, valor } — zona puntual del día
   const [filtroEstado, setFiltroEstado] = useState(null); // null = todos | verde/amarillo/blanco/rojo
-  const [rojasOpen, setRojasOpen] = useState({}); // grupos con las "sin envíos" expandidas
   const [busqueda, setBusqueda] = useState(''); // buscador de cliente o chofer
   const [clientes, setClientes] = useState([]);
   const [registros, setRegistros] = useState({});
@@ -379,8 +378,6 @@ function ColectasInner({ soloArribos = false }) {
     catch { return []; }
   });
   const [syncingChoferes, setSyncingChoferes] = useState(false);
-  // Choferes agregados a mano: viven en Supabase (colectas_choferes_manuales) — el sync de LightData NO los pisa.
-  const [choferesManuales, setChoferesManuales] = useState([]);
 
   const syncChoferes = useCallback(async () => {
     setSyncingChoferes(true);
@@ -391,25 +388,6 @@ function ColectasInner({ soloArribos = false }) {
     } catch(e) { console.error('Error sincronizando choferes:', e); }
     finally { setSyncingChoferes(false); }
   }, []);
-
-  // Lista completa para los selectores: LightData + manuales (sin duplicados).
-  const choferesFull = React.useMemo(
-    () => [...new Set([...choferesList, ...choferesManuales])].sort((a, b) => a.localeCompare(b, 'es')),
-    [choferesList, choferesManuales]
-  );
-  const agregarChoferManual = async (name) => {
-    try {
-      await sbFetch('colectas_choferes_manuales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: name }) });
-      setChoferesManuales(prev => prev.includes(name) ? prev : [...prev, name]);
-    } catch (e) {
-      // best effort: si falla el guardado remoto, al menos queda en esta sesión
-      setChoferesList(prev => prev.includes(name) ? prev : [...prev, name]);
-    }
-  };
-  const quitarChoferManual = async (name) => {
-    setChoferesManuales(prev => prev.filter(x => x !== name));
-    try { await sbFetch(`colectas_choferes_manuales?nombre=eq.${encodeURIComponent(name)}`, { method: 'DELETE' }); } catch (e) { }
-  };
 
   const saveTimer = useRef(null);
   const registrosRef = useRef({});
@@ -466,15 +444,9 @@ function ColectasInner({ soloArribos = false }) {
     return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
   }, [fecha]);
 
-  // Sincronizar choferes desde Supabase siempre al montar (+ los manuales guardados)
+  // Sincronizar choferes desde Supabase siempre al montar
   useEffect(() => {
     syncChoferes();
-    (async () => {
-      try {
-        const rows = await sbFetch('colectas_choferes_manuales?select=nombre&order=nombre.asc');
-        setChoferesManuales(rows.map(r => r.nombre).filter(Boolean));
-      } catch (e) { console.error('Error cargando choferes manuales:', e); }
-    })();
   }, [syncChoferes]);
 
   // Persistir cambios manuales en localStorage
@@ -800,9 +772,6 @@ function ColectasInner({ soloArribos = false }) {
   // Helpers
   const seccionClientes = clientes.filter(c => c.activo && (tab === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === tab));
 
-  // Estado efectivo de un cliente hoy (los fijos sin estado cuentan como amarillo).
-  const estEf = (c) => { const reg = registros[c.id]; return (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco'); };
-
   function getGroups(list) {
     const groups = {}, order = [];
     list.forEach(c => {
@@ -814,10 +783,7 @@ function ColectasInner({ soloArribos = false }) {
       });
     });
     const uniq = [...new Set(order)].filter(c => c !== 'A coordinar').sort((a,b) => a.localeCompare(b, 'es'));
-    const conA = ['A coordinar', ...uniq].filter(c => groups[c]);
-    // Los que hoy solo tienen "sin envíos" van al final, compactados bajo "Sin colectas hoy".
-    const tieneActivas = (ch) => groups[ch].some(c => estEf(c) !== 'rojo');
-    return { groups, order: [...conA.filter(tieneActivas), ...conA.filter(ch => !tieneActivas(ch))] };
+    return { groups, order: ['A coordinar', ...uniq].filter(c => groups[c]) };
   }
 
   function buildMsg(chofer) {
@@ -968,7 +934,7 @@ function ColectasInner({ soloArribos = false }) {
               { key:'verde',   label:'Confirmado', color:'#2ECFAA', bg:'rgba(46,207,170,0.1)',  border:'rgba(46,207,170,0.3)'  },
               { key:'amarillo',label:'Con envíos',  color:'#FBBF24', bg:'rgba(251,191,36,0.1)', border:'rgba(251,191,36,0.3)'  },
               { key:'blanco',  label:'Pendiente',   color:BRAND.muted, bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.12)' },
-              { key:'rojo',    label:'Sin envíos hoy', color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
+              { key:'rojo',    label:'Sin envíos',  color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
             ].map(({ key, label, color, bg, border }) => conteoEstados[key] ? (
               <div key={key} onClick={() => setFiltroEstado(filtroEstado === key ? null : key)}
                 title={filtroEstado === key ? 'Quitar filtro' : `Ver solo ${label.toLowerCase()}`}
@@ -978,7 +944,6 @@ function ColectasInner({ soloArribos = false }) {
                 {filtroEstado === key && <span style={{ fontSize:10, color }}>✕</span>}
               </div>
             ) : null)}
-            <span style={{ fontSize:11, color:'rgba(255,255,255,0.32)', alignSelf:'center' }}>· tocá para filtrar</span>
           </div>
         )}
 
@@ -996,21 +961,15 @@ function ColectasInner({ soloArribos = false }) {
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580 }}>
             <thead>
               <tr style={{ background:'#252932' }}>
-                {['','Cliente','Chofer(es)','Dirección','Zona','Hora','Monto'].map((h,i) => (
+                {['','Cliente','Chofer(es)','Dirección','Zona','Hora','$$$'].map((h,i) => (
                   <th key={i} style={{ ...thSt, width:i===0?36:undefined }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {order.map(chofer => {
+                const isWarn = chofer === 'A coordinar';
                 const rows = groups[chofer];
-                // Con filtro o búsqueda activa no se compacta nada (el usuario pidió ver eso explícitamente).
-                const compactar = !filtroEstado && !busqueda;
-                const rojas = compactar ? rows.filter(c => estEf(c) === 'rojo') : [];
-                const activasRows = compactar ? rows.filter(c => estEf(c) !== 'rojo') : rows;
-                const soloRojas = compactar && activasRows.length === 0;
-                const primerVacio = compactar ? order.find(ch => groups[ch].every(x => estEf(x) === 'rojo')) : null;
-                const isWarn = chofer === 'A coordinar' && !soloRojas;
                 const amarillosConf = isWarn ? 0 : seccionClientes.filter(c => {
                   const reg = registros[c.id];
                   const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
@@ -1023,22 +982,7 @@ function ColectasInner({ soloArribos = false }) {
                 const isActive = hoverChofer === chofer || copiedChofer === chofer;
                 return (
                   <React.Fragment key={chofer}>
-                    {/* Separador: acá empiezan los que hoy no tienen ninguna colecta activa */}
-                    {compactar && chofer === primerVacio && (
-                      <tr>
-                        <td colSpan={7} style={{ padding:'14px 14px 6px', fontSize:10.5, letterSpacing:0.8, textTransform:'uppercase', color:BRAND.muted, fontWeight:700, borderBottom:`1px solid ${BRAND.border}` }}>Sin colectas hoy</td>
-                      </tr>
-                    )}
-                    {/* Grupo sin activas: una sola línea compacta, expandible */}
-                    {soloRojas ? (
-                      <tr onClick={() => setRojasOpen(p => ({ ...p, [chofer]: !p[chofer] }))} style={{ cursor:'pointer', background:'rgba(226,75,74,0.03)' }}>
-                        <td colSpan={7} style={{ padding:'8px 14px', borderBottom:`1px solid ${BRAND.border}` }}>
-                          <span style={{ color:'#E24B4A', opacity:0.75, marginRight:8, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
-                          <span style={{ fontSize:12.5, fontWeight:600, color:'rgba(255,255,255,0.75)' }}>{chofer === 'A coordinar' ? 'Sin chofer' : chofer}</span>
-                          <span style={{ fontSize:11.5, color:BRAND.muted, marginLeft:8 }}>· {rojas.length} sin envíos hoy</span>
-                        </td>
-                      </tr>
-                    ) : (
+                    {/* Group header */}
                     <tr onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
                       style={{ background: isActive ? 'rgba(58,143,212,0.14)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
                       <td colSpan={7} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#3A8FD4'}` }}>
@@ -1048,7 +992,7 @@ function ColectasInner({ soloArribos = false }) {
                               {isWarn ? '⚠️ ' : ''}{chofer}
                             </span>
                             <span style={{ fontSize:12, color:isWarn?'rgba(251,191,36,0.7)':BRAND.teal, marginLeft:6 }}>
-                              {compactar ? activasRows.length : rows.length}
+                              {rows.length}
                             </span>
                           </span>
                           {!isWarn && (
@@ -1064,8 +1008,8 @@ function ColectasInner({ soloArribos = false }) {
                                 onClick={() => copyMsg(chofer)}
                                 onMouseEnter={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='1'; }}
                                 onMouseLeave={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='0'; }}
-                                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:5, height:30, padding:'0 12px', borderRadius:8, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(46,207,170,0.5)'}`, color:'#2ECFAA', background:copiedChofer===chofer?'rgba(46,207,170,0.2)':'rgba(46,207,170,0.1)', fontSize:12, fontWeight:600, cursor:'pointer', transition:'all 0.2s', whiteSpace:'nowrap' }}>
-                                {copiedChofer===chofer ? '✓ Copiado' : '📱 Copiar'}
+                                style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(46,207,170,0.5)'}`, color:'#2ECFAA', background:copiedChofer===chofer?'rgba(46,207,170,0.2)':'rgba(46,207,170,0.1)', fontSize:14, cursor:'pointer', transition:'all 0.2s' }}>
+                                {copiedChofer===chofer ? '✓' : '📱'}
                               </button>
                               <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', right:0, whiteSpace:'nowrap', background:'#1a2e3a', color:'#2ECFAA', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,207,170,0.3)', pointerEvents:'none', zIndex:400 }}>
                                 Copiar {chofer}
@@ -1076,9 +1020,8 @@ function ColectasInner({ soloArribos = false }) {
                         </div>
                       </td>
                     </tr>
-                    )}
                     {/* Data rows */}
-                    {(() => { const renderRow = (c) => {
+                    {rows.map(c => {
                       const reg = registros[c.id] || { choferes:['A coordinar'], estado:'blanco', confirmado_por:[] };
                       const chs = reg.choferes?.length ? reg.choferes : ['A coordinar'];
                       const estado = (c.fija && (!reg.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg.estado || 'blanco');
@@ -1131,7 +1074,7 @@ function ColectasInner({ soloArribos = false }) {
                             <button
                               onClick={handleCircleClick}
                               title={esteChoferActivo ? `Confirmar ${chofer} (independiente)` : unassigned ? 'blanco → amarillo → cancelado' : 'blanco → amarillo → verde → cancelado'}
-                              style={{ width:28, height:28, borderRadius:'50%', border:`2px solid ${EBORDER[circleEstado]}`, background:ECOLOR[circleEstado], cursor:'pointer', color:circleEstado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                              style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${EBORDER[circleEstado]}`, background:ECOLOR[circleEstado], cursor:'pointer', color:circleEstado==='verde'?'#0d1b2a':'#fff', fontWeight:700, fontSize:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                               {EICON[circleEstado]}
                             </button>
                           </td>
@@ -1152,11 +1095,11 @@ function ColectasInner({ soloArribos = false }) {
                           <td style={{ padding:'8px 8px', minWidth:160 }}>
                             <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                               {estado === 'rojo' ? (
-                                <span style={{ fontSize:11, color:BRAND.muted, fontStyle:'italic' }}>Sin envíos hoy</span>
+                                <span style={{ fontSize:11, color:BRAND.muted, fontStyle:'italic' }}>Cancelada</span>
                               ) : (
                               <ChoferPicker
                                 chs={chs}
-                                choferesList={choferesFull}
+                                choferesList={choferesList}
                                 onUpdate={updates => updateRegistro(c.id, updates)}
                                 hideChips={!isDividida && chofer !== 'A coordinar'}
                               />
@@ -1195,7 +1138,7 @@ function ColectasInner({ soloArribos = false }) {
                                 title={reg.zona_barrio ? `Zona de hoy · la fija es: ${c.zona_barrio||'—'}` : 'Click para una zona puntual de hoy'}
                                 style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
                                 {(reg.zona_barrio || c.zona_barrio)
-                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, textTransform:'capitalize', background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.06)', border: reg.zona_barrio ? 'none' : `1px solid ${BRAND.border}`, color: reg.zona_barrio ? '#FBBF24' : 'rgba(255,255,255,0.72)' }}>{String(reg.zona_barrio || c.zona_barrio).toLowerCase()}</span>
+                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, textTransform:'capitalize', background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(58,143,212,0.15)', color: reg.zona_barrio ? '#FBBF24' : '#3A8FD4' }}>{String(reg.zona_barrio || c.zona_barrio).toLowerCase()}</span>
                                   : <span style={{ fontSize:11, color:BRAND.muted }}>+ zona</span>}
                                 {reg.zona_barrio
                                   ? <button onClick={ev => { ev.stopPropagation(); updateRegistro(c.id, { zona_barrio: null }); }} title="Volver a la zona fija" style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:0 }}>↩</button>
@@ -1226,21 +1169,7 @@ function ColectasInner({ soloArribos = false }) {
                           </td>
                         </tr>
                       );
-                    };
-                    return (
-                      <>
-                        {activasRows.map(renderRow)}
-                        {compactar && !soloRojas && rojas.length > 0 && (
-                          <tr onClick={() => setRojasOpen(p => ({ ...p, [chofer]: !p[chofer] }))} style={{ cursor:'pointer', background:'rgba(226,75,74,0.03)' }}>
-                            <td colSpan={7} style={{ padding:'7px 14px 7px 46px', fontSize:11.5, color:BRAND.muted, borderBottom:`1px solid ${BRAND.border}` }}>
-                              <span style={{ color:'#E24B4A', opacity:0.75, marginRight:6 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
-                              {rojas.length} sin envíos hoy
-                            </td>
-                          </tr>
-                        )}
-                        {compactar && rojasOpen[chofer] && rojas.map(renderRow)}
-                      </>
-                    ); })()}
+                    })}
                   </React.Fragment>
                 );
               })}
@@ -1445,19 +1374,15 @@ function ColectasInner({ soloArribos = false }) {
 
         <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'1.25rem', marginBottom:16 }}>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:14 }}>
-            {choferesFull.map(ch => {
-              const esManual = choferesManuales.includes(ch) && !choferesList.includes(ch);
-              return (
-                <div key={ch} title={esManual ? 'Agregado a mano — queda guardado, el sync no lo pisa' : 'Viene de LightData (métricas)'}
-                  style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:20, background: esManual ? 'rgba(46,207,170,0.08)' : BRAND.navyMid, border:`1px solid ${esManual ? 'rgba(46,207,170,0.45)' : BRAND.border}`, fontSize:13 }}>
-                  <span>{esManual ? '📌' : '👤'}</span>
-                  <span>{ch}</span>
-                  <button onClick={() => { if (choferesManuales.includes(ch)) quitarChoferManual(ch); if (choferesList.includes(ch)) setChoferesList(prev => prev.filter(x => x !== ch)); }}
-                    style={{ background:'none', border:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:'0 0 0 4px', lineHeight:1, display:'flex', alignItems:'center' }}>✕</button>
-                </div>
-              );
-            })}
-            {choferesFull.length === 0 && (
+            {choferesList.map(ch => (
+              <div key={ch} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:20, background:BRAND.navyMid, border:`1px solid ${BRAND.border}`, fontSize:13 }}>
+                <span>👤</span>
+                <span>{ch}</span>
+                <button onClick={() => setChoferesList(prev => prev.filter(x => x !== ch))}
+                  style={{ background:'none', border:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:'0 0 0 4px', lineHeight:1, display:'flex', alignItems:'center' }}>✕</button>
+              </div>
+            ))}
+            {choferesList.length === 0 && (
               <div style={{ color:BRAND.muted, fontSize:13 }}>No hay choferes cargados.</div>
             )}
           </div>
@@ -1465,7 +1390,7 @@ function ColectasInner({ soloArribos = false }) {
           <form onSubmit={e => {
             e.preventDefault();
             const name = e.target.chofer.value.trim();
-            if (name && !choferesFull.includes(name)) agregarChoferManual(name);
+            if (name && !choferesList.includes(name)) setChoferesList(prev => [...prev, name]);
             e.target.chofer.value = '';
           }} style={{ display:'flex', gap:8 }}>
             <input name="chofer" placeholder="Nombre del chofer..." style={{ ...inpSt, padding:'7px 12px', flex:1, maxWidth:240 }} />
@@ -1477,7 +1402,7 @@ function ColectasInner({ soloArribos = false }) {
         </div>
 
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:`1px solid ${BRAND.border}` }}>
-          <span style={{ fontSize:12, color:BRAND.muted }}>💡 Los 👤 se sincronizan solos desde métricas (LightData). Los 📌 los agregaste a mano: quedan guardados y el sync no los pisa.</span>
+          <span style={{ fontSize:12, color:BRAND.muted }}>💡 Lista sincronizada desde métricas. Podés agregar o quitar choferes manualmente.</span>
           <button onClick={syncChoferes} disabled={syncingChoferes}
             style={{ padding:'5px 12px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:'transparent', color:syncingChoferes ? BRAND.muted : BRAND.teal, cursor:syncingChoferes ? 'default' : 'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap', marginLeft:12 }}>
             {syncingChoferes ? 'Sincronizando...' : '↺ Sincronizar desde métricas'}
@@ -1767,7 +1692,7 @@ function ColectasInner({ soloArribos = false }) {
             {s}
             {sinConfirmar > 0 && (
               <span title={`${sinConfirmar} con envíos sin confirmar`}
-                style={{ minWidth:16, height:16, borderRadius:8, background:'rgba(251,191,36,0.18)', color:'#FBBF24', fontSize:10, fontWeight:700, lineHeight:1, display:'inline-flex', alignItems:'center', justifyContent:'center', padding:'0 5px' }}>
+                style={{ fontSize:11, fontWeight:700, color:'#FBBF24', lineHeight:1, marginLeft:-4, transform:'translateY(-6px)' }}>
                 {sinConfirmar}
               </span>
             )}
