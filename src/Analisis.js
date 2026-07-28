@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Cell,
+  LineChart, Line, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
 // Pestaña "Análisis" — port del prototipo prototipos/panel-analisis.html a React.
@@ -708,21 +708,6 @@ export default function Analisis({ semanas }) {
     return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); const ent = g.cant - g.pend; return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, sla: slaMeli(g.ml, g.dm, g.d2), p21r: ent > 0 ? g.p21 / ent * 100 : null }; }) };
   }, [periodo.t, periodW, completas, semanas, topeMap]);
 
-  // Titular del gráfico de volumen: el pico del período contado como historia ("⬆ viernes 25/07 · 1.820 envíos").
-  const volHead = useMemo(() => {
-    const ds = tendData.datos || [];
-    if (ds.length < 2) return null;
-    const max = ds.reduce((a, b) => (b.cant > a.cant ? b : a), ds[0]);
-    const rest = ds.filter((d) => d !== max);
-    const avg = rest.length ? rest.reduce((a, d) => a + d.cant, 0) / rest.length : 0;
-    const pct = avg > 0 ? (max.cant / avg - 1) * 100 : null;
-    const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-    let lbl = max.name;
-    if (tendData.modo === "día" && max.fecha) lbl = DIAS[new Date(max.fecha + "T12:00:00").getDay()] + " " + max.name;
-    else if (tendData.modo === "semana") lbl = "semana del " + max.name;
-    return { lbl, cant: max.cant, pct };
-  }, [tendData]);
-
   // Calendario del histórico: stats por fecha (todas las semanas cargadas) para la vista mensual.
   const calStats = useMemo(() => {
     const map = {}; let max = 0;
@@ -737,6 +722,7 @@ export default function Analisis({ semanas }) {
     return { map, max, meses };
   }, [semanas]);
   const [calSel, setCalSel] = useState(null); // día seleccionado del calendario: {fecha, s}
+  const [calMes, setCalMes] = useState(null); // mes visible del calendario (default: el último con datos)
 
   // Patrones: reincidentes de demora (nunca "Sin asignar" ni basura — esos van a alertas operativas).
   const patrones = useMemo(() => {
@@ -1345,29 +1331,63 @@ export default function Analisis({ semanas }) {
       {/* === 3 · Tendencia (Mensual migrado) — evolución adaptativa por período === */}
       <h2 style={{ fontSize: 16, margin: "28px 0 14px", borderTop: `1px solid ${C.faint}`, paddingTop: 18 }}>Tendencia <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· evolución {tendData.modo === "día" ? "diaria" : tendData.modo === "semana" ? "semanal" : "mensual"} de SLA y volumen</span></h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginBottom: 22 }}>
+        {/* Calendario de volumen — mismo dato que las barras, con más contexto; un mes por vez con flechas */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>Volumen por {tendData.modo}</div>
-          {volHead ? (
-            <div style={{ fontSize: 12, color: C.ink, marginBottom: 8 }}>
-              <span style={{ color: C.blue, fontWeight: 700 }}>⬆ pico:</span> <b>{volHead.lbl}</b> · {fmtInt(volHead.cant)} envíos
-              {volHead.pct != null && volHead.pct >= 1 ? <span style={{ color: C.muted }}> · +{fmt0(volHead.pct)}% vs el resto</span> : null}
-            </div>
-          ) : (
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>Envíos totales (ML + particulares).</div>
-          )}
-          <ResponsiveContainer width="100%" height={190}>
-            <BarChart data={tendData.datos} margin={{ top: 6, right: 8, left: -8, bottom: 0 }}>
-              <CartesianGrid stroke={C.faint} vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v >= 1000 ? (v / 1000) + "k" : v} />
-              <Tooltip cursor={{ fill: "rgba(255,255,255,0.05)" }} contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmtInt(v), "Envíos"]} labelStyle={{ color: C.muted }} />
-              <Bar dataKey="cant" radius={[3, 3, 0, 0]}>
-                {tendData.datos.map((d, i) => (
-                  <Cell key={i} fill={volHead && d.cant === volHead.cant ? C.blue : C.teal} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {(() => {
+            const meses = calStats.meses;
+            if (!meses.length) return <div style={{ color: C.muted, fontSize: 12 }}>Sin datos todavía.</div>;
+            const mk = calMes && meses.includes(calMes) ? calMes : meses[meses.length - 1];
+            const idx = meses.indexOf(mk);
+            const [y, mo] = mk.split("-").map(Number);
+            const off = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // lunes = 0
+            const nd = new Date(y, mo, 0).getDate();
+            const cells = Array.from({ length: off }, () => null).concat(Array.from({ length: nd }, (_, i) => i + 1));
+            let pico = null;
+            Object.entries(calStats.map).forEach(([f, s]) => { if (f.slice(0, 7) === mk && (!pico || s.cant > pico.s.cant)) pico = { f, s }; });
+            const navBtn = (dir, dis) => (
+              <button disabled={dis} onClick={() => setCalMes(meses[idx + dir])} style={{ width: 26, height: 26, borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: dis ? C.dim : C.teal, cursor: dis ? "default" : "pointer", fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{dir < 0 ? "‹" : "›"}</button>
+            );
+            return (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>Volumen del mes</div>
+                  {navBtn(-1, idx === 0)}
+                  <span style={{ fontSize: 12, fontWeight: 700, minWidth: 92, textAlign: "center", textTransform: "capitalize" }}>{MES_FULL[mo - 1]} {y}</span>
+                  {navBtn(1, idx === meses.length - 1)}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Más verde = más envíos · puntito = SLA flojo ese día (🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%). Tocá un día para el detalle.</div>
+                {pico && <div style={{ fontSize: 12, color: C.ink, marginBottom: 8 }}><span style={{ color: C.blue, fontWeight: 700 }}>⬆ pico:</span> <b style={{ textTransform: "capitalize" }}>{DIAS_SEM[new Date(pico.f + "T12:00:00").getDay()]} {fmtDDMM(pico.f)}</b> · {fmtInt(pico.s.cant)} envíos</div>}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(26px, 1fr))", gap: 3 }}>
+                  {["L", "M", "X", "J", "V", "S", "D"].map((d, i) => <div key={d + i} style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>{d}</div>)}
+                  {cells.map((d, i) => {
+                    if (d == null) return <div key={"e" + i} />;
+                    const iso = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                    const s = calStats.map[iso];
+                    const alpha = s && calStats.max ? 0.12 + 0.5 * (s.cant / calStats.max) : 0;
+                    const sel = calSel && calSel.fecha === iso;
+                    return (
+                      <div key={iso} onMouseEnter={s ? () => setCalSel({ fecha: iso, s }) : undefined} onClick={s ? () => setCalSel({ fecha: iso, s }) : undefined}
+                        style={{ height: 32, borderRadius: 6, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: s ? "pointer" : "default", background: s ? `rgba(46,207,170,${alpha.toFixed(2)})` : "transparent", border: `1px solid ${sel ? C.teal : "transparent"}` }}>
+                        <span style={{ fontSize: 10.5, fontWeight: s ? 700 : 400, color: s ? C.ink : C.dim, lineHeight: 1 }}>{d}</span>
+                        {s && s.sla != null && s.sla < CFG.slaOk && <span style={{ width: 5, height: 5, borderRadius: "50%", background: slaColor(s.sla), marginTop: 2 }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: 10, borderTop: `1px solid ${C.faint}`, paddingTop: 8, fontSize: 12, minHeight: 22 }}>
+                  {calSel ? (() => {
+                    const s = calSel.s;
+                    const dw = DIAS_SEM[new Date(calSel.fecha + "T12:00:00").getDay()];
+                    return (
+                      <span>
+                        <b style={{ textTransform: "capitalize" }}>{dw} {fmtDMY(calSel.fecha)}</b> · {fmtInt(s.cant)} envíos · SLA <b style={{ color: slaColor(s.sla) }}>{s.sla != null ? fmt1(s.sla) + "%" : "—"}</b> · {fmtInt(s.dem)} demoras{s.p21r != null ? <> · {fmt1(s.p21r)}% post-21</> : null}{s.pend > 0 ? <> · {fmtInt(s.pend)} pendientes</> : null}
+                      </span>
+                    );
+                  })() : <span style={{ color: C.muted, fontSize: 11.5 }}>Elegí un día para ver su detalle acá.</span>}
+                </div>
+              </>
+            );
+          })()}
         </div>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>SLA Meli por {tendData.modo}</div>
@@ -1394,53 +1414,6 @@ export default function Analisis({ semanas }) {
               <Line type="monotone" dataKey="p21r" stroke={C.warn} strokeWidth={2.5} dot={{ r: 2.5, fill: C.warn }} />
             </LineChart>
           </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Calendario — todo el histórico de un vistazo: color = volumen del día, puntito = SLA flojo */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 22 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>Calendario</div>
-        <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 10 }}>Más verde = más envíos ese día · puntito = SLA flojo (🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%). Pasá el mouse o tocá un día y el detalle aparece abajo.</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-          {calStats.meses.map((mk) => {
-            const [y, mo] = mk.split("-").map(Number);
-            const off = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // lunes = 0
-            const nd = new Date(y, mo, 0).getDate();
-            const cells = Array.from({ length: off }, () => null).concat(Array.from({ length: nd }, (_, i) => i + 1));
-            return (
-              <div key={mk}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: C.ink, marginBottom: 5, textTransform: "capitalize" }}>{MES_FULL[mo - 1]} {y}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 30px)", gap: 3 }}>
-                  {["L", "M", "X", "J", "V", "S", "D"].map((d, i) => <div key={d + i} style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>{d}</div>)}
-                  {cells.map((d, i) => {
-                    if (d == null) return <div key={"e" + i} />;
-                    const iso = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    const s = calStats.map[iso];
-                    const alpha = s && calStats.max ? 0.12 + 0.5 * (s.cant / calStats.max) : 0;
-                    const sel = calSel && calSel.fecha === iso;
-                    return (
-                      <div key={iso} onMouseEnter={s ? () => setCalSel({ fecha: iso, s }) : undefined} onClick={s ? () => setCalSel({ fecha: iso, s }) : undefined}
-                        style={{ height: 30, borderRadius: 6, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: s ? "pointer" : "default", background: s ? `rgba(46,207,170,${alpha.toFixed(2)})` : "transparent", border: `1px solid ${sel ? C.teal : "transparent"}` }}>
-                        <span style={{ fontSize: 10.5, fontWeight: s ? 700 : 400, color: s ? C.ink : C.dim, lineHeight: 1 }}>{d}</span>
-                        {s && s.sla != null && s.sla < CFG.slaOk && <span style={{ width: 5, height: 5, borderRadius: "50%", background: slaColor(s.sla), marginTop: 2 }} />}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: 10, borderTop: `1px solid ${C.faint}`, paddingTop: 8, fontSize: 12.5, minHeight: 22 }}>
-          {calSel ? (() => {
-            const s = calSel.s;
-            const dw = DIAS_SEM[new Date(calSel.fecha + "T12:00:00").getDay()];
-            return (
-              <span>
-                <b style={{ textTransform: "capitalize" }}>{dw} {fmtDMY(calSel.fecha)}</b> · {fmtInt(s.cant)} envíos · SLA <b style={{ color: slaColor(s.sla) }}>{s.sla != null ? fmt1(s.sla) + "%" : "—"}</b> · {fmtInt(s.dem)} demoras{s.p21r != null ? <> · {fmt1(s.p21r)}% post-21</> : null}{s.pend > 0 ? <> · {fmtInt(s.pend)} pendientes</> : null}
-              </span>
-            );
-          })() : <span style={{ color: C.muted, fontSize: 11.5 }}>Elegí un día para ver su detalle acá.</span>}
         </div>
       </div>
 
