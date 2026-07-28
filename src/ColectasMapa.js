@@ -11,6 +11,44 @@ const CENTRO_CABA = [-34.6083, -58.3712];
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Las direcciones de los clientes traen la referencia pegada ("piso 3", "timbre 4B",
+// "entre Conde y Superí", "consultar en la papelera de al lado"). Nominatim no las entiende:
+// medido sobre las 57 de CABA, mandarlas crudas falla el 54%; recortadas a "calle + altura",
+// el 95%. Lo que queda son typos de la dirección cargada (Humbolt, Billingurst) — esos se
+// arreglan editando el cliente o poniendo el pin a mano.
+const JUNK_DIRECCION = /\b(entre|piso|pisos|p\.?b\.?|timbre|depto|dpto|dto|departamento|local|oficina|of|uf|casa|esquina|esq|consultar|puerta|torre|interno|planta|altura|cochera|frente|fondo|galpon|nave|lote|manzana|mza)\d*\b/i;
+
+export function limpiarDireccion(dir) {
+  let s = String(dir || '').split(',')[0].split('(')[0];
+  const m = s.match(JUNK_DIRECCION);
+  if (m) s = s.slice(0, m.index);
+  s = s.replace(/\bcaba\b/ig, ' ').replace(/\s+/g, ' ').trim();
+  // cortar después de la última altura suelta ("directorio 314 2D" → "directorio 314";
+  // "Av. 9 de Julio 1000" se conserva entero porque el último número suelto es la altura)
+  const nums = [...s.matchAll(/\b\d+\b/g)];
+  if (nums.length) { const u = nums[nums.length - 1]; s = s.slice(0, u.index + u[0].length); }
+  return s.replace(/[\s.\-]+$/, '').trim();
+}
+
+// Devuelve {lat,lng} o null. Intento 1 con el barrio/localidad (necesario en GBA), intento 2
+// sin él (en CABA el barrio a veces confunde al buscador: 6 de 28 se resolvieron recién así).
+async function buscarUbicacion(direccion, zonaBarrio) {
+  const limpia = limpiarDireccion(direccion);
+  if (!limpia) return null;
+  const intentos = [
+    [limpia, zonaBarrio, 'Buenos Aires', 'Argentina'].filter(Boolean).join(', '),
+    [limpia, 'Buenos Aires', 'Argentina'].join(', '),
+  ];
+  for (let k = 0; k < intentos.length; k++) {
+    if (k) await sleep(1100);
+    const res = await fetch(`${NOMINATIM}?format=json&limit=1&countrycodes=ar&q=${encodeURIComponent(intentos[k])}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json && json[0]) return { lat: Number(json[0].lat), lng: Number(json[0].lon) };
+  }
+  return null;
+}
+
 // Color estable por chofer (mismo nombre → mismo color en todas las sesiones)
 function colorChofer(nombre) {
   const n = normNombre(nombre);
@@ -140,17 +178,10 @@ export default function ColectasMapa({
         if (!vivoRef.current) break;
         const c = pendientes[i];
         intentadosRef.current.add(`${c.id}|${c.direccion}`);
-        const partes = [c.direccion, c.zona_barrio, 'Buenos Aires', 'Argentina'].filter(Boolean);
         try {
-          const url = `${NOMINATIM}?format=json&limit=1&countrycodes=ar&q=${encodeURIComponent(partes.join(', '))}`;
-          const res = await fetch(url);
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const json = await res.json();
-          if (json && json[0]) {
-            await onGeoUpdate(c.id, {
-              lat: Number(json[0].lat), lng: Number(json[0].lon),
-              geo_fuente: 'auto', geo_direccion: c.direccion,
-            });
+          const punto = await buscarUbicacion(c.direccion, c.zona_barrio);
+          if (punto) {
+            await onGeoUpdate(c.id, { ...punto, geo_fuente: 'auto', geo_direccion: c.direccion });
           } else {
             fallados.push(c.id); // dirección que Nominatim no reconoce → panel "Sin ubicar"
           }
@@ -242,12 +273,14 @@ export default function ColectasMapa({
   // ── Encuadre inicial por pestaña/fecha ──
   useEffect(() => {
     if (!listo || !mapRef.current) return;
-    const clave = `${tab}|${fecha}`;
+    // Mientras la cola de geocoding sigue agregando pines, la clave incluye cuántos hay: así el
+    // encuadre acompaña en vez de quedarse fijo en los 2 primeros que llegaron.
+    const clave = progreso ? `${tab}|${fecha}|${conPin.length}` : `${tab}|${fecha}`;
     if (encuadreRef.current === clave || !conPin.length) return;
     encuadreRef.current = clave;
     const bounds = L.latLngBounds(conPin.map(c => [c.lat, c.lng]));
     mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
-  }, [listo, tab, fecha, conPin]);
+  }, [listo, tab, fecha, conPin, progreso]);
 
   // ── Click en el mapa para ubicar a mano un cliente sin geocodificar ──
   useEffect(() => {
