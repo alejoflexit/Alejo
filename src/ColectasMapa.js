@@ -418,8 +418,9 @@ export default function ColectasMapa({
         });
         marker.addTo(capaRef.current);
         // Tooltip al pasar el mouse: qué colecta es, dirección y chofer (el contenido se
-        // actualiza en la reconciliación de abajo, junto con el ícono)
-        marker.bindTooltip('', { direction: 'top', offset: [0, -16], opacity: 0.96 });
+        // actualiza en la reconciliación de abajo, junto con el ícono). Estilo oscuro Flexit
+        // (clase flexit-tip, CSS al final del render) — Opción B elegida por Alejo el 28/07.
+        marker.bindTooltip('', { direction: 'top', offset: [0, -16], opacity: 1, className: 'flexit-tip' });
         if (marker.dragging) marker.dragging.disable();
         entry = { marker, key: null };
         markersRef.current.set(c.id, entry);
@@ -441,12 +442,20 @@ export default function ColectasMapa({
             <div style="position:absolute;right:-2px;bottom:-2px">${punto}</div>
           </div>`;
         entry.marker.setIcon(L.divIcon({ html, className: 'flexit-pin', iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18] }));
+        // Ancho FIJO (no max-width): cerca del borde del mapa, Leaflet calcula mal el ancho
+        // disponible y con max-width el texto colapsaba en una columna finita (bug real 28/07).
+        const choferesHtml = sinAsignar
+          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-weight:600;color:#FBBF24">` +
+            `<span style="width:9px;height:9px;border-radius:50%;border:2px dashed rgba(255,255,255,0.55);flex-shrink:0;box-sizing:border-box"></span>A coordinar</div>`
+          : chs.filter(x => x !== 'A coordinar').map(ch =>
+              `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-weight:600">` +
+              `<span style="width:9px;height:9px;border-radius:50%;background:${colorChofer(ch)};flex-shrink:0"></span>${escHtml(ch)}</div>`
+            ).join('');
         entry.marker.setTooltipContent(
-          `<div style="font-size:12px;line-height:1.45;max-width:230px;white-space:normal;overflow-wrap:break-word">` +
-          `<b>${escHtml(c.nombre)}</b><br>📍 ${escHtml(dirDelDia)}<br>` +
-          (sinAsignar
-            ? `<span style="color:#b45309">⚠ A coordinar</span>`
-            : `👤 ${escHtml(choferesTxt)}`) +
+          `<div style="width:200px;white-space:normal;overflow-wrap:break-word;font-size:12px;line-height:1.45">` +
+          `<b style="font-size:13px;color:#2ECFAA;display:block;margin-bottom:2px">${escHtml(c.nombre)}</b>` +
+          `<span style="color:rgba(255,255,255,0.65)">📍 ${escHtml(dirDelDia)}</span>` +
+          choferesHtml +
           `</div>`
         );
         entry.key = key;
@@ -580,6 +589,14 @@ export default function ColectasMapa({
 
   return (
     <div>
+      {/* Estilo del tooltip oscuro (Opción B): pisa el blanco default de Leaflet, flecha incluida */}
+      <style>{`
+        .flexit-tip { background: rgba(13,27,42,0.95); border: 1px solid rgba(46,207,170,0.4); color: #fff; border-radius: 10px; box-shadow: 0 3px 14px rgba(0,0,0,0.4); padding: 9px 12px; }
+        .flexit-tip.leaflet-tooltip-top:before { border-top-color: rgba(46,207,170,0.55); }
+        .flexit-tip.leaflet-tooltip-bottom:before { border-bottom-color: rgba(46,207,170,0.55); }
+        .flexit-tip.leaflet-tooltip-left:before { border-left-color: rgba(46,207,170,0.55); }
+        .flexit-tip.leaflet-tooltip-right:before { border-right-color: rgba(46,207,170,0.55); }
+      `}</style>
       {/* Barra de herramientas */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: BRAND.muted }}>
