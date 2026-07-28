@@ -59,9 +59,13 @@ export default function ColectasMapa({
   const encuadreRef = useRef('');
 
   const clientesRef = useRef(clientes);
+  const visiblesRef = useRef([]);
   const dibujandoRef = useRef(false);
-  const geocodeIntentadosRef = useRef(new Set());
+  const intentadosRef = useRef(new Set());  // `${id}|${direccion}` ya intentados en esta sesión
+  const corriendoRef = useRef(false);       // hay una cola de geocoding en curso
+  const vivoRef = useRef(true);             // false al desmontar: única razón para abortar la cola
   useEffect(() => { clientesRef.current = clientes; }, [clientes]);
+  useEffect(() => { vivoRef.current = true; return () => { vivoRef.current = false; }; }, []);
 
   const [listo, setListo] = useState(false);
   const [sel, setSel] = useState(null);           // cliente_id del panel de detalle
@@ -73,6 +77,7 @@ export default function ColectasMapa({
   const [seleccion, setSeleccion] = useState(null); // { ids: [], excluidos: Set }
   const [ajustando, setAjustando] = useState(false);
   const [guardado, setGuardado] = useState('');
+  const [geoError, setGeoError] = useState('');
   const [choferFoco, setChoferFoco] = useState(null); // leyenda: resaltar un chofer
   const [buscaChofer, setBuscaChofer] = useState('');
 
@@ -81,6 +86,7 @@ export default function ColectasMapa({
     () => clientes.filter(c => estadoEfectivo(c, registros[c.id]) !== 'rojo'),
     [clientes, registros]
   );
+  visiblesRef.current = visibles;
   const conPin = useMemo(
     () => visibles.filter(c => typeof c.lat === 'number' && typeof c.lng === 'number'),
     [visibles]
@@ -107,36 +113,38 @@ export default function ColectasMapa({
     return () => { map.remove(); mapRef.current = null; markers.clear(); };
   }, []);
 
-  // Clientes que hay que geocodificar. La clave estable evita que un re-render (o un cambio
-  // de registros) reinicie la cola a mitad de camino y repita requests contra Nominatim.
-  const necesitanGeo = useMemo(() => visibles.filter(c => {
-    if (c.geo_fuente === 'manual') return false;                 // el pin a mano nunca se pisa
-    if (geocodeIntentadosRef.current.has(`${c.id}|${c.direccion}`)) return false; // ya se intentó en esta sesión
-    if (typeof c.lat !== 'number') return true;                  // nunca se ubicó
-    return c.geo_direccion !== c.direccion;                      // cambió la dirección → re-geocodificar
-  }), [visibles]);
-  const geoKey = necesitanGeo.map(c => `${c.id}|${c.direccion}`).join(',');
-
   // ── Geocodificación (Nominatim, 1 req/s, cache en la base) ──
-  useEffect(() => {
-    let cancelado = false;
-    const pendientes = geoKey ? geoKey.split(',').map(k => {
-      const id = Number(k.split('|')[0]);
-      return clientesRef.current.find(c => String(c.id) === String(id));
-    }).filter(Boolean) : [];
-    if (!pendientes.length) { setProgreso(null); return; }
-    pendientes.forEach(c => geocodeIntentadosRef.current.add(`${c.id}|${c.direccion}`));
+  // OJO: la cola NO se puede cancelar cuando cambia la lista de pendientes. La primera versión
+  // dependía de una clave derivada del set de "ya intentados" que la propia cola iba llenando:
+  // al primer setProgreso el efecto se re-ejecutaba, el cleanup marcaba cancelado y la cola moría
+  // antes del primer request (síntoma: mapa sin ningún pin y sin barra de progreso). Ahora la
+  // corrida es un singleton con corriendoRef y solo aborta al desmontar el componente.
+  const firmaGeo = visibles.map(c => `${c.id}:${c.direccion}:${c.lat ?? ''}:${c.geo_fuente ?? ''}`).join('|');
 
+  useEffect(() => {
+    if (corriendoRef.current) return;
+    const pendientes = visiblesRef.current.filter(c => {
+      if (c.geo_fuente === 'manual') return false;                                  // el pin a mano nunca se pisa
+      if (intentadosRef.current.has(`${c.id}|${c.direccion}`)) return false;         // ya se intentó en esta sesión
+      if (typeof c.lat !== 'number') return true;                                    // nunca se ubicó
+      return c.geo_direccion !== c.direccion;                                        // cambió la dirección → re-geocodificar
+    });
+    if (!pendientes.length) { setProgreso(null); return; }
+
+    corriendoRef.current = true;
     (async () => {
       setProgreso({ hechos: 0, total: pendientes.length });
       const fallados = [];
+      let errores = 0, ultimoError = '';
       for (let i = 0; i < pendientes.length; i++) {
-        if (cancelado) return;
+        if (!vivoRef.current) break;
         const c = pendientes[i];
+        intentadosRef.current.add(`${c.id}|${c.direccion}`);
         const partes = [c.direccion, c.zona_barrio, 'Buenos Aires', 'Argentina'].filter(Boolean);
         try {
           const url = `${NOMINATIM}?format=json&limit=1&countrycodes=ar&q=${encodeURIComponent(partes.join(', '))}`;
           const res = await fetch(url);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
           const json = await res.json();
           if (json && json[0]) {
             await onGeoUpdate(c.id, {
@@ -144,22 +152,25 @@ export default function ColectasMapa({
               geo_fuente: 'auto', geo_direccion: c.direccion,
             });
           } else {
-            fallados.push(c.id);
+            fallados.push(c.id); // dirección que Nominatim no reconoce → panel "Sin ubicar"
           }
-        } catch (_) {
+        } catch (e) {
           fallados.push(c.id);
+          errores++; ultimoError = e.message || String(e);
         }
-        if (cancelado) return;
+        if (!vivoRef.current) break;
         setProgreso({ hechos: i + 1, total: pendientes.length });
         if (i < pendientes.length - 1) await sleep(1100); // rate limit duro de Nominatim
       }
-      if (cancelado) return;
+      corriendoRef.current = false;
+      if (!vivoRef.current) return;
       setSinUbicar(prev => [...new Set([...prev, ...fallados])]);
+      // Distinguir "no encontró la dirección" de "el servicio falló" — si no, un bloqueo de red
+      // se ve igual que 47 direcciones mal escritas.
+      setGeoError(errores ? `${errores} pedido(s) al buscador de direcciones fallaron (${ultimoError}).` : '');
       setProgreso(null);
     })();
-
-    return () => { cancelado = true; };
-  }, [geoKey, onGeoUpdate]);
+  }, [firmaGeo, onGeoUpdate]);
 
   // ── Pines: reconciliación (crear / actualizar / borrar) ──
   useEffect(() => {
@@ -360,6 +371,7 @@ export default function ColectasMapa({
           <span style={{ fontSize: 12, color: '#8EC5FF' }}>Ubicando clientes… {progreso.hechos}/{progreso.total}</span>
         )}
         {guardado && <span style={{ fontSize: 12, color: BRAND.teal }}>✓ {guardado}</span>}
+        {geoError && <span style={{ fontSize: 12, color: '#E24B4A' }}>⚠️ {geoError}</span>}
         {sinUbicarClientes.length > 0 && (
           <button onClick={() => setSinUbicarOpen(v => !v)} style={btn(sinUbicarOpen, '#E24B4A')}>
             Sin ubicar ({sinUbicarClientes.length})
