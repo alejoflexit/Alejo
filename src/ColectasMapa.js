@@ -108,6 +108,59 @@ function dentroDePoligono(punto, poligono) {
   return dentro;
 }
 
+// Buscador de direcciones estilo Google Maps: escribís → 🔍 → candidatos → elegís uno.
+// El pin elegido por búsqueda se guarda como manual (el geocoding automático nunca lo pisa).
+function BuscadorDireccion({ inicial, onElegir }) {
+  const [texto, setTexto] = useState(inicial || '');
+  const [candidatos, setCandidatos] = useState(null); // null = sin buscar | [] = sin resultados
+  const [buscando, setBuscando] = useState(false);
+  const [error, setError] = useState('');
+
+  const buscar = async () => {
+    if (!texto.trim() || buscando) return;
+    setBuscando(true); setError(''); setCandidatos(null);
+    try {
+      const res = await fetch(`${NOMINATIM}?format=json&limit=5&countrycodes=ar&viewbox=${CAJA_AMBA}&bounded=1&q=${enc(texto.trim() + ', Argentina')}`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      const lista = (json || [])
+        .map(r => ({ lat: Number(r.lat), lng: Number(r.lon), nombre: String(r.display_name || '').split(',').slice(0, 3).join(',') }))
+        .filter(r => r.lat >= LIMITE_AMBA.latMin && r.lat <= LIMITE_AMBA.latMax && r.lng >= LIMITE_AMBA.lngMin && r.lng <= LIMITE_AMBA.lngMax);
+      setCandidatos(lista);
+    } catch (e) {
+      setError('No se pudo buscar (' + (e.message || e) + ')');
+    }
+    setBuscando(false);
+  };
+
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input value={texto} onChange={e => setTexto(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') buscar(); }}
+          placeholder="Calle y altura, localidad…"
+          style={{ flex: 1, minWidth: 0, padding: '7px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#14171c', color: '#fff', fontSize: 13 }} />
+        <button onClick={buscar} disabled={buscando}
+          style={{ padding: '0 14px', minHeight: 34, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', fontSize: 13, cursor: 'pointer', touchAction: 'manipulation' }}>
+          {buscando ? '…' : '🔍 Buscar'}
+        </button>
+      </div>
+      {error && <div style={{ fontSize: 12, color: '#E24B4A', marginTop: 6 }}>{error}</div>}
+      {candidatos && !candidatos.length && (
+        <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 6 }}>
+          Sin resultados por la zona — probá "calle altura, localidad" o poné el pin a mano.
+        </div>
+      )}
+      {candidatos?.map((cand, i) => (
+        <button key={i} onClick={() => onElegir(cand)}
+          style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6, padding: '8px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>
+          📍 {cand.nombre}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ColectasMapa({
   clientes,          // ya filtrados por pestaña y activos
   registros,
@@ -150,6 +203,7 @@ export default function ColectasMapa({
   const [geoError, setGeoError] = useState('');
   const [choferFoco, setChoferFoco] = useState(null); // leyenda: resaltar un chofer
   const [filtroEst, setFiltroEst] = useState(null);   // null = todos | 'blanco' | 'amarillo' | 'verde'
+  const [buscandoDir, setBuscandoDir] = useState(null); // cliente_id con el buscador de dirección abierto
   const [buscaChofer, setBuscaChofer] = useState('');
 
   // Clientes que van al mapa: los "sin envíos" de hoy no se muestran (info muerta)
@@ -178,6 +232,16 @@ export default function ColectasMapa({
     c => { const chs = registros[c.id]?.choferes; return chs?.length ? chs : ['A coordinar']; },
     [registros]
   );
+
+  // Ubicar un cliente eligiendo un resultado del buscador de direcciones
+  const elegirUbicacion = useCallback(async (c, cand) => {
+    await onGeoUpdate(c.id, { lat: cand.lat, lng: cand.lng, geo_fuente: 'manual', geo_direccion: c.direccion });
+    setSinUbicar(prev => prev.filter(id => id !== c.id));
+    setBuscandoDir(null);
+    if (mapRef.current) mapRef.current.setView([cand.lat, cand.lng], Math.max(mapRef.current.getZoom(), 15));
+    setGuardado(c.nombre);
+    setTimeout(() => setGuardado(g => (g === c.nombre ? '' : g)), 1800);
+  }, [onGeoUpdate]);
 
   // ── Mapa: init ──
   useEffect(() => {
@@ -471,15 +535,25 @@ export default function ColectasMapa({
       {sinUbicarOpen && sinUbicarClientes.length > 0 && (
         <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(226,75,74,0.3)', background: 'rgba(226,75,74,0.07)' }}>
           <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 8 }}>
-            No se pudo encontrar la dirección. Tocá “Ubicar en el mapa” y después tocá el punto exacto.
+            No se pudo encontrar la dirección. Buscala con 🔍 (como en Google Maps), o tocá “Ubicar en el mapa” y después el punto exacto.
           </div>
           {sinUbicarClientes.map(c => (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{c.nombre}</span>
-              <span style={{ fontSize: 11, color: BRAND.muted }}>{c.direccion}</span>
-              <button onClick={() => { setUbicando(c.id); setSinUbicarOpen(false); }} style={{ ...btn(ubicando === c.id), height: 30, marginLeft: 'auto' }}>
-                📍 Ubicar en el mapa
-              </button>
+            <div key={c.id} style={{ padding: '4px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{c.nombre}</span>
+                <span style={{ fontSize: 11, color: BRAND.muted }}>{c.direccion}</span>
+                <button onClick={() => setBuscandoDir(v => (v === c.id ? null : c.id))} style={{ ...btn(buscandoDir === c.id), height: 30, marginLeft: 'auto' }}>
+                  🔍 Buscar
+                </button>
+                <button onClick={() => { setUbicando(c.id); setSinUbicarOpen(false); }} style={{ ...btn(ubicando === c.id), height: 30 }}>
+                  📍 Ubicar en el mapa
+                </button>
+              </div>
+              {buscandoDir === c.id && (
+                <div style={{ marginTop: 6 }}>
+                  <BuscadorDireccion key={c.id} inicial={c.direccion} onElegir={cand => elegirUbicacion(c, cand)} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -561,6 +635,11 @@ export default function ColectasMapa({
                 choferesList={choferesFull}
                 onUpdate={updates => updateRegistro(clienteSel.id, updates)}
               />
+              <button onClick={() => setBuscandoDir(v => (v === clienteSel.id ? null : clienteSel.id))}
+                title="Buscar la dirección como en Google Maps y mover el pin al resultado"
+                style={{ ...btn(buscandoDir === clienteSel.id), height: 30 }}>
+                🔍 Reubicar
+              </button>
               {clienteSel.geo_fuente === 'manual' && (
                 <button
                   onClick={async () => {
@@ -573,6 +652,11 @@ export default function ColectasMapa({
                 </button>
               )}
             </div>
+            {buscandoDir === clienteSel.id && (
+              <div style={{ marginTop: 8 }}>
+                <BuscadorDireccion key={clienteSel.id} inicial={clienteSel.direccion} onElegir={cand => elegirUbicacion(clienteSel, cand)} />
+              </div>
+            )}
           </div>
         );
       })()}
