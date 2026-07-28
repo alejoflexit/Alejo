@@ -34,7 +34,10 @@ export function limpiarDireccion(dir) {
 // "santa fe 1780" cayó en Bahía Blanca y "JOSE A CABRERA 5475" en Mar del Plata).
 const CAJA_CABA = '-58.531,-34.527,-58.335,-34.700';   // CABA propiamente dicha
 const CAJA_AMBA = '-59.8,-33.8,-57.8,-35.4';           // CABA + conurbano, para SUR y NOROESTE
-const LIMITE_AMBA = { latMin: -35.4, latMax: -33.8, lngMin: -59.8, lngMax: -57.8 };
+// Límite duro de aceptación: un cliente de CABA tiene que caer EN CABA (la consulta
+// estructurada no lleva viewbox, así que sin este chequeo podía devolver un homónimo lejos).
+const LIMITE_AMBA = { latMin: -35.4,   latMax: -33.8,   lngMin: -59.8,   lngMax: -57.8 };
+const LIMITE_CABA = { latMin: -34.712, latMax: -34.520, lngMin: -58.540, lngMax: -58.325 };
 
 const enc = encodeURIComponent;
 
@@ -62,8 +65,8 @@ async function buscarUbicacion(direccion, zonaBarrio, seccion) {
     const json = await res.json();
     if (json && json[0]) {
       const lat = Number(json[0].lat), lng = Number(json[0].lon);
-      const dentro = lat >= LIMITE_AMBA.latMin && lat <= LIMITE_AMBA.latMax
-                  && lng >= LIMITE_AMBA.lngMin && lng <= LIMITE_AMBA.lngMax;
+      const lim = esCABA ? LIMITE_CABA : LIMITE_AMBA;
+      const dentro = lat >= lim.latMin && lat <= lim.latMax && lng >= lim.lngMin && lng <= lim.lngMax;
       if (dentro) return { lat, lng };
     }
   }
