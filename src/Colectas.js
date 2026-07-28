@@ -378,6 +378,8 @@ function ColectasInner({ soloArribos = false }) {
     catch { return []; }
   });
   const [syncingChoferes, setSyncingChoferes] = useState(false);
+  // Choferes agregados a mano: viven en Supabase (colectas_choferes_manuales) — el sync de LightData NO los pisa.
+  const [choferesManuales, setChoferesManuales] = useState([]);
 
   const syncChoferes = useCallback(async () => {
     setSyncingChoferes(true);
@@ -388,6 +390,25 @@ function ColectasInner({ soloArribos = false }) {
     } catch(e) { console.error('Error sincronizando choferes:', e); }
     finally { setSyncingChoferes(false); }
   }, []);
+
+  // Lista completa para los selectores: LightData + manuales (sin duplicados).
+  const choferesFull = React.useMemo(
+    () => [...new Set([...choferesList, ...choferesManuales])].sort((a, b) => a.localeCompare(b, 'es')),
+    [choferesList, choferesManuales]
+  );
+  const agregarChoferManual = async (name) => {
+    try {
+      await sbFetch('colectas_choferes_manuales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: name }) });
+      setChoferesManuales(prev => prev.includes(name) ? prev : [...prev, name]);
+    } catch (e) {
+      // best effort: si falla el guardado remoto, al menos queda en esta sesión
+      setChoferesList(prev => prev.includes(name) ? prev : [...prev, name]);
+    }
+  };
+  const quitarChoferManual = async (name) => {
+    setChoferesManuales(prev => prev.filter(x => x !== name));
+    try { await sbFetch(`colectas_choferes_manuales?nombre=eq.${encodeURIComponent(name)}`, { method: 'DELETE' }); } catch (e) { }
+  };
 
   const saveTimer = useRef(null);
   const registrosRef = useRef({});
@@ -444,9 +465,15 @@ function ColectasInner({ soloArribos = false }) {
     return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
   }, [fecha]);
 
-  // Sincronizar choferes desde Supabase siempre al montar
+  // Sincronizar choferes desde Supabase siempre al montar (+ los manuales guardados)
   useEffect(() => {
     syncChoferes();
+    (async () => {
+      try {
+        const rows = await sbFetch('colectas_choferes_manuales?select=nombre&order=nombre.asc');
+        setChoferesManuales(rows.map(r => r.nombre).filter(Boolean));
+      } catch (e) { console.error('Error cargando choferes manuales:', e); }
+    })();
   }, [syncChoferes]);
 
   // Persistir cambios manuales en localStorage
@@ -1099,7 +1126,7 @@ function ColectasInner({ soloArribos = false }) {
                               ) : (
                               <ChoferPicker
                                 chs={chs}
-                                choferesList={choferesList}
+                                choferesList={choferesFull}
                                 onUpdate={updates => updateRegistro(c.id, updates)}
                                 hideChips={!isDividida && chofer !== 'A coordinar'}
                               />
@@ -1374,15 +1401,19 @@ function ColectasInner({ soloArribos = false }) {
 
         <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'1.25rem', marginBottom:16 }}>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:14 }}>
-            {choferesList.map(ch => (
-              <div key={ch} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:20, background:BRAND.navyMid, border:`1px solid ${BRAND.border}`, fontSize:13 }}>
-                <span>👤</span>
-                <span>{ch}</span>
-                <button onClick={() => setChoferesList(prev => prev.filter(x => x !== ch))}
-                  style={{ background:'none', border:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:'0 0 0 4px', lineHeight:1, display:'flex', alignItems:'center' }}>✕</button>
-              </div>
-            ))}
-            {choferesList.length === 0 && (
+            {choferesFull.map(ch => {
+              const esManual = choferesManuales.includes(ch) && !choferesList.includes(ch);
+              return (
+                <div key={ch} title={esManual ? 'Agregado a mano — queda guardado, el sync no lo pisa' : 'Viene de LightData (métricas)'}
+                  style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:20, background: esManual ? 'rgba(46,207,170,0.08)' : BRAND.navyMid, border:`1px solid ${esManual ? 'rgba(46,207,170,0.45)' : BRAND.border}`, fontSize:13 }}>
+                  <span>{esManual ? '📌' : '👤'}</span>
+                  <span>{ch}</span>
+                  <button onClick={() => { if (choferesManuales.includes(ch)) quitarChoferManual(ch); if (choferesList.includes(ch)) setChoferesList(prev => prev.filter(x => x !== ch)); }}
+                    style={{ background:'none', border:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:'0 0 0 4px', lineHeight:1, display:'flex', alignItems:'center' }}>✕</button>
+                </div>
+              );
+            })}
+            {choferesFull.length === 0 && (
               <div style={{ color:BRAND.muted, fontSize:13 }}>No hay choferes cargados.</div>
             )}
           </div>
@@ -1390,7 +1421,7 @@ function ColectasInner({ soloArribos = false }) {
           <form onSubmit={e => {
             e.preventDefault();
             const name = e.target.chofer.value.trim();
-            if (name && !choferesList.includes(name)) setChoferesList(prev => [...prev, name]);
+            if (name && !choferesFull.includes(name)) agregarChoferManual(name);
             e.target.chofer.value = '';
           }} style={{ display:'flex', gap:8 }}>
             <input name="chofer" placeholder="Nombre del chofer..." style={{ ...inpSt, padding:'7px 12px', flex:1, maxWidth:240 }} />
@@ -1402,7 +1433,7 @@ function ColectasInner({ soloArribos = false }) {
         </div>
 
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:`1px solid ${BRAND.border}` }}>
-          <span style={{ fontSize:12, color:BRAND.muted }}>💡 Lista sincronizada desde métricas. Podés agregar o quitar choferes manualmente.</span>
+          <span style={{ fontSize:12, color:BRAND.muted }}>💡 Los 👤 se sincronizan solos desde métricas (LightData). Los 📌 los agregaste a mano: quedan guardados y el sync no los pisa.</span>
           <button onClick={syncChoferes} disabled={syncingChoferes}
             style={{ padding:'5px 12px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:'transparent', color:syncingChoferes ? BRAND.muted : BRAND.teal, cursor:syncingChoferes ? 'default' : 'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap', marginLeft:12 }}>
             {syncingChoferes ? 'Sincronizando...' : '↺ Sincronizar desde métricas'}
