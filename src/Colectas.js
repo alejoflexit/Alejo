@@ -24,6 +24,13 @@ const BRAND = {
 };
 
 const SECCIONES = ['CABA', 'SUR', 'NOROESTE', 'SABADOS'];
+// Vehículo que necesita la colecta de ese cliente — atributo FIJO del cliente (como el horario).
+// NULL = sin definir: no se muestra emoji en la tabla y el pin del mapa cae al genérico 📦.
+const VEHICULOS = {
+  bici:   { emoji: '🚲', label: 'Bici' },
+  auto:   { emoji: '🚗', label: 'Auto' },
+  kangoo: { emoji: '🚐', label: 'Kangoo' },
+};
 const DEFAULT_CHOFERES = ['Alric','Capra','Cepero','Vaccaro','Dani Vargas','Gonzalo','Maxi','Renzo','Cris','Pedro'];
 
 async function sbFetch(path, options = {}) {
@@ -365,7 +372,7 @@ function ColectasInner({ soloArribos = false }) {
   const [loadingPagos, setLoadingPagos] = useState(false);
 
   // Clientes ABM
-  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false };
+  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false, vehiculo:'' };
   const [gruposWA, setGruposWA] = useState([]); // grupos de WhatsApp que conoce el bot (agente_config)
   const [avisoBot, setAvisoBot] = useState('');
   const [clienteForm, setClienteForm] = useState(emptyForm);
@@ -771,6 +778,7 @@ function ColectasInner({ soloArribos = false }) {
       monto: clienteForm.monto !== '' ? Number(clienteForm.monto) : null,
       chat_id: clienteForm.chat_id || null,
       opera_sabados: !!clienteForm.opera_sabados,
+      vehiculo: clienteForm.vehiculo || null, // '' rompería el CHECK de la columna
     };
     try {
       if (editId) {
@@ -790,7 +798,7 @@ function ColectasInner({ soloArribos = false }) {
 
   const editCliente = c => {
     setEditId(c.id);
-    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados });
+    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados, vehiculo:c.vehiculo||'' });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1130,6 +1138,9 @@ function ColectasInner({ soloArribos = false }) {
                           </td>
                           {/* Nombre */}
                           <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none', color:estado==='rojo'?BRAND.muted:undefined }}>
+                            {VEHICULOS[c.vehiculo] && (
+                              <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`} style={{ marginRight:5 }}>{VEHICULOS[c.vehiculo].emoji}</span>
+                            )}
                             {c.nombre}
                             {tab === 'SABADOS' && (
                               <span title={c.seccion==='SABADOS' ? 'Sin zona de semana asignada — editá el cliente para ponerle CABA/SUR/NOROESTE' : `Zona: ${c.seccion}`}
@@ -1340,6 +1351,15 @@ function ColectasInner({ soloArribos = false }) {
                 </select>
               </div>
               <div>
+                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Vehículo</div>
+                <select value={clienteForm.vehiculo} onChange={e => setClienteForm(p => ({...p,vehiculo:e.target.value}))}
+                  title="Vehículo que necesita la colecta de este cliente (fijo, no cambia por día)"
+                  style={{ ...inpSt, width:'100%' }}>
+                  <option value="">— Sin definir —</option>
+                  {Object.entries(VEHICULOS).map(([k,v]) => <option key={k} value={k}>{v.emoji} {v.label}</option>)}
+                </select>
+              </div>
+              <div>
                 <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Sábados</div>
                 <label style={{ ...inpSt, width:'100%', display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
                   <input type="checkbox" checked={!!clienteForm.opera_sabados}
@@ -1383,7 +1403,12 @@ function ColectasInner({ soloArribos = false }) {
               {filtrados.map(c => (
                 <tr key={c.id} style={{ background:BRAND.navy, borderBottom:`1px solid ${BRAND.border}` }}>
                   <td style={{ padding:'8px 12px' }}>
-                    <div style={{ fontWeight:500, fontSize:13 }}>{c.nombre}</div>
+                    <div style={{ fontWeight:500, fontSize:13 }}>
+                      {VEHICULOS[c.vehiculo] && (
+                        <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`} style={{ marginRight:5 }}>{VEHICULOS[c.vehiculo].emoji}</span>
+                      )}
+                      {c.nombre}
+                    </div>
                     <div style={{ fontSize:11, color:BRAND.muted, marginTop:2 }}>{c.direccion}{c.horario ? ` · 🕐 ${c.horario}` : ''}</div>
                   </td>
                   <td style={{ padding:'8px 12px' }}>
