@@ -708,6 +708,22 @@ function ColectasInner({ soloArribos = false }) {
 
   // Persiste la ubicación de un cliente (geocoding automático o pin movido a mano) desde el Mapa.
   const guardarGeoCliente = useCallback(async (clienteId, patch) => {
+    // Escritura AUTOMÁTICA (cola de geocoding): condicional EN EL SERVIDOR — solo aplica si el pin
+    // no es manual. Sin esto, una cola corriendo en otro navegador (o arrancada antes de la
+    // corrección) pisaba los pines puestos a mano (pasó el 28/07: se "revirtieron" direcciones).
+    // Las escrituras manuales (drag, buscador, ubicar, ↩ volver a auto) siguen sin condición.
+    const esAuto = patch.geo_fuente === 'auto' && patch.lat != null;
+    if (esAuto) {
+      try {
+        const res = await sbFetch(`colectas_clientes?id=eq.${clienteId}&or=(geo_fuente.is.null,geo_fuente.eq.auto)`, {
+          method: 'PATCH', body: JSON.stringify(patch),
+        });
+        // Si el servidor no actualizó ninguna fila, el pin era manual: no tocar el estado local.
+        if (Array.isArray(res) && res.length === 0) return;
+        setClientes(prev => prev.map(x => x.id === clienteId ? { ...x, ...patch } : x));
+      } catch (e) { setError('No se pudo guardar la ubicación: ' + e.message); }
+      return;
+    }
     setClientes(prev => prev.map(x => x.id === clienteId ? { ...x, ...patch } : x));
     try {
       await sbFetch(`colectas_clientes?id=eq.${clienteId}`, {

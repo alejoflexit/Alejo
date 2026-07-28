@@ -326,6 +326,11 @@ export default function ColectasMapa({
       for (let i = 0; i < pendientes.length; i++) {
         if (!vivoRef.current) break;
         const c = pendientes[i];
+        // Re-chequear el estado ACTUAL antes de geocodificar: la lista `pendientes` se congeló al
+        // arrancar la cola, y el usuario pudo haber puesto el pin a mano mientras tanto (28/07:
+        // esos pines se pisaban). El PATCH del guardado además es condicional en el servidor.
+        const actual = clientesRef.current.find(x => x.id === c.id);
+        if (actual && actual.geo_fuente === 'manual') { setProgreso({ hechos: i + 1, total: pendientes.length }); continue; }
         intentadosRef.current.add(`${c.id}|${c.direccion}`);
         try {
           const punto = await buscarUbicacion(c.direccion, c.zona_barrio, c.seccion);
