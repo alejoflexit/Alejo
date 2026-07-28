@@ -90,7 +90,7 @@ const COLOR_ESTADO = {
 // Chips-filtro por estado: filtran los pines y a la vez son la leyenda de colores
 // (el circulito de cada chip replica el estilo real del pin de ese estado).
 const FILTROS_ESTADO = [
-  { est: 'blanco',   label: 'Pendiente',   color: '#9CA3AF', relleno: 'rgba(20,30,42,0.92)',  borde: 'rgba(255,255,255,0.45)' },
+  { est: 'blanco',   label: 'Pendiente',   color: '#9CA3AF', relleno: 'rgba(148,155,166,0.92)', borde: 'rgba(255,255,255,0.45)' },
   { est: 'amarillo', label: 'A confirmar', color: '#FBBF24', relleno: 'rgba(251,191,36,0.25)', borde: '#FBBF24' },
   { est: 'verde',    label: 'Confirmado',  color: '#2ECFAA', relleno: 'rgba(46,207,170,0.25)', borde: '#2ECFAA' },
 ];
@@ -391,7 +391,7 @@ export default function ColectasMapa({
 
       if (entry.key !== key) {
         const borde = COLOR_ESTADO[est] || COLOR_ESTADO.blanco;
-        const fondo = est === 'blanco' ? 'rgba(20,30,42,0.92)' : est === 'verde' ? 'rgba(46,207,170,0.22)' : 'rgba(251,191,36,0.20)';
+        const fondo = est === 'blanco' ? 'rgba(148,155,166,0.92)' : est === 'verde' ? 'rgba(46,207,170,0.22)' : 'rgba(251,191,36,0.20)';
         const punto = sinAsignar
           ? `<span style="width:11px;height:11px;border-radius:50%;border:2px dashed rgba(255,255,255,0.55);background:transparent;display:block"></span>`
           : `<span style="width:11px;height:11px;border-radius:50%;background:${colorChofer(chofer)};border:1.5px solid rgba(0,0,0,0.45);display:block"></span>`;
