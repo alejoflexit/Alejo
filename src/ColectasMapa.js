@@ -87,6 +87,14 @@ const COLOR_ESTADO = {
   verde:    '#2ECFAA',
 };
 
+// Chips-filtro por estado: filtran los pines y a la vez son la leyenda de colores
+// (el circulito de cada chip replica el estilo real del pin de ese estado).
+const FILTROS_ESTADO = [
+  { est: 'blanco',   label: 'Pendiente',   color: '#9CA3AF', relleno: 'rgba(20,30,42,0.92)',  borde: 'rgba(255,255,255,0.45)' },
+  { est: 'amarillo', label: 'A confirmar', color: '#FBBF24', relleno: 'rgba(251,191,36,0.25)', borde: '#FBBF24' },
+  { est: 'verde',    label: 'Confirmado',  color: '#2ECFAA', relleno: 'rgba(46,207,170,0.25)', borde: '#2ECFAA' },
+];
+
 // Punto dentro de polígono (ray casting sobre lat/lng)
 function dentroDePoligono(punto, poligono) {
   const [x, y] = punto;
@@ -141,14 +149,26 @@ export default function ColectasMapa({
   const [guardado, setGuardado] = useState('');
   const [geoError, setGeoError] = useState('');
   const [choferFoco, setChoferFoco] = useState(null); // leyenda: resaltar un chofer
+  const [filtroEst, setFiltroEst] = useState(null);   // null = todos | 'blanco' | 'amarillo' | 'verde'
   const [buscaChofer, setBuscaChofer] = useState('');
 
   // Clientes que van al mapa: los "sin envíos" de hoy no se muestran (info muerta)
-  const visibles = useMemo(
+  const activos = useMemo(
     () => clientes.filter(c => estadoEfectivo(c, registros[c.id]) !== 'rojo'),
     [clientes, registros]
   );
-  visiblesRef.current = visibles;
+  // La cola de geocoding trabaja sobre TODOS los activos, tenga o no un filtro de estado puesto
+  visiblesRef.current = activos;
+  // Conteo por estado para los chips-filtro
+  const porEstado = useMemo(() => {
+    const acc = { blanco: 0, amarillo: 0, verde: 0 };
+    activos.forEach(c => { const e = estadoEfectivo(c, registros[c.id]); if (acc[e] != null) acc[e]++; });
+    return acc;
+  }, [activos, registros]);
+  const visibles = useMemo(
+    () => (filtroEst ? activos.filter(c => estadoEfectivo(c, registros[c.id]) === filtroEst) : activos),
+    [activos, registros, filtroEst]
+  );
   const conPin = useMemo(
     () => visibles.filter(c => typeof c.lat === 'number' && typeof c.lng === 'number'),
     [visibles]
@@ -181,7 +201,7 @@ export default function ColectasMapa({
   // al primer setProgreso el efecto se re-ejecutaba, el cleanup marcaba cancelado y la cola moría
   // antes del primer request (síntoma: mapa sin ningún pin y sin barra de progreso). Ahora la
   // corrida es un singleton con corriendoRef y solo aborta al desmontar el componente.
-  const firmaGeo = visibles.map(c => `${c.id}:${c.direccion}:${c.lat ?? ''}:${c.geo_fuente ?? ''}`).join('|');
+  const firmaGeo = activos.map(c => `${c.id}:${c.direccion}:${c.lat ?? ''}:${c.geo_fuente ?? ''}`).join('|');
 
   useEffect(() => {
     if (corriendoRef.current) return;
@@ -427,6 +447,14 @@ export default function ColectasMapa({
           title="Arrastrar los pines para corregir su posición">
           📌 Ajustar pines
         </button>
+        {FILTROS_ESTADO.map(f => (
+          <button key={f.est} onClick={() => setFiltroEst(v => (v === f.est ? null : f.est))}
+            title={filtroEst === f.est ? 'Ver todos' : `Ver solo ${f.label.toLowerCase()}`}
+            style={{ ...btn(filtroEst === f.est, f.color), height: 30, padding: '0 10px', fontSize: 12 }}>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', flexShrink: 0, boxSizing: 'border-box', background: f.relleno, border: `2px solid ${f.borde}` }} />
+            {f.label} {porEstado[f.est]}
+          </button>
+        ))}
         <span style={{ fontSize: 12, color: BRAND.muted }}>{conPin.length} en el mapa</span>
         {progreso && (
           <span style={{ fontSize: 12, color: '#8EC5FF' }}>Ubicando clientes… {progreso.hechos}/{progreso.total}</span>
