@@ -381,6 +381,7 @@ function ColectasInner({ soloArribos = false }) {
   const [syncingChoferes, setSyncingChoferes] = useState(false);
   // Choferes agregados a mano: viven en Supabase (colectas_choferes_manuales) — el sync de LightData NO los pisa.
   const [choferesManuales, setChoferesManuales] = useState([]);
+  const [choferAviso, setChoferAviso] = useState(''); // aviso al intentar agregar un duplicado
 
   const syncChoferes = useCallback(async () => {
     setSyncingChoferes(true);
@@ -392,11 +393,22 @@ function ColectasInner({ soloArribos = false }) {
     finally { setSyncingChoferes(false); }
   }, []);
 
-  // Lista completa para los selectores: LightData + manuales (sin duplicados).
-  const choferesFull = React.useMemo(
-    () => [...new Set([...choferesList, ...choferesManuales])].sort((a, b) => a.localeCompare(b, 'es')),
-    [choferesList, choferesManuales]
-  );
+  // Lista completa para los selectores: LightData + manuales, deduplicada por nombre NORMALIZADO
+  // (minúsculas, sin tildes, sin dobles espacios) — evita la "doble Analia" cuando el manual y el
+  // de LightData difieren solo en mayúsculas/tildes. Si hay match, gana el nombre de LightData.
+  const choferesFull = React.useMemo(() => {
+    const ldNorm = new Set(choferesList.map(normNombre));
+    const manualesVisibles = choferesManuales.filter(m => !ldNorm.has(normNombre(m)));
+    return [...new Set([...choferesList, ...manualesVisibles])].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [choferesList, choferesManuales]);
+
+  // Auto-limpieza: cuando un chofer manual aparece en LightData (mismo nombre normalizado),
+  // el registro manual ya cumplió su función → se borra solo de colectas_choferes_manuales.
+  useEffect(() => {
+    if (!choferesList.length || !choferesManuales.length) return;
+    const ldNorm = new Set(choferesList.map(normNombre));
+    choferesManuales.filter(m => ldNorm.has(normNombre(m))).forEach(m => { quitarChoferManual(m); });
+  }, [choferesList, choferesManuales]); // eslint-disable-line react-hooks/exhaustive-deps
   const agregarChoferManual = async (name) => {
     try {
       await sbFetch('colectas_choferes_manuales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: name }) });
@@ -1446,7 +1458,16 @@ function ColectasInner({ soloArribos = false }) {
           <form onSubmit={e => {
             e.preventDefault();
             const name = e.target.chofer.value.trim();
-            if (name && !choferesFull.includes(name)) agregarChoferManual(name);
+            if (!name) return;
+            // Anti-duplicados: compara normalizado (mayúsculas/tildes/espacios no cuentan).
+            const existente = choferesFull.find(c => normNombre(c) === normNombre(name));
+            const parecidos = existente ? [] : choferesFull.filter(c => normNombre(c).includes(normNombre(name)) || normNombre(name).includes(normNombre(c)));
+            if (existente) {
+              setChoferAviso(`⚠️ "${name}" ya existe como "${existente}" — no lo agregué para no duplicar.`);
+            } else {
+              agregarChoferManual(name);
+              setChoferAviso(parecidos.length ? `✓ Agregado. Ojo: se parece a "${parecidos[0]}" — si es la misma persona, borrá uno con la ✕.` : '');
+            }
             e.target.chofer.value = '';
           }} style={{ display:'flex', gap:8 }}>
             <input name="chofer" placeholder="Nombre del chofer..." style={{ ...inpSt, padding:'7px 12px', flex:1, maxWidth:240 }} />
@@ -1455,6 +1476,9 @@ function ColectasInner({ soloArribos = false }) {
               + Agregar
             </button>
           </form>
+          {choferAviso && (
+            <div style={{ marginTop:8, fontSize:12, color:choferAviso.startsWith('⚠️') ? '#FBBF24' : BRAND.teal, lineHeight:1.5 }}>{choferAviso}</div>
+          )}
         </div>
 
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:`1px solid ${BRAND.border}` }}>
