@@ -280,12 +280,17 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
   const colectaResumen = new Map(); // desglose por chofer para la seccion Colectas de Liquidaciones (solo lectura)
   const fleteroMap = new Map(); // fleteros: solo hacen colectas y cobran el monto de cada una
   colectas.forEach(c => {
-    const confirmada = c.estado === 'verde' || (Array.isArray(c.confirmado_por) && c.confirmado_por.length > 0);
-    if (!confirmada) return; // solo se paga la colecta confirmada (no 'sin envíos'/rojo ni pendientes)
+    if (c.estado === 'rojo') return; // cancelada: aunque haya quedado confirmado_por de antes, no se paga
     const monto = Number(c.monto ?? c.colectas_clientes?.monto ?? 0) || 0; // fallback al precio del cliente (el monto por colecta casi nunca se guarda)
-    (c.choferes || []).forEach(ch => {
+    const chsCol = [...new Set(c.choferes || [])]; // sin duplicados: un chofer repetido no cobra doble
+    const dividida = chsCol.filter(x => x && norm(String(x).trim()) !== 'a coordinar').length > 1;
+    chsCol.forEach(ch => {
       let raw = (ch || '').trim();
       if (!raw || norm(raw) === 'a coordinar') return;
+      // Regla de pago (28/07): cobra SOLO el chofer que confirmó — en divididas, estar en
+      // confirmado_por (monto completo cada uno); en no divididas, estado verde.
+      const confirmoEste = dividida ? (Array.isArray(c.confirmado_por) && c.confirmado_por.includes(ch)) : c.estado === 'verde';
+      if (!confirmoEste) return;
       // resolver alias también en colectas (ej. "Yeni" -> "Yeni Sambrano")
       const alC = aliasByLD.get(norm(raw));
       if (alC && alC.regla === 'merge' && alC.paga_como) raw = alC.paga_como;

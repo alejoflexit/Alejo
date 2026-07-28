@@ -60,8 +60,9 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
     } else {
       const base = chs.filter(x => x !== 'A coordinar');
       next = [...base, ch];
-      if (!next.length) next = ['A coordinar'];
     }
+    next = [...new Set(next)]; // nunca el mismo chofer dos veces (cobraría doble la colecta)
+    if (!next.length) next = ['A coordinar'];
     onUpdate({ choferes: next });
     setOpen(false); setQuery(''); setEditIdx(null);
   };

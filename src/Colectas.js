@@ -538,11 +538,18 @@ function ColectasInner({ soloArribos = false }) {
         const map = {};
         regs.forEach(r => {
           const monto = Number(r.monto ?? r.colectas_clientes?.monto ?? 0);
-          (r.choferes || []).forEach(ch => {
+          const chsPago = [...new Set(r.choferes || [])]; // sin duplicados: un chofer repetido no cobra doble
+          const dividida = chsPago.filter(x => x && x !== 'A coordinar').length > 1;
+          chsPago.forEach(ch => {
             if (!ch || ch === 'A coordinar') return;
             if (!map[ch]) map[ch] = { cadete: ch, total: 0, confirmadas: 0, monto: 0 };
             map[ch].total++;
-            if (r.confirmado_por?.length > 0 || r.estado === 'verde') { map[ch].confirmadas++; map[ch].monto += monto; }
+            // Regla de pago (28/07): cobra SOLO el chofer que confirmó — en divididas, estar en
+            // confirmado_por (monto completo cada uno); en no divididas, estado verde.
+            // Una colecta cancelada (rojo) nunca se paga, aunque haya quedado confirmado_por viejo.
+            if (r.estado === 'rojo') return;
+            const confirmoEste = dividida ? (r.confirmado_por || []).includes(ch) : r.estado === 'verde';
+            if (confirmoEste) { map[ch].confirmadas++; map[ch].monto += monto; }
           });
         });
         setPagosData(Object.values(map).sort((a, b) => b.monto - a.monto));
@@ -1032,7 +1039,9 @@ function ColectasInner({ soloArribos = false }) {
                             ? { blanco:'amarillo', amarillo:'rojo', rojo:'blanco', verde:'blanco' }
                             : { blanco:'amarillo', amarillo:'verde', verde:'rojo', rojo:'blanco' };
                           const nextEstado = ciclo[estado] || 'blanco';
-                          updateRegistro(c.id, { estado: nextEstado, ...(nextEstado === 'blanco' ? { confirmado_por: [] } : {}) });
+                          // Al cancelar (rojo) también se limpia la confirmación: una colecta
+                          // confirmada y después cancelada no debe quedar "confirmada" para pagos.
+                          updateRegistro(c.id, { estado: nextEstado, ...(nextEstado === 'blanco' || nextEstado === 'rojo' ? { confirmado_por: [] } : {}) });
                         }
                       };
 
