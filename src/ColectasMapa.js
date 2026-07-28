@@ -30,21 +30,42 @@ export function limpiarDireccion(dir) {
   return s.replace(/[\s.-]+$/, '').trim();
 }
 
-// Devuelve {lat,lng} o null. Intento 1 con el barrio/localidad (necesario en GBA), intento 2
-// sin él (en CABA el barrio a veces confunde al buscador: 6 de 28 se resolvieron recién así).
-async function buscarUbicacion(direccion, zonaBarrio) {
+// Cercos geográficos: sin esto, una calle homónima manda el pin a otra ciudad (pasó de verdad:
+// "santa fe 1780" cayó en Bahía Blanca y "JOSE A CABRERA 5475" en Mar del Plata).
+const CAJA_CABA = '-58.531,-34.527,-58.335,-34.700';   // CABA propiamente dicha
+const CAJA_AMBA = '-59.8,-33.8,-57.8,-35.4';           // CABA + conurbano, para SUR y NOROESTE
+const LIMITE_AMBA = { latMin: -35.4, latMax: -33.8, lngMin: -59.8, lngMax: -57.8 };
+
+const enc = encodeURIComponent;
+
+// Devuelve {lat,lng} o null. Tres intentos en cascada, del más preciso al más laxo:
+//   1) consulta ESTRUCTURADA (street + city). Es la que mejor funciona y en CABA no se escapa
+//      del partido: recupera casos que la búsqueda libre resuelve mal ("santa fe 1780").
+//   2) libre con el barrio, acotada por caja.
+//   3) libre sin el barrio, acotada por caja — en CABA el barrio a veces confunde al buscador.
+// Cualquier resultado fuera del AMBA se descarta: mejor "sin ubicar" que un pin en otra provincia.
+async function buscarUbicacion(direccion, zonaBarrio, seccion) {
   const limpia = limpiarDireccion(direccion);
   if (!limpia) return null;
+  const esCABA = seccion === 'CABA';
+  const caja = esCABA ? CAJA_CABA : CAJA_AMBA;
+  const ciudad = esCABA ? 'Ciudad Autónoma de Buenos Aires' : (zonaBarrio || 'Buenos Aires');
   const intentos = [
-    [limpia, zonaBarrio, 'Buenos Aires', 'Argentina'].filter(Boolean).join(', '),
-    [limpia, 'Buenos Aires', 'Argentina'].join(', '),
+    `street=${enc(limpia)}&city=${enc(ciudad)}&country=Argentina`,
+    `q=${enc([limpia, zonaBarrio, 'Buenos Aires', 'Argentina'].filter(Boolean).join(', '))}&viewbox=${caja}&bounded=1`,
+    `q=${enc([limpia, 'Buenos Aires', 'Argentina'].join(', '))}&viewbox=${caja}&bounded=1`,
   ];
   for (let k = 0; k < intentos.length; k++) {
-    if (k) await sleep(1100);
-    const res = await fetch(`${NOMINATIM}?format=json&limit=1&countrycodes=ar&q=${encodeURIComponent(intentos[k])}`);
+    if (k) await sleep(1100); // rate limit duro de Nominatim, también entre reintentos
+    const res = await fetch(`${NOMINATIM}?format=json&limit=1&countrycodes=ar&${intentos[k]}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
-    if (json && json[0]) return { lat: Number(json[0].lat), lng: Number(json[0].lon) };
+    if (json && json[0]) {
+      const lat = Number(json[0].lat), lng = Number(json[0].lon);
+      const dentro = lat >= LIMITE_AMBA.latMin && lat <= LIMITE_AMBA.latMax
+                  && lng >= LIMITE_AMBA.lngMin && lng <= LIMITE_AMBA.lngMax;
+      if (dentro) return { lat, lng };
+    }
   }
   return null;
 }
@@ -179,7 +200,7 @@ export default function ColectasMapa({
         const c = pendientes[i];
         intentadosRef.current.add(`${c.id}|${c.direccion}`);
         try {
-          const punto = await buscarUbicacion(c.direccion, c.zona_barrio);
+          const punto = await buscarUbicacion(c.direccion, c.zona_barrio, c.seccion);
           if (punto) {
             await onGeoUpdate(c.id, { ...punto, geo_fuente: 'auto', geo_direccion: c.direccion });
           } else {
