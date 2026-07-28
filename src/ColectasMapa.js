@@ -73,6 +73,9 @@ async function buscarUbicacion(direccion, zonaBarrio, seccion) {
   return null;
 }
 
+// Escape mínimo para meter texto de clientes/direcciones dentro del HTML del tooltip
+const escHtml = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
 // Color estable por chofer (mismo nombre → mismo color en todas las sesiones)
 function colorChofer(nombre) {
   const n = normNombre(nombre);
@@ -364,7 +367,9 @@ export default function ColectasMapa({
       const atenuado = choferFoco && chofer !== choferFoco;
       const enSeleccion = seleccion?.ids.includes(c.id) && !seleccion.excluidos.has(c.id);
       const emoji = VEHICULOS[c.vehiculo]?.emoji || '📦';
-      const key = [est, chofer || '-', atenuado ? 'a' : '', enSeleccion ? 's' : '', emoji, c.lat, c.lng].join('|');
+      const dirDelDia = reg?.direccion || c.direccion;
+      const choferesTxt = sinAsignar ? 'A coordinar' : chs.filter(x => x !== 'A coordinar').join(' + ');
+      const key = [est, choferesTxt, atenuado ? 'a' : '', enSeleccion ? 's' : '', emoji, c.lat, c.lng, dirDelDia].join('|');
 
       let entry = markersRef.current.get(c.id);
       if (!entry) {
@@ -382,6 +387,9 @@ export default function ColectasMapa({
           setTimeout(() => setGuardado(g => (g === actual.nombre ? '' : g)), 1800);
         });
         marker.addTo(capaRef.current);
+        // Tooltip al pasar el mouse: qué colecta es, dirección y chofer (el contenido se
+        // actualiza en la reconciliación de abajo, junto con el ícono)
+        marker.bindTooltip('', { direction: 'top', offset: [0, -16], opacity: 0.96 });
         if (marker.dragging) marker.dragging.disable();
         entry = { marker, key: null };
         markersRef.current.set(c.id, entry);
@@ -403,6 +411,14 @@ export default function ColectasMapa({
             <div style="position:absolute;right:-2px;bottom:-2px">${punto}</div>
           </div>`;
         entry.marker.setIcon(L.divIcon({ html, className: 'flexit-pin', iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18] }));
+        entry.marker.setTooltipContent(
+          `<div style="font-size:12px;line-height:1.45;max-width:230px">` +
+          `<b>${escHtml(c.nombre)}</b><br>📍 ${escHtml(dirDelDia)}<br>` +
+          (sinAsignar
+            ? `<span style="color:#b45309">⚠ A coordinar</span>`
+            : `👤 ${escHtml(choferesTxt)}`) +
+          `</div>`
+        );
         entry.key = key;
       }
 
