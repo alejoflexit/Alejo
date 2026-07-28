@@ -255,8 +255,9 @@ export default function ColectasMapa({
   const markersRef = useRef(new Map());   // clienteId -> { marker, key }
   const capaRef = useRef(null);           // LayerGroup de pines
   const dibujoRef = useRef(null);         // polyline en vivo
-  const poligonoRef = useRef(null);       // polígono cerrado de la selección
+  const trazosRef = useRef([]);           // lazos cerrados acumulados: [{ layer, ids }] — Ctrl+Z deshace el último
   const puntosRef = useRef([]);
+  const ultPxRef = useRef(null);          // último punto en píxeles (afinado del trazo)
   const encuadreRef = useRef('');
 
   const clientesRef = useRef(clientes);
@@ -537,18 +538,47 @@ export default function ColectasMapa({
   const limpiarTrazo = useCallback(() => {
     const map = mapRef.current;
     if (dibujoRef.current && map) { map.removeLayer(dibujoRef.current); dibujoRef.current = null; }
-    if (poligonoRef.current && map) { map.removeLayer(poligonoRef.current); poligonoRef.current = null; }
     puntosRef.current = [];
+    ultPxRef.current = null;
   }, []);
 
-  const cancelarSeleccion = useCallback(() => { limpiarTrazo(); setSeleccion(null); }, [limpiarTrazo]);
+  const cancelarSeleccion = useCallback(() => {
+    limpiarTrazo();
+    const map = mapRef.current;
+    trazosRef.current.forEach(t => { if (map) map.removeLayer(t.layer); });
+    trazosRef.current = [];
+    setSeleccion(null);
+  }, [limpiarTrazo]);
 
-  // Esc cancela el lazo / la selección
+  // Deshacer el ÚLTIMO lazo (Ctrl+Z): saca su polígono y sus colectas de la selección;
+  // si era el único, deselecciona todo.
+  const deshacerUltimoLazo = useCallback(() => {
+    const t = trazosRef.current.pop();
+    if (!t) return;
+    if (mapRef.current) mapRef.current.removeLayer(t.layer);
+    const ids = [...new Set(trazosRef.current.flatMap(x => x.ids))];
+    setSeleccion(prev => ids.length
+      ? { ids, excluidos: new Set([...(prev?.excluidos || [])].filter(id => ids.includes(id))) }
+      : null);
+  }, []);
+
+  // Cambiar de pestaña o fecha invalida la selección: los ids eran de la vista anterior
+  // (sin esto se podía "Asignar" a clientes que ya no estaban en pantalla — auditoría 28/07).
+  useEffect(() => { cancelarSeleccion(); }, [tab, fecha, cancelarSeleccion]);
+
+  // Esc cancela el lazo y toda la selección; Ctrl+Z (o Cmd+Z) deshace solo el último lazo
   useEffect(() => {
-    const h = e => { if (e.key === 'Escape') { cancelarSeleccion(); setLazo(false); } };
+    const h = e => {
+      if (e.key === 'Escape') { cancelarSeleccion(); setLazo(false); return; }
+      const enInput = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '');
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !enInput && trazosRef.current.length) {
+        e.preventDefault();
+        deshacerUltimoLazo();
+      }
+    };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [cancelarSeleccion]);
+  }, [cancelarSeleccion, deshacerUltimoLazo]);
 
   const puntoDeEvento = e => {
     const map = mapRef.current;
@@ -557,19 +587,24 @@ export default function ColectasMapa({
   };
 
   const onLazoDown = e => {
+    if (!e.isPrimary) return; // un segundo dedo NO reinicia el trazo (bug real en iPhone)
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    cancelarSeleccion();
+    limpiarTrazo(); // descarta el trazo en vivo anterior; los lazos ya cerrados QUEDAN (acumulables)
     dibujandoRef.current = true;
     const ll = puntoDeEvento(e);
     puntosRef.current = [[ll.lat, ll.lng]];
+    ultPxRef.current = [e.clientX, e.clientY];
     dibujoRef.current = L.polyline(puntosRef.current, { color: '#8EC5FF', weight: 3, dashArray: '6 4' }).addTo(mapRef.current);
   };
 
   const onLazoMove = e => {
-    if (!dibujandoRef.current || !dibujoRef.current) return;
+    if (!dibujandoRef.current || !dibujoRef.current || !e.isPrimary) return;
+    // Afinado: un punto cada ≥5px de movimiento — mismo trazo a la vista, ~5-10x menos puntos
+    // (menos redibujo y punto-en-polígono más rápido).
+    const u = ultPxRef.current;
+    if (u) { const dx = e.clientX - u[0], dy = e.clientY - u[1]; if (dx * dx + dy * dy < 25) return; }
+    ultPxRef.current = [e.clientX, e.clientY];
     const ll = puntoDeEvento(e);
-    const ult = puntosRef.current[puntosRef.current.length - 1];
-    if (ult && Math.abs(ult[0] - ll.lat) < 1e-6 && Math.abs(ult[1] - ll.lng) < 1e-6) return;
     puntosRef.current.push([ll.lat, ll.lng]);
     dibujoRef.current.setLatLngs(puntosRef.current);
   };
@@ -581,9 +616,15 @@ export default function ColectasMapa({
     if (pts.length < 3) { limpiarTrazo(); return; }
     const dentro = conPin.filter(c => dentroDePoligono([c.lat, c.lng], pts)).map(c => c.id);
     if (dibujoRef.current) { mapRef.current.removeLayer(dibujoRef.current); dibujoRef.current = null; }
-    if (!dentro.length) { limpiarTrazo(); setSeleccion(null); return; }
-    poligonoRef.current = L.polygon(pts, { color: '#8EC5FF', weight: 2, fillColor: '#8EC5FF', fillOpacity: 0.08 }).addTo(mapRef.current);
-    setSeleccion({ ids: dentro, excluidos: new Set() });
+    if (!dentro.length) { limpiarTrazo(); return; } // lazo vacío se descarta; la selección previa queda
+    const layer = L.polygon(pts, { color: '#8EC5FF', weight: 2, fillColor: '#8EC5FF', fillOpacity: 0.08 }).addTo(mapRef.current);
+    trazosRef.current.push({ layer, ids: dentro });
+    limpiarTrazo();
+    // Acumulable: cada lazo SUMA a la selección; Ctrl+Z deshace el último
+    setSeleccion(prev => ({
+      ids: [...new Set([...(prev?.ids || []), ...dentro])],
+      excluidos: prev?.excluidos || new Set(),
+    }));
     setBuscaChofer('');
   };
 
@@ -798,6 +839,7 @@ export default function ColectasMapa({
             <span style={{ fontSize: 14, fontWeight: 700, color: '#8EC5FF' }}>
               {seleccion.ids.filter(id => !seleccion.excluidos.has(id)).length} colecta(s) seleccionada(s)
             </span>
+            <span style={{ fontSize: 11, color: BRAND.muted }}>· podés sumar más lazos · Ctrl+Z deshace el último</span>
             <button onClick={cancelarSeleccion} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
 
