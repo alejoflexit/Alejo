@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { getSession, getToken } from './auth';
 import {
   BRAND, VEHICULOS, normNombre, estadoEfectivo, ChoferPicker,
-  SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, mergeChoferes, LoginFlexit,
+  SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, mergeChoferes, LoginFlexit, NotasHoy,
 } from './colectasShared';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
@@ -182,7 +182,7 @@ class MapaBoundary extends React.Component {
   }
 }
 
-function ColectasInner({ soloArribos = false }) {
+function ColectasInner({ soloArribos = false, irA }) {
   const [navView, setNavView] = useState(soloArribos ? 'arribos' : 'colectas'); // 'colectas' | 'arribos' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
   const [vistaColectas, setVistaColectas] = useState('tabla'); // 'tabla' | 'mapa'
@@ -832,6 +832,8 @@ function ColectasInner({ soloArribos = false }) {
 
     return (
       <>
+        {/* Notas de la pizarra cuyo día es la fecha vigente — resolvibles sin salir de Colectas */}
+        <NotasHoy fecha={fecha} irAPizarra={irA ? () => irA('pizarra') : undefined} />
         {/* Toolbar */}
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
@@ -1727,6 +1729,8 @@ function ColectasInner({ soloArribos = false }) {
             <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
           </div>
         )}
+        {/* Ausencias de la pizarra para hoy — lo que Arribos necesita saber al recibir cadetes */}
+        <NotasHoy fecha={fecha} soloAusencias irAPizarra={irA ? () => irA('pizarra') : undefined} />
         {renderArribos()}
       </div>
     );
@@ -1813,8 +1817,8 @@ function ColectasInner({ soloArribos = false }) {
   );
 }
 
-export default function Colectas({ soloArribos = false }) {
+export default function Colectas({ soloArribos = false, irA }) {
   const [usuario, setUsuario] = useState(() => (getSession() || {}).nombre || '');
   if (!usuario) return <LoginFlexit icono="📦" titulo="Colectas Flexit" onOk={setUsuario} />;
-  return <ColectasInner soloArribos={soloArribos} />;
+  return <ColectasInner soloArribos={soloArribos} irA={irA} />;
 }

@@ -1,7 +1,7 @@
 // Piezas compartidas entre Colectas (Colectas.js), la vista Mapa (ColectasMapa.js) y la Pizarra (Pizarra.js).
 // Viven acá para no duplicarlas en copias que después divergen.
-import React, { useState, useEffect, useRef } from 'react';
-import { login, authedFetch, getToken } from './auth';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { login, authedFetch, getToken, getSession } from './auth';
 
 export const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -349,4 +349,67 @@ export function aplicarCambioNota(prev, row, evento) {
   const next = [...prev];
   next[i] = { ...next[i], ...row };
   return next;
+}
+
+// ── FRANJA "Notas para hoy" (Tarea 2 de la spec) ──
+// La pizarra viene a buscar al que está trabajando: se muestra arriba de Colectas y Arribos con las
+// notas cuyo día objetivo es la fecha vigente, y se resuelven ahí mismo (✓ Hecho / → Mañana) sin
+// cambiar de pantalla. En Arribos, solo ausencias. Reusa los helpers de la pizarra — misma tabla.
+export function NotasHoy({ fecha, soloAusencias = false, irAPizarra }) {
+  const [notas, setNotas] = useState([]);
+  const usuario = (getSession() || {}).nombre || '';
+
+  const recargar = useCallback(() => {
+    // Pendientes cuyo día objetivo es la fecha vigente (las resueltas no se muestran acá).
+    sbFetch(`notas_operativas?select=*&resuelta_at=is.null&fecha_objetivo=eq.${fecha}`)
+      .then(rows => setNotas(Array.isArray(rows) ? rows : []))
+      .catch(() => {});
+  }, [fecha]);
+
+  useEffect(() => { recargar(); }, [recargar]);
+  // Realtime: cuando alguien crea/resuelve/mueve una nota, la franja se actualiza sola.
+  useNotasRealtime(useCallback((row, ev) => {
+    setNotas(prev => {
+      const next = aplicarCambioNota(prev, row, ev);
+      // Filtrar a lo que corresponde a esta franja (fecha vigente, sin resolver, tipo si aplica).
+      return next.filter(n => n.fecha_objetivo === fecha && !n.resuelta_at && (!soloAusencias || n.tipo === 'ausencia'));
+    });
+  }, [fecha, soloAusencias]));
+
+  const visibles = ordenarNotas(notas.filter(n => !n.resuelta_at && (!soloAusencias || n.tipo === 'ausencia')));
+  if (!visibles.length) return null;
+
+  const quitar = id => setNotas(prev => prev.filter(n => n.id !== id));
+  const hacer = n => { quitar(n.id); resolverNota(n.id, usuario).catch(recargar); };
+  const mover = n => { quitar(n.id); posponerNota(n).catch(recargar); };
+
+  return (
+    <div style={{ marginBottom: 14, padding: '11px 14px', borderRadius: 12, border: '1px solid rgba(251,191,36,0.35)', background: 'rgba(251,191,36,0.07)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#FBBF24' }}>📋 {soloAusencias ? 'Ausencias de hoy' : 'Notas para hoy'} ({visibles.length})</span>
+        {irAPizarra && <button onClick={irAPizarra} style={{ marginLeft: 'auto', border: 'none', background: 'none', color: BRAND.teal, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Abrir pizarra →</button>}
+      </div>
+      {visibles.map(n => {
+        const t = NOTA_TIPOS[n.tipo] || {};
+        const urgente = n.prioridad === 'ahora';
+        const conHora = n.prioridad === 'hora' && n.hora_limite;
+        return (
+          <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <span style={{ fontSize: 14 }}>{t.emoji}</span>
+            <div style={{ flex: 1, minWidth: 150, fontSize: 13, color: '#fff' }}>
+              {urgente && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#E24B4A', borderRadius: 5, padding: '1px 6px', marginRight: 6 }}>⚡ AHORA</span>}
+              {conHora && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#1a1500', background: '#FBBF24', borderRadius: 5, padding: '1px 6px', marginRight: 6 }}>⏰ {n.hora_limite}</span>}
+              {n.texto}
+              {n.tipo === 'ausencia' && n.cubre && <span style={{ color: BRAND.teal, fontWeight: 600 }}> · cubre {n.cubre}</span>}
+              <span style={{ display: 'block', fontSize: 11, color: BRAND.muted, marginTop: 1 }}>{n.autor}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => hacer(n)} style={{ minHeight: 32, border: '1px solid rgba(46,207,170,0.45)', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, borderRadius: 8, padding: '0 11px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✓ Hecho</button>
+              {n.tipo !== 'ausencia' && <button onClick={() => mover(n)} title="Posponer a mañana" style={{ minHeight: 32, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', borderRadius: 8, padding: '0 11px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>→ Mañana</button>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

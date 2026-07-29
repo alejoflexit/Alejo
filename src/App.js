@@ -1000,9 +1000,9 @@ export default function App() {
         onLogin={async (em, pw) => { const s = await login(em, pw); setSession(s); return s; }}
         onLogout={() => { logout(); setSession(null); }} />}
 
-      {seccion === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas /></Suspense>}
+      {seccion === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas irA={setSeccion} /></Suspense>}
 
-      {seccion === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos /></Suspense>}
+      {seccion === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>}
 
       {seccion === "zonas" && <Suspense fallback={<VistaSkeleton />}><Zonas /></Suspense>}
 
