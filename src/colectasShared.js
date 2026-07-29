@@ -306,6 +306,59 @@ export const borrarNota = (id) =>
 export const posponerNota = (nota) =>
   patchNota(nota.id, { fecha_objetivo: sumarDias(nota.fecha_objetivo, 1) });
 
+// Editar el texto/tipo de una nota (solo el autor, desde la Pizarra). Al cambiar el tipo se
+// limpian los campos que ya no aplican (un aviso no tiene cadete ni cliente ni reemplazo).
+export function editarNota(id, { texto, tipo }) {
+  const patch = { texto };
+  if (tipo) {
+    patch.tipo = tipo;
+    if (tipo !== 'colecta') patch.cliente_id = null;
+    if (tipo !== 'ausencia') { patch.cadete = null; patch.cubre = null; }
+  }
+  return patchNota(id, patch);
+}
+
+// ── COMENTARIOS de una nota (hilo corto del equipo) ──
+export const cargarComentarios = () =>
+  sbFetch('nota_comentarios?select=*&order=created_at.asc');
+export const agregarComentario = (notaId, autor, texto) =>
+  sbFetch('nota_comentarios', { method: 'POST', body: JSON.stringify({ nota_id: notaId, autor, texto }) });
+export const borrarComentario = (id) =>
+  sbFetch(`nota_comentarios?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+
+// Suscripción a los comentarios (mismo patrón que las notas).
+export function useComentariosRealtime(onRow, activo = true) {
+  const cb = useRef(onRow);
+  useEffect(() => { cb.current = onRow; });
+  useEffect(() => {
+    if (!activo || !window.supabase) return;
+    let client = null, channel = null, cancelled = false, retryTimer = null;
+    const cleanup = () => {
+      try { if (channel && client) client.removeChannel(channel); } catch {}
+      try { if (client) client.realtime.disconnect(); } catch {}
+      channel = null; client = null;
+    };
+    const connect = async () => {
+      const token = await getToken().catch(() => null);
+      if (!token || cancelled) return;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      client.realtime.setAuth(token);
+      channel = client.channel('comentarios-rt')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'nota_comentarios' }, payload => {
+          cb.current(payload.eventType === 'DELETE' ? payload.old : payload.new, payload.eventType);
+        })
+        .subscribe(status => {
+          if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) {
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => { cleanup(); connect(); }, 5000);
+          }
+        });
+    };
+    connect();
+    return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
+  }, [activo]);
+}
+
 // Suscripción a los cambios de notas_operativas. Mismo patrón que colectas_registros/colectas_arribos:
 // cliente propio con el JWT del usuario y reconexión ante corte de red o token vencido.
 export function useNotasRealtime(onRow, activo = true) {

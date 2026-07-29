@@ -8,6 +8,7 @@ import {
   BRAND, sbFetch, todayStr, minutosAR, sumarDias, labelDia, destinoLabel,
   NOTA_TIPOS, ordenarNotas, estaVencida, cargarNotas, resolverNota, desmarcarNota, borrarNota, patchNota,
   cargarChoferesFull, useNotasRealtime, aplicarCambioNota, LoginFlexit,
+  editarNota, cargarComentarios, agregarComentario, borrarComentario, useComentariosRealtime,
 } from './colectasShared';
 
 const ROJO = '#E24B4A';
@@ -246,11 +247,20 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
 }
 
 // ── TARJETA ──
-function Tarjeta({ nota, clientesById, onResolver, onDesmarcar, onBorrar, onCubrir, onMover, hoy, mostrarDia, arrastrable }) {
+function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolver, onDesmarcar, onBorrar, onCubrir, onMover, onEditar, onComentar, onBorrarComentario, hoy, mostrarDia, arrastrable }) {
+  const comentarios = comentariosByNota[nota.id] || [];
   const [cubre, setCubre] = useState(nota.cubre || '');
   const [abierta, setAbierta] = useState(false);
   const [hover, setHover] = useState(false);
   const [armado, setArmado] = useState(false);   // borrar: primer toque arma, segundo confirma
+  const [editando, setEditando] = useState(false);
+  const [txtEdit, setTxtEdit] = useState(nota.texto);
+  const [tipoEdit, setTipoEdit] = useState(nota.tipo);
+  const [comOpen, setComOpen] = useState(false);
+  const [comTxt, setComTxt] = useState('');
+  const esAutor = usuario && nota.autor === usuario;
+  const guardarEdit = () => { if (txtEdit.trim()) { onEditar(nota, { texto: txtEdit.trim(), tipo: tipoEdit }); setEditando(false); } };
+  const enviarCom = () => { if (comTxt.trim()) { onComentar(nota, comTxt.trim()); setComTxt(''); } };
   const tBorrar = useRef(null);
   useEffect(() => () => { if (tBorrar.current) clearTimeout(tBorrar.current); }, []);
   const armarBorrar = () => {
@@ -311,9 +321,32 @@ function Tarjeta({ nota, clientesById, onResolver, onDesmarcar, onBorrar, onCubr
             </div>
           )}
 
-          <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.white, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
-            {nota.texto}
-          </div>
+          {editando ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 4 }}>
+              <textarea value={txtEdit} onChange={e => setTxtEdit(e.target.value)} rows={2} autoFocus
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) guardarEdit(); if (e.key === 'Escape') setEditando(false); }}
+                style={{ ...inpSt, fontSize: 14, resize: 'vertical', width: '100%', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                {Object.entries(NOTA_TIPOS).map(([k, v]) => (
+                  <button key={k} type="button" onClick={() => setTipoEdit(k)}
+                    style={{ minHeight: 30, padding: '0 9px', borderRadius: 7, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation',
+                      border: `1px solid ${tipoEdit === k ? BRAND.teal : BRAND.border}`, background: tipoEdit === k ? 'rgba(46,207,170,0.14)' : 'transparent', color: tipoEdit === k ? BRAND.teal : BRAND.muted, fontWeight: tipoEdit === k ? 700 : 500 }}>
+                    {v.emoji} {v.label}
+                  </button>
+                ))}
+                <span style={{ marginLeft: 'auto', display: 'flex', gap: 5 }}>
+                  <button type="button" onClick={guardarEdit} disabled={!txtEdit.trim()}
+                    style={{ minHeight: 30, padding: '0 12px', borderRadius: 7, fontSize: 12.5, fontWeight: 700, cursor: txtEdit.trim() ? 'pointer' : 'default', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.14)', color: BRAND.teal }}>Guardar</button>
+                  <button type="button" onClick={() => { setEditando(false); setTxtEdit(nota.texto); setTipoEdit(nota.tipo); }}
+                    style={{ minHeight: 30, padding: '0 10px', borderRadius: 7, fontSize: 12.5, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.white, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
+              {nota.texto}
+            </div>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', fontSize: 10.5, color: 'rgba(255,255,255,0.62)' }}>
@@ -335,6 +368,8 @@ function Tarjeta({ nota, clientesById, onResolver, onDesmarcar, onBorrar, onCubr
           )}
 
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+            {!resuelta && esAutor && !editando && <Accion onClick={() => setEditando(true)} titulo="Editar tu nota">✏️ Editar</Accion>}
+            <Accion onClick={() => setComOpen(o => !o)} color={comentarios.length ? BRAND.teal : undefined} titulo="Comentarios del equipo">💬 {comentarios.length || ''}</Accion>
             {!resuelta && nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
             {!resuelta && nota.tipo === 'ausencia' && (
               <Accion onClick={() => setAbierta(a => !a)} color={BRAND.teal} titulo="Definir el reemplazo">
@@ -368,6 +403,32 @@ function Tarjeta({ nota, clientesById, onResolver, onDesmarcar, onBorrar, onCubr
                 }}>
                 Cubrir ausencia
               </button>
+            </div>
+          )}
+
+          {/* Comentarios del equipo (cualquiera puede sumar uno) */}
+          {comOpen && (
+            <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${BRAND.border}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {comentarios.length === 0 && <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.4)' }}>Sin comentarios todavía.</div>}
+              {comentarios.map(c => {
+                const h = c.created_at ? new Date(new Date(c.created_at).getTime() - 3 * 3600 * 1000).toISOString().slice(11, 16) : '';
+                return (
+                  <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 700, color: BRAND.teal, background: 'rgba(46,207,170,0.14)' }}>{(c.autor || '?')[0].toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, color: BRAND.white, lineHeight: 1.35, wordBreak: 'break-word' }}>{c.texto}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>{c.autor}{h ? ` · ${h}` : ''}{c.autor === usuario ? <span onClick={() => onBorrarComentario(c.id)} style={{ color: ROJO, cursor: 'pointer', marginLeft: 6 }}>borrar</span> : null}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ display: 'flex', gap: 5 }}>
+                <input type="text" value={comTxt} onChange={e => setComTxt(e.target.value)} placeholder="Escribir un comentario…"
+                  onKeyDown={e => { if (e.key === 'Enter' && comTxt.trim()) enviarCom(); }}
+                  style={{ ...inpSt, fontSize: 12.5, flex: 1, minWidth: 120 }} />
+                <button type="button" onClick={enviarCom} disabled={!comTxt.trim()}
+                  style={{ minHeight: 32, padding: '0 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, touchAction: 'manipulation', cursor: comTxt.trim() ? 'pointer' : 'default', border: `1px solid ${comTxt.trim() ? BRAND.teal : BRAND.border}`, background: comTxt.trim() ? 'rgba(46,207,170,0.14)' : 'rgba(255,255,255,0.04)', color: comTxt.trim() ? BRAND.teal : 'rgba(255,255,255,0.3)' }}>Enviar</button>
+              </div>
             </div>
           )}
         </div>
@@ -485,6 +546,27 @@ function PizarraInner({ usuario }) {
   const onRow = useCallback((row, evento) => setNotas(prev => aplicarCambioNota(prev, row, evento)), []);
   useNotasRealtime(onRow);
 
+  // Comentarios del equipo (hilo por nota)
+  const [comentarios, setComentarios] = useState([]);
+  useEffect(() => { cargarComentarios().then(setComentarios).catch(() => {}); }, []);
+  useComentariosRealtime(useCallback((row, ev) => setComentarios(prev => aplicarCambioNota(prev, row, ev)), []));
+  const comentariosByNota = useMemo(() => {
+    const m = {};
+    [...comentarios].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+      .forEach(c => { (m[c.nota_id] = m[c.nota_id] || []).push(c); });
+    return m;
+  }, [comentarios]);
+  const comentar = (nota, texto) => {
+    agregarComentario(nota.id, usuario, texto)
+      .then(rows => { const c = Array.isArray(rows) ? rows[0] : null; if (c) setComentarios(prev => prev.some(x => x.id === c.id) ? prev : [...prev, c]); })
+      .catch(e => setError('No se pudo comentar: ' + e.message));
+  };
+  const quitarComentario = (id) => { setComentarios(prev => prev.filter(c => c.id !== id)); borrarComentario(id).catch(() => {}); };
+  const editar = (nota, campos) => {
+    setNotas(prev => prev.map(n => n.id === nota.id ? { ...n, ...campos } : n));
+    editarNota(nota.id, campos).catch(e => { setError('No se pudo editar: ' + e.message); recargar(); });
+  };
+
   const clientesById = useMemo(() => Object.fromEntries(clientes.map(c => [c.id, c.nombre])), [clientes]);
 
   const parchar = async (id, patch) => {
@@ -539,12 +621,15 @@ function PizarraInner({ usuario }) {
 
   const visibles = cols.filter(c => !c.soloSiHay || c.notas.length || c.hechas.length);
   const props = {
-    clientesById, hoy,
+    clientesById, hoy, usuario, comentariosByNota,
     onResolver: n => resolver(n),
     onDesmarcar: desmarcar,
     onBorrar: borrar,
     onCubrir: (n, c) => resolver(n, { cubre: c }),
     onMover: mover,
+    onEditar: editar,
+    onComentar: comentar,
+    onBorrarComentario: quitarComentario,
   };
 
   return (
