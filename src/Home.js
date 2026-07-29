@@ -144,7 +144,7 @@ const mini = { border: "1px solid rgba(255,255,255,0.09)", background: "rgba(255
 const miniOk = { ...mini, border: "1px solid rgba(46,230,182,0.4)", color: "#2ee6b6", background: "rgba(46,230,182,0.1)" };
 const secSt = { fontSize: 12, fontWeight: 600, color: C.ink3, margin: "22px 6px 12px" };
 
-export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout }) {
+export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout, comBadge = 0 }) {
   const hoy = todayStr();
   const ahora = useMemo(() => new Date(Date.now() - 3 * 3600 * 1000), []);
   const diaSemana = new Date(hoy + "T12:00:00").getDay();
@@ -393,6 +393,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             <button key={d.id} onClick={() => onNav(d.id)} style={{ ...cardBase, padding: "14px 6px", textAlign: "center", cursor: "pointer", color: C.ink2, transition: "transform .18s ease, border-color .18s ease" }}
               onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; e.currentTarget.style.color = C.ink; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = C.line; e.currentTarget.style.color = C.ink2; }}>
+              {d.id === "pizarra" && comBadge > 0 && <span style={{ position: "absolute", top: 8, right: 10, minWidth: 18, height: 18, borderRadius: 9, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
               <div style={{ color: C.teal, marginBottom: 7, display: "flex", justifyContent: "center" }}><Icon id={d.id} size={24} /></div>
               <div style={{ fontSize: 11, fontWeight: 600, fontFamily: C.grotesk }}>{d.label}</div>
             </button>

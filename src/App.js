@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"; // build: 20 nav + lazy
 import Home from "./Home";
 import { getSession, login, logout } from "./auth";
+import { cargarComentarios, useComentariosRealtime, aplicarCambioNota } from "./colectasShared";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
@@ -102,7 +103,7 @@ function VistaSkeleton() {
 }
 
 // Panel de navegación (compartido entre la sidebar fija de desktop y el overlay de mobile)
-function NavPanel({ seccion, go, onClose, logo }) {
+function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
   const items = [
     { id: "metricas", icon: "ti ti-chart-bar", label: "Métricas" },
     { id: "colectas", icon: "ti ti-package", label: "Colectas" },
@@ -127,6 +128,9 @@ function NavPanel({ seccion, go, onClose, logo }) {
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${active ? "rgba(46,207,170,0.3)" : "rgba(255,255,255,0.08)"}`, background: active ? "rgba(46,207,170,0.1)" : "rgba(255,255,255,0.04)", color: active ? "#2ECFAA" : "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
               <i className={it.icon} style={{ fontSize: 18 }} />
               {it.label}
+              {it.id === "pizarra" && comBadge > 0 && (
+                <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: "#E24B4A", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{comBadge}</span>
+              )}
             </button>
           );
         })}
@@ -716,13 +720,37 @@ export default function App() {
   const [session, setSession] = useState(() => getSession());
   const fileRef = useRef();
 
+  // ── Comentarios nuevos de la pizarra → badge en la pestaña y en el acceso "Pizarra" ──
+  // "Visto" = timestamp del último comentario que el usuario ya vio (localStorage). Un comentario
+  // cuenta como nuevo si es posterior a ese visto y NO lo escribió uno mismo.
+  const [comentarios, setComentarios] = useState([]);
+  const usuarioNombre = (session || {}).nombre || "";
+  useEffect(() => {
+    if (!session) { setComentarios([]); return; }
+    cargarComentarios().then(setComentarios).catch(() => {});
+  }, [session]);
+  useComentariosRealtime(useCallback((row, ev) => setComentarios(prev => aplicarCambioNota(prev, row, ev)), []), !!session);
+  const comVisto = () => { try { return localStorage.getItem("flexit_pizarra_com_visto") || ""; } catch { return ""; } };
+  const comNuevos = React.useMemo(() => {
+    const visto = comVisto();
+    return comentarios.filter(c => c.autor !== usuarioNombre && String(c.created_at || "") > visto).length;
+  }, [comentarios, usuarioNombre]);
+  // Al entrar a la Pizarra, marcar todo como visto (el último created_at) → limpia el badge.
+  useEffect(() => {
+    if (seccion !== "pizarra" || !comentarios.length) return;
+    const max = comentarios.reduce((m, c) => (String(c.created_at || "") > m ? String(c.created_at) : m), "");
+    try { localStorage.setItem("flexit_pizarra_com_visto", max); } catch {}
+    setComentarios(c => [...c]); // recomputar comNuevos → 0
+  }, [seccion, comentarios]);
+
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
     const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", pagos: "Liquidaciones" };
-    document.title = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
+    const base = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
+    document.title = (comNuevos > 0 && seccion !== "pizarra") ? `(${comNuevos}) ${base}` : base;
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
     if (seccion === "home") setSession(getSession());
-  }, [seccion]);
+  }, [seccion, comNuevos]);
 
   // Cargar desde Supabase al inicio
   useEffect(() => {
@@ -958,7 +986,7 @@ export default function App() {
           style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, backdropFilter:"blur(2px)" }}>
           <div onClick={e => e.stopPropagation()}
             style={{ position:"absolute", top:0, left:0, bottom:0, width:240, background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem" }}>
-            <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} />
+            <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} comBadge={comNuevos} />
           </div>
         </div>
       )}
@@ -996,7 +1024,7 @@ export default function App() {
       )}
 
       {seccion === "home" && <Home onNav={setSeccion} onMenu={() => setSidebarOpen(true)} isMobile={isMobile} logo={FLEXIT_LOGO}
-        session={session}
+        session={session} comBadge={comNuevos}
         onLogin={async (em, pw) => { const s = await login(em, pw); setSession(s); return s; }}
         onLogout={() => { logout(); setSession(null); }} />}
 

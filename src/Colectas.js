@@ -1729,8 +1729,6 @@ function ColectasInner({ soloArribos = false, irA }) {
             <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
           </div>
         )}
-        {/* Ausencias de la pizarra para hoy — lo que Arribos necesita saber al recibir cadetes */}
-        <NotasHoy fecha={fecha} soloAusencias irAPizarra={irA ? () => irA('pizarra') : undefined} />
         {renderArribos()}
       </div>
     );

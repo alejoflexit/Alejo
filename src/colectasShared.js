@@ -245,7 +245,7 @@ export function labelDia(fechaStr, hoy = todayStr()) {
 // sinDia=true omite el día: lo usa el tablero, donde la columna ya lo dice.
 export function destinoLabel(nota, clientesById, hoy = todayStr(), sinDia = false) {
   const cola = sinDia ? '' : ` › ${labelDia(nota.fecha_objetivo, hoy)}`;
-  if (nota.tipo === 'ausencia') return `Colectas + Arribos${cola}`;
+  if (nota.tipo === 'ausencia') return `Colectas${cola}`;
   if (nota.tipo === 'colecta') {
     const cli = nota.cliente_id && clientesById ? clientesById[nota.cliente_id] : null;
     return cli ? `Colectas › ${cli}${cola}` : `Colectas${cola}`;
