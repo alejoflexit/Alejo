@@ -242,14 +242,15 @@ export function labelDia(fechaStr, hoy = todayStr()) {
 }
 
 // Dónde va a aparecer la nota, en una sola frase uniforme.
-export function destinoLabel(nota, clientesById, hoy = todayStr()) {
-  const dia = labelDia(nota.fecha_objetivo, hoy);
-  if (nota.tipo === 'ausencia') return `Colectas + Arribos › ${dia}`;
+// sinDia=true omite el día: lo usa el tablero, donde la columna ya lo dice.
+export function destinoLabel(nota, clientesById, hoy = todayStr(), sinDia = false) {
+  const cola = sinDia ? '' : ` › ${labelDia(nota.fecha_objetivo, hoy)}`;
+  if (nota.tipo === 'ausencia') return `Colectas + Arribos${cola}`;
   if (nota.tipo === 'colecta') {
     const cli = nota.cliente_id && clientesById ? clientesById[nota.cliente_id] : null;
-    return cli ? `Colectas › ${cli} › ${dia}` : `Colectas › ${dia}`;
+    return cli ? `Colectas › ${cli}${cola}` : `Colectas${cola}`;
   }
-  return `Pizarra › ${dia}`;
+  return sinDia ? 'Pizarra' : `Pizarra${cola}`;
 }
 
 export const hhmmAMin = h => {
