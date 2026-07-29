@@ -106,10 +106,16 @@ function Creador({ autor, choferes, clientes, onPublicar }) {
   const [aviso, setAviso] = useState('');
 
   const fechaObjetivo = cuando === 'hoy' ? hoy : cuando === 'manana' ? sumarDias(hoy, 1) : fechaLibre;
-  const puede = texto.trim() && fechaObjetivo && (prioridad !== 'hora' || hora);
+  // Qué falta para poder publicar. Se muestra siempre (no dejar el botón muerto y mudo).
+  const falta = !texto.trim() ? 'Escribí de qué se trata la nota.'
+    : !fechaObjetivo ? 'Elegí una fecha: la nota tiene que saber qué día importa.'
+    : prioridad === 'hora' && !hora ? 'Falta la hora límite.'
+    : '';
+  const puede = !falta;
 
   const publicar = async () => {
-    if (!puede || busy) return;
+    if (busy) return;
+    if (falta) { setAviso(falta); return; }
     setBusy(true); setAviso('');
     try {
       await sbFetch('notas_operativas', {
@@ -122,7 +128,7 @@ function Creador({ autor, choferes, clientes, onPublicar }) {
           fecha_objetivo: fechaObjetivo,
           cliente_id: tipo === 'colecta' && clienteId ? clienteId : null,
           cadete: tipo === 'ausencia' && cadete ? cadete : null,
-          cubre: tipo === 'ausencia' && cubre ? cubre : null,
+          cubre: tipo === 'ausencia' && cubre.trim() ? cubre.trim() : null,
           autor,
         }),
       });
@@ -180,10 +186,9 @@ function Creador({ autor, choferes, clientes, onPublicar }) {
               {choferes.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <span style={{ fontSize: 12.5, color: BRAND.muted }}>lo cubre</span>
-            <select value={cubre} onChange={e => setCubre(e.target.value)} style={{ ...inpSt, padding: '8px 10px', fontSize: 13 }}>
-              <option value="">Sin definir</option>
-              {choferes.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <input type="text" list="fx-choferes" value={cubre} onChange={e => setCubre(e.target.value)}
+              placeholder="A mano o de la lista"
+              style={{ ...inpSt, padding: '8px 10px', fontSize: 13, width: 180 }} />
           </FilaChips>
         )}
 
@@ -200,20 +205,18 @@ function Creador({ autor, choferes, clientes, onPublicar }) {
       {aviso && <div style={{ color: ROJO, fontSize: 12.5, marginTop: 10 }}>{aviso}</div>}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-        <button type="button" onClick={publicar} disabled={!puede || busy}
+        <button type="button" onClick={publicar} disabled={busy}
           style={{
             minHeight: 38, padding: '0 20px', borderRadius: 10, fontSize: 14, fontWeight: 700, touchAction: 'manipulation',
-            cursor: puede && !busy ? 'pointer' : 'default',
+            cursor: busy ? 'default' : 'pointer',
             border: `1px solid ${puede ? BRAND.teal : BRAND.border}`,
             background: puede ? 'rgba(46,207,170,0.14)' : BRAND.faint,
-            color: puede ? BRAND.teal : 'rgba(255,255,255,0.3)',
+            color: puede ? BRAND.teal : 'rgba(255,255,255,0.45)',
           }}>
           {busy ? 'Publicando…' : 'Publicar'}
         </button>
-        {!texto.trim() ? null : !fechaObjetivo ? (
-          <span style={{ fontSize: 12.5, color: AMBAR }}>Elegí una fecha: la nota tiene que saber qué día importa.</span>
-        ) : prioridad === 'hora' && !hora ? (
-          <span style={{ fontSize: 12.5, color: AMBAR }}>Falta la hora límite.</span>
+        {falta ? (
+          <span style={{ fontSize: 12.5, color: AMBAR }}>{falta}</span>
         ) : (
           <span style={{ fontSize: 12.5, color: BRAND.muted }}>
             {destinoLabel({ tipo, fecha_objetivo: fechaObjetivo, cliente_id: clienteId }, Object.fromEntries(clientes.map(c => [c.id, c.nombre])), hoy)}
@@ -225,7 +228,7 @@ function Creador({ autor, choferes, clientes, onPublicar }) {
 }
 
 // ── TARJETA DE NOTA ──
-function Nota({ nota, clientesById, choferes, usuario, onResolver, onCubrir, hoy }) {
+function Nota({ nota, clientesById, onResolver, onCubrir, hoy }) {
   const [cubre, setCubre] = useState(nota.cubre || '');
   const resuelta = !!nota.resuelta_at;
   const t = NOTA_TIPOS[nota.tipo] || NOTA_TIPOS.aviso;
@@ -279,18 +282,16 @@ function Nota({ nota, clientesById, choferes, usuario, onResolver, onCubrir, hoy
         {!resuelta && nota.tipo === 'ausencia' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 12.5, color: BRAND.muted }}>Lo cubre:</span>
-            <select value={cubre} onChange={e => setCubre(e.target.value)}
-              style={{ ...inpSt, padding: '7px 10px', fontSize: 13 }}>
-              <option value="">Sin definir</option>
-              {choferes.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <button type="button" onClick={() => onCubrir(nota, cubre)} disabled={!cubre}
+            <input type="text" list="fx-choferes" value={cubre} onChange={e => setCubre(e.target.value)}
+              placeholder="A mano o de la lista"
+              style={{ ...inpSt, padding: '7px 10px', fontSize: 13, width: 170 }} />
+            <button type="button" onClick={() => onCubrir(nota, cubre.trim())} disabled={!cubre.trim()}
               style={{
                 minHeight: 34, padding: '0 14px', borderRadius: 9, fontSize: 13, fontWeight: 700, touchAction: 'manipulation',
-                cursor: cubre ? 'pointer' : 'default',
-                border: `1px solid ${cubre ? BRAND.teal : BRAND.border}`,
-                background: cubre ? 'rgba(46,207,170,0.14)' : BRAND.faint,
-                color: cubre ? BRAND.teal : 'rgba(255,255,255,0.3)',
+                cursor: cubre.trim() ? 'pointer' : 'default',
+                border: `1px solid ${cubre.trim() ? BRAND.teal : BRAND.border}`,
+                background: cubre.trim() ? 'rgba(46,207,170,0.14)' : BRAND.faint,
+                color: cubre.trim() ? BRAND.teal : 'rgba(255,255,255,0.3)',
               }}>
               Cubrir ausencia
             </button>
@@ -378,6 +379,12 @@ function PizarraInner({ usuario }) {
 
   return (
     <div style={{ maxWidth: 760 }}>
+      {/* Sugerencias para los campos "lo cubre": se puede elegir de la lista o escribir a mano
+          (el reemplazo puede ser alguien que no esté en el padrón de cadetes). */}
+      <datalist id="fx-choferes">
+        {choferes.map(c => <option key={c} value={c} />)}
+      </datalist>
+
       {error && (
         <div style={{ background: 'rgba(226,75,74,0.15)', color: ROJO, border: `1px solid rgba(226,75,74,0.3)`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {error}
