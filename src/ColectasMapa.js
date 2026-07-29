@@ -771,7 +771,6 @@ export default function ColectasMapa({
             })}
           </div>
         )}
-      </div>
 
       {/* Detalle de un cliente */}
       {clienteSel && !seleccion && (() => {
@@ -781,7 +780,7 @@ export default function ColectasMapa({
         const monto = reg.monto ?? clienteSel.monto;
         const estLbl = { blanco: 'Pendiente', amarillo: 'Con envíos', verde: 'Confirmado' }[est] || est;
         return (
-          <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: BRAND.navyCard }}>
+          <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 960, padding: '12px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(22,45,66,0.97)', boxShadow: '0 -6px 24px rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 16 }}>{VEHICULOS[clienteSel.vehiculo]?.emoji || '📦'}</span>
               <span style={{ fontSize: 14, fontWeight: 700 }}>{clienteSel.nombre}</span>
@@ -805,6 +804,7 @@ export default function ColectasMapa({
                 chs={choferesDe(clienteSel)}
                 choferesList={choferesFull}
                 onUpdate={updates => updateRegistro(clienteSel.id, updates)}
+                abrirArriba
               />
               <button onClick={() => setBuscandoDir(v => (v === clienteSel.id ? null : clienteSel.id))}
                 title="Buscar la dirección como en Google Maps y mover el pin al resultado"
@@ -834,8 +834,8 @@ export default function ColectasMapa({
 
       {/* Panel de asignación en bloque */}
       {seleccion && (
-        <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid rgba(142,197,255,0.45)', background: BRAND.navyCard }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 960, padding: '12px 14px', borderRadius: 12, border: '1px solid rgba(142,197,255,0.45)', background: 'rgba(22,45,66,0.97)', boxShadow: '0 -6px 24px rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', maxHeight: 'calc(100% - 16px)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexShrink: 0 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#8EC5FF' }}>
               {seleccion.ids.filter(id => !seleccion.excluidos.has(id)).length} colecta(s) seleccionada(s)
             </span>
@@ -843,7 +843,7 @@ export default function ColectasMapa({
             <button onClick={cancelarSeleccion} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
 
-          <div style={{ maxHeight: 190, overflowY: 'auto', marginBottom: 10 }}>
+          <div style={{ maxHeight: 190, overflowY: 'auto', marginBottom: 10, minHeight: 0 }}>
             {seleccion.ids.map(id => {
               const c = clientes.find(x => x.id === id);
               if (!c) return null;
@@ -884,6 +884,8 @@ export default function ColectasMapa({
           </div>
         </div>
       )}
+      </div>
+
     </div>
   );
 }

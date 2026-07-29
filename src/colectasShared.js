@@ -65,7 +65,10 @@ export function estadoEfectivo(cliente, reg) {
 }
 
 // ── CHOFER PICKER ──
-export function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
+// abrirArriba: el desplegable se abre hacia ARRIBA. Necesario cuando el picker vive al pie de
+// un panel flotante (el mapa): abriéndose hacia abajo queda fuera de la pantalla y parece que el
+// botón no hace nada.
+export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArriba }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [editIdx, setEditIdx] = useState(null);
@@ -121,7 +124,7 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips }) {
       </div>
 
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 300, width: 210, background: '#162d42', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.55)' }}>
+        <div style={{ position: 'absolute', ...(abrirArriba ? { bottom: 'calc(100% + 4px)' } : { top: 'calc(100% + 4px)' }), left: 0, zIndex: 300, width: 210, background: '#162d42', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.55)' }}>
           <div style={{ padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>🔍</span>
             <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
