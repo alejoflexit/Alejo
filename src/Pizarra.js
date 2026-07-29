@@ -159,7 +159,7 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
   };
 
   return (
-    <div style={{ padding: 10, borderRadius: 10, border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.05)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="fx-crear" style={{ padding: 10, borderRadius: 10, border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.05)', display: 'flex', flexDirection: 'column', gap: 8 }}>
       <textarea ref={ref} value={texto} onChange={e => setTexto(e.target.value)} rows={2}
         placeholder="Qué hay que saber…"
         onKeyDown={e => {
@@ -249,6 +249,7 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
 function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostrarDia, arrastrable }) {
   const [cubre, setCubre] = useState(nota.cubre || '');
   const [abierta, setAbierta] = useState(false);
+  const [hover, setHover] = useState(false);
   const resuelta = !!nota.resuelta_at;
   const t = NOTA_TIPOS[nota.tipo] || NOTA_TIPOS.aviso;
   const urgente = !resuelta && nota.prioridad === 'ahora';
@@ -257,17 +258,24 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
   const creada = nota.created_at
     ? new Date(new Date(nota.created_at).getTime() - 3 * 3600 * 1000).toISOString().slice(11, 16)
     : '';
-  const meta = { fontSize: 10.5, color: 'rgba(255,255,255,0.38)', whiteSpace: 'nowrap' };
+  const meta = { fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.38)', whiteSpace: 'nowrap' };
 
   return (
     <div
       draggable={arrastrable && !resuelta}
       onDragStart={e => { e.dataTransfer.setData('text/plain', String(nota.id)); e.dataTransfer.effectAllowed = 'move'; }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="fx-nota"
       style={{
-        padding: '10px 11px', borderRadius: 9, background: BRAND.navyCard,
-        border: `1px solid ${BRAND.border}`,
-        borderLeft: acento ? `3px solid ${acento}` : `1px solid ${BRAND.border}`,
-        opacity: resuelta ? 0.5 : 1, cursor: arrastrable && !resuelta ? 'grab' : 'default',
+        padding: '10px 11px', borderRadius: 9,
+        background: hover && !resuelta ? '#1a3550' : BRAND.navyCard,
+        border: `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
+        borderLeft: acento ? `3px solid ${acento}` : `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
+        boxShadow: hover && !resuelta ? '0 4px 14px rgba(0,0,0,0.35)' : 'none',
+        transform: hover && !resuelta ? 'translateY(-1px)' : 'none',
+        opacity: resuelta ? 0.45 : 1, cursor: arrastrable && !resuelta ? 'grab' : 'default',
+        transition: 'background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease, opacity .2s ease',
       }}>
 
       <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
@@ -280,8 +288,9 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
           }}>
           <span style={{
             width: 19, height: 19, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: `2px solid ${resuelta ? BRAND.teal : 'rgba(255,255,255,0.28)'}`,
+            border: `2px solid ${resuelta ? BRAND.teal : (hover ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.28)')}`,
             background: resuelta ? BRAND.teal : 'transparent', color: '#0d1b2a', fontWeight: 800, fontSize: 12,
+            transition: 'background .18s ease, border-color .18s ease',
           }}>{resuelta ? '✓' : ''}</span>
         </div>
 
@@ -294,7 +303,7 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
             </div>
           )}
 
-          <div style={{ fontSize: 13.5, color: BRAND.white, lineHeight: 1.4, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.white, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
             {nota.texto}
           </div>
 
@@ -379,14 +388,19 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 3px 6px' }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: col.color, letterSpacing: '0.01em' }}>{col.titulo}</span>
-        <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.3)' }}>{notas.length}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: col.color, letterSpacing: '0.01em' }}>{col.titulo}</span>
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>{notas.length}</span>
       </div>
 
       {notas.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} {...rest} />)}
 
       {!notas.length && !hechas.length && !creando && (
-        <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.22)', padding: '10px 4px' }}>{col.vacio}</div>
+        <div style={{ padding: '14px 6px 10px', textAlign: 'center' }}>
+          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.3)' }}>{col.vacio}</div>
+          {col.creable && (
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>{col.pista}</div>
+          )}
+        </div>
       )}
 
       {/* Lo hecho no desaparece: queda a la vista, tachado, para saber que se resolvió. */}
@@ -489,9 +503,9 @@ function PizarraInner({ usuario }) {
     return {
       cols: [
         { id: 'vencidas', titulo: '⚠ Vencidas', color: ROJO, notas: venc, hechas: [], vacio: '', soloSiHay: true },
-        { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, vacio: 'Nada pendiente para hoy.', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)), hechas: comp },
-        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, vacio: 'Nada para mañana.', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: [] },
-        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, mostrarDia: true, vacio: 'Sin notas más adelante.', notas: prox, hechas: [] },
+        { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, vacio: '✨ El día está limpio', pista: 'Agregá lo que haya que saber hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)), hechas: comp },
+        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, vacio: '✨ Nada para mañana', pista: 'O arrastrá algo desde Hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: [] },
+        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, mostrarDia: true, vacio: '✨ Sin notas más adelante', pista: 'Ausencias avisadas, colectas especiales…', notas: prox, hechas: [] },
       ],
     };
   }, [notas, hoy, manana, ahora]);
@@ -501,6 +515,12 @@ function PizarraInner({ usuario }) {
 
   return (
     <div>
+      <style>{`
+        @keyframes fxNotaIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .fx-nota { animation: fxNotaIn .2s ease both; }
+        .fx-crear { animation: fxNotaIn .18s ease both; }
+      `}</style>
+
       {/* Sugerencias para "lo cubre": se elige de la lista o se escribe a mano (el reemplazo
           puede ser alguien que no esté en el padrón de cadetes). */}
       <datalist id="fx-choferes">
