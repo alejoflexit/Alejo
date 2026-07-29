@@ -230,6 +230,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   }, [isAdmin, esLunMar, hoy]);
 
   const notasHoy = useMemo(() => ordenarNotas(notas.filter((n) => !n.resuelta_at && n.fecha_objetivo === hoy && n.tipo !== "aviso")), [notas, hoy]);
+  const pendientesFuturas = useMemo(() => notas.filter((n) => !n.resuelta_at && n.fecha_objetivo > hoy).length, [notas, hoy]);
   const resolverLocal = (n) => { setNotas((prev) => prev.filter((x) => x.id !== n.id)); resolverNota(n.id, usuario).catch(recargarNotas); };
   const moverLocal = (n) => { setNotas((prev) => prev.filter((x) => x.id !== n.id)); posponerNota(n).catch(recargarNotas); };
 
@@ -344,9 +345,19 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           )}
         </div>
 
-        {/* NOTAS DEL EQUIPO */}
-        {session && notasHoy.length > 0 && (<>
-          <div style={secSt}>Notas del equipo</div>
+        {/* NOTAS DEL EQUIPO — siempre visible con sesión; estado vacío si no hay pendientes de hoy */}
+        {session && (<>
+          <div style={{ ...secSt, display: "flex", alignItems: "center" }}>
+            Notas del equipo
+            <span onClick={() => onNav("pizarra")} style={{ marginLeft: "auto", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 11.5 }}>+ Nueva</span>
+          </div>
+          {notasHoy.length === 0 ? (
+            <div style={{ ...cardBase, padding: "18px", fontSize: 13, color: C.ink2, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>✅</span>
+              <span>Sin notas pendientes para hoy.{pendientesFuturas > 0 ? ` Hay ${pendientesFuturas} para los próximos días — ` : " "}</span>
+              <span onClick={() => onNav("pizarra")} style={{ color: C.teal, fontWeight: 600, cursor: "pointer" }}>{pendientesFuturas > 0 ? "verlas" : "abrir la pizarra"} →</span>
+            </div>
+          ) : (
           <div style={{ ...cardBase, padding: "6px 18px" }}>
             {notasHoy.slice(0, isMobile ? 2 : 4).map((n) => {
               const t = NOTA_TIPOS[n.tipo] || {};
@@ -373,6 +384,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
               <div onClick={() => onNav("pizarra")} style={{ textAlign: "center", fontSize: 12, color: C.teal, fontWeight: 600, padding: "11px 0", borderTop: `1px solid ${C.line}`, cursor: "pointer" }}>Ver las {notasHoy.length} en la pizarra →</div>
             )}
           </div>
+          )}
         </>)}
 
         {/* DOCK */}
