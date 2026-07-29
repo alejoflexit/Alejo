@@ -88,7 +88,7 @@ function Buzon({ notas, onIr, onResolver }) {
   const n = pendientes.length;
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ position: "relative", width: 44, height: 44, borderRadius: 13, background: C.glassSoft, border: `1px solid ${C.line}`, color: C.ink2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ position: "relative", width: 40, height: 40, borderRadius: 12, background: C.glassSoft, border: `1px solid ${C.line}`, color: C.ink2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Icon id="bell" size={20} />
         {n > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 11, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", border: "2px solid #0F0F1B", fontFamily: C.grotesk }}>{n}</span>}
       </button>
@@ -265,21 +265,22 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     <div style={bg}>
       <div style={{ maxWidth: 820, margin: "0 auto", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: C.ink }}>
 
-        {/* Header */}
+        {/* Header — logo + saludo a la izquierda, acciones a la derecha. Sin wrap: el saludo se
+            trunca antes de chocar con los botones, y la meta es corta en mobile. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 13, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)" }}>
+          <div style={{ width: isMobile ? 40 : 44, height: isMobile ? 40 : 44, borderRadius: 13, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)" }}>
             <img src={logo} alt="Flexit" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: C.grotesk, fontSize: isMobile ? 18 : 21, fontWeight: 600, letterSpacing: "-0.4px" }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontFamily: C.grotesk, fontSize: isMobile ? 17 : 21, fontWeight: 600, letterSpacing: "-0.4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {franja === "manana" ? "Buen día" : "Hola"}{usuario ? `, ${usuario.split(" ")[0]}` : ""}
             </div>
-            <div style={{ fontSize: 12, color: C.ink3, marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal, boxShadow: `0 0 6px ${C.teal}` }} />
-              {session ? "En vivo" : "Panel"} · {DIAS[diaSemana]} {ahora.getUTCDate()} de {MESES[ahora.getUTCMonth()]} · {horaTxt}
+            <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 1, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal, boxShadow: `0 0 6px ${C.teal}`, flexShrink: 0 }} />
+              {session ? "En vivo" : "Panel"} · {isMobile ? `${horaTxt}` : `${DIAS[diaSemana]} ${ahora.getUTCDate()} de ${MESES[ahora.getUTCMonth()]} · ${horaTxt}`}
             </div>
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {session && <Buzon notas={notas} onIr={onNav} onResolver={resolverLocal} />}
             {onLogin && <LoginWidget session={session} onLogin={onLogin} onLogout={onLogout} />}
           </div>
