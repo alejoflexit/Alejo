@@ -663,10 +663,8 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
 
       {creando ? children : col.creable && (
         <button type="button" onClick={onCrear}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '0 8px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, touchAction: 'manipulation', border: '1px solid transparent', background: 'transparent', color: 'rgba(255,255,255,0.3)', textAlign: 'left' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = BRAND.muted; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.3)'; }}>
-          + Nueva nota
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 38, padding: '0 8px', borderRadius: 9, cursor: 'pointer', fontSize: 13, fontWeight: 700, touchAction: 'manipulation', border: `1px dashed ${col.color}88`, background: `${col.color}12`, color: col.color, textAlign: 'center' }}>
+          + Nueva nota{esMovil ? ` en ${col.titulo}` : ''}
         </button>
       )}
     </div>
@@ -876,6 +874,15 @@ function PizarraInner({ usuario }) {
           )}
 
           <BloqueObjetivos usuario={usuario} esMovil={esMovil} />
+
+          {/* Acción principal siempre a mano: crea una nota para HOY (antes el "+ Nueva nota"
+              quedaba escondido en gris al pie de cada columna). */}
+          {creandoEn !== 'hoy' && (
+            <button type="button" onClick={() => setCreandoEn('hoy')}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 44, marginBottom: 12, borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 700, touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>
+              + Nueva nota
+            </button>
+          )}
 
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
             {visibles.map(col => (
