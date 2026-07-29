@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
-import { login, logout, getSession, authedFetch, getToken } from './auth';
-import { BRAND, VEHICULOS, normNombre, estadoEfectivo, ChoferPicker } from './colectasShared';
+import { getSession, getToken } from './auth';
+import {
+  BRAND, VEHICULOS, normNombre, estadoEfectivo, ChoferPicker,
+  SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, mergeChoferes, LoginFlexit,
+} from './colectasShared';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
-
-const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
-const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
 // Bridge LightData (VPS) — solo lectura, riesgo aceptado de exponer la key en el bundle (ver spec-lightdata-bridge)
 const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
@@ -16,24 +16,6 @@ const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // clave 
 
 const SECCIONES = ['CABA', 'SUR', 'NOROESTE', 'SABADOS'];
 const DEFAULT_CHOFERES = ['Alric','Capra','Cepero','Vaccaro','Dani Vargas','Gonzalo','Maxi','Renzo','Cris','Pedro'];
-
-async function sbFetch(path, options = {}) {
-  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      "Prefer": "return=representation",
-      ...options.headers,
-    },
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(text);
-  return text ? JSON.parse(text) : [];
-}
-
-function todayStr() {
-  // fecha calendario en Argentina (UTC-3, sin DST) — evita saltar al día siguiente después de las 21hs
-  return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
-}
 
 function fmtMonto(n) {
   return n ? '$' + Number(n).toLocaleString('es-AR') : '—';
@@ -200,34 +182,6 @@ class MapaBoundary extends React.Component {
   }
 }
 
-function LoginColectas({ onOk }) {
-  const [em, setEm] = useState('');
-  const [pw, setPw] = useState('');
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
-  const inp = { width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${err ? '#FF5C5C' : 'rgba(255,255,255,0.18)'}`, background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, boxSizing: 'border-box', outline: 'none' };
-  return (
-    <div style={{ minHeight: '62vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 400, maxWidth: '94vw', padding: '36px 32px', borderRadius: 22, border: '1px solid rgba(46,207,170,0.22)', background: 'linear-gradient(165deg, rgba(46,207,170,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))', textAlign: 'center' }}>
-        <div style={{ fontSize: 30, marginBottom: 10 }}>📦</div>
-        <div style={{ fontSize: 20, fontWeight: 800 }}>Colectas Flexit</div>
-        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4, marginBottom: 22 }}>Ingresá con tu usuario del equipo</div>
-        <form onSubmit={async e => {
-          e.preventDefault(); if (busy) return; setBusy(true); setErr('');
-          try { const ses = await login(em, pw); onOk(ses.nombre); }
-          catch (er) { setErr(er.message || 'No se pudo iniciar sesión'); }
-          finally { setBusy(false); }
-        }}>
-          <input type="email" autoFocus autoComplete="username" value={em} onChange={e => { setEm(e.target.value); setErr(''); }} placeholder="Email" style={{ ...inp, marginBottom: 10 }} />
-          <input type="password" autoComplete="current-password" value={pw} onChange={e => { setPw(e.target.value); setErr(''); }} placeholder="Contraseña" style={inp} />
-          {err && <div style={{ color: '#FF5C5C', fontSize: 12.5, marginTop: 8 }}>{err}</div>}
-          <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 16, padding: '13px 10px', borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(46,207,170,0.35)', background: 'rgba(46,207,170,0.12)', color: '#2ECFAA' }}>{busy ? 'Entrando…' : 'Entrar'}</button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 function ColectasInner({ soloArribos = false }) {
   const [navView, setNavView] = useState(soloArribos ? 'arribos' : 'colectas'); // 'colectas' | 'arribos' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
@@ -306,11 +260,9 @@ function ColectasInner({ soloArribos = false }) {
   // Lista completa para los selectores: LightData + manuales, deduplicada por nombre NORMALIZADO
   // (minúsculas, sin tildes, sin dobles espacios) — evita la "doble Analia" cuando el manual y el
   // de LightData difieren solo en mayúsculas/tildes. Si hay match, gana el nombre de LightData.
-  const choferesFull = React.useMemo(() => {
-    const ldNorm = new Set(choferesList.map(normNombre));
-    const manualesVisibles = choferesManuales.filter(m => !ldNorm.has(normNombre(m)));
-    return [...new Set([...choferesList, ...manualesVisibles])].sort((a, b) => a.localeCompare(b, 'es'));
-  }, [choferesList, choferesManuales]);
+  const choferesFull = React.useMemo(
+    () => mergeChoferes(choferesList, choferesManuales),
+    [choferesList, choferesManuales]);
 
   // Auto-limpieza: cuando un chofer manual aparece en LightData (mismo nombre normalizado),
   // el registro manual ya cumplió su función → se borra solo de colectas_choferes_manuales.
@@ -1863,6 +1815,6 @@ function ColectasInner({ soloArribos = false }) {
 
 export default function Colectas({ soloArribos = false }) {
   const [usuario, setUsuario] = useState(() => (getSession() || {}).nombre || '');
-  if (!usuario) return <LoginColectas onOk={setUsuario} />;
+  if (!usuario) return <LoginFlexit icono="📦" titulo="Colectas Flexit" onOk={setUsuario} />;
   return <ColectasInner soloArribos={soloArribos} />;
 }

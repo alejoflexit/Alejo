@@ -51,6 +51,14 @@ const ICONS = {
       <path d="M12 12v6" />
     </>
   ),
+  pizarra: (
+    <>
+      <path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5Z" />
+      <path d="M15 3v6h6" />
+      <path d="M8 13h6" />
+      <path d="M8 17h4" />
+    </>
+  ),
   pagos: (
     <>
       <rect width="20" height="12" x="2" y="6" rx="2" />
@@ -106,6 +114,7 @@ export default function Home({ onNav, onMenu, isMobile, logo, session, onLogin, 
     { id: "arribos",   title: "Arribos",   desc: "Quién va llegando al depósito, ETA y avance en vivo.",   accent: "#34D399", grad: "linear-gradient(135deg, #34D399, #059669)" },
     { id: "tiquetera", title: "Tiquetera", desc: "Casos de clientes, respuestas del agente y aprobación.", accent: "#FBBF24", grad: "linear-gradient(135deg, #FBBF24, #D97706)" },
     { id: "zonas",     title: "Zonas",     desc: "Saturación por zona en vivo: carga del día contra capacidad.", accent: "#F87171", grad: "linear-gradient(135deg, #F87171, #DC2626)" },
+    { id: "pizarra",   title: "Pizarra",   desc: "Notas del equipo ancladas al día: ausencias, colectas y avisos.", accent: "#818CF8", grad: "linear-gradient(135deg, #818CF8, #4F46E5)" },
     { id: "pagos",     title: "Liquidaciones", desc: "Pagos semanales de cadetes: cálculo, tarifas y cierre.", accent: "#2ECFAA", grad: "linear-gradient(135deg, #2ECFAA, #059669)" },
   ];
 
