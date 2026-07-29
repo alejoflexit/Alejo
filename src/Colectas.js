@@ -1658,7 +1658,6 @@ function ColectasInner({ soloArribos = false, irA }) {
   const sidebarItems = [
     { section: 'OPERACIÓN', items: [
       { id: 'colectas', icon: '📦', label: 'Colectas' },
-      { id: 'pagos',    icon: '💰', label: 'Pagos' },
     ]},
     { section: 'CONFIG', items: [
       { id: 'clientes', icon: '📋', label: 'Clientes' },
@@ -1733,48 +1732,73 @@ function ColectasInner({ soloArribos = false, irA }) {
       </div>
     );
   }
+  const navFlat = sidebarItems.flatMap(g => g.items);
   return (
-    <div style={{ display:'flex', gap:0, minHeight:'60vh', borderRadius:14, overflow:'hidden', border:`1px solid ${BRAND.border}` }}>
+    <div style={{ display:'flex', flexDirection: esMovil ? 'column' : 'row', gap:0, minHeight:'60vh', borderRadius:14, overflow:'hidden', border:`1px solid ${BRAND.border}` }}>
 
-      {/* SIDEBAR */}
-      <div style={{
-        width:152, flexShrink:0, background:BRAND.navySide,
-        borderRight:`1px solid ${BRAND.border}`,
-        padding:'18px 0',
-        display:'flex', flexDirection:'column', gap:0,
-      }}>
-        {sidebarItems.map(group => (
-          <div key={group.section} style={{ marginBottom:8 }}>
-            <div style={{
-              fontSize:10, fontWeight:700, letterSpacing:'0.1em',
-              color:'rgba(255,255,255,0.22)', padding:'0 14px 6px',
-              textTransform:'uppercase',
-            }}>
-              {group.section}
+      {/* NAV — barra horizontal en celular (no se come el ancho), sidebar vertical en desktop */}
+      {esMovil ? (
+        <div style={{
+          display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch',
+          background:BRAND.navySide, borderBottom:`1px solid ${BRAND.border}`,
+          padding:'10px 12px',
+        }}>
+          {navFlat.map(item => {
+            const active = navView === item.id;
+            return (
+              <button key={item.id} onClick={() => setNavView(item.id)} style={{
+                display:'inline-flex', alignItems:'center', gap:6, flexShrink:0,
+                padding:'7px 14px', borderRadius:20, cursor:'pointer',
+                border:`1px solid ${active ? BRAND.teal : BRAND.border}`,
+                background: active ? 'rgba(46,207,170,0.12)' : BRAND.faint,
+                color: active ? BRAND.teal : BRAND.muted,
+                fontSize:13, fontWeight:600, whiteSpace:'nowrap', touchAction:'manipulation',
+              }}>
+                <span style={{ fontSize:14 }}>{item.icon}</span>{item.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{
+          width:152, flexShrink:0, background:BRAND.navySide,
+          borderRight:`1px solid ${BRAND.border}`,
+          padding:'18px 0',
+          display:'flex', flexDirection:'column', gap:0,
+        }}>
+          {sidebarItems.map(group => (
+            <div key={group.section} style={{ marginBottom:8 }}>
+              <div style={{
+                fontSize:10, fontWeight:700, letterSpacing:'0.1em',
+                color:'rgba(255,255,255,0.22)', padding:'0 14px 6px',
+                textTransform:'uppercase',
+              }}>
+                {group.section}
+              </div>
+              {group.items.map(item => {
+                const active = navView === item.id;
+                return (
+                  <button key={item.id} onClick={() => setNavView(item.id)} style={{
+                    display:'flex', alignItems:'center', gap:8,
+                    width:'100%', padding:'8px 14px', border:'none', cursor:'pointer',
+                    background: active ? 'rgba(46,207,170,0.1)' : 'transparent',
+                    color: active ? BRAND.teal : BRAND.muted,
+                    fontSize:13, fontWeight: active ? 600 : 400,
+                    borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
+                    textAlign:'left', transition:'all 0.15s',
+                  }}>
+                    <span style={{ fontSize:14 }}>{item.icon}</span>
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
-            {group.items.map(item => {
-              const active = navView === item.id;
-              return (
-                <button key={item.id} onClick={() => setNavView(item.id)} style={{
-                  display:'flex', alignItems:'center', gap:8,
-                  width:'100%', padding:'8px 14px', border:'none', cursor:'pointer',
-                  background: active ? 'rgba(46,207,170,0.1)' : 'transparent',
-                  color: active ? BRAND.teal : BRAND.muted,
-                  fontSize:13, fontWeight: active ? 600 : 400,
-                  borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
-                  textAlign:'left', transition:'all 0.15s',
-                }}>
-                  <span style={{ fontSize:14 }}>{item.icon}</span>
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* MAIN CONTENT */}
-      <div style={{ flex:1, padding:'20px 24px', background:BRAND.navy, minWidth:0 }}>
+      <div style={{ flex:1, padding: esMovil ? '16px 14px' : '20px 24px', background:BRAND.navy, minWidth:0 }}>
         <div style={{ fontSize:16, fontWeight:700, letterSpacing:'-0.01em', marginBottom:16, color:BRAND.white }}>
           {viewTitles[navView]}
         </div>
@@ -1807,7 +1831,6 @@ function ColectasInner({ soloArribos = false, irA }) {
           ) : renderZona()}
         </>}
         {navView === 'arribos'  && renderArribos()}
-        {navView === 'pagos'    && renderPagos()}
         {navView === 'clientes' && renderClientes()}
         {navView === 'choferes' && renderChoferes()}
       </div>
