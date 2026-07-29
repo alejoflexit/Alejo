@@ -125,6 +125,7 @@ const COLOR_ESTADO = {
   blanco:   'rgba(255,255,255,0.45)',
   amarillo: '#FBBF24',
   verde:    '#2ECFAA',
+  rojo:     '#E24B4A',
 };
 
 // Chips-filtro por estado: filtran los pines y a la vez son la leyenda de colores
@@ -282,13 +283,19 @@ export default function ColectasMapa({
   const [geoError, setGeoError] = useState('');
   const [choferFoco, setChoferFoco] = useState(null); // leyenda: resaltar un chofer
   const [filtroEst, setFiltroEst] = useState(null);   // null = todos | 'blanco' | 'amarillo' | 'verde'
+  const [verCanceladas, setVerCanceladas] = useState(false); // mostrar también las "sin envíos" (rojo)
   const [buscandoDir, setBuscandoDir] = useState(null); // cliente_id con el buscador de dirección abierto
   const [buscaChofer, setBuscaChofer] = useState('');
 
-  // Clientes que van al mapa: los "sin envíos" de hoy no se muestran (info muerta)
-  const activos = useMemo(
-    () => clientes.filter(c => estadoEfectivo(c, registros[c.id]) !== 'rojo'),
+  // Cuántas colectas canceladas (sin envíos) hay hoy — para el contador del toggle, aunque estén ocultas
+  const rojoCount = useMemo(
+    () => clientes.filter(c => estadoEfectivo(c, registros[c.id]) === 'rojo').length,
     [clientes, registros]
+  );
+  // Clientes que van al mapa: las canceladas (rojo) se esconden por default; el toggle las suma.
+  const activos = useMemo(
+    () => clientes.filter(c => { const e = estadoEfectivo(c, registros[c.id]); return e !== 'rojo' || verCanceladas; }),
+    [clientes, registros, verCanceladas]
   );
   // La cola de geocoding trabaja sobre TODOS los activos, tenga o no un filtro de estado puesto
   visiblesRef.current = activos;
@@ -458,14 +465,15 @@ export default function ColectasMapa({
 
       if (entry.key !== key) {
         const borde = COLOR_ESTADO[est] || COLOR_ESTADO.blanco;
-        const fondo = est === 'blanco' ? 'rgba(148,155,166,0.92)' : est === 'verde' ? 'rgba(46,207,170,0.22)' : 'rgba(251,191,36,0.20)';
+        const fondo = est === 'blanco' ? 'rgba(148,155,166,0.92)' : est === 'verde' ? 'rgba(46,207,170,0.22)' : est === 'rojo' ? 'rgba(226,75,74,0.12)' : 'rgba(251,191,36,0.20)';
+        const cancelada = est === 'rojo'; // atenuada: es info secundaria, no debe competir con las activas
         // Puntito con la INICIAL del chofer: segunda pista además del color (los colores son
         // únicos por día/pestaña, pero pueden variar entre días — la letra ancla la identidad).
         const punto = sinAsignar
           ? `<span style="width:11px;height:11px;border-radius:50%;border:2px dashed rgba(255,255,255,0.55);background:transparent;display:block"></span>`
           : `<span style="width:14px;height:14px;border-radius:50%;background:${colorDe(chofer)};border:1.5px solid rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:8px;font-weight:700;color:#fff;line-height:1;text-shadow:0 0 2px rgba(0,0,0,0.8)">${escHtml((chofer[0] || '').toUpperCase())}</span>`;
         const html = `
-          <div style="position:relative;opacity:${atenuado ? 0.28 : 1};transition:opacity .15s">
+          <div style="position:relative;opacity:${atenuado ? 0.28 : cancelada ? 0.5 : 1};transition:opacity .15s">
             <div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
               border:2.5px solid ${enSeleccion ? '#8EC5FF' : borde};background:${fondo};font-size:17px;line-height:1;
               box-shadow:${enSeleccion ? '0 0 0 4px rgba(142,197,255,0.35)' : '0 2px 6px rgba(0,0,0,0.5)'}">${emoji}</div>
@@ -690,6 +698,14 @@ export default function ColectasMapa({
             {f.label} {porEstado[f.est]}
           </button>
         ))}
+        {rojoCount > 0 && (
+          <button onClick={() => setVerCanceladas(v => !v)}
+            title={verCanceladas ? 'Ocultar las colectas canceladas' : 'Mostrar también las canceladas (sin envíos)'}
+            style={{ ...btn(verCanceladas, '#E24B4A'), height: 30, padding: '0 10px', fontSize: 12 }}>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', flexShrink: 0, boxSizing: 'border-box', background: 'rgba(226,75,74,0.2)', border: '2px solid #E24B4A' }} />
+            {verCanceladas ? 'Ocultar canceladas' : 'Canceladas'} {rojoCount}
+          </button>
+        )}
         <span style={{ fontSize: 12, color: BRAND.muted }}>{conPin.length} en el mapa</span>
         {progreso && (
           <span style={{ fontSize: 12, color: '#8EC5FF' }}>Ubicando clientes… {progreso.hechos}/{progreso.total}</span>
