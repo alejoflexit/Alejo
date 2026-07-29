@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota,
+  cargarObjetivos, marcarObjetivo, useObjetivosRealtime, aplicarCambioObjetivo,
 } from "./colectasShared";
 
 // ── Home = Centro de operaciones (spec-home-centro-operaciones, diseño flexit-design "premium").
@@ -219,6 +220,21 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   useEffect(() => { recargarNotas(); }, [recargarNotas]);
   useNotasRealtime(useCallback((row, ev) => setNotas((prev) => aplicarCambioNota(prev, row, ev)), []), !!session);
 
+  // Objetivos del equipo (lista para tachar de la Pizarra). Se muestran acá como avance, y
+  // los pendientes se pueden tachar sin entrar a la Pizarra.
+  const [objetivos, setObjetivos] = useState([]);
+  const recargarObjetivos = useCallback(() => {
+    if (!session) return;
+    cargarObjetivos().then((rows) => setObjetivos(Array.isArray(rows) ? rows : [])).catch(() => {});
+  }, [session]);
+  useEffect(() => { recargarObjetivos(); }, [recargarObjetivos]);
+  useObjetivosRealtime(useCallback((row, ev) => setObjetivos((prev) => aplicarCambioObjetivo(prev, row, ev)), []), !!session);
+  const objPend = useMemo(() => objetivos.filter((o) => !o.hecho_at), [objetivos]);
+  const tacharObjetivo = (o) => {
+    setObjetivos((prev) => prev.map((x) => (x.id === o.id ? { ...x, hecho_at: new Date().toISOString(), hecho_por: usuario } : x)));
+    marcarObjetivo(o.id, usuario).catch(recargarObjetivos);
+  };
+
   // Liquidación (solo lun/mar, solo admin)
   useEffect(() => {
     if (!isAdmin || !esLunMar) return;
@@ -344,6 +360,38 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             </Stat>
           )}
         </div>
+
+        {/* OBJETIVOS DEL EQUIPO — avance de la lista para tachar de la Pizarra */}
+        {session && objetivos.length > 0 && (<>
+          <div style={{ ...secSt, display: "flex", alignItems: "center" }}>
+            Objetivos del equipo
+            <span onClick={() => onNav("pizarra")} style={{ marginLeft: "auto", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 11.5 }}>ver todos →</span>
+          </div>
+          <div style={{ ...cardBase, padding: "16px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: objPend.length ? 12 : 0 }}>
+              <span style={{ fontSize: 20, fontWeight: 800, color: C.teal }}>{objetivos.length - objPend.length}</span>
+              <span style={{ fontSize: 12.5, color: C.ink2 }}>de {objetivos.length} cumplidos</span>
+              <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden", minWidth: 60 }}>
+                <div style={{ width: `${Math.round(((objetivos.length - objPend.length) / objetivos.length) * 100)}%`, height: "100%", background: C.teal, transition: "width .25s" }} />
+              </div>
+            </div>
+            {objPend.slice(0, isMobile ? 3 : 5).map((o) => (
+              <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${C.line}` }}>
+                <button type="button" onClick={() => tacharObjetivo(o)} title="Marcar como cumplido"
+                  style={{ width: 20, height: 20, flexShrink: 0, borderRadius: 6, cursor: "pointer", touchAction: "manipulation", border: "2px solid rgba(255,255,255,0.28)", background: "transparent" }} />
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13 }}>{o.texto}</span>
+              </div>
+            ))}
+            {objPend.length > (isMobile ? 3 : 5) && (
+              <div onClick={() => onNav("pizarra")} style={{ fontSize: 11.5, color: C.teal, cursor: "pointer", paddingTop: 9, borderTop: `1px solid ${C.line}` }}>
+                +{objPend.length - (isMobile ? 3 : 5)} más →
+              </div>
+            )}
+            {objPend.length === 0 && (
+              <div style={{ fontSize: 12.5, color: C.teal, marginTop: 8 }}>✨ Todos cumplidos.</div>
+            )}
+          </div>
+        </>)}
 
         {/* NOTAS DEL EQUIPO — siempre visible con sesión; estado vacío si no hay pendientes de hoy */}
         {session && (<>

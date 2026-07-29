@@ -396,6 +396,66 @@ export function useNotasRealtime(onRow, activo = true) {
   }, [activo]);
 }
 
+// ── OBJETIVOS DEL EQUIPO ──
+// Lista para tachar, compartida y SIN dueño. A diferencia de las notas, un objetivo NO está
+// anclado a un día: vive en el tablero hasta que alguien lo marca. Por eso vive en su propia
+// tabla (objetivos_equipo) en vez de ser un tipo más de nota — el modelo de la nota gira
+// alrededor de `fecha_objetivo` (columnas por día, "→ Mañana", vencidas) y acá eso no aplica.
+export function cargarObjetivos() {
+  return sbFetch('objetivos_equipo?select=*&order=orden.asc,created_at.asc');
+}
+
+export function crearObjetivo(texto, autor) {
+  return sbFetch('objetivos_equipo', { method: 'POST', body: JSON.stringify({ texto, autor: autor || null }) });
+}
+
+export function patchObjetivo(id, patch) {
+  return sbFetch(`objetivos_equipo?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
+export const marcarObjetivo = (id, quien) =>
+  patchObjetivo(id, { hecho_at: new Date().toISOString(), hecho_por: quien || null });
+
+export const desmarcarObjetivo = (id) =>
+  patchObjetivo(id, { hecho_at: null, hecho_por: null });
+
+export const borrarObjetivo = (id) =>
+  sbFetch(`objetivos_equipo?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+
+// Suscripción a objetivos_equipo — mismo patrón que las notas (cliente propio con el JWT y
+// reintento ante corte). Sin esto, dos personas tachando a la vez se pisan.
+export function useObjetivosRealtime(onRow, activo = true) {
+  const cb = useRef(onRow);
+  useEffect(() => { cb.current = onRow; }, [onRow]);
+  useEffect(() => {
+    if (!activo || typeof window === 'undefined' || !window.supabase) return;
+    let client = null, channel = null, cancelled = false, retryTimer = null;
+    const cleanup = () => {
+      try { if (channel && client) client.removeChannel(channel); } catch {}
+      try { if (client) client.realtime.disconnect(); } catch {}
+      channel = null; client = null;
+    };
+    const connect = async () => {
+      const token = await getToken().catch(() => null);
+      if (!token || cancelled) return;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      client.realtime.setAuth(token);
+      channel = client.channel('objetivos-rt')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'objetivos_equipo' }, payload => {
+          cb.current(payload.eventType === 'DELETE' ? payload.old : payload.new, payload.eventType);
+        })
+        .subscribe(status => {
+          if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) {
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => { cleanup(); connect(); }, 5000);
+          }
+        });
+    };
+    connect();
+    return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
+  }, [activo]);
+}
+
 // Aplica un cambio de realtime sobre el array de notas en memoria.
 export function aplicarCambioNota(prev, row, evento) {
   if (!row || !row.id) return prev;
@@ -406,6 +466,9 @@ export function aplicarCambioNota(prev, row, evento) {
   next[i] = { ...next[i], ...row };
   return next;
 }
+
+// El merge por id no tiene nada de específico de las notas: los objetivos usan el mismo.
+export const aplicarCambioObjetivo = aplicarCambioNota;
 
 // ── FRANJA "Notas para hoy" (Tarea 2 de la spec) ──
 // La pizarra viene a buscar al que está trabajando: se muestra arriba de Colectas y Arribos con las

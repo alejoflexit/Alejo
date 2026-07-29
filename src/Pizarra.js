@@ -9,6 +9,8 @@ import {
   NOTA_TIPOS, ordenarNotas, estaVencida, cargarNotas, resolverNota, desmarcarNota, borrarNota, patchNota,
   cargarChoferesFull, useNotasRealtime, aplicarCambioNota, LoginFlexit,
   editarNota, cargarComentarios, agregarComentario, borrarComentario, useComentariosRealtime,
+  cargarObjetivos, crearObjetivo, marcarObjetivo, desmarcarObjetivo, borrarObjetivo,
+  useObjetivosRealtime, aplicarCambioObjetivo,
 } from './colectasShared';
 
 const ROJO = '#E24B4A';
@@ -37,6 +39,146 @@ function Accion({ onClick, children, color, titulo }) {
 }
 
 // Chip de opción del creador inline.
+// Fecha calendario argentina de un timestamp (los hecho_at vienen en UTC: sin esto, algo
+// marcado después de las 21hs figuraría como del día siguiente).
+const fechaAR = (iso) => new Date(new Date(iso).getTime() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+
+// ── OBJETIVOS DEL EQUIPO ──
+// Lista para tachar, del equipo, sin dueño: no está atada a un día (a diferencia de las notas),
+// vive hasta que alguien la marca. Cualquiera tacha cualquier objetivo y queda quién lo hizo.
+function BloqueObjetivos({ usuario, esMovil }) {
+  const [objetivos, setObjetivos] = useState([]);
+  const [texto, setTexto] = useState('');
+  const [creando, setCreando] = useState(false);
+  const [verHechos, setVerHechos] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef(null);
+
+  const recargar = useCallback(() => {
+    cargarObjetivos().then(r => setObjetivos(Array.isArray(r) ? r : [])).catch(() => {});
+  }, []);
+  useEffect(() => { recargar(); }, [recargar]);
+  useObjetivosRealtime(useCallback((row, ev) => setObjetivos(prev => aplicarCambioObjetivo(prev, row, ev)), []));
+  useEffect(() => { if (creando && inputRef.current) inputRef.current.focus(); }, [creando]);
+
+  const pendientes = objetivos.filter(o => !o.hecho_at);
+  const hechos = objetivos.filter(o => o.hecho_at)
+    .sort((a, b) => String(b.hecho_at).localeCompare(String(a.hecho_at)));
+  const total = objetivos.length;
+  const pct = total ? Math.round((hechos.length / total) * 100) : 0;
+
+  // Optimista en los tres casos: el realtime confirma después. Si falla, se recarga de la base.
+  const agregar = () => {
+    const t = texto.trim();
+    if (!t) { setCreando(false); return; }
+    setTexto('');
+    crearObjetivo(t, usuario)
+      .then(r => { const fila = Array.isArray(r) ? r[0] : r; if (fila?.id) setObjetivos(prev => prev.some(o => o.id === fila.id) ? prev : [...prev, fila]); })
+      .catch(e => { setError('No se pudo agregar: ' + e.message); recargar(); });
+  };
+  const alternar = (o) => {
+    const hecho = !!o.hecho_at;
+    setObjetivos(prev => prev.map(x => x.id === o.id
+      ? { ...x, hecho_at: hecho ? null : new Date().toISOString(), hecho_por: hecho ? null : usuario }
+      : x));
+    (hecho ? desmarcarObjetivo(o.id) : marcarObjetivo(o.id, usuario))
+      .catch(e => { setError('No se pudo guardar: ' + e.message); recargar(); });
+  };
+  const quitar = (o) => {
+    setObjetivos(prev => prev.filter(x => x.id !== o.id));
+    borrarObjetivo(o.id).catch(e => { setError('No se pudo borrar: ' + e.message); recargar(); });
+  };
+
+  const fila = (o) => {
+    const hecho = !!o.hecho_at;
+    return (
+      <div key={o.id} className="fx-nota"
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: `1px solid ${BRAND.border}` }}>
+        <button type="button" onClick={() => alternar(o)}
+          title={hecho ? 'Desmarcar' : 'Marcar como cumplido'}
+          style={{ width: 22, height: 22, flexShrink: 0, borderRadius: 6, cursor: 'pointer', touchAction: 'manipulation',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800,
+            border: `2px solid ${hecho ? BRAND.teal : 'rgba(255,255,255,0.28)'}`,
+            background: hecho ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>
+          {hecho ? '✓' : ''}
+        </button>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13.5,
+          color: hecho ? BRAND.muted : BRAND.white, textDecoration: hecho ? 'line-through' : 'none' }}>
+          {o.texto}
+          <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 1, textDecoration: 'none' }}>
+            {hecho
+              ? `✓ ${o.hecho_por || 'alguien'} · ${labelDia(fechaAR(o.hecho_at), todayStr())}`
+              : (o.autor ? `propuesto por ${o.autor}` : '')}
+          </span>
+        </div>
+        <button type="button" onClick={() => quitar(o)} title="Borrar objetivo"
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', cursor: 'pointer', fontSize: 14, padding: '4px 2px', touchAction: 'manipulation' }}>✕</button>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ marginBottom: 12, padding: '12px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.white }}>🎯 Objetivos del equipo</span>
+        {total > 0 && (
+          <>
+            <span style={{ fontSize: 11.5, color: BRAND.muted }}>{hechos.length} de {total}</span>
+            <div style={{ width: esMovil ? 70 : 110, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: BRAND.teal, transition: 'width .25s' }} />
+            </div>
+          </>
+        )}
+        <button type="button" onClick={() => setCreando(true)}
+          style={{ marginLeft: 'auto', minHeight: 28, padding: '0 10px', borderRadius: 8, cursor: 'pointer', touchAction: 'manipulation',
+            border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.08)', color: BRAND.teal, fontSize: 12, fontWeight: 700 }}>
+          + Objetivo
+        </button>
+      </div>
+
+      {error && <div style={{ fontSize: 12, color: ROJO, marginTop: 8 }}>{error}</div>}
+
+      {creando && (
+        <div className="fx-crear" style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+          <input ref={inputRef} value={texto} onChange={e => setTexto(e.target.value)}
+            placeholder="Ej: cerrar el mes de colectas sin pendientes"
+            onKeyDown={e => {
+              if (e.key === 'Enter') agregar();
+              if (e.key === 'Escape') { setTexto(''); setCreando(false); }
+            }}
+            style={{ ...inpSt, flex: 1 }} />
+          <button type="button" onClick={agregar}
+            style={{ minHeight: 34, padding: '0 14px', borderRadius: 8, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Agregar</button>
+          <button type="button" onClick={() => { setTexto(''); setCreando(false); }}
+            style={{ minHeight: 34, padding: '0 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 12.5, cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+
+      {pendientes.length > 0 && <div style={{ marginTop: 4 }}>{pendientes.map(fila)}</div>}
+
+      {total === 0 && !creando && (
+        <div style={{ fontSize: 12.5, color: BRAND.muted, marginTop: 8 }}>
+          Todavía no hay objetivos. Sirven para lo que el equipo quiere lograr y no tiene día fijo — quedan a la vista hasta tacharlos.
+        </div>
+      )}
+
+      {pendientes.length === 0 && total > 0 && (
+        <div style={{ fontSize: 12.5, color: BRAND.teal, marginTop: 8 }}>✨ Todos los objetivos cumplidos.</div>
+      )}
+
+      {hechos.length > 0 && (
+        <>
+          <button type="button" onClick={() => setVerHechos(v => !v)}
+            style={{ marginTop: 8, background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: 0, touchAction: 'manipulation' }}>
+            {verHechos ? '▾' : '▸'} {hechos.length} cumplido{hechos.length > 1 ? 's' : ''}
+          </button>
+          {verHechos && <div>{hechos.map(fila)}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function Chip({ activo, onClick, children, color }) {
   const c = color || BRAND.teal;
   return (
@@ -704,6 +846,8 @@ function PizarraInner({ usuario }) {
               ))}
             </div>
           )}
+
+          <BloqueObjetivos usuario={usuario} esMovil={esMovil} />
 
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
             {visibles.map(col => (
