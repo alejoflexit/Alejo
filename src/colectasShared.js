@@ -354,10 +354,13 @@ export function aplicarCambioNota(prev, row, evento) {
 // ── FRANJA "Notas para hoy" (Tarea 2 de la spec) ──
 // La pizarra viene a buscar al que está trabajando: se muestra arriba de Colectas y Arribos con las
 // notas cuyo día objetivo es la fecha vigente, y se resuelven ahí mismo (✓ Hecho / → Mañana) sin
-// cambiar de pantalla. En Arribos, solo ausencias. Reusa los helpers de la pizarra — misma tabla.
+// cambiar de pantalla. Reusa los helpers de la pizarra — misma tabla.
+// Qué tipos entran en cada franja (decisión de Alejo 29/07): los 📌 AVISOS viven SOLO en la Pizarra.
+//   Colectas → colecta + ausencia · Arribos → solo ausencia.
 export function NotasHoy({ fecha, soloAusencias = false, irAPizarra }) {
   const [notas, setNotas] = useState([]);
   const usuario = (getSession() || {}).nombre || '';
+  const aplica = n => soloAusencias ? n.tipo === 'ausencia' : (n.tipo === 'colecta' || n.tipo === 'ausencia');
 
   const recargar = useCallback(() => {
     // Pendientes cuyo día objetivo es la fecha vigente (las resueltas no se muestran acá).
@@ -369,14 +372,10 @@ export function NotasHoy({ fecha, soloAusencias = false, irAPizarra }) {
   useEffect(() => { recargar(); }, [recargar]);
   // Realtime: cuando alguien crea/resuelve/mueve una nota, la franja se actualiza sola.
   useNotasRealtime(useCallback((row, ev) => {
-    setNotas(prev => {
-      const next = aplicarCambioNota(prev, row, ev);
-      // Filtrar a lo que corresponde a esta franja (fecha vigente, sin resolver, tipo si aplica).
-      return next.filter(n => n.fecha_objetivo === fecha && !n.resuelta_at && (!soloAusencias || n.tipo === 'ausencia'));
-    });
-  }, [fecha, soloAusencias]));
+    setNotas(prev => aplicarCambioNota(prev, row, ev).filter(n => n.fecha_objetivo === fecha && !n.resuelta_at));
+  }, [fecha]));
 
-  const visibles = ordenarNotas(notas.filter(n => !n.resuelta_at && (!soloAusencias || n.tipo === 'ausencia')));
+  const visibles = ordenarNotas(notas.filter(n => !n.resuelta_at && aplica(n)));
   if (!visibles.length) return null;
 
   const quitar = id => setNotas(prev => prev.filter(n => n.id !== id));
