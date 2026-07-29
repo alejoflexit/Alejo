@@ -304,8 +304,13 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
       }
       if (tarifaByLD.has(key)) {
         colectaByKey.set(key, (colectaByKey.get(key) || 0) + monto);
-        const r = colectaResumen.get(key) || { chofer: raw, cadete: tarifaByLD.get(key).nombre_lightdata || raw, cantidad: 0, monto: 0 };
+        const r = colectaResumen.get(key) || { chofer: raw, cadete: tarifaByLD.get(key).nombre_lightdata || raw, cantidad: 0, monto: 0, detalle: new Map() };
         r.cantidad += 1; r.monto += monto;
+        // desglose por cliente: "5 Finoquito · $15" etc.
+        const cli = (c.colectas_clientes?.nombre || 'Sin cliente').trim() || 'Sin cliente';
+        const d = r.detalle.get(cli) || { cliente: cli, cantidad: 0, monto: 0 };
+        d.cantidad += 1; d.monto += monto;
+        r.detalle.set(cli, d);
         colectaResumen.set(key, r);
       } else {
         colectasSinMatch.push({ chofer: raw, fecha: c.fecha, monto });
@@ -1124,6 +1129,7 @@ function PagosInner({ session }) {
 
   const [vista, setVista] = useState('tabla'); // 'tabla' | 'config' | 'pagador'
   const [semanaLunes, setSemanaLunes] = useState(null); // se resuelve al cargar
+  const [colExp, setColExp] = useState(() => new Set()); // choferes con el desglose por cliente abierto (vista Colectas)
 
   const [tarifas, setTarifas] = useState([]);
   const [alias, setAlias] = useState([]);
@@ -1199,7 +1205,7 @@ function PagosInner({ session }) {
       const sabado = addDays(lunes, 5);
       const [ent, col, aj, ci, remoteOv, av] = await Promise.all([
         sbAll(`pagos_entregados?select=cadete,localidad,cp,fecha_estado&semana_lunes=eq.${lunes}`),
-        sbAll(`colectas_registros?select=fecha,choferes,monto,estado,confirmado_por,colectas_clientes(monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
+        sbAll(`colectas_registros?select=fecha,choferes,monto,estado,confirmado_por,colectas_clientes(nombre,monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
         sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
         sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`),
         loadOverridesRemote(lunes),
@@ -1541,14 +1547,31 @@ function PagosInner({ session }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {filasCol.map(r => (
-                          <tr key={r.chofer} style={{ borderBottom: `1px solid ${BRAND.border}` }}>
-                            <td style={{ padding: '9px 12px', fontWeight: 600 }}>{r.chofer}</td>
+                        {filasCol.map(r => {
+                          const abierto = colExp.has(r.chofer);
+                          const dets = r.detalle ? [...r.detalle.values()].sort((a, b) => b.cantidad - a.cantidad) : [];
+                          const toggle = () => setColExp(prev => { const n = new Set(prev); n.has(r.chofer) ? n.delete(r.chofer) : n.add(r.chofer); return n; });
+                          return (
+                          <React.Fragment key={r.chofer}>
+                          <tr onClick={dets.length ? toggle : undefined} style={{ borderBottom: `1px solid ${BRAND.border}`, cursor: dets.length ? 'pointer' : 'default' }}>
+                            <td style={{ padding: '9px 12px', fontWeight: 600 }}>
+                              {dets.length > 0 && <span style={{ display:'inline-block', width:14, color: BRAND.muted, transform: abierto ? 'rotate(90deg)' : 'none', transition:'transform 0.15s' }}>▸</span>}
+                              {r.chofer}
+                            </td>
                             <td style={{ padding: '9px 12px', color: BRAND.muted }}>{r.cadete}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'right' }}>{r.cantidad}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 700, color: BRAND.white }}>{money(r.monto)}</td>
                           </tr>
-                        ))}
+                          {abierto && dets.map(d => (
+                            <tr key={r.chofer + '::' + d.cliente} style={{ borderBottom: `1px solid ${BRAND.border}`, background: BRAND.navyMid || 'rgba(255,255,255,0.02)' }}>
+                              <td colSpan={2} style={{ padding: '6px 12px 6px 34px', fontSize: 12.5, color: BRAND.muted }}>{d.cliente}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', fontSize: 12.5, color: BRAND.muted }}>{d.cantidad}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', fontSize: 12.5, color: BRAND.muted }}>{money(d.monto)}</td>
+                            </tr>
+                          ))}
+                          </React.Fragment>
+                          );
+                        })}
                         <tr>
                           <td style={{ padding: '10px 12px', fontWeight: 700 }}>TOTAL</td>
                           <td />
