@@ -713,6 +713,7 @@ function PizarraInner({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creandoEn, setCreandoEn] = useState(null); // id de la columna con el creador abierto
+  const [verExtras, setVerExtras] = useState(false); // Seguimiento + Objetivos plegados al pie
   const [esMovil, setEsMovil] = useState(typeof window !== 'undefined' && window.innerWidth < 900);
   useEffect(() => {
     const h = () => setEsMovil(window.innerWidth < 900);
@@ -888,37 +889,8 @@ function PizarraInner({ usuario }) {
         <div style={{ color: BRAND.muted, padding: '3rem', textAlign: 'center' }}>Cargando…</div>
       ) : (
         <>
-          {/* Seguimiento: la pizarra recuerda las faltas de días anteriores y pregunta si volvió */}
-          {sugerencias.length > 0 && (
-            <div style={{ marginBottom: 12, padding: '11px 14px', borderRadius: 12, border: `1px solid ${BRAND.teal}40`, background: 'rgba(46,207,170,0.06)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, marginBottom: 8 }}>💡 Seguimiento</div>
-              {sugerencias.map(a => (
-                <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${BRAND.border}` }}>
-                  <span style={{ flex: 1, minWidth: 170, fontSize: 13, color: BRAND.white }}>
-                    {labelDia(a.fecha_objetivo, hoy) === 'ayer' ? 'Ayer' : `El ${labelDia(a.fecha_objetivo, hoy)}`} faltó: <b>{a.texto}</b>. ¿Se reincorporó hoy?
-                  </span>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button type="button" onClick={() => ocultarSug(a.id)}
-                      style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>✓ Volvió</button>
-                    <button type="button" onClick={() => seguirFaltando(a)}
-                      style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${AMBAR}`, background: `${AMBAR}22`, color: AMBAR }}>Sigue faltando</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <BloqueObjetivos usuario={usuario} esMovil={esMovil} />
-
-          {/* Acción principal siempre a mano: crea una nota para HOY (antes el "+ Nueva nota"
-              quedaba escondido en gris al pie de cada columna). */}
-          {creandoEn !== 'hoy' && (
-            <button type="button" onClick={() => setCreandoEn('hoy')}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', minHeight: 44, marginBottom: 12, borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 700, touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>
-              + Nueva nota
-            </button>
-          )}
-
+          {/* Lo principal arriba: las columnas Hoy / Mañana / Próximos. Cada una tiene su
+              propio "+ Nueva nota" (antes había además un botón enorme arriba, molesto). */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
             {visibles.map(col => (
               <Columna key={col.id} col={col} notas={col.notas} hechas={col.hechas} esMovil={esMovil}
@@ -934,6 +906,50 @@ function PizarraInner({ usuario }) {
                   onCancelar={() => setCreandoEn(null)} />
               </Columna>
             ))}
+          </div>
+
+          {/* Pie plegable: Seguimiento + Objetivos. Escondidos por defecto; si hay
+              faltas por revisar, el botón muestra un aviso ámbar tipo notificación. */}
+          <div style={{ marginTop: 18 }}>
+            <button type="button" onClick={() => setVerExtras(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 42, padding: '0 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
+                border: `1px solid ${sugerencias.length > 0 && !verExtras ? `${AMBAR}55` : BRAND.border}`,
+                background: sugerencias.length > 0 && !verExtras ? `${AMBAR}12` : 'rgba(255,255,255,0.02)',
+                color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
+              <span style={{ color: BRAND.muted }}>{verExtras ? '▾' : '▸'}</span>
+              <span>Seguimiento y objetivos</span>
+              {sugerencias.length > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto', fontSize: 11.5, fontWeight: 800, color: AMBAR }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: AMBAR, boxShadow: `0 0 8px ${AMBAR}` }} />
+                  {sugerencias.length} falta{sugerencias.length > 1 ? 's' : ''} por revisar
+                </span>
+              )}
+            </button>
+
+            {verExtras && (
+              <div style={{ marginTop: 10 }}>
+                {/* Seguimiento: la pizarra recuerda las faltas de días anteriores y pregunta si volvió */}
+                {sugerencias.length > 0 && (
+                  <div style={{ marginBottom: 12, padding: '11px 14px', borderRadius: 12, border: `1px solid ${BRAND.teal}40`, background: 'rgba(46,207,170,0.06)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, marginBottom: 8 }}>💡 Seguimiento</div>
+                    {sugerencias.map(a => (
+                      <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${BRAND.border}` }}>
+                        <span style={{ flex: 1, minWidth: 170, fontSize: 13, color: BRAND.white }}>
+                          {labelDia(a.fecha_objetivo, hoy) === 'ayer' ? 'Ayer' : `El ${labelDia(a.fecha_objetivo, hoy)}`} faltó: <b>{a.texto}</b>. ¿Se reincorporó hoy?
+                        </span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button type="button" onClick={() => ocultarSug(a.id)}
+                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>✓ Volvió</button>
+                          <button type="button" onClick={() => seguirFaltando(a)}
+                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${AMBAR}`, background: `${AMBAR}22`, color: AMBAR }}>Sigue faltando</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <BloqueObjetivos usuario={usuario} esMovil={esMovil} />
+              </div>
+            )}
           </div>
 
         </>
