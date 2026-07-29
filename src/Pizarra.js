@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { getSession } from './auth';
 import {
   BRAND, sbFetch, todayStr, minutosAR, sumarDias, labelDia, destinoLabel,
-  NOTA_TIPOS, ordenarNotas, estaVencida, cargarNotas, resolverNota, patchNota,
+  NOTA_TIPOS, ordenarNotas, estaVencida, cargarNotas, resolverNota, desmarcarNota, borrarNota, patchNota,
   cargarChoferesFull, useNotasRealtime, aplicarCambioNota, LoginFlexit,
 } from './colectasShared';
 
@@ -246,10 +246,18 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
 }
 
 // ── TARJETA ──
-function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostrarDia, arrastrable }) {
+function Tarjeta({ nota, clientesById, onResolver, onDesmarcar, onBorrar, onCubrir, onMover, hoy, mostrarDia, arrastrable }) {
   const [cubre, setCubre] = useState(nota.cubre || '');
   const [abierta, setAbierta] = useState(false);
   const [hover, setHover] = useState(false);
+  const [armado, setArmado] = useState(false);   // borrar: primer toque arma, segundo confirma
+  const tBorrar = useRef(null);
+  useEffect(() => () => { if (tBorrar.current) clearTimeout(tBorrar.current); }, []);
+  const armarBorrar = () => {
+    setArmado(true);
+    if (tBorrar.current) clearTimeout(tBorrar.current);
+    tBorrar.current = setTimeout(() => setArmado(false), 4000);
+  };
   const resuelta = !!nota.resuelta_at;
   const t = NOTA_TIPOS[nota.tipo] || NOTA_TIPOS.aviso;
   const urgente = !resuelta && nota.prioridad === 'ahora';
@@ -279,12 +287,12 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
       }}>
 
       <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-        <div onClick={() => !resuelta && onResolver(nota)}
-          title={resuelta ? 'Resuelta' : 'Marcar como resuelta'}
+        <div onClick={() => (resuelta ? onDesmarcar(nota) : onResolver(nota))}
+          title={resuelta ? 'Tocar para desmarcar (si se marcó por error)' : 'Marcar como resuelta'}
           style={{
             width: 32, height: 32, marginTop: -3, marginLeft: -4, flexShrink: 0, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: resuelta ? 'default' : 'pointer', touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none',
+            cursor: 'pointer', touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none',
           }}>
           <span style={{
             width: 19, height: 19, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -326,16 +334,23 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
             </div>
           )}
 
-          {!resuelta && (
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
-              {nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
-              {nota.tipo === 'ausencia' && (
-                <Accion onClick={() => setAbierta(a => !a)} color={BRAND.teal} titulo="Definir el reemplazo">
-                  {nota.cubre ? `Cubre: ${nota.cubre}` : 'Cubrir'}
-                </Accion>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+            {!resuelta && nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
+            {!resuelta && nota.tipo === 'ausencia' && (
+              <Accion onClick={() => setAbierta(a => !a)} color={BRAND.teal} titulo="Definir el reemplazo">
+                {nota.cubre ? `Cubre: ${nota.cubre}` : 'Cubrir'}
+              </Accion>
+            )}
+            {resuelta && <Accion onClick={() => onDesmarcar(nota)} titulo="Se marcó por error">↩ Desmarcar</Accion>}
+
+            <span style={{ marginLeft: 'auto' }}>
+              {armado ? (
+                <Accion onClick={() => onBorrar(nota)} color={ROJO} titulo="Borrar definitivamente">Borrar ✓</Accion>
+              ) : (
+                <Accion onClick={armarBorrar} titulo="Borrar la nota">✕</Accion>
               )}
-            </div>
-          )}
+            </span>
+          </div>
 
           {!resuelta && nota.tipo === 'ausencia' && abierta && (
             <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
@@ -485,6 +500,18 @@ function PizarraInner({ usuario }) {
       .catch(e => { setError('No se pudo resolver: ' + e.message); recargar(); });
   };
 
+  const desmarcar = (nota) => {
+    setNotas(prev => prev.map(n => n.id === nota.id ? { ...n, resuelta_por: null, resuelta_at: null } : n));
+    return desmarcarNota(nota.id)
+      .catch(e => { setError('No se pudo desmarcar: ' + e.message); recargar(); });
+  };
+
+  const borrar = (nota) => {
+    setNotas(prev => prev.filter(n => n.id !== nota.id));
+    return borrarNota(nota.id)
+      .catch(e => { setError('No se pudo borrar: ' + e.message); recargar(); });
+  };
+
   const mover = (nota, fecha) => parchar(nota.id, { fecha_objetivo: fecha });
   const soltar = (id, fecha) => parchar(id, { fecha_objetivo: fecha });
 
@@ -511,7 +538,14 @@ function PizarraInner({ usuario }) {
   }, [notas, hoy, manana, ahora]);
 
   const visibles = cols.filter(c => !c.soloSiHay || c.notas.length || c.hechas.length);
-  const props = { clientesById, hoy, onResolver: n => resolver(n), onCubrir: (n, c) => resolver(n, { cubre: c }), onMover: mover };
+  const props = {
+    clientesById, hoy,
+    onResolver: n => resolver(n),
+    onDesmarcar: desmarcar,
+    onBorrar: borrar,
+    onCubrir: (n, c) => resolver(n, { cubre: c }),
+    onMover: mover,
+  };
 
   return (
     <div>

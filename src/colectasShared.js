@@ -296,6 +296,13 @@ export function patchNota(id, patch) {
 export const resolverNota = (id, quien, extra = {}) =>
   patchNota(id, { resuelta_por: quien, resuelta_at: new Date().toISOString(), ...extra });
 
+// Volver atrás una nota marcada por error. Se conserva el reemplazo cargado (si lo había).
+export const desmarcarNota = (id) =>
+  patchNota(id, { resuelta_por: null, resuelta_at: null });
+
+export const borrarNota = (id) =>
+  sbFetch(`notas_operativas?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+
 export const posponerNota = (nota) =>
   patchNota(nota.id, { fecha_objetivo: sumarDias(nota.fecha_objetivo, 1) });
 
