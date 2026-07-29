@@ -102,10 +102,11 @@ function BloqueObjetivos({ usuario, esMovil }) {
             background: hecho ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>
           {hecho ? '✓' : ''}
         </button>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 13.5,
-          color: hecho ? BRAND.muted : BRAND.white, textDecoration: hecho ? 'line-through' : 'none' }}>
-          {o.texto}
-          <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 1, textDecoration: 'none' }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: hecho ? BRAND.muted : BRAND.white }}>
+          {/* el tachado va SOLO en el texto: si se pone en el contenedor, la línea también
+              atraviesa el "✓ quién · cuándo" de abajo (text-decoration no se puede quitar desde el hijo) */}
+          <span style={{ textDecoration: hecho ? 'line-through' : 'none' }}>{o.texto}</span>
+          <span style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>
             {hecho
               ? `✓ ${o.hecho_por || 'alguien'} · ${labelDia(fechaAR(o.hecho_at), todayStr())}`
               : (o.autor ? `propuesto por ${o.autor}` : '')}
