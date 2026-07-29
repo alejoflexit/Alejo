@@ -9,7 +9,7 @@ import {
   NOTA_TIPOS, ordenarNotas, estaVencida, cargarNotas, resolverNota, desmarcarNota, borrarNota, patchNota,
   cargarChoferesFull, useNotasRealtime, aplicarCambioNota, LoginFlexit,
   editarNota, cargarComentarios, agregarComentario, borrarComentario, useComentariosRealtime,
-  cargarObjetivos, crearObjetivo, marcarObjetivo, desmarcarObjetivo, borrarObjetivo,
+  cargarObjetivos, crearObjetivo, marcarObjetivo, desmarcarObjetivo, borrarObjetivo, patchObjetivo,
   useObjetivosRealtime, aplicarCambioObjetivo,
 } from './colectasShared';
 
@@ -52,6 +52,8 @@ function BloqueObjetivos({ usuario, esMovil }) {
   const [creando, setCreando] = useState(false);
   const [verHechos, setVerHechos] = useState(false);
   const [error, setError] = useState('');
+  const [editNota, setEditNota] = useState(null); // id del objetivo cuyo comentario se está editando
+  const [notaDraft, setNotaDraft] = useState('');
   const inputRef = useRef(null);
 
   const recargar = useCallback(() => {
@@ -88,6 +90,14 @@ function BloqueObjetivos({ usuario, esMovil }) {
     setObjetivos(prev => prev.filter(x => x.id !== o.id));
     borrarObjetivo(o.id).catch(e => { setError('No se pudo borrar: ' + e.message); recargar(); });
   };
+  const abrirNota = (o) => { setEditNota(o.id); setNotaDraft(o.nota || ''); };
+  const cerrarNota = () => { setEditNota(null); setNotaDraft(''); };
+  const guardarNota = (o) => {
+    const t = notaDraft.trim();
+    setObjetivos(prev => prev.map(x => x.id === o.id ? { ...x, nota: t || null } : x));
+    cerrarNota();
+    patchObjetivo(o.id, { nota: t || null }).catch(e => { setError('No se pudo guardar el comentario: ' + e.message); recargar(); });
+  };
 
   const fila = (o) => {
     const hecho = !!o.hecho_at;
@@ -112,6 +122,31 @@ function BloqueObjetivos({ usuario, esMovil }) {
               : (o.autor ? `propuesto por ${o.autor}` : '')}
           </span>
         </div>
+        {/* Comentario en burbuja a la derecha (ej. quién cubre el backup) */}
+        {editNota === o.id ? (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+            <input autoFocus value={notaDraft} onChange={e => setNotaDraft(e.target.value)}
+              placeholder="quién lo cubre…" maxLength={60}
+              onKeyDown={e => { if (e.key === 'Enter') guardarNota(o); if (e.key === 'Escape') cerrarNota(); }}
+              style={{ width: esMovil ? 108 : 150, fontSize: 12, padding: '5px 8px', borderRadius: 8, border: `1px solid ${BRAND.teal}55`, background: BRAND.navyCard, color: BRAND.white, outline: 'none' }} />
+            <button type="button" onClick={() => guardarNota(o)} title="Guardar"
+              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 800, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✓</button>
+            <button type="button" onClick={cerrarNota} title="Cancelar"
+              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✕</button>
+          </div>
+        ) : o.nota ? (
+          <button type="button" onClick={() => abrirNota(o)} title="Editar comentario"
+            style={{ flexShrink: 0, maxWidth: esMovil ? 120 : 200, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
+              border: `1px solid ${BRAND.teal}44`, background: 'rgba(46,207,170,0.10)', color: BRAND.teal, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', touchAction: 'manipulation' }}>
+            💬 {o.nota}
+          </button>
+        ) : (
+          <button type="button" onClick={() => abrirNota(o)} title="Agregar comentario (ej. quién lo cubre)"
+            style={{ flexShrink: 0, padding: '4px 9px', borderRadius: 999, cursor: 'pointer',
+              border: '1px dashed rgba(255,255,255,0.20)', background: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', touchAction: 'manipulation' }}>
+            + nota
+          </button>
+        )}
         <button type="button" onClick={() => quitar(o)} title="Borrar objetivo"
           style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', cursor: 'pointer', fontSize: 14, padding: '4px 2px', touchAction: 'manipulation' }}>✕</button>
       </div>
