@@ -256,14 +256,17 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
 
   const bg = {
     minHeight: "78vh", padding: isMobile ? "6px 2px 30px" : "8px 4px 40px",
-    background: "radial-gradient(1100px 600px at 12% -6%, rgba(0,255,180,0.045), transparent 60%), radial-gradient(1000px 640px at 92% 108%, rgba(0,180,255,0.035), transparent 60%)",
   };
   const focoTitulo = { fontFamily: C.grotesk, fontSize: isMobile ? 20 : 26, fontWeight: 600, letterSpacing: "-0.6px", margin: "11px 0 6px", lineHeight: 1.15 };
   const focoBajada = { fontSize: isMobile ? 13 : 14, color: C.ink2, lineHeight: 1.5 };
 
   return (
     <div style={bg}>
-      <div style={{ maxWidth: 820, margin: "0 auto", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: C.ink }}>
+      {/* Profundidad: los degradés van en una capa FIJA de pantalla completa (position:fixed) —
+          así no dibujan un rectángulo tintado dentro del padding de la app (eso se veía como un
+          "borde" alrededor del header). El contenido va por encima. */}
+      <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "radial-gradient(1100px 600px at 12% -4%, rgba(0,255,180,0.05), transparent 60%), radial-gradient(1000px 640px at 92% 106%, rgba(0,180,255,0.04), transparent 60%)" }} />
+      <div style={{ maxWidth: 820, margin: "0 auto", position: "relative", zIndex: 1, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: C.ink }}>
 
         {/* Header — logo + saludo a la izquierda, acciones a la derecha. Sin wrap: el saludo se
             trunca antes de chocar con los botones, y la meta es corta en mobile. */}
