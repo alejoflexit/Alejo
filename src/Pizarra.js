@@ -106,6 +106,7 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
   const [hora, setHora] = useState('');
   const [horaOpen, setHoraOpen] = useState(false);
   const [fecha, setFecha] = useState(fechaFija || sumarDias(todayStr(), 2));
+  const [hasta, setHasta] = useState('');   // vacío = un solo día
   const [cadete, setCadete] = useState('');
   const [cubre, setCubre] = useState('');
   const [clienteId, setClienteId] = useState('');
@@ -114,8 +115,20 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
   const ref = useRef(null);
   useEffect(() => { if (ref.current) ref.current.focus(); }, []);
 
+  // Días que cubre la nota. Un rango genera una nota POR DÍA: si falta un cadete toda la semana,
+  // cada día se cubre y se resuelve por separado. Se saltean los domingos (no se opera).
+  const dias = useMemo(() => {
+    if (!fecha) return [];
+    const fin = hasta && hasta > fecha ? hasta : fecha;
+    const out = [];
+    for (let f = fecha; f <= fin && out.length < 31; f = sumarDias(f, 1)) {
+      if (new Date(f + 'T12:00:00').getDay() !== 0) out.push(f);
+    }
+    return out;
+  }, [fecha, hasta]);
+
   const falta = !texto.trim() ? 'Escribí de qué se trata la nota.'
-    : !fecha ? 'Elegí la fecha.'
+    : !dias.length ? 'Elegí la fecha.'
     : prioridad === 'hora' && !hora ? 'Falta la hora límite.'
     : '';
 
@@ -124,19 +137,19 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
     if (falta) { setAviso(falta); return; }
     setBusy(true); setAviso('');
     try {
+      const base = {
+        texto: texto.trim(),
+        tipo,
+        prioridad,
+        hora_limite: prioridad === 'hora' ? hora : null,
+        cliente_id: tipo === 'colecta' && clienteId ? clienteId : null,
+        cadete: tipo === 'ausencia' && cadete ? cadete : null,
+        cubre: tipo === 'ausencia' && cubre.trim() ? cubre.trim() : null,
+        autor,
+      };
       await sbFetch('notas_operativas', {
         method: 'POST',
-        body: JSON.stringify({
-          texto: texto.trim(),
-          tipo,
-          prioridad,
-          hora_limite: prioridad === 'hora' ? hora : null,
-          fecha_objetivo: fecha,
-          cliente_id: tipo === 'colecta' && clienteId ? clienteId : null,
-          cadete: tipo === 'ausencia' && cadete ? cadete : null,
-          cubre: tipo === 'ausencia' && cubre.trim() ? cubre.trim() : null,
-          autor,
-        }),
+        body: JSON.stringify(dias.map(d => ({ ...base, fecha_objetivo: d }))),
       });
       onListo();
     } catch (e) {
@@ -179,7 +192,20 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
           <input type="date" value={fecha} min={sumarDias(todayStr(), 2)} onChange={e => setFecha(e.target.value)}
             style={{ ...inpSt, fontSize: 12 }} />
         )}
+        <Chip activo={!!hasta} color={LILA}
+          onClick={() => setHasta(h => (h ? '' : sumarDias(fecha, 1)))}>📅 Varios días</Chip>
+        {!!hasta && (
+          <input type="date" value={hasta} min={sumarDias(fecha, 1)} onChange={e => setHasta(e.target.value)}
+            style={{ ...inpSt, fontSize: 12 }} />
+        )}
       </div>
+
+      {dias.length > 1 && (
+        <div style={{ fontSize: 11, color: LILA }}>
+          Se van a crear {dias.length} notas, una por día ({labelDia(dias[0])} → {labelDia(dias[dias.length - 1])}).
+          Cada día se cubre y se resuelve por separado.
+        </div>
+      )}
 
       {tipo === 'ausencia' && (
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -231,8 +257,6 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
   const creada = nota.created_at
     ? new Date(new Date(nota.created_at).getTime() - 3 * 3600 * 1000).toISOString().slice(11, 16)
     : '';
-  const manana = sumarDias(hoy, 1);
-
   const meta = { fontSize: 10.5, color: 'rgba(255,255,255,0.38)', whiteSpace: 'nowrap' };
 
   return (
@@ -283,7 +307,7 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
                 {labelDia(nota.fecha_objetivo, hoy)}
               </span>
             )}
-            <span style={meta}>{destinoLabel(nota, clientesById, hoy, true)}</span>
+            {nota.tipo !== 'aviso' && <span style={meta}>{destinoLabel(nota, clientesById, hoy, true)}</span>}
             <span style={meta}>{nota.autor}{creada ? ` · ${creada}` : ''}</span>
           </div>
 
@@ -296,7 +320,6 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
           {!resuelta && (
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
               {nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
-              {nota.fecha_objetivo !== manana && <Accion onClick={() => onMover(nota, manana)} titulo="Pasar a mañana">→ Mañana</Accion>}
               {nota.tipo === 'ausencia' && (
                 <Accion onClick={() => setAbierta(a => !a)} color={BRAND.teal} titulo="Definir el reemplazo">
                   {nota.cubre ? `Cubre: ${nota.cubre}` : 'Cubrir'}
@@ -330,7 +353,7 @@ function Tarjeta({ nota, clientesById, onResolver, onCubrir, onMover, hoy, mostr
 }
 
 // ── COLUMNA ──
-function Columna({ col, notas, esMovil, creando, onCrear, onCancelarCrear, onSoltar, children, ...rest }) {
+function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar, children, ...rest }) {
   const [encima, setEncima] = useState(false);
   const puedeSoltar = !!col.fecha;
 
@@ -362,8 +385,20 @@ function Columna({ col, notas, esMovil, creando, onCrear, onCancelarCrear, onSol
 
       {notas.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} {...rest} />)}
 
-      {!notas.length && !creando && (
+      {!notas.length && !hechas.length && !creando && (
         <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.22)', padding: '10px 4px' }}>{col.vacio}</div>
+      )}
+
+      {/* Lo hecho no desaparece: queda a la vista, tachado, para saber que se resolvió. */}
+      {hechas.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 3px 2px' }}>
+            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+            <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)' }}>Hechas {hechas.length}</span>
+            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+          </div>
+          {hechas.map(n => <Tarjeta key={n.id} nota={n} mostrarDia={col.mostrarDia} {...rest} />)}
+        </>
       )}
 
       {creando ? children : col.creable && (
@@ -384,7 +419,6 @@ function PizarraInner({ usuario }) {
   const [choferes, setChoferes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [verCompletadas, setVerCompletadas] = useState(false);
   const [creandoEn, setCreandoEn] = useState(null); // id de la columna con el creador abierto
   const [esMovil, setEsMovil] = useState(typeof window !== 'undefined' && window.innerWidth < 900);
   useEffect(() => {
@@ -440,7 +474,7 @@ function PizarraInner({ usuario }) {
   const mover = (nota, fecha) => parchar(nota.id, { fecha_objetivo: fecha });
   const soltar = (id, fecha) => parchar(id, { fecha_objetivo: fecha });
 
-  const { cols, completadas } = useMemo(() => {
+  const { cols } = useMemo(() => {
     const min = minutosAR(ahora);
     const pend = notas.filter(n => !n.resuelta_at);
     const venc = ordenarNotas(pend.filter(n => estaVencida(n, hoy, min)));
@@ -451,19 +485,18 @@ function PizarraInner({ usuario }) {
       .forEach(n => { (porDia[n.fecha_objetivo] = porDia[n.fecha_objetivo] || []).push(n); });
     const prox = Object.keys(porDia).sort().flatMap(f => ordenarNotas(porDia[f]));
     const comp = notas.filter(n => n.resuelta_at && n.fecha_objetivo === hoy)
-      .sort((a, b) => String(b.resuelta_at).localeCompare(String(a.resuelta_at)));
+      .sort((a, b) => String(a.resuelta_at).localeCompare(String(b.resuelta_at)));
     return {
       cols: [
-        { id: 'vencidas', titulo: '⚠ Vencidas', color: ROJO, notas: venc, vacio: '', soloSiHay: true },
-        { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, vacio: 'Nada pendiente para hoy.', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)) },
-        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, vacio: 'Nada para mañana.', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)) },
-        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, mostrarDia: true, vacio: 'Sin notas más adelante.', notas: prox },
+        { id: 'vencidas', titulo: '⚠ Vencidas', color: ROJO, notas: venc, hechas: [], vacio: '', soloSiHay: true },
+        { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, vacio: 'Nada pendiente para hoy.', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)), hechas: comp },
+        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, vacio: 'Nada para mañana.', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: [] },
+        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, mostrarDia: true, vacio: 'Sin notas más adelante.', notas: prox, hechas: [] },
       ],
-      completadas: comp,
     };
   }, [notas, hoy, manana, ahora]);
 
-  const visibles = cols.filter(c => !c.soloSiHay || c.notas.length);
+  const visibles = cols.filter(c => !c.soloSiHay || c.notas.length || c.hechas.length);
   const props = { clientesById, hoy, onResolver: n => resolver(n), onCubrir: (n, c) => resolver(n, { cubre: c }), onMover: mover };
 
   return (
@@ -487,7 +520,7 @@ function PizarraInner({ usuario }) {
         <>
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
             {visibles.map(col => (
-              <Columna key={col.id} col={col} notas={col.notas} esMovil={esMovil}
+              <Columna key={col.id} col={col} notas={col.notas} hechas={col.hechas} esMovil={esMovil}
                 creando={creandoEn === col.id}
                 onCrear={() => setCreandoEn(col.id)}
                 onSoltar={soltar} {...props}>
@@ -502,19 +535,6 @@ function PizarraInner({ usuario }) {
             ))}
           </div>
 
-          {completadas.length > 0 && (
-            <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${BRAND.border}` }}>
-              <button type="button" onClick={() => setVerCompletadas(v => !v)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '0 11px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.04)', color: BRAND.muted }}>
-                {verCompletadas ? '▾' : '▸'} Completadas hoy ({completadas.length})
-              </button>
-              {verCompletadas && (
-                <div style={{ display: 'grid', gridTemplateColumns: esMovil ? '1fr' : 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8, marginTop: 10 }}>
-                  {completadas.map(n => <Tarjeta key={n.id} nota={n} {...props} />)}
-                </div>
-              )}
-            </div>
-          )}
         </>
       )}
     </div>
