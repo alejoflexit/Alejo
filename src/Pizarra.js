@@ -271,6 +271,19 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
     return out;
   }, [fecha, hasta]);
 
+  // Botones de día rápido para la columna "Próximos": los próximos días hábiles (sin domingos),
+  // para elegir "el viernes" de un toque en vez de pelear con el selector de fecha.
+  const DIAS_CORTO = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  const chipDia = (f) => { const d = new Date(f + 'T12:00:00'); return `${DIAS_CORTO[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}`; };
+  const proximos = useMemo(() => {
+    const out = [];
+    for (let i = 2; out.length < 6 && i < 14; i++) {
+      const f = sumarDias(todayStr(), i);
+      if (new Date(f + 'T12:00:00').getDay() !== 0) out.push(f);
+    }
+    return out;
+  }, []);
+
   const falta = !texto.trim() ? 'Escribí de qué se trata la nota.'
     : !dias.length ? 'Elegí la fecha.'
     : prioridad === 'hora' && !hora ? 'Falta la hora límite.'
@@ -318,7 +331,38 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+      {/* Cuándo: en Hoy/Mañana el día ya está fijo; en Próximos se elige con botones de día. */}
+      {!fechaFija && (
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>¿Qué día?</div>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+            {proximos.map(f => (
+              <Chip key={f} activo={fecha === f && !hasta} color={LILA} onClick={() => { setFecha(f); setHasta(''); }}>{chipDia(f)}</Chip>
+            ))}
+            <input type="date" value={fecha} min={sumarDias(todayStr(), 2)} onChange={e => { setFecha(e.target.value); setHasta(''); }}
+              title="Otra fecha" style={{ ...inpSt, fontSize: 12, maxWidth: 150 }} />
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <Chip activo={!!hasta} color={LILA}
+              onClick={() => setHasta(h => (h ? '' : sumarDias(fecha, 1)))}>📅 Varios días seguidos</Chip>
+            {!!hasta && (
+              <input type="date" value={hasta} min={sumarDias(fecha, 1)} onChange={e => setHasta(e.target.value)}
+                style={{ ...inpSt, fontSize: 12, marginLeft: 6, maxWidth: 150 }} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {dias.length > 1 && (
+        <div style={{ fontSize: 11, color: LILA }}>
+          Se van a crear {dias.length} notas, una por día ({labelDia(dias[0])} → {labelDia(dias[dias.length - 1])}).
+          Cada día se cubre y se resuelve por separado.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 2 }}>Prioridad</span>
+        <Chip activo={prioridad === 'normal'} onClick={() => { setPrioridad('normal'); setHoraOpen(false); setHora(''); }}>Normal</Chip>
         <Chip activo={prioridad === 'ahora'} color={ROJO}
           onClick={() => { setPrioridad(prioridad === 'ahora' ? 'normal' : 'ahora'); setHoraOpen(false); setHora(''); }}>⚡ Ahora</Chip>
         <span style={{ position: 'relative', display: 'inline-flex' }}>
@@ -332,24 +376,7 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
               onCerrar={() => { setHoraOpen(false); if (!hora) setPrioridad('normal'); }} />
           )}
         </span>
-        {!fechaFija && (
-          <input type="date" value={fecha} min={sumarDias(todayStr(), 2)} onChange={e => setFecha(e.target.value)}
-            style={{ ...inpSt, fontSize: 12 }} />
-        )}
-        <Chip activo={!!hasta} color={LILA}
-          onClick={() => setHasta(h => (h ? '' : sumarDias(fecha, 1)))}>📅 Varios días</Chip>
-        {!!hasta && (
-          <input type="date" value={hasta} min={sumarDias(fecha, 1)} onChange={e => setHasta(e.target.value)}
-            style={{ ...inpSt, fontSize: 12 }} />
-        )}
       </div>
-
-      {dias.length > 1 && (
-        <div style={{ fontSize: 11, color: LILA }}>
-          Se van a crear {dias.length} notas, una por día ({labelDia(dias[0])} → {labelDia(dias[dias.length - 1])}).
-          Cada día se cubre y se resuelve por separado.
-        </div>
-      )}
 
       {tipo === 'ausencia' && (
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
