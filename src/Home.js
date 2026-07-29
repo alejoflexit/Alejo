@@ -192,7 +192,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     let vivo = true;
     Promise.all([
       sbFetch("colectas_clientes?select=id,activo,fija"),
-      sbFetch(`colectas_registros?select=cliente_id,estado,choferes&fecha=eq.${hoy}`),
+      sbFetch(`colectas_registros?select=cliente_id,estado,choferes,confirmado_por&fecha=eq.${hoy}`),
       sbFetch(`colectas_arribos?select=cadete,llego_at&fecha=eq.${hoy}`),
     ]).then(([clientes, regs, arr]) => {
       if (!vivo) return;
@@ -207,7 +207,19 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         if (est === "verde") confirmadas++;
         if (est === "amarillo" || est === "verde") { conColecta++; if (sinAsig) sinChofer++; }
       });
-      setCol({ sinChofer, confirmadas, totalCol: conColecta, llegaron: (arr || []).filter((a) => a.llego_at).length, totalArr: (arr || []).length });
+      // Roster de arribos = cadetes con al menos una colecta CONFIRMADA hoy (mismo criterio que la pantalla Arribos),
+      // no la cantidad de filas en colectas_arribos (que solo existen para los ya marcados).
+      const roster = new Set();
+      (regs || []).forEach((r) => {
+        if (r.estado === "rojo") return;
+        (r.choferes || []).forEach((ch) => {
+          if (!ch || ch === "A coordinar") return;
+          if (r.estado === "verde" || (r.confirmado_por || []).includes(ch)) roster.add(ch);
+        });
+      });
+      const llegadosSet = new Set((arr || []).filter((a) => a.llego_at).map((a) => a.cadete));
+      const llegaron = [...roster].filter((ch) => llegadosSet.has(ch)).length;
+      setCol({ sinChofer, confirmadas, totalCol: conColecta, llegaron, totalArr: roster.size });
     }).catch(() => {});
     return () => { vivo = false; };
   }, [session, hoy]);
