@@ -806,6 +806,11 @@ export default function ColectasMapa({
                 onUpdate={updates => updateRegistro(clienteSel.id, updates)}
                 abrirArriba
               />
+              <button onClick={() => { setUbicando(clienteSel.id); setSel(null); }}
+                title="Tocar el punto exacto en el mapa donde va el pin"
+                style={{ ...btn(false), height: 30 }}>
+                📍 Mover en el mapa
+              </button>
               <button onClick={() => setBuscandoDir(v => (v === clienteSel.id ? null : clienteSel.id))}
                 title="Buscar la dirección como en Google Maps y mover el pin al resultado"
                 style={{ ...btn(buscandoDir === clienteSel.id), height: 30 }}>
