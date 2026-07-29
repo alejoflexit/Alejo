@@ -567,6 +567,34 @@ function PizarraInner({ usuario }) {
     editarNota(nota.id, campos).catch(e => { setError('No se pudo editar: ' + e.message); recargar(); });
   };
 
+  // ── Seguimiento: ausencias de días anteriores → sugerir si el cadete se reincorporó ──
+  const nrm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+  const [ausPrevias, setAusPrevias] = useState([]);
+  const [sugOcultas, setSugOcultas] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('flexit_pizarra_sug_ocultas') || '[]')); } catch { return new Set(); } });
+  useEffect(() => {
+    const desde = sumarDias(hoy, -4);
+    sbFetch(`notas_operativas?select=*&tipo=eq.ausencia&fecha_objetivo=gte.${desde}&fecha_objetivo=lt.${hoy}&order=fecha_objetivo.desc`)
+      .then(rows => setAusPrevias(Array.isArray(rows) ? rows : [])).catch(() => {});
+  }, [hoy]);
+  const ocultarSug = (id) => setSugOcultas(prev => { const n = new Set(prev); n.add(id); try { localStorage.setItem('flexit_pizarra_sug_ocultas', JSON.stringify([...n])); } catch {} return n; });
+  const ausHoyTxt = useMemo(() => new Set(notas.filter(n => n.tipo === 'ausencia' && n.fecha_objetivo === hoy).map(n => nrm(n.texto))), [notas, hoy]);
+  const sugerencias = useMemo(() => {
+    const vistos = new Set();
+    return ausPrevias.filter(a => {
+      if (sugOcultas.has(a.id)) return false;
+      const k = nrm(a.texto);
+      if (ausHoyTxt.has(k) || vistos.has(k)) return false; // ya se cargó hoy, o repetido
+      vistos.add(k); return true;
+    });
+  }, [ausPrevias, sugOcultas, ausHoyTxt]);
+  const seguirFaltando = async (a) => {
+    ocultarSug(a.id);
+    try {
+      await sbFetch('notas_operativas', { method: 'POST', body: JSON.stringify({ texto: a.texto, tipo: 'ausencia', prioridad: 'normal', fecha_objetivo: hoy, cadete: a.cadete || null, autor: usuario }) });
+      recargar();
+    } catch (e) { setError('No se pudo crear la nota: ' + e.message); }
+  };
+
   const clientesById = useMemo(() => Object.fromEntries(clientes.map(c => [c.id, c.nombre])), [clientes]);
 
   const parchar = async (id, patch) => {
@@ -657,6 +685,26 @@ function PizarraInner({ usuario }) {
         <div style={{ color: BRAND.muted, padding: '3rem', textAlign: 'center' }}>Cargando…</div>
       ) : (
         <>
+          {/* Seguimiento: la pizarra recuerda las faltas de días anteriores y pregunta si volvió */}
+          {sugerencias.length > 0 && (
+            <div style={{ marginBottom: 12, padding: '11px 14px', borderRadius: 12, border: `1px solid ${BRAND.teal}40`, background: 'rgba(46,207,170,0.06)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, marginBottom: 8 }}>💡 Seguimiento</div>
+              {sugerencias.map(a => (
+                <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${BRAND.border}` }}>
+                  <span style={{ flex: 1, minWidth: 170, fontSize: 13, color: BRAND.white }}>
+                    {labelDia(a.fecha_objetivo, hoy) === 'ayer' ? 'Ayer' : `El ${labelDia(a.fecha_objetivo, hoy)}`} faltó: <b>{a.texto}</b>. ¿Se reincorporó hoy?
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" onClick={() => ocultarSug(a.id)}
+                      style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>✓ Volvió</button>
+                    <button type="button" onClick={() => seguirFaltando(a)}
+                      style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${AMBAR}`, background: `${AMBAR}22`, color: AMBAR }}>Sigue faltando</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
             {visibles.map(col => (
               <Columna key={col.id} col={col} notas={col.notas} hechas={col.hechas} esMovil={esMovil}
