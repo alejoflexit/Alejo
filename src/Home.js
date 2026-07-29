@@ -121,9 +121,9 @@ function Buzon({ notas, onIr, onResolver }) {
 }
 
 // ── Stat card glass ──
-function Stat({ cap, capId, live, children, span2, onClick, colorNum }) {
+function Stat({ cap, capId, live, children, span2, onClick, orden }) {
   return (
-    <div onClick={onClick} style={{ ...cardBase, padding: "18px 18px", gridColumn: span2 ? "span 2" : "auto", cursor: onClick ? "pointer" : "default" }}>
+    <div onClick={onClick} style={{ ...cardBase, padding: "18px 18px", gridColumn: span2 ? "span 2" : "auto", order: orden || 0, cursor: onClick ? "pointer" : "default" }}>
       <span style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.10),transparent)" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: C.ink2 }}>
         {capId && <Icon id={capId} size={15} color={C.ink3} />} {cap}
@@ -149,6 +149,8 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   const ahora = useMemo(() => new Date(Date.now() - 3 * 3600 * 1000), []);
   const diaSemana = new Date(hoy + "T12:00:00").getDay();
   const franja = minutosAR() < 690 ? "manana" : "dia";
+  const minsAhora = minutosAR();
+  const ventanaArribos = minsAhora >= 780 && minsAhora <= 930; // 13:00–15:30: lo que más se usa (llegan los choferes)
   const esLunMar = diaSemana === 1 || diaSemana === 2;
   const isAdmin = !!(session && session.email === "admin@flexit.app");
   const horaTxt = `${String(ahora.getUTCHours()).padStart(2, "0")}:${String(ahora.getUTCMinutes()).padStart(2, "0")}`;
@@ -246,9 +248,12 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   const foco = (() => {
     if (isAdmin && esLunMar && liq && liq.confirmados < 41) return "liq";
     if (session && franja === "dia" && col && col.sinChofer > 0) return "colectas";
+    // 13:00–15:30 el protagonista es Arribos (llegan los choferes) mientras falte alguno
+    if (session && ventanaArribos && col && col.totalArr > 0 && col.llegaron < col.totalArr) return "arribos";
     if (franja === "manana" && ayer && ayer.cadetes.length > 0) return "arranque";
     return "ok";
   })();
+  const colCompleto = !!(col && col.totalCol > 0 && col.sinChofer === 0 && col.confirmadas === col.totalCol);
 
   const dock = [
     { id: "metricas", label: "Métricas" }, { id: "colectas", label: "Colectas" }, { id: "arribos", label: "Arribos" },
@@ -299,6 +304,11 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             <div style={focoBajada}>Asignalas <b style={{ color: C.ambar }}>antes de las 14:00</b> para evitar demoras en el reparto.</div>
             <button onClick={() => onNav("colectas")} style={ctaSt}>Abrir colectas <Icon id="arrow" size={15} color="#04150f" /></button>
           </>)}
+          {foco === "arribos" && (<>
+            <div style={focoTitulo}>Van llegando: {col.llegaron} de {col.totalArr} cadetes</div>
+            <div style={focoBajada}>Faltan <b style={{ color: C.ambar }}>{col.totalArr - col.llegaron}</b> por llegar al depósito. Marcá a cada uno cuando entra.</div>
+            <button onClick={() => onNav("arribos")} style={ctaSt}>Abrir arribos <Icon id="arrow" size={15} color="#04150f" /></button>
+          </>)}
           {foco === "arranque" && (<>
             <div style={focoTitulo}>{ayer.cadetes.length} cadete{ayer.cadetes.length === 1 ? "" : "s"} para revisar de ayer</div>
             <div style={focoBajada}>SLA general {ayer.sla != null ? ayer.sla.toFixed(1) + "%" : "—"}. Copiá el resumen y mandalo al grupo.</div>
@@ -315,25 +325,36 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           </>)}
         </div>
 
-        {/* AHORA — widgets */}
+        {/* AHORA — widgets. En la ventana de arribos (13–15:30) Arribos va primero. */}
         <div style={secSt}>Ahora</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: isMobile ? 11 : 14 }}>
-          {session && col && (
-            <Stat cap="Colectas confirmadas" capId="check" span2={!isMobile}>
+          {/* Colectas: cuando está completo se muestra como "listo" (no una barra llena a medias) */}
+          {session && col && (colCompleto ? (
+            <Stat cap="Colectas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 10 }}>
+                <span style={{ fontSize: 26 }}>✅</span>
+                <div>
+                  <div style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: isMobile ? 18 : 20, color: C.teal, letterSpacing: "-0.5px" }}>Todas confirmadas</div>
+                  <div style={{ fontSize: 11, color: C.ink3, marginTop: 2 }}>{col.totalCol} colectas · sin pendientes</div>
+                </div>
+              </div>
+            </Stat>
+          ) : (
+            <Stat cap="Colectas confirmadas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1}>
               <div style={bigNum(isMobile)}>{col.confirmadas} <small style={{ fontSize: 14, color: C.ink3, fontWeight: 500 }}>/ {col.totalCol}</small></div>
               <Barra pct={col.totalCol ? col.confirmadas / col.totalCol * 100 : 0} color={C.lila} />
               <div style={{ fontSize: 11, color: C.ink3, marginTop: 7 }}>{col.sinChofer} sin chofer</div>
             </Stat>
-          )}
+          ))}
           {session && col && col.totalArr > 0 && (
-            <Stat cap="Arribos" capId="arribos" live span2={!isMobile}>
+            <Stat cap="Arribos" capId="arribos" live span2={!isMobile} orden={ventanaArribos ? 1 : 2}>
               <div style={bigNum(isMobile)}>{col.llegaron} <small style={{ fontSize: 14, color: C.ink3, fontWeight: 500 }}>/ {col.totalArr}</small></div>
               <Barra pct={col.totalArr ? col.llegaron / col.totalArr * 100 : 0} color={C.teal} />
-              <div style={{ fontSize: 11, color: C.ink3, marginTop: 7 }}>llegaron al depósito</div>
+              <div style={{ fontSize: 11, color: C.ink3, marginTop: 7 }}>{col.llegaron === col.totalArr ? "llegaron todos ✓" : `faltan ${col.totalArr - col.llegaron}`}</div>
             </Stat>
           )}
           {ayer && ayer.sla != null && (
-            <Stat cap="SLA de ayer" capId="chart" span2={!isMobile}>
+            <Stat cap="SLA de ayer" capId="chart" span2={!isMobile} orden={3}>
               <div style={{ ...bigNum(isMobile), color: ayer.sla >= 98 ? C.teal : ayer.sla >= 95 ? C.ambar : C.rojo }}>{ayer.sla.toFixed(1)}%</div>
               <div style={{ fontSize: 11, color: C.ink3, marginTop: 10 }}>{fmt(ayer.envios)} envíos · {ayer.cadetes.length} en alerta</div>
             </Stat>
