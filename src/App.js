@@ -1134,11 +1134,16 @@ export default function App() {
                 const on = tab === key;
                 return (
                   <button key={key} onClick={()=>setTab(key)}
+                    // El relleno teal sólido quedaba flúo. Ahora el teal va en el texto sobre un fondo
+                    // tenue, igual que "Todos" y los botones de rango. El borde se declara SIEMPRE
+                    // (transparente cuando no está activo) para que la píldora no cambie de tamaño al
+                    // cambiar de pestaña.
                     style={{ display:"inline-flex", alignItems:"center", gap:7, height:38, padding:"0 20px", borderRadius:9,
-                      fontSize:14, fontWeight:700, cursor:"pointer", border:"none",
-                      background: on ? "#2ECFAA" : "transparent", color: on ? "#08221b" : BRAND.muted,
-                      boxShadow: on ? "0 2px 10px rgba(46,207,170,0.25)" : "none",
-                      transition:"background .15s ease, color .15s ease" }}>
+                      fontSize:14, fontWeight:700, cursor:"pointer",
+                      border:`1px solid ${on ? "rgba(46,207,170,0.45)" : "transparent"}`,
+                      background: on ? "rgba(46,207,170,0.16)" : "transparent",
+                      color: on ? "#2ECFAA" : BRAND.muted,
+                      transition:"background .15s ease, color .15s ease, border-color .15s ease" }}>
                     <i className={`ti ${icon}`} style={{ fontSize:15 }} />{label}
                   </button>
                 );
