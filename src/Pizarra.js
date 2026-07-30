@@ -649,7 +649,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
       }}
       className="fx-nota"
       style={{
-        padding: '10px 11px', borderRadius: 9,
+        padding: '8px 10px', borderRadius: 9,
         background: hover && !resuelta ? '#1a3550' : BRAND.navyCard,
         border: `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
         borderLeft: acento ? `3px solid ${acento}` : `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
@@ -715,27 +715,26 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           ) : ausCadete ? (
             /* Ausencia: el tag "🚫 Ausencia" se absorbió en el título. "No viene" va en rojo y el
                nombre en blanco — decir las dos cosas era ruido puro. El motivo, si lo hay, abajo. */
-            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
-              <span style={{ color: ROJO }}>{AUSENCIA_PREFIJO}</span>{' '}
-              <span style={{ color: BRAND.white }}>{nota.cadete}</span>
+            <div style={{ fontWeight: 600, lineHeight: 1.3, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
+              <span style={{ color: ROJO, fontSize: 16.5 }}>{AUSENCIA_PREFIJO}</span>{' '}
+              <span style={{ color: BRAND.white, fontSize: 14.5 }}>{nota.cadete}</span>
               {nota.texto && (
                 <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>{nota.texto}</span>
               )}
             </div>
           ) : (
+            /* El tag va AL LADO del título, no en una línea propia debajo: ahorra una línea por tarjeta. */
             <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.white, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
               {nota.texto}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 8, padding: '1px 7px', borderRadius: 5, background: `${tagCol}22`, border: `1px solid ${tagCol}33`, fontSize: 10.5, fontWeight: 700, color: tagCol, textDecoration: 'none', verticalAlign: 2, whiteSpace: 'nowrap' }}>
+                {t.emoji} {t.label}{nota.cadete ? ` · ${nota.cadete}` : ''}
+              </span>
             </div>
           )}
 
-          {/* Chips siempre visibles; el detalle (destino · autor · hora) solo en hover o al tocar. */}
-          {(!ausCadete || mostrarDia || hover || detalle) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
-              {!ausCadete && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 5, background: `${tagCol}22`, border: `1px solid ${tagCol}33`, fontSize: 10.5, fontWeight: 700, color: tagCol }}>
-                  {t.emoji} {t.label}{nota.cadete ? ` · ${nota.cadete}` : ''}
-                </span>
-              )}
+          {/* El chip de día ubica y queda; el resto del detalle solo en hover o al tocar. */}
+          {(mostrarDia || hover || detalle) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
               {mostrarDia && (
                 <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 5, background: `${LILA}1f`, color: LILA, fontSize: 10.5, fontWeight: 600 }}>
                   {labelDia(nota.fecha_objetivo, hoy)}
@@ -743,12 +742,12 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
               )}
               {(hover || detalle) && nota.tipo !== 'aviso' && <span style={meta}>{destinoLabel(nota, clientesById, hoy, true)}</span>}
               {(hover || detalle) && <span style={meta}>{nota.autor}{creada ? ` · ${creada}` : ''}</span>}
-            </div>
-          )}
-
-          {resuelta && (
-            <div style={{ fontSize: 10.5, color: BRAND.teal, marginTop: 5 }}>
-              ✓ {nota.tipo === 'ausencia' && nota.cubre ? `Cubierto por ${nota.cubre}` : `Resuelta por ${nota.resuelta_por || '—'}`}
+              {/* Quién la resolvió también es detalle: en reposo alcanza con el ✓ verde. */}
+              {resuelta && (hover || detalle) && (
+                <span style={{ ...meta, color: BRAND.teal }}>
+                  ✓ {nota.tipo === 'ausencia' && nota.cubre ? `Cubierto por ${nota.cubre}` : `Resuelta por ${nota.resuelta_por || '—'}`}
+                </span>
+              )}
             </div>
           )}
 
@@ -821,7 +820,10 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           )}
         </div>
 
+        {/* En desktop el ⋯ aparece al pasar el mouse (con 6 notas eran 6 puntitos flotando);
+            en táctil no hay hover, así que queda siempre visible pero tenue (ver .fx-dots). */}
         <button type="button" data-ctrl onClick={() => setMenu(m => !m)}
+          className="fx-dots" data-abierto={menu ? '1' : undefined}
           title={menu ? 'Ocultar acciones' : 'Acciones'}
           style={{
             flexShrink: 0, alignSelf: 'flex-start', width: 26, height: 26, marginTop: -2,
@@ -840,6 +842,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
 // ── COLUMNA ──
 function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar, modo, onModo, children, ...rest }) {
   const [encima, setEncima] = useState(false);
+  const [verHechas, setVerHechas] = useState(false);
   const puedeSoltar = !!col.fecha;
   const vacia = !notas.length && !hechas.length && !creando;
   // Sin decisión manual, una columna vacía se pliega sola. Con decisión manual, manda Alejo:
@@ -897,7 +900,7 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
         // del espacio se lo quede Hoy, que es la columna protagonista.
         flex: esMovil ? '1 1 100%' : (col.anchoFijo ? `0 1 ${col.anchoFijo}px` : '1 1 0'),
         minWidth: esMovil ? 0 : (col.anchoFijo ? 250 : 232),
-        display: 'flex', flexDirection: 'column', gap: 8,
+        display: 'flex', flexDirection: 'column', gap: 6,
         padding: 8, borderRadius: 12,
         // Tinte apenas perceptible del color de la columna: el cerebro ubica Hoy/Mañana/Próximos sin leer.
         background: encima ? 'rgba(46,207,170,0.07)' : `${col.color}0d`,
@@ -941,16 +944,22 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
           El separador "Hechas N" solo se muestra si hay notas pendientes ARRIBA que separar;
           si la columna solo tiene hechas, las tarjetas arrancan pegadas al encabezado y así
           quedan alineadas con las otras columnas. */}
+      {/* Lo hecho arranca plegado: la columna muestra SOLO lo que falta hacer. El separador es el
+          botón para desplegarlo. Antes las hechas ocupaban tarjeta completa y pesaban lo mismo
+          que lo pendiente, así que la columna "parecía toda lo mismo". */}
       {hechas.length > 0 && (
         <>
-          {notas.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 3px 2px' }}>
-              <span style={{ flex: 1, height: 1, background: BRAND.border }} />
-              <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)' }}>Hechas {hechas.length}</span>
-              <span style={{ flex: 1, height: 1, background: BRAND.border }} />
-            </div>
-          )}
-          {hechas.map(n => <Tarjeta key={n.id} nota={n} mostrarDia={col.mostrarDia} {...rest} />)}
+          <button type="button" onClick={() => setVerHechas(v => !v)}
+            title={verHechas ? 'Ocultar lo hecho' : 'Ver lo hecho'}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '8px 3px 2px',
+              border: 'none', background: 'transparent', cursor: 'pointer', touchAction: 'manipulation' }}>
+            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+            <span style={{ fontSize: 10.5, color: verHechas ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.3)' }}>
+              {verHechas ? '▾' : '▸'} Hechas {hechas.length}
+            </span>
+            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+          </button>
+          {verHechas && hechas.map(n => <Tarjeta key={n.id} nota={n} mostrarDia={col.mostrarDia} {...rest} />)}
         </>
       )}
 
@@ -1135,6 +1144,9 @@ function PizarraInner({ usuario }) {
         @keyframes fxNotaIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
         .fx-nota { animation: fxNotaIn .2s ease both; }
         .fx-crear { animation: fxNotaIn .18s ease both; }
+        .fx-dots { opacity: 0; transition: opacity .12s ease; }
+        .fx-nota:hover .fx-dots, .fx-dots[data-abierto] { opacity: 1; }
+        @media (hover: none) { .fx-dots { opacity: .45; } }
       `}</style>
 
       {/* Sugerencias para "lo cubre": se elige de la lista o se escribe a mano (el reemplazo

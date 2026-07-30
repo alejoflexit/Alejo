@@ -283,6 +283,11 @@ export function ordenarNotas(notas) {
       const ma = hhmmAMin(a.hora_limite) ?? 9999, mb = hhmmAMin(b.hora_limite) ?? 9999;
       if (ma !== mb) return ma - mb;
     }
+    // A igual urgencia, las ausencias van arriba: un chofer que falta te cambia el día,
+    // un sobre que traen no.
+    const rt = n => (n.tipo === 'ausencia' ? 0 : n.tipo === 'colecta' ? 1 : 2);
+    const ta = rt(a), tb = rt(b);
+    if (ta !== tb) return ta - tb;
     return String(a.created_at || '').localeCompare(String(b.created_at || ''));
   });
 }
