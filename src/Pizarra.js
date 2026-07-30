@@ -49,6 +49,7 @@ const fechaAR = (iso) => new Date(new Date(iso).getTime() - 3 * 3600 * 1000).toI
 // vive hasta que alguien la marca. Cualquiera tacha cualquier objetivo y queda quién lo hizo.
 function BloqueObjetivos({ usuario, esMovil }) {
   const [objetivos, setObjetivos] = useState([]);
+  const [abierto, setAbierto] = useState(true);   // panel abierto por defecto: ocupa el pie de la pizarra
   const [texto, setTexto] = useState('');
   const [creando, setCreando] = useState(false);
   const [verHechos, setVerHechos] = useState(false);
@@ -155,9 +156,11 @@ function BloqueObjetivos({ usuario, esMovil }) {
   };
 
   return (
-    <div style={{ marginBottom: 12, padding: '12px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.white }}>🎯 Objetivos del equipo</span>
+    <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 14px', borderBottom: abierto ? `1px solid ${BRAND.border}` : 'none' }}>
+        <span onClick={() => setAbierto(v => !v)} title={abierto ? 'Plegar' : 'Abrir'}
+          style={{ cursor: 'pointer', color: BRAND.muted, fontSize: 11, touchAction: 'manipulation' }}>{abierto ? '▾' : '▸'}</span>
+        <span onClick={() => setAbierto(v => !v)} style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.white, cursor: 'pointer' }}>🎯 Objetivos del equipo</span>
         {total > 0 && (
           <>
             <span style={{ fontSize: 11.5, color: BRAND.muted }}>{hechos.length} de {total}</span>
@@ -173,6 +176,8 @@ function BloqueObjetivos({ usuario, esMovil }) {
         </button>
       </div>
 
+      {abierto && (
+      <div style={{ padding: '2px 14px 12px' }}>
       {error && <div style={{ fontSize: 12, color: ROJO, marginTop: 8 }}>{error}</div>}
 
       {creando && (
@@ -212,6 +217,8 @@ function BloqueObjetivos({ usuario, esMovil }) {
           {verHechos && <div>{hechos.map(fila)}</div>}
         </>
       )}
+      </div>
+      )}
     </div>
   );
 }
@@ -222,7 +229,7 @@ function BloqueObjetivos({ usuario, esMovil }) {
 const BACKUP_ICON = '🛟';
 function BloqueBackups({ usuario, esMovil }) {
   const [backups, setBackups] = useState([]);
-  const [abierto, setAbierto] = useState(false);
+  const [abierto, setAbierto] = useState(true);   // panel abierto por defecto (antes escondía "N sin confirmar")
   const [zona, setZona] = useState('');
   const [error, setError] = useState('');
   const [editCubre, setEditCubre] = useState(null);
@@ -309,12 +316,12 @@ function BloqueBackups({ usuario, esMovil }) {
   };
 
   return (
-    <div style={{ flex: esMovil ? '1 1 100%' : '0 1 460px', maxWidth: esMovil ? '100%' : 460 }}>
+    <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
       <style>{`.fx-bkrow .fx-bkx{opacity:0;transition:opacity .12s}.fx-bkrow:hover .fx-bkx{opacity:1}@media(hover:none){.fx-bkrow .fx-bkx{opacity:.5}}`}</style>
       <button type="button" onClick={() => setAbierto(v => !v)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
-          border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
-        <span style={{ color: BRAND.muted }}>{abierto ? '▾' : '▸'}</span>
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 14px', cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
+          border: 'none', borderBottom: abierto ? `1px solid ${BRAND.border}` : 'none', background: 'transparent', color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
+        <span style={{ color: BRAND.muted, fontSize: 11 }}>{abierto ? '▾' : '▸'}</span>
         <span>{BACKUP_ICON} Backups</span>
         {total > 0 && (
           <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: pend > 0 ? AMBAR : BRAND.teal }}>
@@ -324,7 +331,7 @@ function BloqueBackups({ usuario, esMovil }) {
       </button>
 
       {abierto && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ padding: '10px 14px 12px' }}>
           {error && <div style={{ fontSize: 12, color: ROJO, marginBottom: 6 }}>{error}</div>}
           <div style={{ borderRadius: 10, border: bLine, overflow: 'hidden', background: 'rgba(255,255,255,0.02)' }}>
             <div style={{ display: 'flex', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.32)' }}>
@@ -758,23 +765,59 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
 }
 
 // ── COLUMNA ──
-function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar, children, ...rest }) {
+function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar, abierta, onAbrir, children, ...rest }) {
   const [encima, setEncima] = useState(false);
   const puedeSoltar = !!col.fecha;
+  const vacia = !notas.length && !hechas.length && !creando;
+
+  const dropProps = {
+    onDragOver: e => { if (puedeSoltar) { e.preventDefault(); setEncima(true); } },
+    onDragLeave: () => setEncima(false),
+    onDrop: e => {
+      setEncima(false);
+      if (!puedeSoltar) return;
+      e.preventDefault();
+      const id = Number(e.dataTransfer.getData('text/plain'));
+      if (id) onSoltar(id, col.fecha);
+    },
+  };
+
+  // ── Columna vacía → tira angosta ──
+  // Con 1 nota en Hoy, dos columnas vacías del mismo ancho se comían 2/3 de la pantalla en
+  // placeholders. Vacías se pliegan a una tira (vertical en desktop, una línea en móvil) que
+  // igual recibe notas arrastradas; un toque la abre completa.
+  if (col.colapsable && vacia && !abierta) {
+    return (
+      <div {...dropProps} onClick={onAbrir} title={`Abrir ${col.titulo}`}
+        style={{
+          flex: esMovil ? '1 1 100%' : '0 0 46px', minWidth: esMovil ? 0 : 46,
+          alignSelf: esMovil ? 'auto' : 'stretch', minHeight: esMovil ? 42 : 0,
+          display: 'flex', flexDirection: esMovil ? 'row' : 'column', alignItems: 'center',
+          gap: esMovil ? 8 : 10, padding: esMovil ? '0 14px' : '10px 0',
+          borderRadius: 12, cursor: 'pointer', touchAction: 'manipulation',
+          border: `1px ${encima ? 'dashed' : 'solid'} ${encima ? BRAND.teal : BRAND.border}`,
+          background: encima ? 'rgba(46,207,170,0.07)' : 'rgba(255,255,255,0.015)',
+          transition: 'background .15s, border-color .15s',
+        }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color, opacity: 0.7, flexShrink: 0 }} />
+        <span style={{
+          writingMode: esMovil ? 'horizontal-tb' : 'vertical-rl', textOrientation: 'mixed',
+          fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: col.color, opacity: 0.75,
+        }}>{col.titulo}</span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>0</span>
+        <span onClick={e => { e.stopPropagation(); onAbrir(); onCrear(); }} title="Nueva nota"
+          style={{ marginLeft: esMovil ? 'auto' : 0, marginTop: esMovil ? 0 : 'auto', fontSize: 15, color: 'rgba(255,255,255,0.28)', padding: '2px 6px' }}>＋</span>
+      </div>
+    );
+  }
 
   return (
-    <div
-      onDragOver={e => { if (puedeSoltar) { e.preventDefault(); setEncima(true); } }}
-      onDragLeave={() => setEncima(false)}
-      onDrop={e => {
-        setEncima(false);
-        if (!puedeSoltar) return;
-        e.preventDefault();
-        const id = Number(e.dataTransfer.getData('text/plain'));
-        if (id) onSoltar(id, col.fecha);
-      }}
+    <div {...dropProps}
       style={{
-        flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: esMovil ? 0 : 232,
+        // Vencidas no necesita crecer (nunca tiene muchas): ancho contenido para que el resto
+        // del espacio se lo quede Hoy, que es la columna protagonista.
+        flex: esMovil ? '1 1 100%' : (col.anchoFijo ? `0 1 ${col.anchoFijo}px` : '1 1 0'),
+        minWidth: esMovil ? 0 : (col.anchoFijo ? 250 : 232),
         display: 'flex', flexDirection: 'column', gap: 8,
         padding: 8, borderRadius: 12,
         // Tinte apenas perceptible del color de la columna: el cerebro ubica Hoy/Mañana/Próximos sin leer.
@@ -788,7 +831,14 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 3px 6px' }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: col.color, letterSpacing: '0.01em' }}>{col.titulo}</span>
-        <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>{notas.length}</span>
+        {/* El contador cuenta PENDIENTES; las hechas van aparte en verde (antes decía "Hoy 0"
+            con una nota resuelta a la vista y parecía un error). */}
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>
+          {notas.length}
+          {hechas.length > 0 && (
+            <span style={{ color: BRAND.teal, opacity: 0.65 }}> · {hechas.length} hecha{hechas.length > 1 ? 's' : ''}</span>
+          )}
+        </span>
       </div>
 
       {notas.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} {...rest} />)}
@@ -836,7 +886,7 @@ function PizarraInner({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creandoEn, setCreandoEn] = useState(null); // id de la columna con el creador abierto
-  const [verExtras, setVerExtras] = useState(false); // Seguimiento + Objetivos plegados al pie
+  const [abiertas, setAbiertas] = useState(() => new Set()); // columnas vacías desplegadas a mano
   const [esMovil, setEsMovil] = useState(typeof window !== 'undefined' && window.innerWidth < 900);
   useEffect(() => {
     const h = () => setEsMovil(window.innerWidth < 900);
@@ -966,10 +1016,10 @@ function PizarraInner({ usuario }) {
       .sort((a, b) => String(a.resuelta_at).localeCompare(String(b.resuelta_at)));
     return {
       cols: [
-        { id: 'vencidas', titulo: '⚠ Vencidas', color: ROJO, notas: venc, hechas: [], vacio: '', soloSiHay: true },
+        { id: 'vencidas', titulo: '⚠ Vencidas', color: ROJO, notas: venc, hechas: [], vacio: '', soloSiHay: true, anchoFijo: 300 },
         { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, vacio: '✨ El día está limpio', pista: 'Agregá lo que haya que saber hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)), hechas: comp },
-        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, vacio: '✨ Nada para mañana', pista: 'O arrastrá algo desde Hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: [] },
-        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, mostrarDia: true, vacio: '✨ Sin notas más adelante', pista: 'Ausencias avisadas, colectas especiales…', notas: prox, hechas: [] },
+        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, colapsable: true, vacio: '✨ Nada para mañana', pista: 'O arrastrá algo desde Hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: [] },
+        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, colapsable: true, mostrarDia: true, vacio: '✨ Sin notas más adelante', pista: 'Ausencias avisadas, colectas especiales…', notas: prox, hechas: [] },
       ],
     };
   }, [notas, hoy, manana, ahora]);
@@ -1018,6 +1068,8 @@ function PizarraInner({ usuario }) {
             {visibles.map(col => (
               <Columna key={col.id} col={col} notas={col.notas} hechas={col.hechas} esMovil={esMovil}
                 creando={creandoEn === col.id}
+                abierta={abiertas.has(col.id)}
+                onAbrir={() => setAbiertas(prev => new Set(prev).add(col.id))}
                 onCrear={() => setCreandoEn(col.id)}
                 onSoltar={soltar} {...props}>
                 <CreadorInline
@@ -1031,30 +1083,12 @@ function PizarraInner({ usuario }) {
             ))}
           </div>
 
-          {/* Pie: Objetivos y Backups, dos bloques plegables del mismo ancho a un costado (izquierda). */}
-          <div style={{ marginTop: 18, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-          <div style={{ flex: esMovil ? '1 1 100%' : '0 1 460px', maxWidth: esMovil ? '100%' : 460 }}>
-            <button type="button" onClick={() => setVerExtras(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
-                border: `1px solid ${sugerencias.length > 0 && !verExtras ? `${AMBAR}55` : BRAND.border}`,
-                background: sugerencias.length > 0 && !verExtras ? `${AMBAR}12` : 'rgba(255,255,255,0.02)',
-                color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
-              <span style={{ color: BRAND.muted }}>{verExtras ? '▾' : '▸'}</span>
-              <span>🎯 Objetivos</span>
-              {sugerencias.length > 0 && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto', fontSize: 11.5, fontWeight: 800, color: AMBAR }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: AMBAR, boxShadow: `0 0 8px ${AMBAR}` }} />
-                  {sugerencias.length} falta{sugerencias.length > 1 ? 's' : ''} por revisar
-                </span>
-              )}
-            </button>
-
-            {verExtras && (
-              <div style={{ marginTop: 10 }}>
-                {/* Seguimiento: la pizarra recuerda las faltas de días anteriores y pregunta si volvió */}
+          {/* Seguimiento: la pizarra recuerda las faltas de días anteriores y pregunta si volvió.
+              Es transitorio y accionable, así que va ancho completo y a la vista — antes estaba
+              escondido detrás de un acordeón cerrado y nadie lo veía. */}
                 {sugerencias.length > 0 && (
-                  <div style={{ marginBottom: 12, padding: '11px 14px', borderRadius: 12, border: `1px solid ${BRAND.teal}40`, background: 'rgba(46,207,170,0.06)' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, marginBottom: 8 }}>💡 Seguimiento</div>
+                  <div style={{ marginTop: 14, padding: '11px 14px', borderRadius: 12, border: `1px solid ${AMBAR}44`, background: `${AMBAR}0f` }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: AMBAR, marginBottom: 8 }}>💡 Seguimiento</div>
                     {sugerencias.map(a => (
                       <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${BRAND.border}` }}>
                         <span style={{ flex: 1, minWidth: 170, fontSize: 13, color: BRAND.white }}>
@@ -1070,12 +1104,13 @@ function PizarraInner({ usuario }) {
                     ))}
                   </div>
                 )}
-                <BloqueObjetivos usuario={usuario} esMovil={esMovil} />
-              </div>
-            )}
-          </div>
 
-          <BloqueBackups usuario={usuario} esMovil={esMovil} />
+          {/* Pie: Objetivos y Backups como dos paneles abiertos del mismo ancho, alineados con las
+              columnas de arriba. Antes eran dos acordeones cerrados abajo a la izquierda: el resto
+              del ancho quedaba vacío y "N sin confirmar" no se veía sin abrir nada. */}
+          <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <BloqueObjetivos usuario={usuario} esMovil={esMovil} />
+            <BloqueBackups usuario={usuario} esMovil={esMovil} />
           </div>
 
         </>
