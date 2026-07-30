@@ -595,6 +595,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
   const [comOpen, setComOpen] = useState(false);
   const [comTxt, setComTxt] = useState('');
   const [detalle, setDetalle] = useState(false);   // móvil: un toque en la tarjeta muestra destino/autor/hora
+  const [menu, setMenu] = useState(false);         // acciones escondidas atrás del ⋯
   const [cadEdit, setCadEdit] = useState(nota.cadete || '');
   const esAutor = usuario && nota.autor === usuario;
   const ausCadete = esAusenciaDeCadete(nota);
@@ -745,25 +746,28 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
-            {!resuelta && esAutor && !editando && <Accion onClick={() => setEditando(true)} titulo="Editar tu nota">✏️ Editar</Accion>}
-            <Accion onClick={() => setComOpen(o => !o)} color={comentarios.length ? BRAND.teal : undefined} titulo="Comentarios del equipo">💬 {comentarios.length || ''}</Accion>
-            {!resuelta && nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
-            {!resuelta && nota.tipo === 'ausencia' && (
-              <Accion onClick={() => setAbierta(a => !a)} color={BRAND.teal} titulo="Definir el reemplazo">
-                {nota.cubre ? `Cubre: ${nota.cubre}` : 'Cubrir'}
-              </Accion>
-            )}
-            {resuelta && <Accion onClick={() => onDesmarcar(nota)} titulo="Se marcó por error">↩ Desmarcar</Accion>}
-
-            <span style={{ marginLeft: 'auto' }}>
-              {armado ? (
-                <Accion onClick={() => onBorrar(nota)} color={ROJO} titulo="Borrar definitivamente">Borrar ✓</Accion>
-              ) : (
-                <Accion onClick={armarBorrar} titulo="Borrar la nota">✕</Accion>
+          {/* Todas las acciones viven atrás del ⋯: la tarjeta en reposo es solo ✓ + mensaje. */}
+          {menu && (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+              {!resuelta && esAutor && !editando && <Accion onClick={() => setEditando(true)} titulo="Editar tu nota">✏️ Editar</Accion>}
+              <Accion onClick={() => setComOpen(o => !o)} color={comentarios.length ? BRAND.teal : undefined} titulo="Comentarios del equipo">💬 {comentarios.length || ''}</Accion>
+              {!resuelta && nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
+              {!resuelta && nota.tipo === 'ausencia' && (
+                <Accion onClick={() => setAbierta(a => !a)} color={BRAND.teal} titulo="Definir el reemplazo">
+                  {nota.cubre ? `Cubre: ${nota.cubre}` : 'Cubrir'}
+                </Accion>
               )}
-            </span>
-          </div>
+              {resuelta && <Accion onClick={() => onDesmarcar(nota)} titulo="Se marcó por error">↩ Desmarcar</Accion>}
+
+              <span style={{ marginLeft: 'auto' }}>
+                {armado ? (
+                  <Accion onClick={() => onBorrar(nota)} color={ROJO} titulo="Borrar definitivamente">Borrar ✓</Accion>
+                ) : (
+                  <Accion onClick={armarBorrar} titulo="Borrar la nota">✕</Accion>
+                )}
+              </span>
+            </div>
+          )}
 
           {!resuelta && nota.tipo === 'ausencia' && abierta && (
             <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
@@ -810,16 +814,31 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
             </div>
           )}
         </div>
+
+        <button type="button" data-ctrl onClick={() => setMenu(m => !m)}
+          title={menu ? 'Ocultar acciones' : 'Acciones'}
+          style={{
+            flexShrink: 0, alignSelf: 'flex-start', width: 26, height: 26, marginTop: -2,
+            borderRadius: 7, cursor: 'pointer', touchAction: 'manipulation',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '1px solid transparent', fontSize: 15, fontWeight: 700, lineHeight: 1,
+            background: menu ? 'rgba(255,255,255,0.08)' : 'transparent',
+            color: menu ? BRAND.white : (hover ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.22)'),
+            transition: 'color .15s, background .15s',
+          }}>⋯</button>
       </div>
     </div>
   );
 }
 
 // ── COLUMNA ──
-function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar, abierta, onAbrir, children, ...rest }) {
+function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar, modo, onModo, children, ...rest }) {
   const [encima, setEncima] = useState(false);
   const puedeSoltar = !!col.fecha;
   const vacia = !notas.length && !hechas.length && !creando;
+  // Sin decisión manual, una columna vacía se pliega sola. Con decisión manual, manda Alejo:
+  // se puede plegar Mañana aunque tenga notas, y volver a abrir una vacía.
+  const plegada = col.colapsable && (modo ? modo === 'cerrada' : vacia);
 
   const dropProps = {
     onDragOver: e => { if (puedeSoltar) { e.preventDefault(); setEncima(true); } },
@@ -833,13 +852,14 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
     },
   };
 
-  // ── Columna vacía → tira angosta ──
+  // ── Columna plegada → tira angosta ──
   // Con 1 nota en Hoy, dos columnas vacías del mismo ancho se comían 2/3 de la pantalla en
-  // placeholders. Vacías se pliegan a una tira (vertical en desktop, una línea en móvil) que
-  // igual recibe notas arrastradas; un toque la abre completa.
-  if (col.colapsable && vacia && !abierta) {
+  // placeholders. Se pliegan a una tira (vertical en desktop, una línea en móvil) que igual
+  // recibe notas arrastradas; un toque la abre completa.
+  if (plegada) {
+    const pend = notas.length;
     return (
-      <div {...dropProps} onClick={onAbrir} title={`Abrir ${col.titulo}`}
+      <div {...dropProps} onClick={() => onModo('abierta')} title={`Abrir ${col.titulo}`}
         style={{
           flex: esMovil ? '1 1 100%' : '0 0 46px', minWidth: esMovil ? 0 : 46,
           alignSelf: esMovil ? 'auto' : 'stretch', minHeight: esMovil ? 42 : 0,
@@ -855,8 +875,10 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
           writingMode: esMovil ? 'horizontal-tb' : 'vertical-rl', textOrientation: 'mixed',
           fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: col.color, opacity: 0.75,
         }}>{col.titulo}</span>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>0</span>
-        <span onClick={e => { e.stopPropagation(); onAbrir(); onCrear(); }} title="Nueva nota"
+        {/* Plegada con notas adentro: el número se ve en el color de la columna para que no
+            parezca que ahí no hay nada. */}
+        <span style={{ fontSize: 11, fontWeight: pend ? 700 : 400, color: pend ? col.color : 'rgba(255,255,255,0.3)' }}>{pend}</span>
+        <span onClick={e => { e.stopPropagation(); onModo('abierta'); onCrear(); }} title="Nueva nota"
           style={{ marginLeft: esMovil ? 'auto' : 0, marginTop: esMovil ? 0 : 'auto', fontSize: 15, color: 'rgba(255,255,255,0.28)', padding: '2px 6px' }}>＋</span>
       </div>
     );
@@ -890,6 +912,12 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
             <span style={{ color: BRAND.teal, opacity: 0.65 }}> · {hechas.length} hecha{hechas.length > 1 ? 's' : ''}</span>
           )}
         </span>
+        {col.colapsable && (
+          <button type="button" onClick={() => onModo('cerrada')} title={`Minimizar ${col.titulo}`}
+            style={{ marginLeft: 'auto', width: 22, height: 22, borderRadius: 6, cursor: 'pointer', touchAction: 'manipulation',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent',
+              color: 'rgba(255,255,255,0.28)', fontSize: 13, lineHeight: 1 }}>‹</button>
+        )}
       </div>
 
       {notas.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} {...rest} />)}
@@ -937,7 +965,7 @@ function PizarraInner({ usuario }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creandoEn, setCreandoEn] = useState(null); // id de la columna con el creador abierto
-  const [abiertas, setAbiertas] = useState(() => new Set()); // columnas vacías desplegadas a mano
+  const [modoCol, setModoCol] = useState({}); // { manana: 'abierta' | 'cerrada' } — decisión manual sobre el auto-plegado
   const [esMovil, setEsMovil] = useState(typeof window !== 'undefined' && window.innerWidth < 900);
   useEffect(() => {
     const h = () => setEsMovil(window.innerWidth < 900);
@@ -1126,8 +1154,8 @@ function PizarraInner({ usuario }) {
             {visibles.map(col => (
               <Columna key={col.id} col={col} notas={col.notas} hechas={col.hechas} esMovil={esMovil}
                 creando={creandoEn === col.id}
-                abierta={abiertas.has(col.id)}
-                onAbrir={() => setAbiertas(prev => new Set(prev).add(col.id))}
+                modo={modoCol[col.id]}
+                onModo={v => setModoCol(m => ({ ...m, [col.id]: v }))}
                 onCrear={() => setCreandoEn(col.id)}
                 onSoltar={soltar} {...props}>
                 <CreadorInline
