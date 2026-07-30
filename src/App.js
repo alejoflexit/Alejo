@@ -1475,13 +1475,7 @@ export default function App() {
                   y los tres de color no decían nada hasta pasarles el mouse. Ahora cada uno lleva el
                   nombre y CUÁNTOS hay. Tocar el activo vuelve a "Todos". */}
               <div style={{ display:"flex", gap:12, marginBottom:"0.85rem", flexWrap:"wrap", alignItems:"center" }}>
-                {diaActivo && (
-                  <button onClick={()=>setShowRuteo(r=>!r)} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showRuteo?"#2ECFAA":BRAND.border}`, background:showRuteo?"rgba(46,207,170,0.15)":BRAND.faint, color:showRuteo?"#2ECFAA":BRAND.muted, flexShrink:0 }}>
-                    🗺️ {showRuteo ? "Ocultar ruteo" : "Ver ruteo"}
-                  </button>
-                )}
-
-                <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center", marginLeft:"auto" }}>
+                <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
                   {[["todos","Todos",null,acumulado.length,"Ver todos los cadetes"],
                     ["critico","críticos","#E24B4A",criticos,"SLA Meli por debajo del 95%"],
                     ["riesgo","en riesgo","#EF9F27",enRiesgo,"SLA Meli entre 95% y 98%"],
@@ -1503,6 +1497,12 @@ export default function App() {
                     );
                   })}
                 </div>
+
+                {diaActivo && (
+                  <button onClick={()=>setShowRuteo(r=>!r)} style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showRuteo?"#2ECFAA":BRAND.border}`, background:showRuteo?"rgba(46,207,170,0.15)":BRAND.faint, color:showRuteo?"#2ECFAA":BRAND.muted, flexShrink:0 }}>
+                    🗺️ {showRuteo ? "Ocultar ruteo" : "Ver ruteo"}
+                  </button>
+                )}
               </div>
 
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
