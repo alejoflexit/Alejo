@@ -870,6 +870,7 @@ export default function App() {
 
   const criticos       = acumulado.filter(m => m.slaMeli !== null && m.slaMeli < SLA_AMARILLO).length;
   const enRiesgo       = acumulado.filter(m => m.slaMeli !== null && m.slaMeli >= SLA_AMARILLO && m.slaMeli < SLA_VERDE).length;
+  const enOk           = acumulado.filter(m => m.slaMeli !== null && m.slaMeli >= SLA_VERDE).length;
   const sinDatosItems  = acumulado.flatMap(m => m.sinDatosDetalle || []); // envíos ML sin datos de destino (cliente desvinculado)
   const totalEnvios    = acumulado.reduce((s,m) => s+m.cantidad, 0);
   const totalML        = acumulado.reduce((s,m) => s+m.envios_ml, 0);
@@ -1469,20 +1470,39 @@ export default function App() {
           {tab==="tabla" && (
             <>
 
-              <div style={{ display:"flex", gap:8, marginBottom:"1rem", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between" }}>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                  {[["todos","Todos",null],["critico","Críticos <95%","#E24B4A"],["riesgo","En riesgo 95-98%","#EF9F27"],["ok","OK ≥98%","#2ECFAA"]].map(([key,label,color]) => (
-                    <button key={key} onClick={()=>setFiltro(key)} title={label}
-                      style={{ display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:600, cursor:"pointer", border:`1px solid ${filtro===key?"#2ECFAA":BRAND.border}`, background:filtro===key?"rgba(46,207,170,0.15)":BRAND.faint, color:filtro===key?"#2ECFAA":BRAND.muted, ...(color ? { width:32, height:32, borderRadius:"50%", padding:0 } : { padding:"5px 14px", borderRadius:20 }) }}>
-                      {color ? <span style={{ width:13, height:13, borderRadius:"50%", background:color, display:"block" }} /> : label}
-                    </button>
-                  ))}
-                </div>
+              {/* Semáforo como chips fantasma: texto tenue con su punto de color, sin caja ni borde,
+                  alineado a la derecha arriba de la tabla. Antes eran cuatro botones de 32px en fila,
+                  y los tres de color no decían nada hasta pasarles el mouse. Ahora cada uno lleva el
+                  nombre y CUÁNTOS hay. Tocar el activo vuelve a "Todos". */}
+              <div style={{ display:"flex", gap:12, marginBottom:"0.85rem", flexWrap:"wrap", alignItems:"center" }}>
                 {diaActivo && (
                   <button onClick={()=>setShowRuteo(r=>!r)} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showRuteo?"#2ECFAA":BRAND.border}`, background:showRuteo?"rgba(46,207,170,0.15)":BRAND.faint, color:showRuteo?"#2ECFAA":BRAND.muted, flexShrink:0 }}>
                     🗺️ {showRuteo ? "Ocultar ruteo" : "Ver ruteo"}
                   </button>
                 )}
+
+                <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center", marginLeft:"auto" }}>
+                  {[["todos","Todos",null,acumulado.length,"Ver todos los cadetes"],
+                    ["critico","críticos","#E24B4A",criticos,"SLA Meli por debajo del 95%"],
+                    ["riesgo","en riesgo","#EF9F27",enRiesgo,"SLA Meli entre 95% y 98%"],
+                    ["ok","OK","#2ECFAA",enOk,"SLA Meli 98% o más"]].map(([key,label,color,n,tip]) => {
+                    const on = filtro===key;
+                    return (
+                      <button key={key} type="button" title={tip}
+                        onClick={()=>setFiltro(on && key!=="todos" ? "todos" : key)}
+                        style={{ display:"inline-flex", alignItems:"center", gap:6, padding:0, border:"none",
+                          background:"none", cursor:"pointer", fontSize:11.5, whiteSpace:"nowrap",
+                          color: on ? (color || "#fff") : "rgba(255,255,255,0.38)",
+                          transition:"color .15s ease" }}>
+                        {color && <span style={{ width:7, height:7, borderRadius:"50%", background:color, display:"block",
+                          opacity: on ? 1 : 0.75, boxShadow: on ? `0 0 7px ${color}` : "none" }} />}
+                        {key==="todos"
+                          ? <span>Todos <b style={{ fontWeight:700 }}>{n}</b></span>
+                          : <span><b style={{ fontWeight:700 }}>{n}</b> {label}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
