@@ -288,8 +288,11 @@ export function ordenarNotas(notas) {
 }
 
 // Notas que trae la vista: todas las pendientes (de cualquier día) + las resueltas de hoy.
+// Trae las pendientes de cualquier día + TODO lo de hoy en adelante, resuelto o no.
+// Antes traía las resueltas solo si eran de hoy: una nota de un día futuro marcada por error
+// (un dedazo en el celular) desaparecía de la pizarra y no había forma de desmarcarla.
 export function cargarNotas(hoy = todayStr()) {
-  return sbFetch(`notas_operativas?select=*&or=(resuelta_at.is.null,fecha_objetivo.eq.${hoy})&order=created_at.asc`);
+  return sbFetch(`notas_operativas?select=*&or=(resuelta_at.is.null,fecha_objetivo.gte.${hoy})&order=created_at.asc`);
 }
 
 export function patchNota(id, patch) {

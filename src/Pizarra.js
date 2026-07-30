@@ -1012,14 +1012,21 @@ function PizarraInner({ usuario }) {
     resto.filter(n => n.fecha_objetivo > manana)
       .forEach(n => { (porDia[n.fecha_objetivo] = porDia[n.fecha_objetivo] || []).push(n); });
     const prox = Object.keys(porDia).sort().flatMap(f => ordenarNotas(porDia[f]));
-    const comp = notas.filter(n => n.resuelta_at && n.fecha_objetivo === hoy)
-      .sort((a, b) => String(a.resuelta_at).localeCompare(String(b.resuelta_at)));
+    // Las resueltas van a la columna de SU día, no solo a Hoy: si no, una nota del viernes marcada
+    // por error se evaporaba de la pizarra y encima no se podía desmarcar.
+    const porResuelta = (a, b) => String(a.resuelta_at).localeCompare(String(b.resuelta_at));
+    const hechas = notas.filter(n => n.resuelta_at);
+    const hechasDe = (f) => hechas.filter(n => n.fecha_objetivo === f).sort(porResuelta);
+    const comp = hechasDe(hoy);
+    const compMan = hechasDe(manana);
+    const compProx = hechas.filter(n => n.fecha_objetivo > manana)
+      .sort((a, b) => String(a.fecha_objetivo).localeCompare(String(b.fecha_objetivo)) || porResuelta(a, b));
     return {
       cols: [
         { id: 'vencidas', titulo: '⚠ Vencidas', color: ROJO, notas: venc, hechas: [], vacio: '', soloSiHay: true, anchoFijo: 300 },
         { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, vacio: '✨ El día está limpio', pista: 'Agregá lo que haya que saber hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)), hechas: comp },
-        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, colapsable: true, vacio: '✨ Nada para mañana', pista: 'O arrastrá algo desde Hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: [] },
-        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, colapsable: true, mostrarDia: true, vacio: '✨ Sin notas más adelante', pista: 'Ausencias avisadas, colectas especiales…', notas: prox, hechas: [] },
+        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, colapsable: true, vacio: '✨ Nada para mañana', pista: 'O arrastrá algo desde Hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: compMan },
+        { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, colapsable: true, mostrarDia: true, vacio: '✨ Sin notas más adelante', pista: 'Ausencias avisadas, colectas especiales…', notas: prox, hechas: compProx },
       ],
     };
   }, [notas, hoy, manana, ahora]);
