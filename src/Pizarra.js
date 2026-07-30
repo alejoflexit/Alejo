@@ -11,7 +11,7 @@ import {
   editarNota, cargarComentarios, agregarComentario, borrarComentario, useComentariosRealtime,
   cargarObjetivos, crearObjetivo, marcarObjetivo, desmarcarObjetivo, borrarObjetivo, patchObjetivo,
   useObjetivosRealtime, aplicarCambioObjetivo,
-  cargarBackups, crearBackup, patchBackup, borrarBackup, useBackupsRealtime, usePresencia,
+  cargarBackups, crearBackup, patchBackup, borrarBackup, useBackupsRealtime,
 } from './colectasShared';
 
 const ROJO = '#E24B4A';
@@ -594,12 +594,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
   const tagCol = TAG_COLOR[nota.tipo] || 'rgba(255,255,255,0.5)';
   const urgente = !resuelta && nota.prioridad === 'ahora';
   const conHora = !resuelta && nota.prioridad === 'hora' && nota.hora_limite;
-  // Barra de atención a la izquierda, derivada del tipo/estado (sin selector de prioridad):
-  // ausencia sin cubrir = rojo (pide acción), ausencia con reemplazo o colecta = ámbar, resuelta = verde.
-  const acento = resuelta ? BRAND.teal
-    : nota.tipo === 'ausencia' ? (nota.cubre ? AMBAR : ROJO)
-    : nota.tipo === 'colecta' ? AMBAR
-    : null;
+  const acento = urgente ? ROJO : conHora ? AMBAR : null;
   const creada = nota.created_at
     ? new Date(new Date(nota.created_at).getTime() - 3 * 3600 * 1000).toISOString().slice(11, 16)
     : '';
@@ -613,10 +608,10 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
       onMouseLeave={() => setHover(false)}
       className="fx-nota"
       style={{
-        padding: '13px 14px', borderRadius: 10,
+        padding: '10px 11px', borderRadius: 9,
         background: hover && !resuelta ? '#1a3550' : BRAND.navyCard,
         border: `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
-        borderLeft: acento ? `4px solid ${acento}` : `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
+        borderLeft: acento ? `3px solid ${acento}` : `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
         boxShadow: hover && !resuelta ? '0 4px 14px rgba(0,0,0,0.35)' : 'none',
         transform: hover && !resuelta ? 'translateY(-1px)' : 'none',
         opacity: resuelta ? 0.45 : 1, cursor: arrastrable && !resuelta ? 'grab' : 'default',
@@ -694,25 +689,18 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
-            {/* Acción principal siempre visible; el resto aparece al pasar el mouse (en touch, siempre). */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+            {!resuelta && esAutor && !editando && <Accion onClick={() => setEditando(true)} titulo="Editar tu nota">✏️ Editar</Accion>}
+            <Accion onClick={() => setComOpen(o => !o)} color={comentarios.length ? BRAND.teal : undefined} titulo="Comentarios del equipo">💬 {comentarios.length || ''}</Accion>
+            {!resuelta && nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
             {!resuelta && nota.tipo === 'ausencia' && (
               <Accion onClick={() => setAbierta(a => !a)} color={BRAND.teal} titulo="Definir el reemplazo">
                 {nota.cubre ? `Cubre: ${nota.cubre}` : 'Cubrir'}
               </Accion>
             )}
             {resuelta && <Accion onClick={() => onDesmarcar(nota)} titulo="Se marcó por error">↩ Desmarcar</Accion>}
-            {comentarios.length > 0 && (
-              <Accion onClick={() => setComOpen(o => !o)} color={BRAND.teal} titulo="Comentarios del equipo">💬 {comentarios.length}</Accion>
-            )}
 
-            <span className="fx-acc-sec" style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-              {comentarios.length === 0 && <Accion onClick={() => setComOpen(o => !o)} titulo="Comentarios del equipo">💬</Accion>}
-              {!resuelta && esAutor && !editando && <Accion onClick={() => setEditando(true)} titulo="Editar tu nota">✏️ Editar</Accion>}
-              {!resuelta && nota.fecha_objetivo !== hoy && <Accion onClick={() => onMover(nota, hoy)} titulo="Traer para hoy">↓ Hoy</Accion>}
-            </span>
-
-            <span className="fx-acc-sec" style={{ marginLeft: 'auto' }}>
+            <span style={{ marginLeft: 'auto' }}>
               {armado ? (
                 <Accion onClick={() => onBorrar(nota)} color={ROJO} titulo="Borrar definitivamente">Borrar ✓</Accion>
               ) : (
@@ -841,107 +829,6 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
   );
 }
 
-// ── BARRA SUPERIOR tipo widget: saludo + contadores en vivo ──
-function TileNum({ icon, label, children, color, bar }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '2px 4px', minWidth: 92 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: BRAND.muted, fontWeight: 600 }}>
-        <span style={{ fontSize: 12.5 }}>{icon}</span>{label}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', color: color || BRAND.white, lineHeight: 1 }}>{children}</span>
-        {bar != null && (
-          <span style={{ width: 54, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.09)', overflow: 'hidden', alignSelf: 'center' }}>
-            <span style={{ display: 'block', width: `${bar}%`, height: '100%', background: BRAND.teal, transition: 'width .3s' }} />
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BarraWidget({ usuario, online, coberturas, objPct, objHechos, objTotal, coment24, esMovil, ahora }) {
-  const min = minutosAR(ahora);
-  const saludo = min < 720 ? '☀️ Buenos días' : min < 1200 ? '🌤️ Buenas tardes' : '🌙 Buenas noches';
-  const fechaTxt = (() => {
-    const d = new Date(todayStr() + 'T12:00:00');
-    return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
-  })();
-  const sep = <span style={{ width: 1, alignSelf: 'stretch', background: BRAND.border, margin: '2px 0' }} />;
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: esMovil ? 14 : 20, flexWrap: 'wrap',
-      padding: esMovil ? '12px 14px' : '13px 18px', marginBottom: 14, borderRadius: 14,
-      border: `1px solid ${BRAND.border}`, background: 'linear-gradient(180deg, rgba(46,207,170,0.05), rgba(255,255,255,0.02))',
-    }}>
-      <div style={{ minWidth: 150 }}>
-        <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em', color: BRAND.white }}>{saludo}, {usuario}</div>
-        <div style={{ fontSize: 12, color: BRAND.muted, textTransform: 'capitalize' }}>{fechaTxt}</div>
-      </div>
-      {!esMovil && sep}
-      <TileNum icon="👥" label="En línea" color={online.length ? BRAND.teal : BRAND.muted}>
-        <span title={online.join(', ')}>{online.length || '—'}</span>
-      </TileNum>
-      {!esMovil && sep}
-      <TileNum icon="⚠️" label="Coberturas" color={coberturas > 0 ? AMBAR : BRAND.teal}>{coberturas}</TileNum>
-      {!esMovil && sep}
-      <TileNum icon="🎯" label="Objetivos" bar={objPct}>
-        <span title={`${objHechos} de ${objTotal}`}>{objPct}%</span>
-      </TileNum>
-      {!esMovil && sep}
-      <TileNum icon="💬" label="Comentarios 24h" color={coment24 > 0 ? BRAND.teal : BRAND.muted}>{coment24}</TileNum>
-    </div>
-  );
-}
-
-// ── ACTIVIDAD RECIENTE: feed de los últimos movimientos del equipo ──
-function haceCuanto(t, ahora) {
-  const ms = ahora - Date.parse(t);
-  if (isNaN(ms)) return '';
-  const m = Math.round(ms / 60000);
-  if (m < 1) return 'recién';
-  if (m < 60) return `hace ${m} min`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `hace ${h} h`;
-  return `hace ${Math.round(h / 24)} d`;
-}
-function ActividadReciente({ notas, comentarios, objetivos, ahora, esMovil }) {
-  const notaById = useMemo(() => Object.fromEntries(notas.map(n => [n.id, n])), [notas]);
-  const eventos = useMemo(() => {
-    const ev = [];
-    notas.forEach(n => {
-      if (n.resuelta_at) ev.push({ t: n.resuelta_at, ic: '✅', c: BRAND.teal, txt: `${n.resuelta_por || 'Alguien'} ${n.tipo === 'ausencia' ? 'cubrió' : 'resolvió'} ${n.texto}` });
-      else if (n.created_at) ev.push({ t: n.created_at, ic: '📝', c: '#8EC5FF', txt: `${n.autor || 'Alguien'} anotó ${n.texto}` });
-    });
-    comentarios.forEach(c => {
-      const n = notaById[c.nota_id];
-      ev.push({ t: c.created_at, ic: '💬', c: LILA, txt: `${c.autor || 'Alguien'} comentó${n ? ` en ${n.texto}` : ''}` });
-    });
-    objetivos.forEach(o => {
-      if (o.hecho_at) ev.push({ t: o.hecho_at, ic: '🎯', c: BRAND.teal, txt: `${o.hecho_por || 'Alguien'} cumplió: ${o.texto}` });
-    });
-    return ev.filter(e => e.t).sort((a, b) => String(b.t).localeCompare(String(a.t))).slice(0, 6);
-  }, [notas, comentarios, objetivos, notaById]);
-
-  if (!eventos.length) return null;
-  return (
-    <div style={{ marginTop: 16, padding: '12px 14px', borderRadius: 14, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', maxWidth: esMovil ? '100%' : 620 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.white, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
-        <span>⚡</span> Actividad reciente
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {eventos.map((e, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 2px', borderTop: i ? `1px solid ${BRAND.border}` : 'none' }}>
-            <span style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, background: `${e.c}1e` }}>{e.ic}</span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: BRAND.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.txt}</span>
-            <span style={{ flexShrink: 0, fontSize: 11, color: BRAND.muted }}>{haceCuanto(e.t, ahora)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function PizarraInner({ usuario }) {
   const [notas, setNotas] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -1006,19 +893,6 @@ function PizarraInner({ usuario }) {
     setNotas(prev => prev.map(n => n.id === nota.id ? { ...n, ...campos } : n));
     editarNota(nota.id, campos).catch(e => { setError('No se pudo editar: ' + e.message); recargar(); });
   };
-
-  // Objetivos (para el contador de la barra superior; el bloque de abajo tiene su propia copia).
-  const [objetivos, setObjetivos] = useState([]);
-  useEffect(() => { cargarObjetivos().then(r => setObjetivos(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
-  useObjetivosRealtime(useCallback((row, ev) => setObjetivos(prev => aplicarCambioObjetivo(prev, row, ev)), []));
-
-  // Presencia en vivo (quién tiene la Pizarra abierta) y métricas de la barra superior.
-  const online = usePresencia(usuario);
-  const coberturas = useMemo(() => notas.filter(n => n.tipo === 'ausencia' && n.fecha_objetivo === hoy && !n.resuelta_at).length, [notas, hoy]);
-  const objTotal = objetivos.length;
-  const objHechos = objetivos.filter(o => o.hecho_at).length;
-  const objPct = objTotal ? Math.round((objHechos / objTotal) * 100) : 0;
-  const coment24 = useMemo(() => { const lim = ahora - 24 * 3600 * 1000; return comentarios.filter(c => c.created_at && Date.parse(c.created_at) >= lim).length; }, [comentarios, ahora]);
 
   // ── Seguimiento: ausencias de días anteriores → sugerir si el cadete se reincorporó ──
   const nrm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
@@ -1116,14 +990,9 @@ function PizarraInner({ usuario }) {
   return (
     <div>
       <style>{`
-        @keyframes fxNotaIn { from { opacity: 0; transform: translateY(-6px) scale(.99); } to { opacity: 1; transform: none; } }
-        .fx-nota { animation: fxNotaIn .22s cubic-bezier(.2,.7,.3,1) both; }
+        @keyframes fxNotaIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .fx-nota { animation: fxNotaIn .2s ease both; }
         .fx-crear { animation: fxNotaIn .18s ease both; }
-        /* Acciones secundarias: al hover en desktop, siempre visibles en touch. */
-        .fx-acc-sec { opacity: 0; transition: opacity .14s ease; }
-        .fx-nota:hover .fx-acc-sec { opacity: 1; }
-        @media (hover: none) { .fx-acc-sec { opacity: 1; } }
-        @media (prefers-reduced-motion: reduce) { .fx-nota { animation: none; } }
       `}</style>
 
       {/* Sugerencias para "lo cubre": se elige de la lista o se escribe a mano (el reemplazo
@@ -1143,11 +1012,6 @@ function PizarraInner({ usuario }) {
         <div style={{ color: BRAND.muted, padding: '3rem', textAlign: 'center' }}>Cargando…</div>
       ) : (
         <>
-          {/* Barra superior tipo widget: saludo + contadores en vivo. */}
-          <BarraWidget usuario={usuario} online={online} coberturas={coberturas}
-            objPct={objPct} objHechos={objHechos} objTotal={objTotal} coment24={coment24}
-            esMovil={esMovil} ahora={ahora} />
-
           {/* Lo principal arriba: las columnas Hoy / Mañana / Próximos. Cada una tiene su
               propio "+ Nueva nota" (antes había además un botón enorme arriba, molesto). */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
@@ -1166,9 +1030,6 @@ function PizarraInner({ usuario }) {
               </Columna>
             ))}
           </div>
-
-          {/* Actividad reciente: le da vida sin ocupar lugar fijo (se esconde si no hay nada). */}
-          <ActividadReciente notas={notas} comentarios={comentarios} objetivos={objetivos} ahora={ahora} esMovil={esMovil} />
 
           {/* Pie plegable: Seguimiento + Objetivos. Escondidos por defecto; si hay
               faltas por revisar, el botón muestra un aviso ámbar tipo notificación. */}
