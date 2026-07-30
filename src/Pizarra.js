@@ -224,25 +224,24 @@ function BloqueBackups({ usuario, esMovil }) {
   const [backups, setBackups] = useState([]);
   const [abierto, setAbierto] = useState(false);
   const [zona, setZona] = useState('');
-  const [creando, setCreando] = useState(false);
   const [error, setError] = useState('');
   const [editCubre, setEditCubre] = useState(null);
   const [cubreDraft, setCubreDraft] = useState('');
-  const inputRef = useRef(null);
+  const [editZona, setEditZona] = useState(null);
+  const [zonaDraft, setZonaDraft] = useState('');
 
   const recargar = useCallback(() => {
     cargarBackups().then(r => setBackups(Array.isArray(r) ? r : [])).catch(() => {});
   }, []);
   useEffect(() => { recargar(); }, [recargar]);
   useBackupsRealtime(useCallback((row, ev) => setBackups(prev => aplicarCambioObjetivo(prev, row, ev)), []));
-  useEffect(() => { if (creando && inputRef.current) inputRef.current.focus(); }, [creando]);
 
   const total = backups.length;
   const pend = backups.filter(b => b.estado !== 'ok').length;
 
   const agregar = () => {
     const z = zona.trim();
-    if (!z) { setCreando(false); return; }
+    if (!z) return;
     setZona('');
     crearBackup(z, usuario)
       .then(r => { const fila = Array.isArray(r) ? r[0] : r; if (fila?.id) setBackups(prev => prev.some(b => b.id === fila.id) ? prev : [...prev, fila]); })
@@ -258,47 +257,53 @@ function BloqueBackups({ usuario, esMovil }) {
     borrarBackup(b.id).catch(e => { setError('No se pudo borrar: ' + e.message); recargar(); });
   };
   const abrirCubre = (b) => { setEditCubre(b.id); setCubreDraft(b.cubre || ''); };
-  const cerrarCubre = () => { setEditCubre(null); setCubreDraft(''); };
   const guardarCubre = (b) => {
     const t = cubreDraft.trim();
     setBackups(prev => prev.map(x => x.id === b.id ? { ...x, cubre: t || null } : x));
-    cerrarCubre();
+    setEditCubre(null); setCubreDraft('');
     patchBackup(b.id, { cubre: t || null }).catch(e => { setError('No se pudo guardar: ' + e.message); recargar(); });
   };
+  const abrirZona = (b) => { setEditZona(b.id); setZonaDraft(b.zona || ''); };
+  const guardarZona = (b) => {
+    const t = zonaDraft.trim();
+    if (!t) { setEditZona(null); return; }
+    setBackups(prev => prev.map(x => x.id === b.id ? { ...x, zona: t } : x));
+    setEditZona(null); setZonaDraft('');
+    patchBackup(b.id, { zona: t }).catch(e => { setError('No se pudo guardar: ' + e.message); recargar(); });
+  };
 
-  // Opción A: una línea por backup — [check] Zona · Quién … ✕. Todo pegado a la izquierda.
+  const bLine = `1px solid ${BRAND.border}`;
+  const cellInput = { width: '100%', fontSize: 13, padding: '2px 0', borderRadius: 0, border: 'none', background: 'transparent', color: BRAND.white, outline: 'none' };
+  const cellTxt = { fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
+
+  // Cuadriculado tipo Apple Notes: izquierda quién/qué necesita backup, derecha quién lo cubre.
+  // Al confirmar (check) se tacha toda la fila. Mínimo ruido: sin chips ni botones sueltos.
   const fila = (b) => {
     const ok = b.estado === 'ok';
     return (
-      <div key={b.id} className="fx-nota fx-bkrow"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 7px', borderRadius: 8 }}>
-        <button type="button" onClick={() => alternarEstado(b)}
-          title={ok ? 'Marcar como pendiente' : 'Confirmar backup'}
-          style={{ width: 19, height: 19, flexShrink: 0, borderRadius: 6, cursor: 'pointer', touchAction: 'manipulation',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800,
-            border: `2px solid ${ok ? BRAND.teal : 'rgba(255,255,255,0.28)'}`,
-            background: ok ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>
-          {ok ? '✓' : ''}
-        </button>
-        <span style={{ fontSize: 13.5, fontWeight: 600, color: ok ? BRAND.muted : BRAND.white, textDecoration: ok ? 'line-through' : 'none', whiteSpace: 'nowrap' }}>{b.zona}</span>
-        <span style={{ color: 'rgba(255,255,255,0.22)', fontSize: 12 }}>·</span>
-        {editCubre === b.id ? (
-          <input autoFocus value={cubreDraft} onChange={e => setCubreDraft(e.target.value)}
-            placeholder="quién la cubre…" maxLength={60} list="fx-choferes"
-            onKeyDown={e => { if (e.key === 'Enter') guardarCubre(b); if (e.key === 'Escape') cerrarCubre(); }}
-            onBlur={() => guardarCubre(b)}
-            style={{ width: 140, fontSize: 12.5, padding: '3px 7px', borderRadius: 7, border: `1px solid ${BRAND.teal}66`, background: BRAND.navyCard, color: BRAND.white, outline: 'none' }} />
-        ) : (
-          <button type="button" onClick={() => abrirCubre(b)}
-            title={b.cubre ? 'Editar quién la cubre' : 'Asignar quién la cubre'}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 2px', touchAction: 'manipulation',
-              fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
-              color: b.cubre ? BRAND.teal : 'rgba(255,255,255,0.32)', fontStyle: b.cubre ? 'normal' : 'italic' }}>
-            {b.cubre || 'asignar quién'}
-          </button>
-        )}
-        <button type="button" onClick={() => quitar(b)} title="Borrar backup" className="fx-bkx"
-          style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: 13, padding: '2px 4px', touchAction: 'manipulation' }}>✕</button>
+      <div key={b.id} className="fx-bkrow" style={{ display: 'flex', borderTop: bLine }}>
+        <div style={{ flex: '1 1 56%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRight: bLine }}>
+          <button type="button" onClick={() => alternarEstado(b)} title={ok ? 'Marcar pendiente' : 'Confirmar'}
+            style={{ width: 18, height: 18, flexShrink: 0, borderRadius: 5, cursor: 'pointer', touchAction: 'manipulation', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, border: `2px solid ${ok ? BRAND.teal : 'rgba(255,255,255,0.28)'}`, background: ok ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>{ok ? '✓' : ''}</button>
+          {editZona === b.id ? (
+            <input autoFocus value={zonaDraft} onChange={e => setZonaDraft(e.target.value)} maxLength={60}
+              onKeyDown={e => { if (e.key === 'Enter') guardarZona(b); if (e.key === 'Escape') setEditZona(null); }} onBlur={() => guardarZona(b)}
+              style={cellInput} />
+          ) : (
+            <span onClick={() => abrirZona(b)} style={{ ...cellTxt, flex: 1, cursor: 'text', fontWeight: 600, color: ok ? BRAND.muted : BRAND.white, textDecoration: ok ? 'line-through' : 'none' }}>{b.zona}</span>
+          )}
+        </div>
+        <div style={{ flex: '1 1 44%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px' }}>
+          {editCubre === b.id ? (
+            <input autoFocus value={cubreDraft} onChange={e => setCubreDraft(e.target.value)} maxLength={60} list="fx-choferes"
+              onKeyDown={e => { if (e.key === 'Enter') guardarCubre(b); if (e.key === 'Escape') { setEditCubre(null); setCubreDraft(''); } }} onBlur={() => guardarCubre(b)}
+              style={cellInput} />
+          ) : (
+            <span onClick={() => abrirCubre(b)} style={{ ...cellTxt, flex: 1, cursor: 'text', fontWeight: 600, color: b.cubre ? (ok ? BRAND.muted : BRAND.teal) : 'rgba(255,255,255,0.3)', fontStyle: b.cubre ? 'normal' : 'italic', textDecoration: ok && b.cubre ? 'line-through' : 'none' }}>{b.cubre || 'quién…'}</span>
+          )}
+          <button type="button" onClick={() => quitar(b)} title="Borrar" className="fx-bkx"
+            style={{ flexShrink: 0, background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: 12, padding: '0 2px', touchAction: 'manipulation' }}>✕</button>
+        </div>
       </div>
     );
   };
@@ -319,32 +324,25 @@ function BloqueBackups({ usuario, esMovil }) {
       </button>
 
       {abierto && (
-        <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)' }}>
+        <div style={{ marginTop: 8 }}>
           {error && <div style={{ fontSize: 12, color: ROJO, marginBottom: 6 }}>{error}</div>}
-
-          {total > 0 && backups.map(fila)}
-
-          {creando ? (
-            <div className="fx-crear" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px' }}>
-              <input ref={inputRef} value={zona} onChange={e => setZona(e.target.value)}
-                placeholder="Zona a cubrir (ej. moto en La Lucila)"
-                onKeyDown={e => { if (e.key === 'Enter') agregar(); if (e.key === 'Escape') { setZona(''); setCreando(false); } }}
-                onBlur={agregar}
-                style={{ ...inpSt, flex: 1, fontSize: 12.5, padding: '5px 8px' }} />
+          <div style={{ borderRadius: 10, border: bLine, overflow: 'hidden', background: 'rgba(255,255,255,0.02)' }}>
+            <div style={{ display: 'flex', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.32)' }}>
+              <div style={{ flex: '1 1 56%', padding: '6px 10px', borderRight: bLine }}>Necesita backup</div>
+              <div style={{ flex: '1 1 44%', padding: '6px 10px' }}>Lo cubre</div>
             </div>
-          ) : (
-            <button type="button" onClick={() => setCreando(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 7px', background: 'none', border: 'none', cursor: 'pointer', color: BRAND.teal, fontSize: 12.5, fontWeight: 700, touchAction: 'manipulation' }}>
-              <span style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px dashed ${BRAND.teal}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>＋</span>
-              agregar backup
-            </button>
-          )}
-
-          {total === 0 && !creando && (
-            <div style={{ fontSize: 12, color: BRAND.muted, padding: '2px 7px 6px' }}>
-              Refuerzos para reforzar una zona (típico los lunes).
+            {backups.map(fila)}
+            {/* Fila de alta: escribí en la celda izquierda, Enter para sumar. */}
+            <div style={{ display: 'flex', borderTop: bLine }}>
+              <div style={{ flex: '1 1 56%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRight: bLine }}>
+                <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: 14, flexShrink: 0 }}>＋</span>
+                <input value={zona} onChange={e => setZona(e.target.value)} placeholder="cadete o zona…"
+                  onKeyDown={e => { if (e.key === 'Enter') agregar(); if (e.key === 'Escape') setZona(''); }}
+                  style={cellInput} />
+              </div>
+              <div style={{ flex: '1 1 44%', padding: '7px 10px', fontSize: 12.5, color: 'rgba(255,255,255,0.22)' }}>—</div>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
