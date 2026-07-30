@@ -304,7 +304,7 @@ function BloqueBackups({ usuario, esMovil }) {
   };
 
   return (
-    <div style={{ marginTop: 10, maxWidth: esMovil ? '100%' : 460 }}>
+    <div style={{ flex: esMovil ? '1 1 100%' : '0 1 460px', maxWidth: esMovil ? '100%' : 460 }}>
       <style>{`.fx-bkrow .fx-bkx{opacity:0;transition:opacity .12s}.fx-bkrow:hover .fx-bkx{opacity:1}@media(hover:none){.fx-bkrow .fx-bkx{opacity:.5}}`}</style>
       <button type="button" onClick={() => setAbierto(v => !v)}
         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
@@ -782,7 +782,9 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
         // Tinte apenas perceptible del color de la columna: el cerebro ubica Hoy/Mañana/Próximos sin leer.
         background: encima ? 'rgba(46,207,170,0.07)' : `${col.color}0d`,
         border: `1px dashed ${encima ? BRAND.teal : 'transparent'}`,
-        transition: 'background .12s, border-color .12s',
+        // Hoy es el protagonista; Mañana y Próximos van apenas más apagados.
+        opacity: (col.id === 'manana' || col.id === 'proximos') ? 0.72 : 1,
+        transition: 'background .12s, border-color .12s, opacity .12s',
       }}>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 3px 6px' }}>
@@ -1031,16 +1033,16 @@ function PizarraInner({ usuario }) {
             ))}
           </div>
 
-          {/* Pie plegable: Seguimiento + Objetivos. Escondidos por defecto; si hay
-              faltas por revisar, el botón muestra un aviso ámbar tipo notificación. */}
-          <div style={{ marginTop: 18 }}>
+          {/* Pie: Objetivos y Backups, dos bloques plegables del mismo ancho a un costado (izquierda). */}
+          <div style={{ marginTop: 18, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: esMovil ? '1 1 100%' : '0 1 460px', maxWidth: esMovil ? '100%' : 460 }}>
             <button type="button" onClick={() => setVerExtras(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 42, padding: '0 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
                 border: `1px solid ${sugerencias.length > 0 && !verExtras ? `${AMBAR}55` : BRAND.border}`,
                 background: sugerencias.length > 0 && !verExtras ? `${AMBAR}12` : 'rgba(255,255,255,0.02)',
                 color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
               <span style={{ color: BRAND.muted }}>{verExtras ? '▾' : '▸'}</span>
-              <span>Seguimiento y objetivos</span>
+              <span>🎯 Objetivos</span>
               {sugerencias.length > 0 && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto', fontSize: 11.5, fontWeight: 800, color: AMBAR }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: AMBAR, boxShadow: `0 0 8px ${AMBAR}` }} />
@@ -1076,6 +1078,7 @@ function PizarraInner({ usuario }) {
           </div>
 
           <BloqueBackups usuario={usuario} esMovil={esMovil} />
+          </div>
 
         </>
       )}
