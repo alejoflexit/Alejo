@@ -485,6 +485,42 @@ export function patchBackup(id, patch) {
 export const borrarBackup = (id) =>
   sbFetch(`backups_equipo?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
 
+// Presencia en vivo: quién tiene la Pizarra abierta ahora. Usa el canal de presence de Supabase
+// Realtime (efímero, no toca la base). Devuelve la lista de nombres únicos conectados.
+export function usePresencia(nombre, activo = true) {
+  const [online, setOnline] = useState([]);
+  useEffect(() => {
+    if (!activo || typeof window === 'undefined' || !window.supabase || !nombre) return;
+    let client = null, channel = null, cancelled = false, retryTimer = null;
+    const cleanup = () => {
+      try { if (channel && client) client.removeChannel(channel); } catch {}
+      try { if (client) client.realtime.disconnect(); } catch {}
+      channel = null; client = null;
+    };
+    const connect = async () => {
+      const token = await getToken().catch(() => null);
+      if (!token || cancelled) return;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      client.realtime.setAuth(token);
+      channel = client.channel('pizarra-presencia', { config: { presence: { key: nombre } } });
+      channel.on('presence', { event: 'sync' }, () => {
+        const st = channel.presenceState();
+        const nombres = [...new Set(Object.values(st).flat().map(p => p.nombre).filter(Boolean))];
+        setOnline(nombres);
+      }).subscribe(async status => {
+        if (status === 'SUBSCRIBED') { try { await channel.track({ nombre, at: Date.now() }); } catch {} }
+        else if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) {
+          clearTimeout(retryTimer);
+          retryTimer = setTimeout(() => { cleanup(); connect(); }, 5000);
+        }
+      });
+    };
+    connect();
+    return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
+  }, [nombre, activo]);
+  return online;
+}
+
 export function useBackupsRealtime(onRow, activo = true) {
   const cb = useRef(onRow);
   useEffect(() => { cb.current = onRow; }, [onRow]);
