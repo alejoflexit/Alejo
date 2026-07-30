@@ -299,7 +299,7 @@ function BloqueBackups({ usuario, esMovil }) {
               onKeyDown={e => { if (e.key === 'Enter') guardarCubre(b); if (e.key === 'Escape') { setEditCubre(null); setCubreDraft(''); } }} onBlur={() => guardarCubre(b)}
               style={cellInput} />
           ) : (
-            <span onClick={() => abrirCubre(b)} style={{ ...cellTxt, flex: 1, cursor: 'text', fontWeight: 600, color: b.cubre ? (ok ? BRAND.muted : BRAND.teal) : 'rgba(255,255,255,0.3)', fontStyle: b.cubre ? 'normal' : 'italic', textDecoration: ok && b.cubre ? 'line-through' : 'none' }}>{b.cubre || 'quién…'}</span>
+            <span onClick={() => abrirCubre(b)} style={{ ...cellTxt, flex: 1, cursor: 'text', fontWeight: 600, color: b.cubre ? (ok ? BRAND.muted : LILA) : 'rgba(255,255,255,0.3)', fontStyle: b.cubre ? 'normal' : 'italic', textDecoration: ok && b.cubre ? 'line-through' : 'none' }}>{b.cubre || 'quién…'}</span>
           )}
           <button type="button" onClick={() => quitar(b)} title="Borrar" className="fx-bkx"
             style={{ flexShrink: 0, background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: 12, padding: '0 2px', touchAction: 'manipulation' }}>✕</button>
