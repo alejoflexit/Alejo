@@ -1124,6 +1124,28 @@ export default function App() {
         </div>
       ) : (
         <>
+          {/* Switch Tabla / Análisis — ARRIBA DE TODO. Antes vivía después de los KPIs, los filtros,
+              la alerta de críticos y el badge de sin-datos, dibujado como dos textos subrayados: había
+              que scrollear para encontrarlo y pesaba menos que cualquier KPI. Ahora es un segmentado
+              (fondo hundido + píldora sólida en la activa) pegado al arranque de la vista. */}
+          {!isMobile && (
+            <div style={{ display:"inline-flex", gap:4, padding:4, marginBottom:"1.25rem", borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
+              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => {
+                const on = tab === key;
+                return (
+                  <button key={key} onClick={()=>setTab(key)}
+                    style={{ display:"inline-flex", alignItems:"center", gap:7, height:38, padding:"0 20px", borderRadius:9,
+                      fontSize:14, fontWeight:700, cursor:"pointer", border:"none",
+                      background: on ? "#2ECFAA" : "transparent", color: on ? "#08221b" : BRAND.muted,
+                      boxShadow: on ? "0 2px 10px rgba(46,207,170,0.25)" : "none",
+                      transition:"background .15s ease, color .15s ease" }}>
+                    <i className={`ti ${icon}`} style={{ fontSize:15 }} />{label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* KPIs */}
           {isMobile ? (
             <>
@@ -1209,18 +1231,6 @@ export default function App() {
           <SinDatosBadge items={sinDatosItems} />
 
 
-          {/* Tabs + exportar — solo desktop */}
-          {!isMobile && (
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BRAND.border}`, marginBottom:"1.5rem" }}>
-            <div style={{ display:"flex", gap:4 }}>
-              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => (
-                <button key={key} onClick={()=>setTab(key)} style={{ padding:"8px 18px", fontSize:13, fontWeight:600, cursor:"pointer", border:"none", background:"none", marginBottom:-1, color:tab===key?"#2ECFAA":BRAND.muted, borderBottom:`2px solid ${tab===key?"#2ECFAA":"transparent"}` }}>
-                  <i className={`ti ${icon}`} style={{ marginRight:6, fontSize:14 }} />{label}
-                </button>
-              ))}
-            </div>
-          </div>
-          )}
           {/* Bottom nav — solo mobile */}
           {isMobile && (
             <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#0D0D2B", borderTop:`1px solid ${BRAND.border}`, display:"flex", alignItems:"stretch", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
