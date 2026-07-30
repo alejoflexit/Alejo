@@ -121,13 +121,21 @@ function Buzon({ notas, onIr, onResolver }) {
 }
 
 // ── Stat card glass ──
-function Stat({ cap, capId, live, children, span2, onClick, orden }) {
+// Una tarjeta con `onClick` es un acceso a su sección: se marca con un chevron tenue a la
+// derecha del encabezado y el borde se enciende al pasar el mouse. Solo cambia color —
+// nada que altere el alto, para no empujar las tarjetas de abajo.
+function Stat({ cap, capId, live, children, span2, onClick, orden, irA }) {
   return (
-    <div onClick={onClick} style={{ ...cardBase, padding: "18px 18px", gridColumn: span2 ? "span 2" : "auto", order: orden || 0, cursor: onClick ? "pointer" : "default" }}>
+    <div onClick={onClick}
+      onMouseEnter={onClick ? (e) => { e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; } : undefined}
+      onMouseLeave={onClick ? (e) => { e.currentTarget.style.borderColor = C.line; } : undefined}
+      title={onClick && irA ? `Ir a ${irA}` : undefined}
+      style={{ ...cardBase, padding: "18px 18px", gridColumn: span2 ? "span 2" : "auto", order: orden || 0, cursor: onClick ? "pointer" : "default", transition: "border-color .18s ease" }}>
       <span style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.10),transparent)" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: C.ink2 }}>
         {capId && <Icon id={capId} size={15} color={C.ink3} />} {cap}
         {live && <span style={{ marginLeft: "auto", fontSize: 10.5, color: C.teal, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal, boxShadow: `0 0 7px ${C.teal}` }} />EN VIVO</span>}
+        {onClick && <span style={{ marginLeft: live ? 8 : "auto", color: C.ink3, fontSize: 13, lineHeight: 1 }}>→</span>}
       </div>
       {children}
     </div>
@@ -342,7 +350,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: isMobile ? 11 : 14 }}>
           {/* Colectas: cuando está completo se muestra como "listo" (no una barra llena a medias) */}
           {session && col && (colCompleto ? (
-            <Stat cap="Colectas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1}>
+            <Stat cap="Colectas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1} onClick={() => onNav("colectas")} irA="Colectas">
               <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 10 }}>
                 <span style={{ fontSize: 26 }}>✅</span>
                 <div>
@@ -352,21 +360,21 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
               </div>
             </Stat>
           ) : (
-            <Stat cap="Colectas confirmadas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1}>
+            <Stat cap="Colectas confirmadas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1} onClick={() => onNav("colectas")} irA="Colectas">
               <div style={bigNum(isMobile)}>{col.confirmadas} <small style={{ fontSize: 14, color: C.ink3, fontWeight: 500 }}>/ {col.totalCol}</small></div>
               <Barra pct={col.totalCol ? col.confirmadas / col.totalCol * 100 : 0} color={C.lila} />
               <div style={{ fontSize: 11, color: C.ink3, marginTop: 7 }}>{col.sinChofer} sin chofer</div>
             </Stat>
           ))}
           {session && col && col.totalArr > 0 && (
-            <Stat cap="Arribos" capId="arribos" live span2={!isMobile} orden={ventanaArribos ? 1 : 2}>
+            <Stat cap="Arribos" capId="arribos" live span2={!isMobile} orden={ventanaArribos ? 1 : 2} onClick={() => onNav("arribos")} irA="Arribos">
               <div style={bigNum(isMobile)}>{col.llegaron} <small style={{ fontSize: 14, color: C.ink3, fontWeight: 500 }}>/ {col.totalArr}</small></div>
               <Barra pct={col.totalArr ? col.llegaron / col.totalArr * 100 : 0} color={C.teal} />
               <div style={{ fontSize: 11, color: C.ink3, marginTop: 7 }}>{col.llegaron === col.totalArr ? "llegaron todos ✓" : `faltan ${col.totalArr - col.llegaron}`}</div>
             </Stat>
           )}
           {ayer && ayer.sla != null && (
-            <Stat cap="SLA de ayer" capId="chart" span2={!isMobile} orden={3}>
+            <Stat cap="SLA de ayer" capId="chart" span2={!isMobile} orden={3} onClick={() => onNav("metricas")} irA="Métricas">
               <div style={{ ...bigNum(isMobile), color: ayer.sla >= 98 ? C.teal : ayer.sla >= 95 ? C.ambar : C.rojo }}>{ayer.sla.toFixed(1)}%</div>
               <div style={{ fontSize: 11, color: C.ink3, marginTop: 10 }}>{fmt(ayer.envios)} envíos · {ayer.cadetes.length} en alerta</div>
             </Stat>
