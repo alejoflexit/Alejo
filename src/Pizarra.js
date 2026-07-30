@@ -15,6 +15,10 @@ import {
   cargarBackups, crearBackup, patchBackup, borrarBackup, useBackupsRealtime,
 } from './colectasShared';
 
+// Alto del encabezado de los paneles del pie (Objetivos y Backups). Los dos comparten esta
+// constante: si difieren, los títulos no arrancan a la misma altura y la fila queda coja.
+const PANEL_HEAD_H = 40;
+
 const ROJO = '#E24B4A';
 const AMBAR = '#FBBF24';
 const LILA = '#818CF8';
@@ -50,7 +54,7 @@ const fechaAR = (iso) => new Date(new Date(iso).getTime() - 3 * 3600 * 1000).toI
 // vive hasta que alguien la marca. Cualquiera tacha cualquier objetivo y queda quién lo hizo.
 function BloqueObjetivos({ usuario, esMovil }) {
   const [objetivos, setObjetivos] = useState([]);
-  const [abierto, setAbierto] = useState(true);   // panel abierto por defecto: ocupa el pie de la pizarra
+  const [abierto, setAbierto] = useState(false);  // plegado: el pie no compite con las notas del día
   const [texto, setTexto] = useState('');
   const [creando, setCreando] = useState(false);
   const [verHechos, setVerHechos] = useState(false);
@@ -158,24 +162,25 @@ function BloqueObjetivos({ usuario, esMovil }) {
 
   return (
     <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 14px', borderBottom: abierto ? `1px solid ${BRAND.border}` : 'none' }}>
-        <span onClick={() => setAbierto(v => !v)} title={abierto ? 'Plegar' : 'Abrir'}
-          style={{ cursor: 'pointer', color: BRAND.muted, fontSize: 11, touchAction: 'manipulation' }}>{abierto ? '▾' : '▸'}</span>
-        <span onClick={() => setAbierto(v => !v)} style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.white, cursor: 'pointer' }}>🎯 Objetivos del equipo</span>
+      {/* Encabezado calcado del de Backups: alto fijo de 40, caret · título · contador. Antes crecía
+          por la píldora "+ Objetivo" adentro y los dos paneles no arrancaban a la misma altura.
+          El alta ahora es la fila "＋ nuevo objetivo…" del pie de la lista, igual que en Backups. */}
+      <button type="button" onClick={() => setAbierto(v => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: PANEL_HEAD_H, padding: '0 14px',
+          cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation', border: 'none',
+          borderBottom: abierto ? `1px solid ${BRAND.border}` : 'none', background: 'transparent',
+          color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{abierto ? '▾' : '▸'}</span>
+        <span>🎯 Objetivos del equipo</span>
         {total > 0 && (
-          <>
-            <span style={{ fontSize: 11.5, color: BRAND.muted }}>{hechos.length} de {total}</span>
-            <div style={{ width: esMovil ? 70 : 110, height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: BRAND.teal, transition: 'width .25s' }} />
-            </div>
-          </>
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 500, color: BRAND.muted }}>{hechos.length} de {total}</span>
+            <span style={{ display: 'block', width: esMovil ? 48 : 64, height: 4, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+              <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: BRAND.teal, transition: 'width .25s' }} />
+            </span>
+          </span>
         )}
-        <button type="button" onClick={() => setCreando(true)}
-          style={{ marginLeft: 'auto', minHeight: 28, padding: '0 10px', borderRadius: 8, cursor: 'pointer', touchAction: 'manipulation',
-            border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.08)', color: BRAND.teal, fontSize: 12, fontWeight: 700 }}>
-          + Objetivo
-        </button>
-      </div>
+      </button>
 
       {abierto && (
       <div style={{ padding: '2px 14px 12px' }}>
@@ -199,14 +204,15 @@ function BloqueObjetivos({ usuario, esMovil }) {
 
       {pendientes.length > 0 && <div style={{ marginTop: 4 }}>{pendientes.map(fila)}</div>}
 
-      {total === 0 && !creando && (
-        <div style={{ fontSize: 12.5, color: BRAND.muted, marginTop: 8 }}>
-          Todavía no hay objetivos. Sirven para lo que el equipo quiere lograr y no tiene día fijo — quedan a la vista hasta tacharlos.
+      {/* Sin objetivos no hay nada que explicar: la fila de alta ya dice qué hacer. */}
+      {!creando && (
+        <div onClick={() => setCreando(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: pendientes.length ? 2 : 6, padding: '7px 0',
+            borderTop: pendientes.length ? `1px solid ${BRAND.border}` : 'none',
+            cursor: 'pointer', touchAction: 'manipulation', color: 'rgba(255,255,255,0.28)', fontSize: 13 }}>
+          <span style={{ fontSize: 14 }}>＋</span>
+          <span>nuevo objetivo…</span>
         </div>
-      )}
-
-      {pendientes.length === 0 && total > 0 && (
-        <div style={{ fontSize: 12.5, color: BRAND.teal, marginTop: 8 }}>✨ Todos los objetivos cumplidos.</div>
       )}
 
       {hechos.length > 0 && (
@@ -230,7 +236,7 @@ function BloqueObjetivos({ usuario, esMovil }) {
 const BACKUP_ICON = '🛟';
 function BloqueBackups({ usuario, esMovil }) {
   const [backups, setBackups] = useState([]);
-  const [abierto, setAbierto] = useState(true);   // panel abierto por defecto (antes escondía "N sin confirmar")
+  const [abierto, setAbierto] = useState(false);  // plegado: los backups se arman los lunes, no todos los días
   const [zona, setZona] = useState('');
   const [error, setError] = useState('');
   const [editCubre, setEditCubre] = useState(null);
@@ -320,9 +326,9 @@ function BloqueBackups({ usuario, esMovil }) {
     <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
       <style>{`.fx-bkrow .fx-bkx{opacity:0;transition:opacity .12s}.fx-bkrow:hover .fx-bkx{opacity:1}@media(hover:none){.fx-bkrow .fx-bkx{opacity:.5}}`}</style>
       <button type="button" onClick={() => setAbierto(v => !v)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 40, padding: '0 14px', cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: PANEL_HEAD_H, padding: '0 14px', cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
           border: 'none', borderBottom: abierto ? `1px solid ${BRAND.border}` : 'none', background: 'transparent', color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
-        <span style={{ color: BRAND.muted, fontSize: 11 }}>{abierto ? '▾' : '▸'}</span>
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{abierto ? '▾' : '▸'}</span>
         <span>{BACKUP_ICON} Backups</span>
         {total > 0 && (
           <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: pend > 0 ? AMBAR : BRAND.teal }}>
