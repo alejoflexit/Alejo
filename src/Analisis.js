@@ -770,7 +770,10 @@ export default function Analisis({ semanas }) {
   const tituloAtender = periodo.t === "todo" ? "Casos históricos a revisar" : (enCursoActual ? "Atención inmediata" : "A atender");
 
   const th = (key, label, right) => (
-    <th onClick={() => doSort(key)} style={{ padding: "9px 10px", textAlign: right ? "right" : "left", cursor: "pointer", color: sortCol === key ? C.teal : C.muted, fontWeight: 600, fontSize: 11.5, whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, background: C.cardAlt }}>
+    // Encabezado fijo de la tabla de cadetes. El z-index y la sombra son necesarios: sin ellos el
+    // header se leía como una fila más incrustada entre dos. Ojo con el contenedor — si vuelve a
+    // tener padding ARRIBA, por ahí se cuela la fila que está pasando por debajo.
+    <th onClick={() => doSort(key)} style={{ padding: "10px 10px", textAlign: right ? "right" : "left", cursor: "pointer", color: sortCol === key ? C.teal : C.muted, fontWeight: 600, fontSize: 11.5, whiteSpace: "nowrap", borderBottom: `1px solid rgba(255,255,255,0.16)`, position: "sticky", top: 0, zIndex: 3, background: C.cardAlt, boxShadow: "0 6px 14px rgba(0,0,0,0.45)" }}>
       {label}{sortCol === key ? (sortDir < 0 ? " ▼" : " ▲") : ""}
     </th>
   );
@@ -1290,7 +1293,7 @@ export default function Analisis({ semanas }) {
           {rankingF.length === 0 && <div style={{ color: C.muted, fontSize: 12.5, padding: "12px 4px" }}>Nadie cumple ese filtro. 👏</div>}
         </div>
       ) : (
-      <div className="flexit-scroll" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 4, marginBottom: 16, overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
+      <div className="flexit-scroll" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, /* padding SOLO a los costados y abajo: con padding arriba quedaban 4px sin cubrir por donde asomaba la fila que pasa por detrás del encabezado fijo */ padding: "0 4px 4px", marginBottom: 16, overflowX: "auto", maxHeight: 520, overflowY: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
