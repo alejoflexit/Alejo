@@ -654,9 +654,8 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
         border: `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
         borderLeft: acento ? `3px solid ${acento}` : `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
         boxShadow: hover && !resuelta ? '0 4px 14px rgba(0,0,0,0.35)' : 'none',
-        transform: hover && !resuelta ? 'translateY(-1px)' : 'none',
         opacity: resuelta ? 0.45 : 1, cursor: arrastrable && !resuelta ? 'grab' : 'default',
-        transition: 'background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease, opacity .2s ease',
+        transition: 'background .15s ease, border-color .15s ease, box-shadow .15s ease, opacity .2s ease',
       }}>
 
       <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
@@ -733,17 +732,17 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           )}
 
           {/* El chip de día ubica y queda; el resto del detalle solo en hover o al tocar. */}
-          {(mostrarDia || hover || detalle) && (
+          {(mostrarDia || detalle) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
               {mostrarDia && (
                 <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 5, background: `${LILA}1f`, color: LILA, fontSize: 10.5, fontWeight: 600 }}>
                   {labelDia(nota.fecha_objetivo, hoy)}
                 </span>
               )}
-              {(hover || detalle) && nota.tipo !== 'aviso' && <span style={meta}>{destinoLabel(nota, clientesById, hoy, true)}</span>}
-              {(hover || detalle) && <span style={meta}>{nota.autor}{creada ? ` · ${creada}` : ''}</span>}
+              {detalle && nota.tipo !== 'aviso' && <span style={meta}>{destinoLabel(nota, clientesById, hoy, true)}</span>}
+              {detalle && <span style={meta}>{nota.autor}{creada ? ` · ${creada}` : ''}</span>}
               {/* Quién la resolvió también es detalle: en reposo alcanza con el ✓ verde. */}
-              {resuelta && (hover || detalle) && (
+              {resuelta && detalle && (
                 <span style={{ ...meta, color: BRAND.teal }}>
                   ✓ {nota.tipo === 'ausencia' && nota.cubre ? `Cubierto por ${nota.cubre}` : `Resuelta por ${nota.resuelta_por || '—'}`}
                 </span>
