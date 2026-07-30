@@ -1124,33 +1124,6 @@ export default function App() {
         </div>
       ) : (
         <>
-          {/* Switch Tabla / Análisis — ARRIBA DE TODO. Antes vivía después de los KPIs, los filtros,
-              la alerta de críticos y el badge de sin-datos, dibujado como dos textos subrayados: había
-              que scrollear para encontrarlo y pesaba menos que cualquier KPI. Ahora es un segmentado
-              (fondo hundido + píldora sólida en la activa) pegado al arranque de la vista. */}
-          {!isMobile && (
-            <div style={{ display:"inline-flex", gap:4, padding:4, marginBottom:"1.25rem", borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
-              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => {
-                const on = tab === key;
-                return (
-                  <button key={key} onClick={()=>setTab(key)}
-                    // El relleno teal sólido quedaba flúo. Ahora el teal va en el texto sobre un fondo
-                    // tenue, igual que "Todos" y los botones de rango. El borde se declara SIEMPRE
-                    // (transparente cuando no está activo) para que la píldora no cambie de tamaño al
-                    // cambiar de pestaña.
-                    style={{ display:"inline-flex", alignItems:"center", gap:7, height:38, padding:"0 20px", borderRadius:9,
-                      fontSize:14, fontWeight:700, cursor:"pointer",
-                      border:`1px solid ${on ? "rgba(46,207,170,0.45)" : "transparent"}`,
-                      background: on ? "rgba(46,207,170,0.16)" : "transparent",
-                      color: on ? "#2ECFAA" : BRAND.muted,
-                      transition:"background .15s ease, color .15s ease, border-color .15s ease" }}>
-                    <i className={`ti ${icon}`} style={{ fontSize:15 }} />{label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
           {/* KPIs */}
           {isMobile ? (
             <>
@@ -1234,6 +1207,32 @@ export default function App() {
           )}
 
           <SinDatosBadge items={sinDatosItems} />
+
+          {/* Switch Tabla / Análisis — segmentado (fondo hundido + píldora tenue en la activa). Antes eran
+              dos textos con subrayado fino que no parecían un control. Va acá, arriba de la vista y
+              debajo de los KPIs y los filtros — Alejo lo probó pegado al título y prefirió este lugar. */}
+          {!isMobile && (
+            <div style={{ display:"inline-flex", gap:4, padding:4, marginBottom:"1.25rem", borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
+              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => {
+                const on = tab === key;
+                return (
+                  <button key={key} onClick={()=>setTab(key)}
+                    // El relleno teal sólido quedaba flúo. Ahora el teal va en el texto sobre un fondo
+                    // tenue, igual que "Todos" y los botones de rango. El borde se declara SIEMPRE
+                    // (transparente cuando no está activo) para que la píldora no cambie de tamaño al
+                    // cambiar de pestaña.
+                    style={{ display:"inline-flex", alignItems:"center", gap:7, height:38, padding:"0 20px", borderRadius:9,
+                      fontSize:14, fontWeight:700, cursor:"pointer",
+                      border:`1px solid ${on ? "rgba(46,207,170,0.45)" : "transparent"}`,
+                      background: on ? "rgba(46,207,170,0.16)" : "transparent",
+                      color: on ? "#2ECFAA" : BRAND.muted,
+                      transition:"background .15s ease, color .15s ease, border-color .15s ease" }}>
+                    <i className={`ti ${icon}`} style={{ fontSize:15 }} />{label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
 
           {/* Bottom nav — solo mobile */}
