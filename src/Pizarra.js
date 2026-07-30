@@ -11,6 +11,7 @@ import {
   editarNota, cargarComentarios, agregarComentario, borrarComentario, useComentariosRealtime,
   cargarObjetivos, crearObjetivo, marcarObjetivo, desmarcarObjetivo, borrarObjetivo, patchObjetivo,
   useObjetivosRealtime, aplicarCambioObjetivo,
+  cargarBackups, crearBackup, patchBackup, borrarBackup, useBackupsRealtime,
 } from './colectasShared';
 
 const ROJO = '#E24B4A';
@@ -215,6 +216,153 @@ function BloqueObjetivos({ usuario, esMovil }) {
   );
 }
 
+// Backups del equipo: refuerzos que se organizan (típico los lunes, día pico). Cada uno tiene una
+// zona a cubrir, quién la cubre y si está confirmado. Persistente y plegado; no se borra solo.
+function BloqueBackups({ usuario, esMovil }) {
+  const [backups, setBackups] = useState([]);
+  const [abierto, setAbierto] = useState(false);
+  const [zona, setZona] = useState('');
+  const [creando, setCreando] = useState(false);
+  const [error, setError] = useState('');
+  const [editCubre, setEditCubre] = useState(null);
+  const [cubreDraft, setCubreDraft] = useState('');
+  const inputRef = useRef(null);
+
+  const recargar = useCallback(() => {
+    cargarBackups().then(r => setBackups(Array.isArray(r) ? r : [])).catch(() => {});
+  }, []);
+  useEffect(() => { recargar(); }, [recargar]);
+  useBackupsRealtime(useCallback((row, ev) => setBackups(prev => aplicarCambioObjetivo(prev, row, ev)), []));
+  useEffect(() => { if (creando && inputRef.current) inputRef.current.focus(); }, [creando]);
+
+  const total = backups.length;
+  const pend = backups.filter(b => b.estado !== 'ok').length;
+
+  const agregar = () => {
+    const z = zona.trim();
+    if (!z) { setCreando(false); return; }
+    setZona('');
+    crearBackup(z, usuario)
+      .then(r => { const fila = Array.isArray(r) ? r[0] : r; if (fila?.id) setBackups(prev => prev.some(b => b.id === fila.id) ? prev : [...prev, fila]); })
+      .catch(e => { setError('No se pudo agregar: ' + e.message); recargar(); });
+  };
+  const alternarEstado = (b) => {
+    const ok = b.estado === 'ok';
+    setBackups(prev => prev.map(x => x.id === b.id ? { ...x, estado: ok ? 'pendiente' : 'ok' } : x));
+    patchBackup(b.id, { estado: ok ? 'pendiente' : 'ok' }).catch(e => { setError('No se pudo guardar: ' + e.message); recargar(); });
+  };
+  const quitar = (b) => {
+    setBackups(prev => prev.filter(x => x.id !== b.id));
+    borrarBackup(b.id).catch(e => { setError('No se pudo borrar: ' + e.message); recargar(); });
+  };
+  const abrirCubre = (b) => { setEditCubre(b.id); setCubreDraft(b.cubre || ''); };
+  const cerrarCubre = () => { setEditCubre(null); setCubreDraft(''); };
+  const guardarCubre = (b) => {
+    const t = cubreDraft.trim();
+    setBackups(prev => prev.map(x => x.id === b.id ? { ...x, cubre: t || null } : x));
+    cerrarCubre();
+    patchBackup(b.id, { cubre: t || null }).catch(e => { setError('No se pudo guardar: ' + e.message); recargar(); });
+  };
+
+  const fila = (b) => {
+    const ok = b.estado === 'ok';
+    return (
+      <div key={b.id} className="fx-nota"
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: `1px solid ${BRAND.border}`, flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
+        <button type="button" onClick={() => alternarEstado(b)}
+          title={ok ? 'Marcar como pendiente' : 'Confirmar backup'}
+          style={{ width: 22, height: 22, flexShrink: 0, borderRadius: 6, cursor: 'pointer', touchAction: 'manipulation',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800,
+            border: `2px solid ${ok ? BRAND.teal : 'rgba(255,255,255,0.28)'}`,
+            background: ok ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>
+          {ok ? '✓' : ''}
+        </button>
+        <div style={{ flex: 1, minWidth: 120, fontSize: 13.5, fontWeight: 600, color: BRAND.white }}>
+          {b.zona}
+          {ok && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: BRAND.teal }}>confirmado</span>}
+        </div>
+        {editCubre === b.id ? (
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+            <input autoFocus value={cubreDraft} onChange={e => setCubreDraft(e.target.value)}
+              placeholder="quién la cubre…" maxLength={60} list="fx-choferes"
+              onKeyDown={e => { if (e.key === 'Enter') guardarCubre(b); if (e.key === 'Escape') cerrarCubre(); }}
+              style={{ width: esMovil ? 120 : 150, fontSize: 12, padding: '5px 8px', borderRadius: 8, border: `1px solid ${BRAND.teal}55`, background: BRAND.navyCard, color: BRAND.white, outline: 'none' }} />
+            <button type="button" onClick={() => guardarCubre(b)} title="Guardar"
+              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 800, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✓</button>
+            <button type="button" onClick={cerrarCubre} title="Cancelar"
+              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✕</button>
+          </div>
+        ) : b.cubre ? (
+          <button type="button" onClick={() => abrirCubre(b)} title="Editar quién la cubre"
+            style={{ flexShrink: 0, maxWidth: esMovil ? 140 : 200, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
+              border: `1px solid ${BRAND.teal}44`, background: 'rgba(46,207,170,0.10)', color: BRAND.teal, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', touchAction: 'manipulation' }}>
+            🛵 {b.cubre}
+          </button>
+        ) : (
+          <button type="button" onClick={() => abrirCubre(b)} title="Asignar quién la cubre"
+            style={{ flexShrink: 0, padding: '4px 9px', borderRadius: 999, cursor: 'pointer',
+              border: '1px dashed rgba(255,255,255,0.20)', background: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', touchAction: 'manipulation' }}>
+            + quién
+          </button>
+        )}
+        <button type="button" onClick={() => quitar(b)} title="Borrar backup"
+          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', cursor: 'pointer', fontSize: 14, padding: '4px 2px', touchAction: 'manipulation' }}>✕</button>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button type="button" onClick={() => setAbierto(v => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 42, padding: '0 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
+          border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', color: BRAND.white, fontSize: 13, fontWeight: 700 }}>
+        <span style={{ color: BRAND.muted }}>{abierto ? '▾' : '▸'}</span>
+        <span>🛵 Backups</span>
+        {total > 0 && (
+          <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: pend > 0 ? AMBAR : BRAND.teal }}>
+            {pend > 0 ? `${pend} sin confirmar` : `${total} confirmado${total > 1 ? 's' : ''}`}
+          </span>
+        )}
+      </button>
+
+      {abierto && (
+        <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: BRAND.muted }}>Refuerzos a organizar (zona, quién la cubre, si está confirmado). Suele armarse los lunes.</span>
+            <button type="button" onClick={() => setCreando(true)}
+              style={{ marginLeft: 'auto', minHeight: 28, padding: '0 10px', borderRadius: 8, cursor: 'pointer', touchAction: 'manipulation',
+                border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.08)', color: BRAND.teal, fontSize: 12, fontWeight: 700 }}>
+              + Backup
+            </button>
+          </div>
+
+          {error && <div style={{ fontSize: 12, color: ROJO, marginTop: 8 }}>{error}</div>}
+
+          {creando && (
+            <div className="fx-crear" style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+              <input ref={inputRef} value={zona} onChange={e => setZona(e.target.value)}
+                placeholder="Zona a cubrir (ej. moto en La Lucila)"
+                onKeyDown={e => { if (e.key === 'Enter') agregar(); if (e.key === 'Escape') { setZona(''); setCreando(false); } }}
+                style={{ ...inpSt, flex: 1 }} />
+              <button type="button" onClick={agregar}
+                style={{ minHeight: 34, padding: '0 14px', borderRadius: 8, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Agregar</button>
+              <button type="button" onClick={() => { setZona(''); setCreando(false); }}
+                style={{ minHeight: 34, padding: '0 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 12.5, cursor: 'pointer' }}>✕</button>
+            </div>
+          )}
+
+          {total > 0 && <div style={{ marginTop: 4 }}>{backups.map(fila)}</div>}
+          {total === 0 && !creando && (
+            <div style={{ fontSize: 12.5, color: BRAND.muted, marginTop: 8 }}>
+              Todavía no hay backups. Agregá la zona que hay que reforzar y quién la cubre.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Chip({ activo, onClick, children, color }) {
   const c = color || BRAND.teal;
   return (
@@ -281,9 +429,6 @@ function SelectorHora({ valor, onElegir, onCerrar }) {
 function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancelar }) {
   const [texto, setTexto] = useState('');
   const [tipo, setTipo] = useState('aviso');
-  const [prioridad, setPrioridad] = useState('normal');
-  const [hora, setHora] = useState('');
-  const [horaOpen, setHoraOpen] = useState(false);
   const [fecha, setFecha] = useState(fechaFija || sumarDias(todayStr(), 2));
   const [hasta, setHasta] = useState('');   // vacío = un solo día
   const [cadete, setCadete] = useState('');
@@ -321,7 +466,6 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
 
   const falta = !texto.trim() ? 'Escribí de qué se trata la nota.'
     : !dias.length ? 'Elegí la fecha.'
-    : prioridad === 'hora' && !hora ? 'Falta la hora límite.'
     : '';
 
   const publicar = async () => {
@@ -332,8 +476,8 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
       const base = {
         texto: texto.trim(),
         tipo,
-        prioridad,
-        hora_limite: prioridad === 'hora' ? hora : null,
+        prioridad: 'normal',
+        hora_limite: null,
         cliente_id: tipo === 'colecta' && clienteId ? clienteId : null,
         cadete: tipo === 'ausencia' && cadete ? cadete : null,
         cubre: tipo === 'ausencia' && cubre.trim() ? cubre.trim() : null,
@@ -394,24 +538,6 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
           Cada día se cubre y se resuelve por separado.
         </div>
       )}
-
-      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 2 }}>Prioridad</span>
-        <Chip activo={prioridad === 'normal'} onClick={() => { setPrioridad('normal'); setHoraOpen(false); setHora(''); }}>Normal</Chip>
-        <Chip activo={prioridad === 'ahora'} color={ROJO}
-          onClick={() => { setPrioridad(prioridad === 'ahora' ? 'normal' : 'ahora'); setHoraOpen(false); setHora(''); }}>⚡ Ahora</Chip>
-        <span style={{ position: 'relative', display: 'inline-flex' }}>
-          <Chip activo={prioridad === 'hora'} color={AMBAR}
-            onClick={() => { setPrioridad('hora'); setHoraOpen(true); }}>
-            ⏰ {prioridad === 'hora' && hora ? `Antes de las ${hora}` : 'Hora límite'}
-          </Chip>
-          {horaOpen && (
-            <SelectorHora valor={hora}
-              onElegir={h => { setHora(h); setHoraOpen(false); }}
-              onCerrar={() => { setHoraOpen(false); if (!hora) setPrioridad('normal'); }} />
-          )}
-        </span>
-      </div>
 
       {tipo === 'ausencia' && (
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -684,14 +810,19 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
         </div>
       )}
 
-      {/* Lo hecho no desaparece: queda a la vista, tachado, para saber que se resolvió. */}
+      {/* Lo hecho no desaparece: queda a la vista, tachado, para saber que se resolvió.
+          El separador "Hechas N" solo se muestra si hay notas pendientes ARRIBA que separar;
+          si la columna solo tiene hechas, las tarjetas arrancan pegadas al encabezado y así
+          quedan alineadas con las otras columnas. */}
       {hechas.length > 0 && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 3px 2px' }}>
-            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
-            <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)' }}>Hechas {hechas.length}</span>
-            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
-          </div>
+          {notas.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 3px 2px' }}>
+              <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+              <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)' }}>Hechas {hechas.length}</span>
+              <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+            </div>
+          )}
           {hechas.map(n => <Tarjeta key={n.id} nota={n} mostrarDia={col.mostrarDia} {...rest} />)}
         </>
       )}
@@ -951,6 +1082,8 @@ function PizarraInner({ usuario }) {
               </div>
             )}
           </div>
+
+          <BloqueBackups usuario={usuario} esMovil={esMovil} />
 
         </>
       )}

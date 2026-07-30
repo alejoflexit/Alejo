@@ -470,6 +470,53 @@ export function aplicarCambioNota(prev, row, evento) {
 // El merge por id no tiene nada de específico de las notas: los objetivos usan el mismo.
 export const aplicarCambioObjetivo = aplicarCambioNota;
 
+// ── BACKUPS del equipo ──
+// Lista persistente (no se borra sola) de refuerzos: zona a cubrir, quién la cubre y si está confirmado.
+// Típico de los lunes (día pico): "sumamos una moto en La Lucila". Vive plegado en la Pizarra.
+export function cargarBackups() {
+  return sbFetch('backups_equipo?select=*&order=orden.asc,created_at.asc');
+}
+export function crearBackup(zona, autor) {
+  return sbFetch('backups_equipo', { method: 'POST', body: JSON.stringify({ zona, autor: autor || null }) });
+}
+export function patchBackup(id, patch) {
+  return sbFetch(`backups_equipo?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+export const borrarBackup = (id) =>
+  sbFetch(`backups_equipo?id=eq.${id}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+
+export function useBackupsRealtime(onRow, activo = true) {
+  const cb = useRef(onRow);
+  useEffect(() => { cb.current = onRow; }, [onRow]);
+  useEffect(() => {
+    if (!activo || typeof window === 'undefined' || !window.supabase) return;
+    let client = null, channel = null, cancelled = false, retryTimer = null;
+    const cleanup = () => {
+      try { if (channel && client) client.removeChannel(channel); } catch {}
+      try { if (client) client.realtime.disconnect(); } catch {}
+      channel = null; client = null;
+    };
+    const connect = async () => {
+      const token = await getToken().catch(() => null);
+      if (!token || cancelled) return;
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      client.realtime.setAuth(token);
+      channel = client.channel('backups-rt')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'backups_equipo' }, payload => {
+          cb.current(payload.eventType === 'DELETE' ? payload.old : payload.new, payload.eventType);
+        })
+        .subscribe(status => {
+          if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) {
+            clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => { cleanup(); connect(); }, 5000);
+          }
+        });
+    };
+    connect();
+    return () => { cancelled = true; clearTimeout(retryTimer); cleanup(); };
+  }, [activo]);
+}
+
 // ── FRANJA "Notas para hoy" (Tarea 2 de la spec) ──
 // La pizarra viene a buscar al que está trabajando: se muestra arriba de Colectas y Arribos con las
 // notas cuyo día objetivo es la fecha vigente, y se resuelven ahí mismo (✓ Hecho / → Mañana) sin
