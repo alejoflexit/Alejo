@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   sbFetch, todayStr, minutosAR,
-  NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota,
+  NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
 } from "./colectasShared";
 
 // ── Home = Centro de operaciones (spec-home-centro-operaciones, diseño flexit-design "premium").
@@ -107,7 +107,7 @@ function Buzon({ notas, onIr, onResolver }) {
                 <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.grotesk, fontWeight: 600, fontSize: 12, color: col, background: col + "26" }}>{(nt.autor || "?")[0].toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600 }}>{nt.autor || "—"} <span style={{ color: C.ink3, fontWeight: 400 }}>· {t.emoji} {t.label}</span></div>
-                  <div style={{ fontSize: 12.5, color: C.ink2, lineHeight: 1.4, marginTop: 2 }}>{nt.texto}</div>
+                  <div style={{ fontSize: 12.5, color: C.ink2, lineHeight: 1.4, marginTop: 2 }}>{textoNota(nt)}</div>
                   {nt.tipo === "ausencia" && nt.cubre && <div style={{ fontSize: 11, color: C.teal, marginTop: 2 }}>cubre {nt.cubre}</div>}
                 </div>
                 <button onClick={() => onResolver(nt)} title="Marcar hecho" style={{ alignSelf: "center", border: "1px solid rgba(46,230,182,0.4)", background: "rgba(46,230,182,0.1)", color: C.teal, borderRadius: 9, padding: "6px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✓</button>
@@ -402,7 +402,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
                   <div style={{ flex: 1, minWidth: 150, fontSize: 13 }}>
                     {urg && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: C.rojo, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>⚡ AHORA</span>}
                     {hora && <span style={{ fontSize: 10, fontWeight: 800, color: "#1a1500", background: C.ambar, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>⏰ {n.hora_limite}</span>}
-                    {n.texto}
+                    {textoNota(n)}
                     {n.tipo === "ausencia" && n.cubre && <span style={{ color: C.teal, fontWeight: 600 }}> · cubre {n.cubre}</span>}
                     <span style={{ display: "block", fontSize: 11, color: C.ink3, marginTop: 1 }}>{n.autor}</span>
                   </div>

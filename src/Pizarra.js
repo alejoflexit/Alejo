@@ -9,6 +9,7 @@ import {
   NOTA_TIPOS, ordenarNotas, estaVencida, cargarNotas, resolverNota, desmarcarNota, borrarNota, patchNota,
   cargarChoferesFull, useNotasRealtime, aplicarCambioNota, LoginFlexit,
   editarNota, cargarComentarios, agregarComentario, borrarComentario, useComentariosRealtime,
+  AUSENCIA_PREFIJO, esAusenciaDeCadete,
   cargarObjetivos, crearObjetivo, marcarObjetivo, desmarcarObjetivo, borrarObjetivo, patchObjetivo,
   useObjetivosRealtime, aplicarCambioObjetivo,
   cargarBackups, crearBackup, patchBackup, borrarBackup, useBackupsRealtime,
@@ -419,7 +420,7 @@ function SelectorHora({ valor, onElegir, onCerrar }) {
 
 // ── CREADOR INLINE (al pie de cada columna) ──
 // La columna ya define el día: en Hoy y Mañana no hay nada que elegir; solo Próximos pide fecha.
-function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancelar }) {
+function CreadorInline({ autor, fechaFija, clientes, onListo, onCancelar }) {
   const [texto, setTexto] = useState('');
   const [tipo, setTipo] = useState('aviso');
   const [fecha, setFecha] = useState(fechaFija || sumarDias(todayStr(), 2));
@@ -430,7 +431,12 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
   const [busy, setBusy] = useState(false);
   const [aviso, setAviso] = useState('');
   const ref = useRef(null);
-  useEffect(() => { if (ref.current) ref.current.focus(); }, []);
+  const refCad = useRef(null);
+  // En una ausencia lo que se carga es un NOMBRE, así que el foco va ahí; en el resto, al texto.
+  useEffect(() => {
+    const el = tipo === 'ausencia' ? refCad.current : ref.current;
+    if (el) el.focus();
+  }, [tipo]);
 
   // Días que cubre la nota. Un rango genera una nota POR DÍA: si falta un cadete toda la semana,
   // cada día se cubre y se resuelve por separado. Se saltean los domingos (no se opera).
@@ -457,9 +463,10 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
     return out;
   }, []);
 
-  const falta = !texto.trim() ? 'Escribí de qué se trata la nota.'
-    : !dias.length ? 'Elegí la fecha.'
-    : '';
+  // En una ausencia el campo obligatorio es el nombre, no el texto.
+  const falta = tipo === 'ausencia'
+    ? (!cadete.trim() ? 'Elegí o escribí quién falta.' : !dias.length ? 'Elegí la fecha.' : '')
+    : (!texto.trim() ? 'Escribí de qué se trata la nota.' : !dias.length ? 'Elegí la fecha.' : '');
 
   const publicar = async () => {
     if (busy) return;
@@ -472,7 +479,7 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
         prioridad: 'normal',
         hora_limite: null,
         cliente_id: tipo === 'colecta' && clienteId ? clienteId : null,
-        cadete: tipo === 'ausencia' && cadete ? cadete : null,
+        cadete: tipo === 'ausencia' && cadete.trim() ? cadete.trim() : null,
         cubre: tipo === 'ausencia' && cubre.trim() ? cubre.trim() : null,
         autor,
       };
@@ -489,19 +496,30 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
 
   return (
     <div className="fx-crear" style={{ padding: 10, borderRadius: 10, border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.05)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <textarea ref={ref} value={texto} onChange={e => setTexto(e.target.value)} rows={2}
-        placeholder="Qué hay que saber…"
-        onKeyDown={e => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); publicar(); }
-          if (e.key === 'Escape') onCancelar();
-        }}
-        style={{ ...inpSt, width: '100%', resize: 'vertical', fontSize: 13.5 }} />
-
+      {/* El tipo va primero porque decide qué se carga: una ausencia pide un NOMBRE, el resto un texto. */}
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
         {Object.entries(NOTA_TIPOS).map(([k, t]) => (
           <Chip key={k} activo={tipo === k} onClick={() => setTipo(k)}>{t.emoji} {t.label}</Chip>
         ))}
       </div>
+
+      {tipo === 'ausencia' && (
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: ROJO, whiteSpace: 'nowrap' }}>{AUSENCIA_PREFIJO}</span>
+          <input ref={refCad} type="text" list="fx-choferes" value={cadete} onChange={e => setCadete(e.target.value)}
+            placeholder="¿quién?"
+            onKeyDown={e => { if (e.key === 'Enter' && !falta) { e.preventDefault(); publicar(); } if (e.key === 'Escape') onCancelar(); }}
+            style={{ ...inpSt, fontSize: 14.5, fontWeight: 600, flex: 1, minWidth: 120 }} />
+        </div>
+      )}
+
+      <textarea ref={ref} value={texto} onChange={e => setTexto(e.target.value)} rows={tipo === 'ausencia' ? 1 : 2}
+        placeholder={tipo === 'ausencia' ? 'Motivo o detalle (opcional)' : 'Qué hay que saber…'}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); publicar(); }
+          if (e.key === 'Escape') onCancelar();
+        }}
+        style={{ ...inpSt, width: '100%', resize: 'vertical', fontSize: tipo === 'ausencia' ? 12.5 : 13.5 }} />
 
       {/* Cuándo: en Hoy/Mañana el día ya está fijo; en Próximos se elige con botones de día. */}
       {!fechaFija && (
@@ -533,14 +551,8 @@ function CreadorInline({ autor, fechaFija, choferes, clientes, onListo, onCancel
       )}
 
       {tipo === 'ausencia' && (
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={cadete} onChange={e => setCadete(e.target.value)} style={{ ...inpSt, fontSize: 12.5, maxWidth: '100%' }}>
-            <option value="">¿Quién falta?</option>
-            {choferes.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <input type="text" list="fx-choferes" value={cubre} onChange={e => setCubre(e.target.value)}
-            placeholder="Lo cubre (a mano)" style={{ ...inpSt, fontSize: 12.5, flex: 1, minWidth: 130 }} />
-        </div>
+        <input type="text" list="fx-choferes" value={cubre} onChange={e => setCubre(e.target.value)}
+          placeholder="Lo cubre (opcional)" style={{ ...inpSt, fontSize: 12.5, width: '100%' }} />
       )}
 
       {tipo === 'colecta' && (
@@ -582,8 +594,18 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
   const [tipoEdit, setTipoEdit] = useState(nota.tipo);
   const [comOpen, setComOpen] = useState(false);
   const [comTxt, setComTxt] = useState('');
+  const [detalle, setDetalle] = useState(false);   // móvil: un toque en la tarjeta muestra destino/autor/hora
+  const [cadEdit, setCadEdit] = useState(nota.cadete || '');
   const esAutor = usuario && nota.autor === usuario;
-  const guardarEdit = () => { if (txtEdit.trim()) { onEditar(nota, { texto: txtEdit.trim(), tipo: tipoEdit }); setEditando(false); } };
+  const ausCadete = esAusenciaDeCadete(nota);
+  // En una ausencia el nombre es lo obligatorio; el texto es la nota opcional del motivo.
+  const guardarEdit = () => {
+    const esAus = tipoEdit === 'ausencia';
+    if (esAus ? cadEdit.trim() : txtEdit.trim()) {
+      onEditar(nota, { texto: txtEdit.trim(), tipo: tipoEdit, ...(esAus ? { cadete: cadEdit.trim() } : {}) });
+      setEditando(false);
+    }
+  };
   const enviarCom = () => { if (comTxt.trim()) { onComentar(nota, comTxt.trim()); setComTxt(''); } };
   const tBorrar = useRef(null);
   useEffect(() => () => { if (tBorrar.current) clearTimeout(tBorrar.current); }, []);
@@ -611,6 +633,13 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
       onDragStart={e => { e.dataTransfer.setData('text/plain', String(nota.id)); e.dataTransfer.effectAllowed = 'move'; }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      // En desktop el detalle (destino · autor · hora) aparece al pasar el mouse; en móvil no hay
+      // hover, así que un toque en la tarjeta lo muestra. Los controles se ignoran para no
+      // desplegar el detalle cada vez que alguien toca un botón o escribe en un campo.
+      onClick={e => {
+        if (e.target.closest && e.target.closest('button, input, textarea, select, a, [data-ctrl]')) return;
+        setDetalle(d => !d);
+      }}
       className="fx-nota"
       style={{
         padding: '10px 11px', borderRadius: 9,
@@ -624,7 +653,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
       }}>
 
       <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-        <div onClick={() => (resuelta ? onDesmarcar(nota) : onResolver(nota))}
+        <div data-ctrl onClick={() => (resuelta ? onDesmarcar(nota) : onResolver(nota))}
           title={resuelta ? 'Tocar para desmarcar (si se marcó por error)' : 'Marcar como resuelta'}
           style={{
             width: 32, height: 32, marginTop: -3, marginLeft: -4, flexShrink: 0, borderRadius: '50%',
@@ -650,7 +679,14 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
 
           {editando ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 4 }}>
-              <textarea value={txtEdit} onChange={e => setTxtEdit(e.target.value)} rows={2} autoFocus
+              {tipoEdit === 'ausencia' && (
+                <input type="text" list="fx-choferes" value={cadEdit} onChange={e => setCadEdit(e.target.value)} autoFocus
+                  placeholder="¿Quién falta?"
+                  onKeyDown={e => { if (e.key === 'Enter') guardarEdit(); if (e.key === 'Escape') setEditando(false); }}
+                  style={{ ...inpSt, fontSize: 14.5, fontWeight: 600, width: '100%' }} />
+              )}
+              <textarea value={txtEdit} onChange={e => setTxtEdit(e.target.value)} rows={2} autoFocus={tipoEdit !== 'ausencia'}
+                placeholder={tipoEdit === 'ausencia' ? 'Motivo o detalle (opcional)' : ''}
                 onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) guardarEdit(); if (e.key === 'Escape') setEditando(false); }}
                 style={{ ...inpSt, fontSize: 14, resize: 'vertical', width: '100%', boxSizing: 'border-box' }} />
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -662,12 +698,22 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
                   </button>
                 ))}
                 <span style={{ marginLeft: 'auto', display: 'flex', gap: 5 }}>
-                  <button type="button" onClick={guardarEdit} disabled={!txtEdit.trim()}
-                    style={{ minHeight: 30, padding: '0 12px', borderRadius: 7, fontSize: 12.5, fontWeight: 700, cursor: txtEdit.trim() ? 'pointer' : 'default', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.14)', color: BRAND.teal }}>Guardar</button>
-                  <button type="button" onClick={() => { setEditando(false); setTxtEdit(nota.texto); setTipoEdit(nota.tipo); }}
+                  <button type="button" onClick={guardarEdit} disabled={!(tipoEdit === 'ausencia' ? cadEdit.trim() : txtEdit.trim())}
+                    style={{ minHeight: 30, padding: '0 12px', borderRadius: 7, fontSize: 12.5, fontWeight: 700, cursor: (tipoEdit === 'ausencia' ? cadEdit.trim() : txtEdit.trim()) ? 'pointer' : 'default', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.14)', color: BRAND.teal }}>Guardar</button>
+                  <button type="button" onClick={() => { setEditando(false); setTxtEdit(nota.texto); setTipoEdit(nota.tipo); setCadEdit(nota.cadete || ''); }}
                     style={{ minHeight: 30, padding: '0 10px', borderRadius: 7, fontSize: 12.5, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
                 </span>
               </div>
+            </div>
+          ) : ausCadete ? (
+            /* Ausencia: el tag "🚫 Ausencia" se absorbió en el título. "No viene" va en rojo y el
+               nombre en blanco — decir las dos cosas era ruido puro. El motivo, si lo hay, abajo. */
+            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
+              <span style={{ color: ROJO }}>{AUSENCIA_PREFIJO}</span>{' '}
+              <span style={{ color: BRAND.white }}>{nota.cadete}</span>
+              {nota.texto && (
+                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>{nota.texto}</span>
+              )}
             </div>
           ) : (
             <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.white, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
@@ -675,18 +721,23 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 5, background: `${tagCol}22`, border: `1px solid ${tagCol}33`, fontSize: 10.5, fontWeight: 700, color: tagCol }}>
-              {t.emoji} {t.label}{nota.cadete ? ` · ${nota.cadete}` : ''}
-            </span>
-            {mostrarDia && (
-              <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 5, background: `${LILA}1f`, color: LILA, fontSize: 10.5, fontWeight: 600 }}>
-                {labelDia(nota.fecha_objetivo, hoy)}
-              </span>
-            )}
-            {nota.tipo !== 'aviso' && <span style={meta}>{destinoLabel(nota, clientesById, hoy, true)}</span>}
-            <span style={meta}>{nota.autor}{creada ? ` · ${creada}` : ''}</span>
-          </div>
+          {/* Chips siempre visibles; el detalle (destino · autor · hora) solo en hover o al tocar. */}
+          {(!ausCadete || mostrarDia || hover || detalle) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
+              {!ausCadete && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 5, background: `${tagCol}22`, border: `1px solid ${tagCol}33`, fontSize: 10.5, fontWeight: 700, color: tagCol }}>
+                  {t.emoji} {t.label}{nota.cadete ? ` · ${nota.cadete}` : ''}
+                </span>
+              )}
+              {mostrarDia && (
+                <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 5, background: `${LILA}1f`, color: LILA, fontSize: 10.5, fontWeight: 600 }}>
+                  {labelDia(nota.fecha_objetivo, hoy)}
+                </span>
+              )}
+              {(hover || detalle) && nota.tipo !== 'aviso' && <span style={meta}>{destinoLabel(nota, clientesById, hoy, true)}</span>}
+              {(hover || detalle) && <span style={meta}>{nota.autor}{creada ? ` · ${creada}` : ''}</span>}
+            </div>
+          )}
 
           {resuelta && (
             <div style={{ fontSize: 10.5, color: BRAND.teal, marginTop: 5 }}>

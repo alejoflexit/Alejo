@@ -288,6 +288,16 @@ export function ordenarNotas(notas) {
 }
 
 // Notas que trae la vista: todas las pendientes (de cualquier día) + las resueltas de hoy.
+// ── Título de una nota ──
+// Una ausencia ya no guarda el texto "no viene fulano": guarda el CHOFER, y el "No viene" es
+// parte del título (en rojo en la Pizarra). El texto queda como nota opcional del motivo.
+// Se arma acá para que la franja, el home y la pizarra digan todos lo mismo.
+export const AUSENCIA_PREFIJO = 'No viene';
+export const esAusenciaDeCadete = (n) => n.tipo === 'ausencia' && !!n.cadete;
+export const textoNota = (n) => (esAusenciaDeCadete(n)
+  ? `${AUSENCIA_PREFIJO} ${n.cadete}${n.texto ? ` — ${n.texto}` : ''}`
+  : n.texto);
+
 // Trae las pendientes de cualquier día + TODO lo de hoy en adelante, resuelto o no.
 // Antes traía las resueltas solo si eran de hoy: una nota de un día futuro marcada por error
 // (un dedazo en el celular) desaparecía de la pizarra y no había forma de desmarcarla.
@@ -567,7 +577,7 @@ export function NotasHoy({ fecha, soloAusencias = false, irAPizarra }) {
             <div style={{ flex: 1, minWidth: 150, fontSize: 13, color: '#fff' }}>
               {urgente && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#E24B4A', borderRadius: 5, padding: '1px 6px', marginRight: 6 }}>⚡ AHORA</span>}
               {conHora && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#1a1500', background: '#FBBF24', borderRadius: 5, padding: '1px 6px', marginRight: 6 }}>⏰ {n.hora_limite}</span>}
-              {n.texto}
+              {textoNota(n)}
               {n.tipo === 'ausencia' && n.cubre && <span style={{ color: BRAND.teal, fontWeight: 600 }}> · cubre {n.cubre}</span>}
               <span style={{ display: 'block', fontSize: 11, color: BRAND.muted, marginTop: 1 }}>{n.autor}</span>
             </div>
