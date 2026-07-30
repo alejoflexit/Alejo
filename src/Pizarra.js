@@ -589,6 +589,9 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
   };
   const resuelta = !!nota.resuelta_at;
   const t = NOTA_TIPOS[nota.tipo] || NOTA_TIPOS.aviso;
+  // Color semántico del tag por tipo: de un vistazo se entiende el motivo.
+  const TAG_COLOR = { ausencia: ROJO, colecta: AMBAR, aviso: '#8EC5FF' };
+  const tagCol = TAG_COLOR[nota.tipo] || 'rgba(255,255,255,0.5)';
   const urgente = !resuelta && nota.prioridad === 'ahora';
   const conHora = !resuelta && nota.prioridad === 'hora' && nota.hora_limite;
   const acento = urgente ? ROJO : conHora ? AMBAR : null;
@@ -668,7 +671,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 7 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', fontSize: 10.5, color: 'rgba(255,255,255,0.62)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 7px', borderRadius: 5, background: `${tagCol}22`, border: `1px solid ${tagCol}33`, fontSize: 10.5, fontWeight: 700, color: tagCol }}>
               {t.emoji} {t.label}{nota.cadete ? ` · ${nota.cadete}` : ''}
             </span>
             {mostrarDia && (
@@ -776,7 +779,8 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
         flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: esMovil ? 0 : 232,
         display: 'flex', flexDirection: 'column', gap: 8,
         padding: 8, borderRadius: 12,
-        background: encima ? 'rgba(46,207,170,0.07)' : 'transparent',
+        // Tinte apenas perceptible del color de la columna: el cerebro ubica Hoy/Mañana/Próximos sin leer.
+        background: encima ? 'rgba(46,207,170,0.07)' : `${col.color}0d`,
         border: `1px dashed ${encima ? BRAND.teal : 'transparent'}`,
         transition: 'background .12s, border-color .12s',
       }}>
