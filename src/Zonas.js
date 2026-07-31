@@ -158,20 +158,58 @@ function calcularPropuestas(sem, topes, fleteros) {
 // ============ Copiloto de Zonas (spec-zonas-copiloto-fase1 + spec-zonas-fijas) ============
 // Determinístico: reglas + umbrales acá, textos por plantilla con números reales. Sin Claude API.
 // El riesgo es por RECORRIDO contra su tope propio (el titular ya no existe como concepto).
+// Umbrales del banco de pruebas (backtest 31/07, entrenado con mayo-junio y validado contra julio).
+// El 100% que se usaba antes estaba en el peor punto de la curva: acertaba 36,7% y avisaba solo el
+// 9,1% de los días que terminaron mal. Arriba del 115% la alerta acierta ~70%. Entre 85 y 115 la
+// señal es ruido (1 de cada 3), así que deja de ser alarma y pasa a ser información.
 const COP = {
-  altoUtil: 1.00,          // 🔴 carga ≥ 100% del tope
-  medioUtil: 0.85,         // 🟡 carga ≥ 85% del tope
+  altoUtil: 1.15,          // 🔴 carga ≥ 115% de la capacidad — acierta ~7 de cada 10
+  cargadoUtil: 0.85,       // ◍ 85–115%: "va cargado", informativo, SIN color de alarma
   vecinoUtilMax: 0.60,     // vecino "libre" para redistribuir: utilización < 60%
-  vecinoMargenMin: 10,     // ...y con al menos 10 de margen (tope − carga)
+  vecinoMargenMin: 10,     // ...y con al menos 10 de margen (capacidad − carga)
 };
+
+// Bandas de riesgo por cadete. El banco mostró que saber QUIÉN sale predice ~3× mejor que cuánto
+// lleva: en julio, un cadete de banda alta terminó con SLA<98 el 40% de los días y uno de banda
+// baja el 12%. Y 3 de cada 4 días malos pasaron con la carga en niveles normales.
+const BANDA = { ventanaDias: 60, minDias: 10, alta: 0.30, media: 0.15, minMl: 10, slaMalo: 98 };
+
+// Los nombres de recorrido/persona son cortos ("Vani", "Gus") y en semanas están completos
+// ("Vanina Barracas"). Match exacto y, si no, por contención — pero solo si es inequívoco.
+function matchCadete(nombre, mapa) {
+  const k = norm(nombre);
+  if (!k) return null;
+  if (mapa.has(k)) return mapa.get(k);
+  const cands = [...mapa.keys()].filter((x) => x.includes(k) || k.includes(x));
+  return cands.length === 1 ? mapa.get(cands[0]) : null;   // ambiguo ("Javier") → no se opina
+}
+
+// Peor banda entre la gente que corre el recorrido.
+function bandaReco(t, bandas) {
+  if (!bandas || !bandas.size) return null;
+  const nombres = (t.personas && t.personas.length) ? t.personas.map((p) => p.cadete) : (t.chofer_ref ? [t.chofer_ref] : []);
+  let peor = null;
+  for (const n of nombres) {
+    const b = matchCadete(n, bandas);
+    if (b && (!peor || b.tasa > peor.tasa)) peor = { ...b, cadete: n };
+  }
+  return peor;
+}
 // Riesgo por RECORRIDO (spec-zonas-fijas): solo utilización contra su tope propio. Sin historial de titular.
-function riesgoReco(t) {
+function riesgoReco(t, banda) {
   const util = t.tope ? t.total / t.tope : null;
-  if (!t.tope) return { nivel: "sindatos", util, razones: ["sin tope configurado"] };
-  const cargaTxt = `${Math.round(t.total)}/${t.tope} envíos (${Math.round(util * 100)}% del tope)`;
-  if (util >= COP.altoUtil) return { nivel: "alto", util, razones: [cargaTxt] };
-  if (util >= COP.medioUtil) return { nivel: "medio", util, razones: [cargaTxt] };
-  return { nivel: "bajo", util, razones: [] };
+  if (!t.tope) return { nivel: "sindatos", util, banda, razones: ["sin capacidad configurada"] };
+  const cargaTxt = `${Math.round(t.total)}/${t.tope} envíos (${Math.round(util * 100)}% de la capacidad)`;
+  const alta = banda && banda.nivel === "alta";
+  const histTxt = banda ? `${banda.cadete} viene con demoras el ${Math.round(banda.tasa * 100)}% de los días` : null;
+  // Carga muy por encima: es la única señal de carga que el banco valida.
+  if (util >= COP.altoUtil) return { nivel: "alto", util, banda, razones: [cargaTxt, "arriba del 115%: 7 de cada 10 veces termina con demoras"] };
+  // Las dos señales débiles juntas sí valen: historial malo + carga por encima de lo normal.
+  if (alta && util >= COP.cargadoUtil) return { nivel: "alto", util, banda, razones: [cargaTxt, histTxt] };
+  if (alta) return { nivel: "medio", util, banda, razones: [histTxt, cargaTxt] };
+  // 85–115% sin historial malo: informativo, NO alarma (acá caía Microcentro).
+  if (util >= COP.cargadoUtil) return { nivel: "cargado", util, banda, razones: [cargaTxt] };
+  return { nivel: "bajo", util, banda, razones: [] };
 }
 // Arma las barras por recorrido desde un mapa zona -> {total, entregados}. Zona en N recorridos → reparto en partes iguales.
 // Devuelve las barras + las zonas con volumen que no caen en ningún recorrido activo (el agujero a vigilar).
@@ -231,6 +269,7 @@ export default function Zonas() {
   const [gErr, setGErr] = useState("");
   const [nuevoNom, setNuevoNom] = useState("");
   const [nuevoTope, setNuevoTope] = useState(50);
+  const [bandas, setBandas] = useState(new Map()); // norm(cadete) -> {tasa, dias, nivel}
   const refMapas = useRef(null);
 
   // Mapas (zonas_cp + cadete_topes) — una sola vez por visita, los usan el vivo y la foto.
@@ -443,6 +482,33 @@ export default function Zonas() {
   }, []);
   useEffect(() => { cargarPropuestas(); }, [cargarPropuestas]);
 
+  // Historial por cadete: qué proporción de sus días terminó con SLA Meli < 98. Es la señal que
+  // el banco de pruebas encontró más fuerte (3× la carga), así que entra al riesgo del recorrido.
+  const cargarBandas = useCallback(async () => {
+    try {
+      const desde = new Date(Date.now() - BANDA.ventanaDias * 86400000).toISOString().slice(0, 10);
+      const filas = await supa(`semanas?select=cadete,envios_ml,demorados,dem21&fecha=gte.${desde}&limit=100000`);
+      const acc = new Map();
+      for (const r of (filas || [])) {
+        const ml = r.envios_ml || 0;
+        if (ml < BANDA.minMl) continue;                       // días muy chicos no opinan
+        const sla = (ml - (r.demorados || 0) - (r.dem21 || 0)) / ml * 100;
+        const k = norm(r.cadete);
+        const a = acc.get(k) || { dias: 0, malos: 0 };
+        a.dias++; if (sla < BANDA.slaMalo) a.malos++;
+        acc.set(k, a);
+      }
+      const m = new Map();
+      for (const [k, a] of acc) {
+        if (a.dias < BANDA.minDias) continue;                 // sin recorrido suficiente, no se etiqueta
+        const tasa = a.malos / a.dias;
+        m.set(k, { tasa, dias: a.dias, nivel: tasa >= BANDA.alta ? "alta" : tasa >= BANDA.media ? "media" : "baja" });
+      }
+      setBandas(m);
+    } catch { /* sin bandas la pantalla sigue funcionando solo con la carga */ }
+  }, []);
+  useEffect(() => { cargarBandas(); }, [cargarBandas]);
+
   async function aplicarPropuesta(p) {
     if (!sesion) return;
     setAplicando(p.cadete); setPropErr("");
@@ -508,7 +574,7 @@ export default function Zonas() {
   // Copiloto: enriquece los RECORRIDOS con riesgo (util vs su tope) + recomendación (determinístico).
   const copiloto = useMemo(() => {
     if (!recos) return null;
-    const base = recos.map((t) => ({ ...t, riesgo: riesgoReco(t) }));
+    const base = recos.map((t) => ({ ...t, riesgo: riesgoReco(t, bandaReco(t, bandas)) }));
     // recomendación: necesita todos los utils/regiones para hallar recorrido vecino libre en la misma región
     const libres = base.filter((x) => x.tope && x.riesgo.util != null && x.riesgo.util < COP.vecinoUtilMax && (x.tope - x.total) >= COP.vecinoMargenMin);
     for (const t of base) {
@@ -526,7 +592,7 @@ export default function Zonas() {
     const decisiones = base.filter((t) => t.riesgo.nivel === "alto" || t.riesgo.nivel === "medio")
       .sort((a, b) => (orden[a.riesgo.nivel] - orden[b.riesgo.nivel]) || ((b.riesgo.util ?? 0) - (a.riesgo.util ?? 0)));
     return { recos: base, decisiones, capLibre };
-  }, [recos]);
+  }, [recos, bandas]);
 
   const colorEstado = (e) => (e === "saturada" ? C.crit : e === "limite" ? C.warn : e === "sintope" ? C.faint : C.ok);
   const f = norm(filtro);
@@ -538,11 +604,13 @@ export default function Zonas() {
 
   // Recorridos del copiloto filtrados por el buscador (para el detalle de abajo en la vista Recorridos).
   const recoCop = copiloto ? copiloto.recos.filter((t) => !f || norm(t.nombre).includes(f) || norm(t.chofer_ref || "").includes(f)) : [];
-  const recoVerdes = recoCop.filter((t) => t.riesgo.nivel === "bajo");
+  const recoVerdes = recoCop.filter((t) => t.riesgo.nivel === "bajo" || t.riesgo.nivel === "cargado");
   const recoSinDatos = recoCop.filter((t) => t.riesgo.nivel === "sindatos");
   const labelsSinMatch = (refMapas.current && refMapas.current.labelsSinMatch) || []; // calidad de datos (a)
 
-  const badgeRiesgo = (nivel) => nivel === "alto" ? { t: "🔴 ALTO", c: C.crit } : nivel === "medio" ? { t: "🟡 MEDIO", c: C.warn } : nivel === "bajo" ? { t: "🟢 OK", c: C.ok } : { t: "⚪ sin tope", c: C.faint };
+  const badgeRiesgo = (nivel) => nivel === "alto" ? { t: "🔴 ALTO", c: C.crit } : nivel === "medio" ? { t: "🟡 MEDIO", c: C.warn }
+    : nivel === "cargado" ? { t: "◍ va cargado", c: C.muted }   // informativo: no es alerta
+    : nivel === "bajo" ? { t: "🟢 OK", c: C.ok } : { t: "⚪ sin capacidad", c: C.faint };
   // Tarjeta de recorrido enriquecida (riesgo por utilización + recomendación). El cadete es circunstancial: solo referencia de planilla.
   const tarjetaReco = (it) => {
     const rz = it.riesgo, badge = badgeRiesgo(rz.nivel), col = badge.c;
@@ -556,6 +624,17 @@ export default function Zonas() {
           <span style={{ fontSize: 15, fontWeight: 700 }}>{it.nombre}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{badge.t}</span>
           {it.colecta === false && <span style={{ fontSize: 10.5, color: C.faint, border: `1px solid ${C.border}`, borderRadius: 999, padding: "1px 7px" }}>sin colecta</span>}
+          {/* Historial de quien lo corre: la señal más fuerte según el banco de pruebas. Es contexto,
+              no una alarma — por eso va como chip y no cambia el color del recorrido por sí solo. */}
+          {rz.banda && (
+            <span title={`${rz.banda.cadete}: ${Math.round(rz.banda.tasa * 100)}% de sus últimos ${rz.banda.dias} días terminaron con SLA Meli por debajo de 98`}
+              style={{ fontSize: 10.5, borderRadius: 999, padding: "1px 8px", fontWeight: 600,
+                border: `1px solid ${rz.banda.nivel === "alta" ? "rgba(226,75,74,0.45)" : rz.banda.nivel === "media" ? "rgba(239,159,39,0.40)" : C.border}`,
+                background: rz.banda.nivel === "alta" ? "rgba(226,75,74,0.12)" : rz.banda.nivel === "media" ? "rgba(239,159,39,0.10)" : "transparent",
+                color: rz.banda.nivel === "alta" ? C.crit : rz.banda.nivel === "media" ? C.warn : C.faint }}>
+              histórico {Math.round(rz.banda.tasa * 100)}%
+            </span>
+          )}
           <span style={{ marginLeft: "auto", fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
             <b>{num(it.total)}</b>{it.tope ? <span style={{ color: C.muted }}> / {num(it.tope)}</span> : null}
           </span>
@@ -633,7 +712,7 @@ export default function Zonas() {
             {gente.length === 0 && <div style={{ color: C.warn, fontSize: 11.5, marginTop: 7 }}>Sin gente cargada — se está usando el tope fijo de {num(it.topeFijo || 0)}.</div>}
           </div>
         )}
-        {rz.razones.length > 0 && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4, lineHeight: 1.5 }}>{rz.razones.join(" · ")}</div>}
+        {rz.razones.filter(Boolean).length > 0 && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4, lineHeight: 1.5 }}>{rz.razones.filter(Boolean).join(" · ")}</div>}
         {it.reco && <div style={{ fontSize: 12, color: rz.nivel === "alto" ? "#f1a2a1" : "#f3c886", marginBottom: 6, fontWeight: 600 }}>→ {it.reco}</div>}
         {it.tope ? (
           <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
