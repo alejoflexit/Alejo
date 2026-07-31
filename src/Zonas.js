@@ -225,21 +225,47 @@ export default function Zonas() {
   const [sesion] = useState(() => getSession());       // hay usuario logueado? (para el botón Aplicar)
   const [aplicando, setAplicando] = useState("");     // cadete que se está aplicando
   const [propErr, setPropErr] = useState("");
+  // Editor de "quién corre este recorrido" (define la capacidad real del día)
+  const [editReco, setEditReco] = useState(null);    // id del recorrido con el editor abierto
+  const [gBusy, setGBusy] = useState(false);
+  const [gErr, setGErr] = useState("");
+  const [nuevoNom, setNuevoNom] = useState("");
+  const [nuevoTope, setNuevoTope] = useState(50);
   const refMapas = useRef(null);
 
   // Mapas (zonas_cp + cadete_topes) — una sola vez por visita, los usan el vivo y la foto.
   const cargarMapas = useCallback(async () => {
     if (refMapas.current) return refMapas.current;
-    const [zonasCP, topes, regiones, recorridos] = await Promise.all([
+    const [zonasCP, topes, regiones, recorridos, personas] = await Promise.all([
       supa("zonas_cp?select=cp,zona&limit=10000"),
       supa("cadete_topes?select=cadete,tope,zonas&activo=eq.true&limit=1000"),
       supa("zonas_regiones?select=zona,region&limit=1000").catch(() => []),
       supa("recorridos?select=id,nombre,zonas,grupo,region,colecta,tope,chofer_ref&activo=eq.true&order=grupo.asc,nombre.asc&limit=1000").catch(() => []),
+      supa("recorrido_personas?select=id,recorrido_id,cadete,tope,rol&activo=eq.true&order=rol.asc,cadete.asc&limit=2000").catch(() => []),
     ]);
     const regionZona = new Map(); // norm(zona) -> región (para la vecindad gruesa del copiloto)
     for (const z of (regiones || [])) regionZona.set(norm(z.zona), z.region);
     // Recorridos (spec-zonas-fijas): la unidad de la pantalla. Zonas parseadas + cobertura (zona en N recorridos → reparto en partes iguales).
-    const recos = (recorridos || []).map((r) => ({ ...r, zonasList: String(r.zonas || "").split(/[,/]/).map((z) => z.trim()).filter(Boolean) }));
+    // Quién corre cada recorrido. La CAPACIDAD deja de ser el número escrito a mano en
+    // recorridos.tope y pasa a ser la suma de los topes de su gente (titular + motos + refuerzos).
+    // Antes, un recorrido con moto medía contra la capacidad de una sola persona y gritaba siempre:
+    // Microcentro decía 40 de tope teniendo dos personas de 50 arriba.
+    const personasPorReco = new Map();
+    for (const pr of (personas || [])) {
+      const arr = personasPorReco.get(pr.recorrido_id) || [];
+      arr.push(pr); personasPorReco.set(pr.recorrido_id, arr);
+    }
+    const recos = (recorridos || []).map((r) => {
+      const gente = personasPorReco.get(r.id) || [];
+      const capacidad = gente.length ? gente.reduce((a, x) => a + (x.tope || 0), 0) : (r.tope || 0);
+      return {
+        ...r,
+        zonasList: String(r.zonas || "").split(/[,/]/).map((z) => z.trim()).filter(Boolean),
+        personas: gente,
+        topeFijo: r.tope,     // el viejo número a mano, solo de referencia
+        tope: capacidad,      // lo que mira todo el resto de la pantalla
+      };
+    });
     const coberturaReco = new Map(); // norm(zona) -> en cuántos recorridos activos está
     for (const r of recos) for (const z of r.zonasList) { const k = norm(z); coberturaReco.set(k, (coberturaReco.get(k) || 0) + 1); }
     const cpZonas = new Map();      // cp (dígitos) -> [zona, zona…]  (48/515 CPs tienen varias)
@@ -265,7 +291,25 @@ export default function Zonas() {
     }
     // Etiquetas de recorrido que no existen en zonas_cp (lista de calidad de datos a): con el seed actual = ninguna.
     const labelsSinMatch = [...new Set(recos.flatMap((r) => r.zonasList).filter((z) => !todasZonas.has(z)))];
-    refMapas.current = { cpZonas, topeZona, zonaCadetes, topes, todasZonas: [...todasZonas], regionZona, recos, coberturaReco, labelsSinMatch };
+    // Sugerencias de gente para cada recorrido: cadetes cuyas zonas están TODAS dentro del
+    // recorrido (regla estricta a propósito — un comodín como "Palermo, Recoleta, Colegiales,
+    // Caballito" no se auto-sugiere en ninguno; ese lo suma Alejo a mano si corresponde).
+    const sugeridosReco = new Map();
+    for (const r of recos) {
+      const setReco = new Set(r.zonasList.map(norm));
+      if (!setReco.size) continue;
+      const yaEstan = new Set((r.personas || []).map((x) => norm(x.cadete)));
+      const sug = [];
+      for (const t of topes) {
+        if (!t.zonas) continue;
+        const zc = String(t.zonas).split(/[,/]/).map((z) => norm(z.trim())).filter(Boolean);
+        if (!zc.length || !zc.every((z) => setReco.has(z))) continue;
+        if (yaEstan.has(norm(t.cadete))) continue;
+        sug.push({ cadete: t.cadete, tope: t.tope || 50 });
+      }
+      if (sug.length) sugeridosReco.set(r.id, sug);
+    }
+    refMapas.current = { cpZonas, topeZona, zonaCadetes, topes, todasZonas: [...todasZonas], regionZona, recos, coberturaReco, labelsSinMatch, sugeridosReco };
     return refMapas.current;
   }, []);
 
@@ -420,6 +464,47 @@ export default function Zonas() {
     finally { setAplicando(""); }
   }
 
+  // ── Gente del recorrido: define la capacidad. Después de cada cambio se tiran los mapas
+  //    cacheados y se recarga, para que el semáforo se recalcule con la capacidad nueva.
+  const refrescarTrasCambio = useCallback(async () => {
+    refMapas.current = null;
+    if (modo === "vivo" || escapeVivo) await cargar(); else await cargarFoto();
+  }, [modo, escapeVivo, cargar, cargarFoto]);
+
+  const gentePost = useCallback(async (body) => {
+    setGBusy(true); setGErr("");
+    try {
+      const r = await authedFetch(`${SUPABASE_URL}/rest/v1/recorrido_personas`, {
+        method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await refrescarTrasCambio();
+    } catch (e) { setGErr("No se pudo guardar: " + String(e.message || e).slice(0, 160)); }
+    finally { setGBusy(false); }
+  }, [refrescarTrasCambio]);
+
+  const gentePatch = useCallback(async (id, patch) => {
+    setGBusy(true); setGErr("");
+    try {
+      const r = await authedFetch(`${SUPABASE_URL}/rest/v1/recorrido_personas?id=eq.${id}`, {
+        method: "PATCH", body: JSON.stringify(patch),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      await refrescarTrasCambio();
+    } catch (e) { setGErr("No se pudo guardar: " + String(e.message || e).slice(0, 160)); }
+    finally { setGBusy(false); }
+  }, [refrescarTrasCambio]);
+
+  const gentePop = useCallback(async (id) => {
+    setGBusy(true); setGErr("");
+    try {
+      const r = await authedFetch(`${SUPABASE_URL}/rest/v1/recorrido_personas?id=eq.${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(await r.text());
+      await refrescarTrasCambio();
+    } catch (e) { setGErr("No se pudo borrar: " + String(e.message || e).slice(0, 160)); }
+    finally { setGBusy(false); }
+  }, [refrescarTrasCambio]);
+
   // Copiloto: enriquece los RECORRIDOS con riesgo (util vs su tope) + recomendación (determinístico).
   const copiloto = useMemo(() => {
     if (!recos) return null;
@@ -462,6 +547,9 @@ export default function Zonas() {
   const tarjetaReco = (it) => {
     const rz = it.riesgo, badge = badgeRiesgo(rz.nivel), col = badge.c;
     const ancho = Math.min(rz.util ?? 0, 1.2) / 1.2;
+    const gente = it.personas || [];
+    const abierto = editReco === it.id;
+    const sug = (refMapas.current && refMapas.current.sugeridosReco && refMapas.current.sugeridosReco.get(it.id)) || [];
     return (
       <div key={it.nombre} style={{ background: C.card, border: `1px solid ${rz.nivel === "alto" ? "rgba(226,75,74,0.45)" : C.border}`, borderRadius: 12, padding: "12px 16px" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
@@ -472,7 +560,79 @@ export default function Zonas() {
             <b>{num(it.total)}</b>{it.tope ? <span style={{ color: C.muted }}> / {num(it.tope)}</span> : null}
           </span>
         </div>
-        {it.chofer_ref && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 5 }}>ref. planilla: {it.chofer_ref}</div>}
+        {/* Quién lo corre = de dónde sale la capacidad. Es el dato que faltaba: con una moto
+            sumada, el mismo volumen deja de ser "alto". */}
+        <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 5, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span>
+            {gente.length
+              ? <>Lo corren: {gente.map((g) => `${g.cadete}${g.rol === "moto" ? " 🛵" : g.rol === "refuerzo" ? " (refuerzo)" : ""} ${g.tope}`).join(" · ")}</>
+              : <>ref. planilla: {it.chofer_ref || "—"}</>}
+          </span>
+          {sesion && (
+            <button type="button" onClick={() => { setEditReco(abierto ? null : it.id); setGErr(""); setNuevoNom(""); setNuevoTope(50); }}
+              style={{ border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.04)", color: abierto ? C.ok : C.muted, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+              {abierto ? "listo" : "editar equipo"}
+            </button>
+          )}
+          {sug.length > 0 && !abierto && (
+            <span style={{ color: C.warn }}>· {sug.length} sin sumar</span>
+          )}
+        </div>
+
+        {abierto && (
+          <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: C.cardAlt }}>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: C.faint, marginBottom: 8 }}>
+              Quién corre este recorrido — la suma de los topes es la capacidad
+            </div>
+            {gente.map((g) => (
+              <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: `1px solid ${C.border}`, flexWrap: "wrap" }}>
+                <span style={{ flex: 1, minWidth: 130, fontSize: 12.5, fontWeight: 600 }}>{g.cadete}</span>
+                {["titular", "refuerzo", "moto"].map((r) => (
+                  <button key={r} type="button" disabled={gBusy} onClick={() => gentePatch(g.id, { rol: r })}
+                    style={{ border: `1px solid ${g.rol === r ? C.ok : C.border}`, background: g.rol === r ? "rgba(46,207,170,0.14)" : "transparent", color: g.rol === r ? C.ok : C.faint, borderRadius: 999, padding: "2px 9px", fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}>
+                    {r === "moto" ? "🛵 moto" : r}
+                  </button>
+                ))}
+                <input type="number" defaultValue={g.tope} min={0} max={300} disabled={gBusy}
+                  onBlur={(e) => { const v = Math.max(0, Math.min(300, +e.target.value || 0)); if (v !== g.tope) gentePatch(g.id, { tope: v }); }}
+                  style={{ width: 58, padding: "3px 6px", borderRadius: 7, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 12, textAlign: "right" }} />
+                <button type="button" disabled={gBusy} onClick={() => gentePop(g.id)} title="Sacar del recorrido"
+                  style={{ border: "none", background: "none", color: "rgba(255,255,255,0.28)", cursor: "pointer", fontSize: 13 }}>✕</button>
+              </div>
+            ))}
+
+            {sug.length > 0 && (
+              <div style={{ marginTop: 9, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>
+                  Ya están cargados en topes con estas zonas y no figuran acá:
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {sug.map((x) => (
+                    <button key={x.cadete} type="button" disabled={gBusy}
+                      onClick={() => gentePost({ recorrido_id: it.id, cadete: x.cadete, tope: x.tope, rol: "refuerzo" })}
+                      style={{ border: `1px solid ${C.warn}55`, background: "rgba(239,159,39,0.10)", color: C.warn, borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                      + {x.cadete} · {x.tope}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <input value={nuevoNom} onChange={(e) => setNuevoNom(e.target.value)} placeholder="sumar otra persona o moto…"
+                style={{ flex: 1, minWidth: 150, padding: "5px 9px", borderRadius: 8, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 12.5 }} />
+              <input type="number" value={nuevoTope} min={0} max={300} onChange={(e) => setNuevoTope(+e.target.value || 0)}
+                style={{ width: 62, padding: "5px 7px", borderRadius: 8, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 12.5, textAlign: "right" }} />
+              <button type="button" disabled={gBusy || !nuevoNom.trim()}
+                onClick={() => { gentePost({ recorrido_id: it.id, cadete: nuevoNom.trim(), tope: nuevoTope, rol: "moto" }); setNuevoNom(""); }}
+                style={{ border: `1px solid ${C.ok}`, background: "rgba(46,207,170,0.12)", color: C.ok, borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: nuevoNom.trim() ? "pointer" : "default" }}>
+                🛵 Sumar
+              </button>
+            </div>
+            {gErr && <div style={{ color: C.crit, fontSize: 11.5, marginTop: 7 }}>{gErr}</div>}
+            {gente.length === 0 && <div style={{ color: C.warn, fontSize: 11.5, marginTop: 7 }}>Sin gente cargada — se está usando el tope fijo de {num(it.topeFijo || 0)}.</div>}
+          </div>
+        )}
         {rz.razones.length > 0 && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4, lineHeight: 1.5 }}>{rz.razones.join(" · ")}</div>}
         {it.reco && <div style={{ fontSize: 12, color: rz.nivel === "alto" ? "#f1a2a1" : "#f3c886", marginBottom: 6, fontWeight: 600 }}>→ {it.reco}</div>}
         {it.tope ? (
