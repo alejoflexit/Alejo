@@ -592,6 +592,8 @@ const XL = {
 };
 const XL_MONEY = '"$"#,##0';
 const XL_INT = '#,##0';
+// mismos colores de marca que usa la vista Pagar, en formato ARGB de Excel
+const XL_MEDIO_COLOR = { galicia: 'FFC2540A', mercadopago: 'FF0079B0' };
 
 function xlBorde(ws, row, nCols, { top, bottom } = {}) {
   for (let c = 1; c <= nCols; c++) {
@@ -627,7 +629,18 @@ function xlFilaDatos(row, { moneyCols, intCols, nCols, zebra }) {
   xlBorde(null, row, nCols, { bottom: true });
 }
 
-async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotales }) {
+// Medio con el que se pagó cada fila (viene de pagos_cierres.pagado_via, lo elige
+// la vista Pagar). Si todavía no se pagó no hay medio: la columna lo dice.
+function xlMetodo(f, cierrePorCadete) {
+  const cierre = cierrePorCadete ? cierrePorCadete.get(norm(f.nombre)) : null;
+  const via = cierre && cierre.pagado ? cierre.pagado_via : null;
+  const medio = via ? MEDIOS_PAGO[via] : null;
+  if (!f.factura) return { texto: cierre && cierre.pagado ? 'Efectivo' : 'Efectivo (sin pagar)', via: null };
+  if (medio) return { texto: `Transferencia ${medio.nombre}`, via };
+  return { texto: cierre && cierre.pagado ? 'Transferencia' : 'Transferencia (sin pagar)', via: null };
+}
+
+async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotales, cierrePorCadete }) {
   const ExcelJS = await cargarExcelJS();
   const label = fmtSemanaLabel(semanaLunes);
   const header = ['Cadete', 'Cantidad', 'Precio', 'Monto', 'Colecta', 'Ajuste', 'TOTAL', 'Método'];
@@ -642,7 +655,7 @@ async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotale
   });
   ws.columns = [
     { width: 30 }, { width: 11 }, { width: 11 }, { width: 14 },
-    { width: 13 }, { width: 12 }, { width: 15 }, { width: 15 },
+    { width: 13 }, { width: 12 }, { width: 15 }, { width: 28 }, // Método: entra "Transferencia Mercado Pago"
   ];
 
   // Título (fila 1)
@@ -657,15 +670,16 @@ async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotale
   xlHeaderRow(ws, header);
   const primeraFila = 4;
   filas.forEach((f, i) => {
+    const metodo = xlMetodo(f, cierrePorCadete);
     const row = ws.addRow(f.esFletero ? [
       `${f.nombre} (fletero)`, f.colectasCant, null, null,
       Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
-      Math.round(f.total || 0), f.factura ? 'Transferencia' : 'Efectivo',
+      Math.round(f.total || 0), metodo.texto,
     ] : [
       f.nombre, f.cantidad,
       f.cantidad ? Math.round((f.monto || 0) / f.cantidad) : (f.precioFijo || null),
       Math.round(f.monto || 0), Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
-      Math.round(f.total || 0), f.factura ? 'Transferencia' : 'Efectivo',
+      Math.round(f.total || 0), metodo.texto,
     ]);
     xlFilaDatos(row, { moneyCols: MONEY_COLS, intCols: INT_COLS, nCols: N, zebra: i % 2 === 1 });
     if (f.esFletero) {
@@ -674,28 +688,44 @@ async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotale
     }
     if (f.faltaPrecio) row.getCell(4).font = { color: { argb: XL.rojo }, bold: true };
     row.getCell(7).font = { bold: true };
+    // el medio de pago se colorea con su color de marca (naranja Galicia / celeste MP)
+    if (metodo.via) row.getCell(8).font = { bold: true, color: { argb: XL_MEDIO_COLOR[metodo.via] } };
+    else if (/sin pagar/.test(metodo.texto)) row.getCell(8).font = { color: { argb: XL.gris }, italic: true };
   });
   const ultimaFila = primeraFila + filas.length - 1;
   if (filas.length) {
     ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: ultimaFila, column: N } };
   }
 
-  // Totales
+  // Totales — con el desglose de las transferencias por banco/billetera, para
+  // cuadrar contra el resumen de Galicia y el de Mercado Pago por separado.
+  const porMedio = { galicia: 0, mercadopago: 0, pendiente: 0 };
+  filas.filter(f => f.factura).forEach(f => {
+    const via = xlMetodo(f, cierrePorCadete).via;
+    porMedio[via === 'galicia' || via === 'mercadopago' ? via : 'pendiente'] += (f.total || 0);
+  });
+  const totalesRows = [
+    { etiqueta: 'TOTAL GENERAL', valor: subtotales.total, nivel: 0 },
+    { etiqueta: 'Transferencia', valor: subtotales.transferencia, nivel: 0 },
+    { etiqueta: '    Galicia', valor: porMedio.galicia, nivel: 1, via: 'galicia' },
+    { etiqueta: '    Mercado Pago', valor: porMedio.mercadopago, nivel: 1, via: 'mercadopago' },
+    { etiqueta: '    Sin pagar todavía', valor: porMedio.pendiente, nivel: 1, pendiente: true },
+    { etiqueta: 'Efectivo', valor: subtotales.efectivo, nivel: 0 },
+  ].filter(r => r.nivel === 0 || r.valor > 0);
   ws.addRow([]);
-  [
-    ['TOTAL GENERAL', subtotales.total],
-    ['Transferencia', subtotales.transferencia],
-    ['Efectivo', subtotales.efectivo],
-  ].forEach(([etiqueta, valor], i) => {
-    const row = ws.addRow([etiqueta, null, null, null, null, null, Math.round(valor)]);
+  totalesRows.forEach((r, i) => {
+    const row = ws.addRow([r.etiqueta, null, null, null, null, null, Math.round(r.valor)]);
+    const esTotal = i === 0;
+    const color = r.via ? XL_MEDIO_COLOR[r.via] : (r.pendiente ? XL.gris : null);
     for (let c = 1; c <= N; c++) {
       const cell = row.getCell(c);
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.totalBg } };
-      cell.font = { bold: i === 0, size: i === 0 ? 12 : 11 };
+      cell.font = { bold: esTotal, size: esTotal ? 12 : 11 };
     }
+    row.getCell(1).font = { bold: esTotal, size: esTotal ? 12 : r.nivel ? 10 : 11, italic: !!r.pendiente, color: color ? { argb: color } : undefined };
     row.getCell(7).numFmt = XL_MONEY;
-    row.getCell(7).font = { bold: true, size: i === 0 ? 12 : 11 };
-    xlBorde(ws, row, N, { top: i === 0, bottom: i === 2 });
+    row.getCell(7).font = { bold: r.nivel === 0, size: esTotal ? 12 : r.nivel ? 10 : 11, color: color ? { argb: color } : undefined };
+    xlBorde(ws, row, N, { top: esTotal, bottom: i === totalesRows.length - 1 });
   });
 
   // Título de sección (banda ámbar a lo ancho)
@@ -718,7 +748,7 @@ async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotale
         f.cantidad && f.monto ? Math.round(f.monto / f.cantidad) : (f.precioFijo || null),
         f.monto ? Math.round(f.monto) : 'FALTA PRECIO',
         Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
-        f.total != null ? Math.round(f.total) : null, f.factura ? 'Transferencia' : 'Efectivo',
+        f.total != null ? Math.round(f.total) : null, xlMetodo(f, cierrePorCadete).texto,
       ]);
       xlFilaDatos(row, { moneyCols: MONEY_COLS, intCols: INT_COLS, nCols: N, zebra: i % 2 === 1 });
       if (typeof row.getCell(4).value === 'string') {
@@ -1763,7 +1793,7 @@ function PagosInner({ session }) {
                 onClick={async () => {
                   setExportando(true); setError('');
                   try {
-                    await exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, porDarAlta: calc.porDarAlta, semanaLunes, subtotales });
+                    await exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, porDarAlta: calc.porDarAlta, semanaLunes, subtotales, cierrePorCadete });
                   } catch (e) { setError(`No se pudo exportar el Excel: ${e.message}`); }
                   finally { setExportando(false); }
                 }}
