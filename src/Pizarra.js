@@ -9,7 +9,7 @@ import {
   NOTA_TIPOS, ordenarNotas, estaVencida, cargarNotas, resolverNota, desmarcarNota, borrarNota, patchNota,
   cargarChoferesFull, useNotasRealtime, aplicarCambioNota, LoginFlexit,
   editarNota, cargarComentarios, agregarComentario, borrarComentario, useComentariosRealtime,
-  AUSENCIA_PREFIJO, esAusenciaDeCadete,
+  AUSENCIA_PREFIJO, esAusenciaDeCadete, nombreAusente,
   cargarObjetivos, crearObjetivo, marcarObjetivo, desmarcarObjetivo, borrarObjetivo, patchObjetivo,
   useObjetivosRealtime, aplicarCambioObjetivo,
   cargarBackups, crearBackup, patchBackup, borrarBackup, useBackupsRealtime,
@@ -1047,9 +1047,6 @@ function PizarraInner({ usuario }) {
       .then(rows => setAusPrevias(Array.isArray(rows) ? rows : [])).catch(() => {});
   }, [hoy]);
   const ocultarSug = (id) => setSugOcultas(prev => { const n = new Set(prev); n.add(id); try { localStorage.setItem('flexit_pizarra_sug_ocultas', JSON.stringify([...n])); } catch {} return n; });
-  // Quién faltó. Desde el rediseño de la ausencia por nombre, el nombre vive en `cadete`
-  // y `texto` es el motivo (opcional) — las notas viejas todavía lo traen al revés.
-  const nombreAusente = (n) => (n.cadete || n.texto || '').trim();
   const ausHoyTxt = useMemo(() => new Set(
     notas.filter(n => n.tipo === 'ausencia' && n.fecha_objetivo === hoy).map(n => nrm(nombreAusente(n)))
   ), [notas, hoy]);

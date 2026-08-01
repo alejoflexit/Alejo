@@ -299,6 +299,9 @@ export function ordenarNotas(notas) {
 // Se arma acá para que la franja, el home y la pizarra digan todos lo mismo.
 export const AUSENCIA_PREFIJO = 'No viene';
 export const esAusenciaDeCadete = (n) => n.tipo === 'ausencia' && !!n.cadete;
+// Quién faltó, para cuando hace falta el nombre pelado (ej. el Seguimiento de la Pizarra).
+// El nombre vive en `cadete`; las notas anteriores a la migración lo traen en `texto`.
+export const nombreAusente = (n) => (n.cadete || n.texto || '').trim();
 export const textoNota = (n) => (esAusenciaDeCadete(n)
   ? `${AUSENCIA_PREFIJO} ${n.cadete}${n.texto ? ` — ${n.texto}` : ''}`
   : n.texto);
