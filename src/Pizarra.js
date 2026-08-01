@@ -1047,12 +1047,18 @@ function PizarraInner({ usuario }) {
       .then(rows => setAusPrevias(Array.isArray(rows) ? rows : [])).catch(() => {});
   }, [hoy]);
   const ocultarSug = (id) => setSugOcultas(prev => { const n = new Set(prev); n.add(id); try { localStorage.setItem('flexit_pizarra_sug_ocultas', JSON.stringify([...n])); } catch {} return n; });
-  const ausHoyTxt = useMemo(() => new Set(notas.filter(n => n.tipo === 'ausencia' && n.fecha_objetivo === hoy).map(n => nrm(n.texto))), [notas, hoy]);
+  // Quién faltó. Desde el rediseño de la ausencia por nombre, el nombre vive en `cadete`
+  // y `texto` es el motivo (opcional) — las notas viejas todavía lo traen al revés.
+  const nombreAusente = (n) => (n.cadete || n.texto || '').trim();
+  const ausHoyTxt = useMemo(() => new Set(
+    notas.filter(n => n.tipo === 'ausencia' && n.fecha_objetivo === hoy).map(n => nrm(nombreAusente(n)))
+  ), [notas, hoy]);
   const sugerencias = useMemo(() => {
     const vistos = new Set();
     return ausPrevias.filter(a => {
       if (sugOcultas.has(a.id)) return false;
-      const k = nrm(a.texto);
+      const k = nrm(nombreAusente(a));
+      if (!k) return false; // sin nombre no hay a quién seguirle el rastro
       if (ausHoyTxt.has(k) || vistos.has(k)) return false; // ya se cargó hoy, o repetido
       vistos.add(k); return true;
     });
@@ -1195,7 +1201,9 @@ function PizarraInner({ usuario }) {
                     {sugerencias.map(a => (
                       <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${BRAND.border}` }}>
                         <span style={{ flex: 1, minWidth: 170, fontSize: 13, color: BRAND.white }}>
-                          {labelDia(a.fecha_objetivo, hoy) === 'ayer' ? 'Ayer' : `El ${labelDia(a.fecha_objetivo, hoy)}`} faltó: <b>{a.texto}</b>. ¿Se reincorporó hoy?
+                          {labelDia(a.fecha_objetivo, hoy) === 'ayer' ? 'Ayer' : `El ${labelDia(a.fecha_objetivo, hoy)}`} faltó <b>{nombreAusente(a)}</b>
+                          {a.cadete && a.texto && a.texto.trim() ? <span style={{ color: 'rgba(255,255,255,0.55)' }}> ({a.texto.trim()})</span> : null}
+                          . ¿Se reincorporó hoy?
                         </span>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button type="button" onClick={() => ocultarSug(a.id)}
