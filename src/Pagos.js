@@ -1330,7 +1330,10 @@ function PagosInner({ session }) {
     navigator.clipboard.writeText(msg).then(() => {
       setCopiadoKey(f.key);
       setTimeout(() => setCopiadoKey(k => (k === f.key ? null : k)), 1500);
-    });
+      // copiar el mensaje ya cuenta como avisar: no hace falta marcarlo aparte.
+      // Si fue sin querer, el chip "✓ Avisado" lo desmarca.
+      if (!avisados.has(norm(f.nombre))) toggleAviso(f);
+    }).catch(() => setError('No se pudo copiar el mensaje al portapapeles'));
   }
   const [revExpand, setRevExpand] = useState({}); // Tarea 4: tarjetas expandibles de 'A revisar'
 
@@ -1938,12 +1941,12 @@ function PagosInner({ session }) {
                                 {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
                               </span>
                               <button onClick={e => { e.stopPropagation(); copiarMensaje(f); }}
-                                title={'copiar mensaje para el cadete: "Hola ..., esta semana me figuran X envíos y $Y de colecta"'}
+                                title={'copiar mensaje para el cadete: "Hola ..., esta semana me figuran X envíos y $Y de colecta". Al copiarlo queda marcado como avisado.'}
                                 style={{ marginLeft: 6, fontSize: 14, padding: '4px 7px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
                                 {copiadoKey === f.key ? '✓' : '💬'}
                               </button>
                               {(() => { const av = avisados.has(norm(f.nombre)); return (
-                                <button onClick={e => { e.stopPropagation(); toggleAviso(f); }} title={av ? 'ya le avisaste — tocá para desmarcar' : 'marcá que ya le mandaste el mensaje al chofer'}
+                                <button onClick={e => { e.stopPropagation(); toggleAviso(f); }} title={av ? 'ya le avisaste — tocá para desmarcar' : 'se marca solo al copiar el mensaje; tocá si le avisaste por afuera'}
                                   style={{ marginLeft: 4, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: av ? 'rgba(46,207,170,0.12)' : 'none', border: `1px solid ${av ? 'rgba(46,207,170,0.45)' : BRAND.border}`, borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: av ? BRAND.teal : BRAND.muted }}>
                                   {av ? '✓ Avisado' : 'Avisar'}
                                 </button>
