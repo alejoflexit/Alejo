@@ -575,7 +575,8 @@ function SinDatosBadge({ items }) {
   for (const it of items) { const c = (it.cliente || "").trim() || "Cliente sin identificar"; porCliente[c] = (porCliente[c] || 0) + 1; }
   const filas = Object.entries(porCliente).sort((a, b) => b[1] - a[1]);
   return (
-    <div ref={ref} style={{ position:"relative", display:"inline-block", marginBottom:"1rem" }}>
+    // Sin marginBottom: vive dentro de la fila de controles, que es la que separa del contenido.
+    <div ref={ref} style={{ position:"relative", display:"inline-block" }}>
       <button onClick={() => setShow(s => !s)} title="Envíos sin dirección (cliente desvinculado) — tocar para ver detalle"
         style={{ position:"relative", display:"inline-flex", alignItems:"center", justifyContent:"center", background: show ? "rgba(239,159,39,0.22)" : "rgba(239,159,39,0.12)", border:"1px solid rgba(239,159,39,0.5)", borderRadius:9, padding:8, color:"#EF9F27", cursor:"pointer", lineHeight:1 }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block" }}>
@@ -1207,16 +1208,13 @@ export default function App() {
             </div>
           )}
 
-          <SinDatosBadge items={sinDatosItems} />
-
-          {/* Switch Tabla / Análisis — segmentado (fondo hundido + píldora tenue en la activa). Antes eran
-              dos textos con subrayado fino que no parecían un control. Va acá, arriba de la vista y
-              debajo de los KPIs y los filtros — Alejo lo probó pegado al título y prefirió este lugar. */}
-          {/* El contenedor de BLOQUE es necesario: el switch es inline-flex y SinDatosBadge es
-              inline-block, así que sin esto se acomodan en la misma línea y el switch aparece
-              pegado al costado de la alerta en vez de arrancar abajo. */}
-          {!isMobile && (
-            <div style={{ marginBottom:"1.25rem" }}>
+          {/* Fila de controles: el switch Tabla/Análisis y el badge de "sin datos" comparten línea
+              A PROPÓSITO — centrados entre sí y con separación. Antes eran dos elementos inline
+              sueltos y el navegador los pegaba uno al lado del otro, desalineados y sin aire.
+              El switch es segmentado (fondo hundido + píldora tenue en la activa); va acá, debajo
+              de los KPIs y los filtros — Alejo lo probó pegado al título y prefirió este lugar. */}
+          <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:"1.25rem" }}>
+            {!isMobile && (
             <div style={{ display:"inline-flex", gap:4, padding:4, borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
               {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => {
                 const on = tab === key;
@@ -1237,8 +1235,9 @@ export default function App() {
                 );
               })}
             </div>
-            </div>
-          )}
+            )}
+            <SinDatosBadge items={sinDatosItems} />
+          </div>
 
           {/* Bottom nav — solo mobile */}
           {isMobile && (
