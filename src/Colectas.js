@@ -1670,10 +1670,13 @@ function ColectasInner({ soloArribos = false, irA }) {
     <div style={{ display:'flex', gap:0, marginBottom:20, borderBottom:`1px solid ${BRAND.border}` }}>
       {SECCIONES.map(s => {
         const active = tab === s;
-        // La alerta de SÁBADOS (con envíos sin confirmar) solo tiene sentido cuando estás viendo un sábado:
-        // entre semana la colecta del sábado todavía no ocurrió, así que no se muestra badge en esa pestaña.
+        // El badge "sin confirmar" solo tiene sentido si esa colecta ocurre el día que estás mirando:
+        //  · entre semana, la colecta de SÁBADOS todavía no pasó → no alerta.
+        //  · en sábado, los clientes de CABA/SUR/NOROESTE no operan → tampoco alertan (si no, un
+        //    sábado te muestra 32/19/33 pendientes que nunca se van a confirmar).
         const esSabadoHoy = new Date(fecha + 'T12:00:00').getDay() === 6;
-        const sinConfirmar = (s === 'SABADOS' && !esSabadoHoy) ? 0 : clientes.filter(c => c.activo && (s === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === s)).filter(c => {
+        const aplicaHoy = s === 'SABADOS' ? esSabadoHoy : !esSabadoHoy;
+        const sinConfirmar = !aplicaHoy ? 0 : clientes.filter(c => c.activo && (s === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === s)).filter(c => {
           const reg = registros[c.id];
           const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
           return estEf === 'amarillo';
