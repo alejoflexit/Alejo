@@ -110,16 +110,21 @@ async function sbAll(path, pageSize = 1000) {
   return all;
 }
 
-function useXLSX() {
-  const [ready, setReady] = useState(typeof window !== 'undefined' && !!window.XLSX);
-  useEffect(() => {
-    if (window.XLSX) { setReady(true); return; }
+// ExcelJS se carga a demanda (recién al tocar "Exportar Excel"): pesa ~900KB y no
+// tiene por qué frenar la carga de la pantalla. Antes el botón sólo se renderizaba
+// si el CDN había cargado, así que si fallaba la red el botón directamente no existía.
+let excelJsPromise = null;
+function cargarExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (excelJsPromise) return excelJsPromise;
+  excelJsPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    s.onload = () => setReady(true);
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = () => (window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error('ExcelJS no cargó')));
+    s.onerror = () => { excelJsPromise = null; reject(new Error('No se pudo descargar ExcelJS (¿sin internet?)')); };
     document.head.appendChild(s);
-  }, []);
-  return ready;
+  });
+  return excelJsPromise;
 }
 
 // ───────────────────────── motor de cálculo (puro) ─────────────────────────
@@ -574,54 +579,180 @@ function LoginPagos({ onOk }) {
 
 // ───────────────────────── export a excel ─────────────────────────
 
-function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotales }) {
+// Paleta del Excel (tonos claros: el archivo se lee en Excel/Sheets, no en el tema oscuro de la app)
+const XL = {
+  navy: 'FF0D1B2A',      // encabezados
+  white: 'FFFFFFFF',
+  totalBg: 'FFE7F8F3',   // verde agua suave para los totales
+  seccionBg: 'FFFFF3DC', // ámbar suave para los títulos de sección
+  zebra: 'FFF7F9FB',
+  linea: 'FFD9E2EC',
+  rojo: 'FFC0392B',
+  gris: 'FF64748B',
+};
+const XL_MONEY = '"$"#,##0';
+const XL_INT = '#,##0';
+
+function xlBorde(ws, row, nCols, { top, bottom } = {}) {
+  for (let c = 1; c <= nCols; c++) {
+    const cell = row.getCell(c);
+    cell.border = {
+      top: top ? { style: 'thin', color: { argb: XL.linea } } : undefined,
+      bottom: bottom ? { style: 'thin', color: { argb: XL.linea } } : undefined,
+    };
+  }
+}
+
+// Fila de encabezado de tabla: fondo navy, texto blanco en negrita.
+function xlHeaderRow(ws, valores) {
+  const row = ws.addRow(valores);
+  row.height = 20;
+  row.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: XL.white }, size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.navy } };
+    cell.alignment = { vertical: 'middle', horizontal: 'left' };
+  });
+  return row;
+}
+
+// Aplica formato de plata a las columnas de importe de una fila de datos.
+function xlFilaDatos(row, { moneyCols, intCols, nCols, zebra }) {
+  moneyCols.forEach(c => { row.getCell(c).numFmt = XL_MONEY; });
+  intCols.forEach(c => { row.getCell(c).numFmt = XL_INT; });
+  if (zebra) {
+    for (let c = 1; c <= nCols; c++) {
+      row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.zebra } };
+    }
+  }
+  xlBorde(null, row, nCols, { bottom: true });
+}
+
+async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotales }) {
+  const ExcelJS = await cargarExcelJS();
   const label = fmtSemanaLabel(semanaLunes);
   const header = ['Cadete', 'Cantidad', 'Precio', 'Monto', 'Colecta', 'Ajuste', 'TOTAL', 'Método'];
-  const rows = filas.map(f => f.esFletero ? [
-    `${f.nombre} (fletero)`, `${f.colectasCant} colectas`, '', '',
-    Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
-    Math.round(f.total || 0), f.factura ? 'Transferencia' : 'Efectivo',
-  ] : [
-    f.nombre, f.cantidad,
-    f.cantidad ? Math.round((f.monto || 0) / f.cantidad) : (f.precioFijo || ''),
-    Math.round(f.monto || 0), Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
-    Math.round(f.total || 0), f.factura ? 'Transferencia' : 'Efectivo',
-  ]);
+  const N = header.length;
+  const MONEY_COLS = [3, 4, 5, 6, 7]; // Precio, Monto, Colecta, Ajuste, TOTAL
+  const INT_COLS = [2];               // Cantidad
 
-  const aoa = [
-    [`Liquidaciones — Semana ${label}`],
-    [],
-    header,
-    ...rows,
-    [],
-    ['TOTAL GENERAL', '', '', '', '', '', Math.round(subtotales.total)],
-    ['Transferencia', '', '', '', '', '', Math.round(subtotales.transferencia)],
-    ['Efectivo', '', '', '', '', '', Math.round(subtotales.efectivo)],
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Flexit';
+  const ws = wb.addWorksheet('Liquidaciones', {
+    views: [{ state: 'frozen', ySplit: 3 }], // el encabezado queda fijo al scrollear
+  });
+  ws.columns = [
+    { width: 30 }, { width: 11 }, { width: 11 }, { width: 14 },
+    { width: 13 }, { width: 12 }, { width: 15 }, { width: 15 },
   ];
 
-  if (aparte.length) {
-    aoa.push([], ['PAGOS APARTE (fleteros / no suman al total)']);
-    aoa.push(header);
-    aparte.forEach(f => aoa.push([
-      f.nombre, f.cantidad,
-      f.cantidad && f.monto != null ? Math.round((f.monto || 0) / f.cantidad) : (f.precioFijo || ''),
-      f.monto != null ? Math.round(f.monto) : 'FALTA PRECIO',
+  // Título (fila 1)
+  ws.mergeCells(1, 1, 1, N);
+  const titulo = ws.getCell(1, 1);
+  titulo.value = `Liquidaciones — Semana ${label}`;
+  titulo.font = { bold: true, size: 14, color: { argb: XL.navy } };
+  ws.getRow(1).height = 24;
+  ws.addRow([]); // fila 2 en blanco
+
+  // Encabezado (fila 3) + datos
+  xlHeaderRow(ws, header);
+  const primeraFila = 4;
+  filas.forEach((f, i) => {
+    const row = ws.addRow(f.esFletero ? [
+      `${f.nombre} (fletero)`, f.colectasCant, null, null,
       Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
-      f.total != null ? Math.round(f.total) : '', f.factura ? 'Transferencia' : 'Efectivo',
-    ]));
+      Math.round(f.total || 0), f.factura ? 'Transferencia' : 'Efectivo',
+    ] : [
+      f.nombre, f.cantidad,
+      f.cantidad ? Math.round((f.monto || 0) / f.cantidad) : (f.precioFijo || null),
+      Math.round(f.monto || 0), Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
+      Math.round(f.total || 0), f.factura ? 'Transferencia' : 'Efectivo',
+    ]);
+    xlFilaDatos(row, { moneyCols: MONEY_COLS, intCols: INT_COLS, nCols: N, zebra: i % 2 === 1 });
+    if (f.esFletero) {
+      row.getCell(2).numFmt = '#,##0" colectas"'; // sigue siendo un número: se puede sumar y filtrar
+      row.getCell(1).font = { italic: true };
+    }
+    if (f.faltaPrecio) row.getCell(4).font = { color: { argb: XL.rojo }, bold: true };
+    row.getCell(7).font = { bold: true };
+  });
+  const ultimaFila = primeraFila + filas.length - 1;
+  if (filas.length) {
+    ws.autoFilter = { from: { row: 3, column: 1 }, to: { row: ultimaFila, column: N } };
+  }
+
+  // Totales
+  ws.addRow([]);
+  [
+    ['TOTAL GENERAL', subtotales.total],
+    ['Transferencia', subtotales.transferencia],
+    ['Efectivo', subtotales.efectivo],
+  ].forEach(([etiqueta, valor], i) => {
+    const row = ws.addRow([etiqueta, null, null, null, null, null, Math.round(valor)]);
+    for (let c = 1; c <= N; c++) {
+      const cell = row.getCell(c);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.totalBg } };
+      cell.font = { bold: i === 0, size: i === 0 ? 12 : 11 };
+    }
+    row.getCell(7).numFmt = XL_MONEY;
+    row.getCell(7).font = { bold: true, size: i === 0 ? 12 : 11 };
+    xlBorde(ws, row, N, { top: i === 0, bottom: i === 2 });
+  });
+
+  // Título de sección (banda ámbar a lo ancho)
+  const seccion = (texto) => {
+    ws.addRow([]);
+    const row = ws.addRow([texto]);
+    ws.mergeCells(row.number, 1, row.number, N);
+    const cell = row.getCell(1);
+    cell.font = { bold: true, size: 11, color: { argb: XL.navy } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XL.seccionBg } };
+    row.height = 19;
+  };
+
+  if (aparte.length) {
+    seccion('PAGOS APARTE (fleteros / no suman al total)');
+    xlHeaderRow(ws, header);
+    aparte.forEach((f, i) => {
+      const row = ws.addRow([
+        f.nombre, f.cantidad,
+        f.cantidad && f.monto ? Math.round(f.monto / f.cantidad) : (f.precioFijo || null),
+        f.monto ? Math.round(f.monto) : 'FALTA PRECIO',
+        Math.round(f.colecta || 0), Math.round(f.ajusteTotal || 0),
+        f.total != null ? Math.round(f.total) : null, f.factura ? 'Transferencia' : 'Efectivo',
+      ]);
+      xlFilaDatos(row, { moneyCols: MONEY_COLS, intCols: INT_COLS, nCols: N, zebra: i % 2 === 1 });
+      if (typeof row.getCell(4).value === 'string') {
+        row.getCell(4).numFmt = 'General';
+        row.getCell(4).font = { color: { argb: XL.rojo }, bold: true };
+        row.getCell(4).alignment = { horizontal: 'right' };
+      }
+    });
   }
 
   if (porDarAlta && porDarAlta.length) {
-    aoa.push([], ['A REVISAR — choferes por dar de alta']);
-    aoa.push(['Chofer', 'Entregas', 'Colectas']);
-    porDarAlta.forEach(s => aoa.push([s.nombre, s.entregas, s.colectas]));
+    seccion('A REVISAR — choferes por dar de alta');
+    xlHeaderRow(ws, ['Chofer', 'Entregas', 'Colectas']);
+    porDarAlta.forEach((s, i) => {
+      const row = ws.addRow([s.nombre, s.entregas, s.colectas]);
+      xlFilaDatos(row, { moneyCols: [], intCols: [2, 3], nCols: 3, zebra: i % 2 === 1 });
+    });
   }
 
-  const wb = window.XLSX.utils.book_new();
-  const ws = window.XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
-  window.XLSX.utils.book_append_sheet(wb, ws, 'Liquidaciones');
-  window.XLSX.writeFile(wb, `pagos_semana_${semanaLunes}.xlsx`);
+  // Pie: cuándo se generó
+  ws.addRow([]);
+  const pie = ws.addRow([`Generado desde flota-logistica · ${new Date().toLocaleString('es-AR')}`]);
+  pie.getCell(1).font = { size: 9, italic: true, color: { argb: XL.gris } };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pagos_semana_${semanaLunes}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 // ───────────────────────── sub-vista: Config de cadetes (solo admin) ─────────────────────────
@@ -1124,7 +1255,7 @@ function FilaDarAlta({ item, onAlta, onIgnorar, busy, note }) {
 // ───────────────────────── componente principal ─────────────────────────
 
 function PagosInner({ session }) {
-  const xlsxReady = useXLSX();
+  const [exportando, setExportando] = useState(false); // el botón siempre existe; ExcelJS baja al tocarlo
   const isAdmin = session && session.email === ADMIN_EMAIL;
 
   const [vista, setVista] = useState('tabla'); // 'tabla' | 'config' | 'pagador'
@@ -1627,12 +1758,18 @@ function PagosInner({ session }) {
             )}
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-              {xlsxReady && (
-                <button onClick={() => exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, porDarAlta: calc.porDarAlta, semanaLunes, subtotales })}
-                  style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 8, cursor: 'pointer', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <i className="ti ti-file-spreadsheet" style={{ fontSize: 15 }} /> Exportar Excel
-                </button>
-              )}
+              <button
+                disabled={exportando || cargando}
+                onClick={async () => {
+                  setExportando(true); setError('');
+                  try {
+                    await exportarExcel({ filas: filasOrdenadas, aparte: calc.aparte, porDarAlta: calc.porDarAlta, semanaLunes, subtotales });
+                  } catch (e) { setError(`No se pudo exportar el Excel: ${e.message}`); }
+                  finally { setExportando(false); }
+                }}
+                style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 8, cursor: exportando || cargando ? 'default' : 'pointer', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, opacity: exportando || cargando ? 0.55 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className={`ti ${exportando ? 'ti-loader-2' : 'ti-file-spreadsheet'}`} style={{ fontSize: 15 }} /> {exportando ? 'Generando…' : 'Exportar Excel'}
+              </button>
             </div>
           </div>
 
