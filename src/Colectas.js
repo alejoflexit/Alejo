@@ -902,7 +902,7 @@ function ColectasInner({ soloArribos = false, irA }) {
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580 }}>
             <thead>
               <tr style={{ background:'#252932' }}>
-                {['','Cliente','Chofer(es)','Dirección','Zona','Hora','$$$'].map((h,i) => (
+                {['','Cliente','Chofer(es)','Dirección','Zona','Vehículo','Hora','$$$'].map((h,i) => (
                   <th key={i} style={{ ...thSt, width:i===0?36:undefined }}>{h}</th>
                 ))}
               </tr>
@@ -931,7 +931,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                     {/* Group header */}
                     <tr onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
                       style={{ background: isActive ? 'rgba(58,143,212,0.14)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
-                      <td colSpan={7} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#3A8FD4'}` }}>
+                      <td colSpan={8} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#3A8FD4'}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
                             <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#FBBF24':'rgba(255,255,255,0.85)' }}>
@@ -1030,9 +1030,6 @@ function ColectasInner({ soloArribos = false, irA }) {
                           </td>
                           {/* Nombre */}
                           <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none', color:estado==='rojo'?BRAND.muted:undefined }}>
-                            {VEHICULOS[c.vehiculo] && (
-                              <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`} style={{ marginRight:5 }}>{VEHICULOS[c.vehiculo].emoji}</span>
-                            )}
                             {c.nombre}
                             {tab === 'SABADOS' && (
                               <span title={c.seccion==='SABADOS' ? 'Sin zona de semana asignada — editá el cliente para ponerle CABA/SUR/NOROESTE' : `Zona: ${c.seccion}`}
@@ -1099,6 +1096,18 @@ function ColectasInner({ soloArribos = false, irA }) {
                               </span>
                             )}
                           </td>
+                          {/* Vehículo — columna propia entre Zona y Hora. Antes era un emoji de color
+                              pegado al nombre y competía con lo que uno busca al barrer la lista. Va en
+                              gris: es un dato secundario, no una alerta. */}
+                          <td style={{ padding:'8px 8px', whiteSpace:'nowrap' }}>
+                            {VEHICULOS[c.vehiculo]
+                              ? <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`}
+                                  style={{ fontSize:10.5, padding:'2px 8px', borderRadius:20, border:'1px solid rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.55)' }}>
+                                  {VEHICULOS[c.vehiculo].label.toLowerCase()}
+                                </span>
+                              : <span style={{ fontSize:12, color:'rgba(255,255,255,0.18)' }}>—</span>}
+                          </td>
+
                           {/* Hora — horario configurado del cliente (se edita en Clientes) */}
                           <td style={{ padding:'8px 8px', whiteSpace:'nowrap', fontSize:12, color:(c.horario || c.hora_habitual) ? 'rgba(255,255,255,0.75)' : BRAND.muted }}>
                             {c.horario || (c.hora_habitual ? `${c.hora_habitual}:00` : '—')}
@@ -1128,7 +1137,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                         {activasRows.map(renderRow)}
                         {compactar && rojas.length > 0 && (
                           <tr onClick={() => setRojasOpen(p => ({ ...p, [chofer]: !p[chofer] }))} style={{ cursor:'pointer' }}>
-                            <td colSpan={7} style={{ padding:'7px 14px 7px 44px', fontSize:11.5, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
+                            <td colSpan={8} style={{ padding:'7px 14px 7px 44px', fontSize:11.5, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
                               <span style={{ color:'#E5604D', opacity:0.75, marginRight:7, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
                               {rojas.length} sin envíos
                             </td>
@@ -1295,17 +1304,18 @@ function ColectasInner({ soloArribos = false, irA }) {
               {filtrados.map(c => (
                 <tr key={c.id} style={{ background:BRAND.navy, borderBottom:`1px solid ${BRAND.border}` }}>
                   <td style={{ padding:'8px 12px' }}>
-                    <div style={{ fontWeight:500, fontSize:13 }}>
-                      {VEHICULOS[c.vehiculo] && (
-                        <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`} style={{ marginRight:5 }}>{VEHICULOS[c.vehiculo].emoji}</span>
-                      )}
-                      {c.nombre}
-                    </div>
+                    <div style={{ fontWeight:500, fontSize:13 }}>{c.nombre}</div>
                     <div style={{ fontSize:11, color:BRAND.muted, marginTop:2 }}>{c.direccion}{c.horario ? ` · 🕐 ${c.horario}` : ''}</div>
                   </td>
                   <td style={{ padding:'8px 12px' }}>
                     <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(58,143,212,0.15)', color:'#3A8FD4' }}>{c.seccion}</span>
                     {c.opera_sabados && <span style={{ marginLeft:4, fontSize:10, padding:'2px 6px', borderRadius:20, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>🗓️ Sáb</span>}
+                    {VEHICULOS[c.vehiculo] && (
+                      <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`}
+                        style={{ marginLeft:4, fontSize:10, padding:'2px 8px', borderRadius:20, border:'1px solid rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.55)' }}>
+                        {VEHICULOS[c.vehiculo].label.toLowerCase()}
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding:'8px 12px', fontSize:12, color:BRAND.muted }}>{c.zona_barrio||'—'}</td>
                   <td style={{ padding:'8px 12px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>{fmtMonto(c.monto)}</td>
