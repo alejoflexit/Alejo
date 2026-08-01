@@ -1212,8 +1212,12 @@ export default function App() {
           {/* Switch Tabla / Análisis — segmentado (fondo hundido + píldora tenue en la activa). Antes eran
               dos textos con subrayado fino que no parecían un control. Va acá, arriba de la vista y
               debajo de los KPIs y los filtros — Alejo lo probó pegado al título y prefirió este lugar. */}
+          {/* El contenedor de BLOQUE es necesario: el switch es inline-flex y SinDatosBadge es
+              inline-block, así que sin esto se acomodan en la misma línea y el switch aparece
+              pegado al costado de la alerta en vez de arrancar abajo. */}
           {!isMobile && (
-            <div style={{ display:"inline-flex", gap:4, padding:4, marginBottom:"1.25rem", borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
+            <div style={{ marginBottom:"1.25rem" }}>
+            <div style={{ display:"inline-flex", gap:4, padding:4, borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
               {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => {
                 const on = tab === key;
                 return (
@@ -1233,8 +1237,8 @@ export default function App() {
                 );
               })}
             </div>
+            </div>
           )}
-
 
           {/* Bottom nav — solo mobile */}
           {isMobile && (
