@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"; // build: 20 nav + lazy
 import Home from "./Home";
-import { getSession, login, logout } from "./auth";
+import { getSession, login, logout, authedFetch } from "./auth";
 import { cargarComentarios, useComentariosRealtime, aplicarCambioNota } from "./colectasShared";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
@@ -27,7 +27,11 @@ let _clienteTokens = null;
 async function getClienteTokens() {
   if (_clienteTokens) return _clienteTokens;
   try {
-    const res = await supabaseFetch("clientes_tokens?select=codigo,token&limit=1000");
+    // Con SESIÓN, no con la clave anónima: son los tokens de la API de LightData, uno por
+    // cliente. Estaban legibles por cualquiera que sacara la clave del bundle (auditoría 02/08).
+    const r = await authedFetch(`${SUPABASE_URL}/rest/v1/clientes_tokens?select=codigo,token&limit=1000`);
+    if (!r.ok) throw new Error(await r.text());
+    const res = await r.json();
     _clienteTokens = {};
     if (Array.isArray(res)) {
       res.forEach(r => { 

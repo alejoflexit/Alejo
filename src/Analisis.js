@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
+import { authedFetch } from "./auth";
 
 // Pestaña "Análisis" — port del prototipo prototipos/panel-analisis.html a React.
 // Datos: `semanas` (por cadete×día, prop desde App) + semanas_zonas y cadete_topes de Supabase.
@@ -90,10 +91,13 @@ async function sbGet(path) {
   return res.json();
 }
 // Escrituras (seguimiento de decisiones). POST devuelve la fila creada; DELETE devuelve null.
+// Escribe con la SESIÓN del usuario, no con la clave anónima: decisiones_seguimiento dejó de
+// aceptar escritura anónima (auditoría 02/08 — cualquiera con la clave del bundle podía
+// insertar y borrar filas). authedFetch ya refresca el token si venció.
 async function sbWrite(path, method, body) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method,
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+    headers: { "Content-Type": "application/json", Prefer: "return=representation" },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(await res.text());
