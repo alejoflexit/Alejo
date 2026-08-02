@@ -24,14 +24,83 @@ const ID_EMPRESA = 125;
 
 function fmtFecha(f) {
   if (!f) return "";
-  const d = new Date(f);
-  if (isNaN(d.getTime())) return String(f);
+  const s = String(f).trim();
+  // LightData manda "dd/mm/aaaa hh:mm". new Date() lo lee como mm/dd cuando el día es <= 12,
+  // así que 01/08 salía como 8 de enero. Se parsea a mano.
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{1,2}):(\d{2}))?/);
+  if (m) return `${m[1]}/${m[2]} ${m[4] ? `${m[4].padStart(2, "0")}:${m[5]}` : ""}`.trim();
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
   return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-// Panel "Info del envío": estado actual desde envios_busqueda + historial en vivo desde LightData
-function InfoEnvio({ envioId }) {
-  const [open, setOpen] = useState(false);
+// Números "reales" del mensaje: saca las menciones @123… de WhatsApp y deja los candidatos a venta/orden/tracking.
+function numerosDelTexto(texto) {
+  return [...new Set(String(texto || "").replace(/@[0-9]+/g, " ").match(/[0-9]{6,}/g) || [])].slice(0, 8);
+}
+
+// Las dos familias de ID de Mercado Libre: LightData indexa el id de ENVÍO (2000017…);
+// el de VENTA (2000014…) que mandan algunos clientes no matchea nunca.
+function diagnosticoNumero(n) {
+  const s = String(n);
+  if (/^2000017[0-9]{8,9}$/.test(s)) return "Número de envío de Mercado Libre — es el que busca el sistema.";
+  if (/^2000014[0-9]{8,9}$/.test(s)) return "Número de VENTA de Mercado Libre. El sistema busca por número de ENVÍO (empieza con 2000017), así que este no puede matchear.";
+  if (/^2000[0-9]{11,12}$/.test(s)) return "Número de Mercado Libre de otra familia — puede no estar indexado.";
+  if (s.length >= 9) return "Podría ser un tracking.";
+  return "Número suelto del mensaje.";
+}
+
+// Cómo encontró el envío: se deduce comparando los números del mensaje con el envío que quedó guardado.
+// No hay campo en la base para esto — si algún día el agente lo guarda, se reemplaza por ese dato.
+function comoEncontro(caso, envio) {
+  if (!envio) return null;
+  const nums = new Set(numerosDelTexto([caso.cita, caso.mensaje].filter(Boolean).join(" ")));
+  if (envio.id_venta_ml && nums.has(String(envio.id_venta_ml)))
+    return { nivel: "ok", txt: "Encontrado por venta de Mercado Libre", det: "El número del mensaje coincide exacto con el del envío." };
+  if (envio.tracking && nums.has(String(envio.tracking)))
+    return { nivel: "ok", txt: "Encontrado por número de tracking", det: "Coincidencia exacta." };
+  if (nums.has(String(envio.id_interno)))
+    return { nivel: "ok", txt: "Encontrado por número de envío", det: "Coincidencia exacta." };
+  return { nivel: "medio", txt: "Encontrado por dirección o nombre", det: "Ningún número del mensaje coincidió: verificá que sea el envío correcto." };
+}
+
+function colorEstado(e) {
+  const s = String(e || "");
+  if (/entregado/i.test(s) && !/no entregado/i.test(s)) return "#2ECFAA";
+  if (/(no entregado|cancelado|devuelto|nadie)/i.test(s)) return "#E24B4A";
+  return "#FFB020";
+}
+
+const S_SEC = { fontSize: 10, letterSpacing: ".11em", textTransform: "uppercase", color: "rgba(255,255,255,0.34)", fontWeight: 800, marginBottom: 8 };
+const S_CHIP = { display: "flex", alignItems: "flex-start", gap: 9, borderRadius: 10, padding: "10px 12px", marginBottom: 14 };
+const CHIP_COLOR = {
+  ok:    { bg: "rgba(46,207,170,0.10)",  bd: "rgba(46,207,170,0.30)",  c: "#2ECFAA", ic: "🟢" },
+  medio: { bg: "rgba(255,176,32,0.09)",  bd: "rgba(255,176,32,0.30)",  c: "#FFB020", ic: "🟡" },
+  no:    { bg: "rgba(226,75,74,0.09)",   bd: "rgba(226,75,74,0.28)",   c: "#ff8b8a", ic: "🔴" },
+};
+function ChipMatch({ nivel, txt, det }) {
+  const k = CHIP_COLOR[nivel] || CHIP_COLOR.medio;
+  return (
+    <div style={{ ...S_CHIP, background: k.bg, border: `1px solid ${k.bd}` }}>
+      <span style={{ fontSize: 15, lineHeight: 1.2 }}>{k.ic}</span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: k.c }}>{txt}</div>
+        {det && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", marginTop: 2, lineHeight: 1.5 }}>{det}</div>}
+      </div>
+    </div>
+  );
+}
+function Fila({ k, v, mono }) {
+  if (!v) return null;
+  return (<>
+    <dt style={{ color: "rgba(255,255,255,0.34)", fontSize: 11.5 }}>{k}</dt>
+    <dd style={{ margin: 0, color: "#e8ecf7", wordBreak: "break-word", ...(mono ? { fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12 } : {}) }}>{v}</dd>
+  </>);
+}
+
+// Columna derecha del caso: el estado del envío, el cadete y el historial de LightData, SIEMPRE a la vista.
+function PanelEnvio({ caso }) {
+  const envioId = caso.envio_id;
   const [data, setData] = useState(null);
   const [cargando, setCargando] = useState(false);
 
@@ -78,57 +147,130 @@ function InfoEnvio({ envioId }) {
     setCargando(false);
   }, [envioId]);
 
-  useEffect(() => { if (open && !data && !cargando) consultar(); }, [open, data, cargando, consultar]);
+  useEffect(() => { setData(null); }, [envioId]);
+  useEffect(() => { if (!data && !cargando) consultar(); }, [data, cargando, consultar]);
 
   const e = data && data.envio;
+  const match = comoEncontro(caso, e);
+
   return (
-    <div style={{ maxWidth: 640, marginBottom: 10 }}>
-      <button onClick={() => setOpen(!open)}
-        style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(74,158,255,0.35)", background: "rgba(74,158,255,0.08)", color: "#4A9EFF" }}>
-        📦 Info del envío
-        <span style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .2s", fontSize: 10 }}>▶</span>
-      </button>
-      {open && (
-        <div style={{ border: "1px solid rgba(74,158,255,0.25)", borderRadius: "0 10px 10px 10px", background: "rgba(74,158,255,0.05)", padding: "12px 14px", fontSize: 13 }}>
-          {cargando && <div style={{ color: "rgba(255,255,255,0.5)" }}>Consultando LightData…</div>}
-          {!cargando && data && (<>
-            {e && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-                  <span style={{ padding: "3px 10px", borderRadius: 6, fontWeight: 700, background: /entregado/i.test(e.estado) ? "rgba(46,207,170,0.15)" : "rgba(255,176,32,0.15)", color: /entregado/i.test(e.estado) ? "#2ECFAA" : "#FFB020" }}>
-                    {e.estado || "¿?"}{e.fecha_estado ? ` · ${e.fecha_estado}` : ""}
-                  </span>
-                  {e.cadete && <span style={{ color: "rgba(255,255,255,0.75)" }}>🛵 <b>{e.cadete}</b></span>}
-                </div>
-                <div style={{ color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>
-                  <b style={{ color: "#fff" }}>{e.nombre || "—"}</b> · {e.direccion || "—"}{e.localidad ? `, ${e.localidad}` : ""}{e.cp ? ` (CP ${e.cp})` : ""}<br />
-                  Cliente: {e.razon_social || e.cod_cliente || "—"}
-                  {e.id_venta_ml ? <> · Venta ML: {e.id_venta_ml}</> : null}
-                  {e.url_tracking ? <> · <a href={e.url_tracking} target="_blank" rel="noreferrer" style={{ color: "#4A9EFF" }}>Ver tracking</a></> : null}
-                </div>
-              </div>
-            )}
-            {Array.isArray(data.historial) && data.historial.length > 0 && (
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
-                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#4A9EFF", fontWeight: 700, marginBottom: 6 }}>Historial</div>
-                {data.historial.map((h, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "4px 0", borderBottom: i < data.historial.length - 1 ? "1px dashed rgba(255,255,255,0.06)" : "none" }}>
-                    <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", flex: "0 0 auto", background: i === data.historial.length - 1 ? "#2ECFAA" : "rgba(255,255,255,0.25)" }} />
-                    <span style={{ flex: "1 1 auto", color: "#fff", fontWeight: i === data.historial.length - 1 ? 700 : 400 }}>{h.estado}</span>
-                    <span style={{ color: "rgba(255,255,255,0.5)", whiteSpace: "nowrap" }}>{fmtFecha(h.fecha)}</span>
-                    {h.quien && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.quien}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-            {data.error && <div style={{ color: "#FFB020", fontSize: 12.5, marginTop: 6 }}>⚠ {data.error}</div>}
-            <button onClick={() => { setData(null); consultar(); }}
-              style={{ marginTop: 8, padding: "5px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.6)" }}>
-              ↻ Actualizar
-            </button>
-          </>)}
+    <div>
+      {cargando && !data && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Consultando LightData…</div>}
+      {match && <ChipMatch nivel={match.nivel} txt={match.txt} det={match.det} />}
+      {!match && data && <ChipMatch nivel="medio" txt="Envío guardado en el caso" det="Ya no está en la caché: se muestra lo que quedó registrado." />}
+
+      <div style={S_SEC}>Envío {envioId}</div>
+      {e ? (<>
+        <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.3px", color: colorEstado(e.estado) }}>{e.estado || "Sin estado"}</div>
+        {e.fecha_estado && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.34)", marginBottom: 13 }}>{e.fecha_estado}</div>}
+        <dl style={{ display: "grid", gridTemplateColumns: "88px 1fr", gap: "6px 10px", fontSize: 12.5, alignItems: "baseline", margin: 0 }}>
+          <Fila k="Cadete" v={e.cadete ? <b style={{ color: "#fff" }}>🛵 {e.cadete}</b> : <span style={{ color: "#FFB020" }}>sin asignar</span>} />
+          <Fila k="Destinatario" v={e.nombre} />
+          <Fila k="Dirección" v={[e.direccion, e.localidad, e.cp ? `CP ${e.cp}` : ""].filter(Boolean).join(", ")} />
+          <Fila k="Venta ML" v={e.id_venta_ml} mono />
+          <Fila k="Tracking" v={e.tracking} mono />
+          <Fila k="Cliente" v={[e.razon_social, e.cod_cliente].filter(Boolean).join(" · ")} />
+        </dl>
+      </>) : (
+        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
+          {caso.cadete ? <>Cadete registrado en el caso: <b style={{ color: "#fff" }}>{caso.cadete}</b><br /></> : null}
+          {data && data.error ? data.error : "Sin datos del envío."}
         </div>
       )}
+
+      {Array.isArray(data && data.historial) && data.historial.length > 0 && (
+        <div style={{ marginTop: 15, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+          <div style={S_SEC}>Historial</div>
+          {data.historial.map((h, i) => {
+            const ult = i === data.historial.length - 1;
+            return (
+              <div key={i} style={{ display: "flex", gap: 9, alignItems: "baseline", padding: "5px 0", fontSize: 12.5 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", flex: "0 0 auto", position: "relative", top: -2, background: ult ? "#2ECFAA" : "rgba(255,255,255,0.22)", boxShadow: ult ? "0 0 0 3px rgba(46,207,170,0.18)" : "none" }} />
+                <span style={{ flex: 1, color: ult ? "#fff" : "rgba(255,255,255,0.8)", fontWeight: ult ? 700 : 400 }}>{h.estado}</span>
+                <span style={{ color: "rgba(255,255,255,0.34)", fontSize: 11.5, whiteSpace: "nowrap" }}>{fmtFecha(h.fecha)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {data && data.error && e && <div style={{ color: "#FFB020", fontSize: 12, marginTop: 10 }}>⚠ {data.error}</div>}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        {e && e.url_tracking && (
+          <a href={e.url_tracking} target="_blank" rel="noreferrer"
+            style={{ flex: 1, textAlign: "center", padding: 8, borderRadius: 8, border: "1px solid rgba(74,158,255,0.3)", background: "rgba(74,158,255,0.07)", color: "#4A9EFF", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
+            Ver en LightData ↗
+          </a>
+        )}
+        <button onClick={() => setData(null)} title="Volver a consultar"
+          style={{ padding: "8px 11px", borderRadius: 8, fontSize: 12, cursor: "pointer", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.6)" }}>↻</button>
+      </div>
+    </div>
+  );
+}
+
+// Columna derecha cuando el bot NO resolvió el envío: qué buscó, por qué no lo encontró y qué probar.
+// Es el caso más frecuente, así que tiene que servir para algo.
+function PanelSinEnvio({ caso }) {
+  const texto = [caso.cita, caso.mensaje].filter(Boolean).join(" ");
+  const nums = numerosDelTexto(texto);
+  const [envio, setEnvio] = useState(undefined); // undefined = buscando
+
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      if (!nums.length) { setEnvio(null); return; }
+      const list = nums.join(",");
+      try {
+        const rows = await sb(`envios_busqueda?or=(id_venta_ml.in.(${list}),id_interno.in.(${list}),tracking.in.(${list}))&select=id_interno,cadete,estado,fecha_estado,localidad,nombre,direccion&limit=1`);
+        if (!cancel) setEnvio(rows && rows[0] ? rows[0] : null);
+      } catch (e) { if (!cancel) setEnvio(null); }
+    })();
+    return () => { cancel = true; };
+  }, [texto]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (envio === undefined) return (
+    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Buscando el envío…</div>
+  );
+
+  if (envio) return (
+    <div>
+      <ChipMatch nivel="medio" txt="Lo encontré yo, el bot no"
+        det="Uno de los números del mensaje sí está en la base. El caso quedó sin envío igual." />
+      <div style={S_SEC}>Envío {envio.id_interno}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.3px", color: colorEstado(envio.estado) }}>{envio.estado || "Sin estado"}</div>
+      {envio.fecha_estado && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.34)", marginBottom: 13 }}>{envio.fecha_estado}</div>}
+      <dl style={{ display: "grid", gridTemplateColumns: "88px 1fr", gap: "6px 10px", fontSize: 12.5, alignItems: "baseline", margin: 0 }}>
+        <Fila k="Cadete" v={envio.cadete ? <b style={{ color: "#fff" }}>🛵 {envio.cadete}</b> : <span style={{ color: "#FFB020" }}>sin asignar</span>} />
+        <Fila k="Destinatario" v={envio.nombre} />
+        <Fila k="Dirección" v={[envio.direccion, envio.localidad].filter(Boolean).join(", ")} />
+      </dl>
+    </div>
+  );
+
+  return (
+    <div>
+      <ChipMatch nivel="no" txt="No se encontró el envío"
+        det="El bot no pudo vincular este caso a ningún envío." />
+      <div style={S_SEC}>Qué se buscó</div>
+      {nums.length === 0 && (
+        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
+          El mensaje no trae ningún número de venta, orden ni tracking. Solo se pudo buscar por dirección y nombre.
+        </div>
+      )}
+      {nums.map(n => (
+        <div key={n} style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 9, padding: "9px 11px", marginBottom: 7, background: "rgba(255,255,255,0.025)" }}>
+          <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, color: "#fff", fontWeight: 600 }}>{n}</div>
+          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", marginTop: 3, lineHeight: 1.5 }}>{diagnosticoNumero(n)}</div>
+        </div>
+      ))}
+      <div style={{ marginTop: 11, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.10)", fontSize: 11.5, color: "rgba(255,255,255,0.34)", lineHeight: 1.7 }}>
+        <b style={{ color: "rgba(255,255,255,0.55)" }}>Qué probar:</b><br />
+        · Pedirle el número que empieza con <b style={{ color: "#fff" }}>2000017</b><br />
+        · Buscar por el nombre del comprador en LightData<br />
+        · Si el envío es de hace más de ~6 días, ya salió de la caché
+      </div>
     </div>
   );
 }
@@ -215,33 +357,6 @@ function ordenGrupo(c) {
   if (c.estado === "resuelto") return 4;
   if (dormido(c)) return 3;
   return 2;
-}
-
-// Busca el envío mencionado (por número de venta/orden/tracking) en el texto — sirve cuando el número
-// está en el mensaje citado y el bot no pudo vincularlo. Solo encuentra envíos recientes (caché ~6 días).
-function EnvioPorTexto({ texto }) {
-  const [envio, setEnvio] = useState(undefined);
-  useEffect(() => {
-    let cancel = false;
-    (async () => {
-      const nums = [...new Set(String(texto || "").replace(/@[0-9]+/g, " ").match(/[0-9]{6,}/g) || [])].slice(0, 6);
-      if (!nums.length) { setEnvio(null); return; }
-      const list = nums.join(",");
-      try {
-        const rows = await sb(`envios_busqueda?or=(id_venta_ml.in.(${list}),id_interno.in.(${list}),tracking.in.(${list}))&select=id_interno,cadete,estado,fecha_estado,localidad&limit=1`);
-        if (!cancel) setEnvio(rows && rows[0] ? rows[0] : null);
-      } catch (e) { if (!cancel) setEnvio(null); }
-    })();
-    return () => { cancel = true; };
-  }, [texto]);
-  if (!envio) return null;
-  return (
-    <div style={{ maxWidth: 640, marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(46,207,170,0.35)", background: "rgba(46,207,170,0.06)", fontSize: 13, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-      <span style={{ color: "#2ECFAA", fontWeight: 700 }}>📦 Lo tiene: {envio.cadete || "sin asignar"}</span>
-      <span style={{ color: "rgba(255,255,255,0.6)" }}>· {envio.estado || "?"}{envio.fecha_estado ? " · " + envio.fecha_estado : ""}{envio.localidad ? " · " + envio.localidad : ""}</span>
-      <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>(envío #{envio.id_interno})</span>
-    </div>
-  );
 }
 
 export default function Tiquetera() {
@@ -495,7 +610,13 @@ export default function Tiquetera() {
 
   return (
     <div>
-      <style>{`@keyframes pingTk{75%,100%{transform:scale(2.4);opacity:0}}@keyframes temblarTk{0%,100%{transform:translateX(0)}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-2px)}40%{transform:translateX(2px)}50%{transform:translateX(0)}}`}</style>
+      <style>{`@keyframes pingTk{75%,100%{transform:scale(2.4);opacity:0}}@keyframes temblarTk{0%,100%{transform:translateX(0)}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-2px)}40%{transform:translateX(2px)}50%{transform:translateX(0)}}
+        .tk-cols{display:grid;grid-template-columns:1fr 380px}
+        .tk-col-der{border-left:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.018)}
+        @media (max-width: 900px){
+          .tk-cols{grid-template-columns:1fr}
+          .tk-col-der{border-left:none;border-top:1px solid rgba(255,255,255,0.10)}
+        }`}</style>
 
       {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: "1rem" }}>{error}</div>}
 
@@ -698,7 +819,7 @@ export default function Tiquetera() {
         const dorm = dormido(c);
         return (
           <div onClick={() => { setError(""); setAbierto(null); }} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(4,7,12,0.30)", backdropFilter: "blur(1.5px)", WebkitBackdropFilter: "blur(1.5px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "24px 16px", overflowY: "auto" }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, margin: "auto", background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 1180, margin: "auto", background: "#0f1626", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,0.55)", position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
                 {c.estado === "abierto" && !dorm && (
                   <span title="Sin contestar" style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
@@ -709,33 +830,33 @@ export default function Tiquetera() {
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
                 <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
+                {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
                 {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color }}>{eb.txt}</span>}
-                <button onClick={() => { setError(""); setAbierto(null); }} title="Cerrar" style={{ marginLeft: "auto", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+                <span style={{ marginLeft: "auto", fontSize: 12.5, color: "rgba(255,255,255,0.34)", whiteSpace: "nowrap" }}>{edadTxt(c)}</span>
+                <button onClick={() => { setError(""); setAbierto(null); }} title="Cerrar" style={{ marginLeft: 6, background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
               </div>
-              <div style={{ padding: "16px 18px" }}>
+              <div className="tk-cols">
+              <div style={{ padding: "16px 18px", minWidth: 0 }}>
                 {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: 10 }}>{error}</div>}
                   {c.cita && (
-                    <div style={{ borderLeft: "3px solid rgba(46,207,170,0.55)", background: "rgba(255,255,255,0.04)", borderRadius: "0 8px 8px 0", padding: "6px 10px", marginBottom: 6, maxWidth: 640 }}>
+                    <div style={{ borderLeft: "3px solid rgba(46,207,170,0.55)", background: "rgba(255,255,255,0.04)", borderRadius: "0 8px 8px 0", padding: "6px 10px", marginBottom: 6 }}>
                       <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 2, textTransform: "uppercase", letterSpacing: ".04em" }}>↩ En respuesta a</div>
                       <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.35 }}>{resolverMenciones(c.cita, mapaLids)}</div>
                     </div>
                   )}
-                  <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", maxWidth: 640, fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
+                  <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
                     {resolverMenciones(c.mensaje, mapaLids)}
                   </div>
                   {mediaCaso && (
                     <img onClick={() => setLightbox(`data:${mediaCaso.mime};base64,${mediaCaso.b64}`)} src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" title="Tocar para ver en grande" style={{ width: 104, height: 104, objectFit: "cover", borderRadius: 9, border: "1px solid rgba(255,255,255,0.14)", display: "block", cursor: "zoom-in", marginBottom: 10 }} />
                   )}
-                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
-                    {c.envio_id && <span>Envío <b style={{ color: "#fff" }}>#{c.envio_id}</b></span>}
-                    {c.cadete && <span>Cadete: <b style={{ color: "#fff" }}>{c.cadete}</b></span>}
-                    {c.turno && <span>Turno: {c.turno}</span>}
-                    {c.resuelto_por && <span style={{ color: "#2ECFAA" }}>✓ Resuelto por {c.resuelto_por}</span>}
-                  </div>
-
-                  {c.envio_id && <InfoEnvio envioId={c.envio_id} />}
-                  {!c.envio_id && (c.cita || c.mensaje) && <EnvioPorTexto texto={[c.cita, c.mensaje].filter(Boolean).join(" ")} />}
+                  {(c.turno || c.resuelto_por) && (
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
+                      {c.turno && <span>Turno: {c.turno}</span>}
+                      {c.resuelto_por && <span style={{ color: "#2ECFAA" }}>✓ Resuelto por {c.resuelto_por}</span>}
+                    </div>
+                  )}
 
                   {Array.isArray(c.notas) && c.notas.length > 0 && (() => {
                     const hilo = [
@@ -744,7 +865,7 @@ export default function Tiquetera() {
                     ].sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
                     const ab = !!hilos[c.id];
                     return (
-                      <div style={{ maxWidth: 640, marginBottom: 10 }}>
+                      <div style={{ marginBottom: 10 }}>
                         <button onClick={() => setHilos(h => ({ ...h, [c.id]: !h[c.id] }))}
                           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#cfe3ff", borderRadius: 9, padding: "9px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                           <span>💬 Conversación ({hilo.length} mensaje{hilo.length > 1 ? "s" : ""})</span>
@@ -777,7 +898,7 @@ export default function Tiquetera() {
                   })()}
 
                   {c.respuesta_enviada && (
-                    <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 10, padding: "10px 12px", maxWidth: 640, marginBottom: 10 }}>
+                    <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, marginBottom: 4 }}>
                         {c.estado === "enviando" ? "📤 En cola — sale en menos de 1 minuto" : ("✓✓ Enviado al cliente" + (c.enviado_at ? " · " + new Date(c.enviado_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""))}
                       </div>
@@ -786,7 +907,7 @@ export default function Tiquetera() {
                   )}
 
                   {(() => { const dups = posiblesDuplicados(c, casos); return dups.length > 0 && (
-                    <div style={{ maxWidth: 640, marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(255,176,32,0.4)", background: "rgba(255,176,32,0.07)", fontSize: 12.5, color: "#FFB020" }}>
+                    <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(255,176,32,0.4)", background: "rgba(255,176,32,0.07)", fontSize: 12.5, color: "#FFB020" }}>
                       ⚠ Posible duplicado (mismo envío o número):{dups.map(d => (
                         <span key={d.id} onClick={() => setAbierto(d.id)} title={d.mensaje} style={{ cursor: "pointer", textDecoration: "underline", marginLeft: 6 }}>
                           #{d.id}{d.estado === "resuelto" ? " (resuelto)" : d.respuesta_enviada ? " (contestado)" : ""}
@@ -795,7 +916,7 @@ export default function Tiquetera() {
                     </div>
                   ); })()}
                   {c.estado !== "resuelto" && (<>
-                    <div style={{ border: "1px dashed rgba(46,207,170,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,207,170,0.04)", maxWidth: 640, marginBottom: 10 }}>
+                    <div style={{ border: "1px dashed rgba(46,207,170,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,207,170,0.04)", marginBottom: 10 }}>
                       <div onClick={c.respuesta_enviada ? undefined : () => setRespAbierta(v => !v)} title={c.respuesta_enviada ? undefined : (respAbierta ? "Ocultar" : "Mostrar")}
                         style={{ display: "flex", alignItems: "center", gap: 6, cursor: c.respuesta_enviada ? "default" : "pointer", fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, userSelect: "none" }}>
                         {!c.respuesta_enviada && <span style={{ display: "inline-block", transition: "transform .15s", transform: respAbierta ? "rotate(90deg)" : "none", fontSize: 10 }}>▸</span>}
@@ -809,34 +930,45 @@ export default function Tiquetera() {
                           style={{ width: "100%", background: "transparent", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "inherit", resize: "none", overflow: "hidden", outline: "none", boxSizing: "border-box", marginTop: 8, minHeight: 40, display: "block" }} />
                       )}
                     </div>
-                    <div style={{ display: "flex", gap: 8, maxWidth: 640, marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                       <input value={notaTxt} onChange={e => setNotaTxt(e.target.value)} placeholder="Nota interna para el equipo (no la ve el cliente)…"
                         style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 13 }} />
                       <button style={btn(false)} onClick={() => { if (!notaTxt.trim()) return; patch(c.id, { notas: [...(c.notas || []), { quien: operador, texto: notaTxt.trim(), at: new Date().toISOString() }] }); setNotaTxt(""); }}>+ Nota</button>
                     </div>
-                    <div style={{ display: "flex", gap: 8, maxWidth: 640, flexWrap: "wrap" }}>
-                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, ...(copiado === c.id ? { background: "#1A9E7C", borderColor: "transparent", color: "#fff" } : {}) }} title="Copiar la respuesta" onClick={() => {
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+<button style={{ ...btn(false), padding: "8px 14px", fontWeight: 700, background: "#2ECFAA", borderColor: "transparent", color: "#07281f" }} title="Enviar mensaje de bot" onClick={() => {
+                        const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
+                        if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
+                        if (!window.confirm("Se va a ENVIAR este mensaje al cliente por WhatsApp:\n\n" + txt + "\n\n¿Confirmás?")) return; patch(c.id, { respuesta_enviada: txt, estado: "enviando", enviado_por: operador });
+                      }}>🤖 Enviar por WhatsApp</button>
+<button style={btn(false)} title="Si copiaste el mensaje y lo pegaste vos en WhatsApp, marcá el caso como respondido con esto" onClick={() => {
+                        const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
+                        patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual", enviado_por: operador });
+                      }}>✓✓ Contestado</button>
+                      
+<button style={{ ...btn(false), borderColor: "rgba(46,207,170,0.45)", background: "rgba(46,207,170,0.07)", color: "#2ECFAA" }}
+                        onClick={() => setConfirmarResolver(c.id)}>
+                        Resolver
+                      </button>
+                      
+<button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, ...(copiado === c.id ? { background: "#1A9E7C", borderColor: "transparent", color: "#fff" } : {}) }} title="Copiar la respuesta" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("No hay respuesta para copiar."); return; }
                         navigator.clipboard.writeText(txt); setCopiado(c.id);
                       }}>{copiado === c.id ? "✓" : "📋"}</button>
-                      <button style={{ ...btn(false), padding: "8px 12px", fontSize: 17, borderColor: "rgba(46,207,170,0.5)", color: "#2ECFAA" }} title="Enviar mensaje de bot" onClick={() => {
-                        const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
-                        if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
-                        if (!window.confirm("Se va a ENVIAR este mensaje al cliente por WhatsApp:\n\n" + txt + "\n\n¿Confirmás?")) return; patch(c.id, { respuesta_enviada: txt, estado: "enviando", enviado_por: operador });
-                      }}>🤖</button>
-                      <button style={btn(false)} title="Si copiaste el mensaje y lo pegaste vos en WhatsApp, marcá el caso como respondido con esto" onClick={() => {
-                        const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
-                        patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual", enviado_por: operador });
-                      }}>✓✓ Contestado</button>
-                      <button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_cadete" ? "abierto" : "esperando_cadete" })}>
+                      
+                    </div>
+                    <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "11px 0 9px" }} />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+<button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_cadete" ? "abierto" : "esperando_cadete" })}>
                         {c.estado === "esperando_cadete" ? "Volver a abierto" : "Esperando cadete"}
                       </button>
-                      <button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_deposito" ? "abierto" : "esperando_deposito" })}>
+                      
+<button style={btn(false)} onClick={() => patch(c.id, { estado: c.estado === "esperando_deposito" ? "abierto" : "esperando_deposito" })}>
                         {c.estado === "esperando_deposito" ? "Volver a abierto" : "Esperando depósito"}
                       </button>
-                      <button style={btn(false)} title="Fijar arriba" onClick={() => patch(c.id, { fijado: !c.fijado })}>📌</button>
-                      <select defaultValue="" title="Posponer este caso (la alarma lo despierta)"
+                      
+<select defaultValue="" title="Posponer este caso (la alarma lo despierta)"
                         onChange={e => { const v = e.target.value; if (!v) return; let d; if (v === "manana") { d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); } else { d = new Date(Date.now() + Number(v) * 3600000); } patch(c.id, { snooze_hasta: d.toISOString() }); e.target.value = ""; }}
                         style={{ ...btn(false), padding: "8px 10px", background: "#12123A", color: "rgba(255,255,255,0.7)", appearance: "none", WebkitAppearance: "none", MozAppearance: "none", textAlign: "center" }} title="Posponer (la alarma lo despierta)">
                         <option value="" disabled>⏰</option>
@@ -847,16 +979,16 @@ export default function Tiquetera() {
                         <option value="8">8 horas</option>
                         <option value="manana">Mañana 9hs</option>
                       </select>
-                      {c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(255,176,32,0.5)", color: "#FFB020" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
-                      <button style={{ ...btn(false), borderColor: "rgba(46,207,170,0.4)", color: "#2ECFAA" }}
-                        onClick={() => setConfirmarResolver(c.id)}>
-                        Resolver
-                      </button>
-                      <button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, borderColor: "rgba(229,115,115,0.45)", color: "#E57373" }} title="Reportar algo raro de este caso"
+                      
+{c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(255,176,32,0.5)", color: "#FFB020" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
+                      
+<button style={btn(false)} title="Fijar arriba" onClick={() => patch(c.id, { fijado: !c.fijado })}>📌</button>
+                      
+<button style={{ ...btn(false), padding: "8px 11px", fontSize: 15, borderColor: "rgba(229,115,115,0.45)", color: "#E57373" }} title="Reportar algo raro de este caso"
                         onClick={() => { setBugPara(bugPara === c.id ? null : c.id); setBugTxt(""); }}>🐛</button>
                     </div>
                     {confirmarResolver === c.id && (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", maxWidth: 640, marginTop: 10, padding: "9px 12px", borderRadius: 8, border: "1px solid rgba(46,207,170,0.45)", background: "rgba(46,207,170,0.07)" }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "9px 12px", borderRadius: 8, border: "1px solid rgba(46,207,170,0.45)", background: "rgba(46,207,170,0.07)" }}>
                         <span style={{ fontSize: 13, color: "#fff" }}>¿Marcar este caso como resuelto?</span>
                         <button style={{ ...btn(true), marginLeft: "auto" }} onClick={async () => {
                           const idx = visibles.findIndex(x => x.id === c.id);
@@ -871,7 +1003,7 @@ export default function Tiquetera() {
                       </div>
                     )}
                     {bugPara === c.id && (
-                      <div style={{ display: "flex", gap: 8, maxWidth: 640, marginTop: 10 }}>
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                         <input value={bugTxt} onChange={e => setBugTxt(e.target.value)} autoFocus placeholder="¿Qué viste raro en este caso?"
                           onKeyDown={e => { if (e.key === "Enter") reportarBug(c); }}
                           style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(229,115,115,0.45)", background: "rgba(229,115,115,0.06)", color: "#fff", fontSize: 13 }} />
@@ -880,6 +1012,10 @@ export default function Tiquetera() {
                     )}
                     {bugMsg === c.id && <div style={{ marginTop: 8, fontSize: 12.5, color: "#39d98a" }}>✓ ¡Gracias! Reporte guardado para revisar.</div>}
                   </>)}
+              </div>
+              <div className="tk-col-der" style={{ padding: "16px 18px", minWidth: 0 }}>
+                {c.envio_id ? <PanelEnvio caso={c} /> : <PanelSinEnvio caso={c} />}
+              </div>
               </div>
             </div>
           </div>
