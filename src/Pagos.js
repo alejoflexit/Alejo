@@ -1462,12 +1462,17 @@ function PagosInner({ session }) {
     return c.pagado ? 'pagado' : 'confirmado';
   }, [cierrePorCadete]);
 
-  // la vista filtra por método y por estado; el Excel exporta SIEMPRE todas (Tarea 1)
+  // Recorte por MÉTODO. Es el que manda el alcance de los KPIs y de la barra de confirmación:
+  // Alejo trabaja por tanda — transferencias lunes y martes, efectivo después — así que cuando
+  // filtra Transferencia quiere saber cuánto falta DE TRANSFERENCIAS, no de toda la semana.
+  const filasPorMetodo = useMemo(() =>
+    filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura),
+    [filasOrdenadas, filtroMetodo]);
+
+  // la vista además filtra por estado; el Excel exporta SIEMPRE todas (Tarea 1)
   const filasVisibles = useMemo(() =>
-    filasOrdenadas
-      .filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura)
-      .filter(f => filtroEstado === 'todos' ? true : estadoDeFila(f) === filtroEstado),
-    [filasOrdenadas, filtroMetodo, filtroEstado, estadoDeFila]);
+    filasPorMetodo.filter(f => filtroEstado === 'todos' ? true : estadoDeFila(f) === filtroEstado),
+    [filasPorMetodo, filtroEstado, estadoDeFila]);
 
   // Tarea 2: setter que persiste las ediciones de cantidad de la semana en localStorage
   const setOverridesPersist = useCallback((updater) => {
@@ -1529,6 +1534,9 @@ function PagosInner({ session }) {
     return { total, transferencia, efectivo };
   }, [filasEfectivas]);
 
+  // Nombre del alcance activo (para los rótulos de KPIs y de la barra). '' = toda la semana.
+  const alcanceLbl = filtroMetodo === 'transferencia' ? 'transferencias' : filtroMetodo === 'efectivo' ? 'efectivo' : '';
+
   const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '1rem 1.1rem' };
   // Selector de semana como desplegable: muestra el rango completo ("20/07 al 25/07") con flechita.
   const selSt = { padding: '6px 32px 6px 12px', fontSize: 13, fontWeight: 600, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-opacity='0.6' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center' };
@@ -1548,15 +1556,16 @@ function PagosInner({ session }) {
   const thNum = { ...thSt, textAlign: 'right' };
 
   // Cierre por cadete (normalizado): cada fila se cuelga su cierre para saber si está trabada.
+  // Avance de confirmación DEL ALCANCE ELEGIDO (ver filasPorMetodo).
   const avance = useMemo(() => {
     let confirmados = 0, faltaConfirmarMonto = 0;
-    filasEfectivas.forEach(f => {
+    filasPorMetodo.forEach(f => {
       const c = cierrePorCadete.get(norm(f.nombre));
       if (c && c.estado === 'confirmado') confirmados++;
       else faltaConfirmarMonto += (f.total || 0);
     });
-    return { confirmados, total: filasEfectivas.length, faltaConfirmarMonto };
-  }, [filasEfectivas, cierrePorCadete]);
+    return { confirmados, total: filasPorMetodo.length, faltaConfirmarMonto };
+  }, [filasPorMetodo, cierrePorCadete]);
   // La columna Ajuste solo se muestra si alguna fila visible tiene ajuste; el descuento se agrega desde el detalle del cadete
   const hayAjustes = filasVisibles.some(f => f.ajusteTotal);
   const nCols = hayAjustes ? 10 : 9; // Cadete,Cant,Precio,Monto,Colecta,[Ajuste],TOTAL,Método,Medio,Estado
@@ -1879,25 +1888,28 @@ function PagosInner({ session }) {
                   const pctT = subtotales.total ? Math.round(subtotales.transferencia / subtotales.total * 100) : 0;
                   const pctE = subtotales.total ? Math.round(subtotales.efectivo / subtotales.total * 100) : 0;
                   const pend = Math.max(0, avance.total - avance.confirmados);
-                  const kpi = (lbl, val, sub, subColor) => (
-                    <div key={lbl} style={{ ...cardSt, padding: '12px 14px' }}>
+                  const kpi = (lbl, val, sub, subColor, extra) => (
+                    <div key={lbl} style={{ ...cardSt, padding: '12px 14px', ...(extra || {}) }}>
                       <div style={{ fontSize: 10.5, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{lbl}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: BRAND.white, marginTop: 4 }}>{val}</div>
                       {sub && <div style={{ fontSize: 11.5, color: subColor || BRAND.muted, marginTop: 2 }}>{sub}</div>}
                     </div>
                   );
+                  // Con un método filtrado, el otro se apaga: la tanda que estás haciendo queda
+                  // adelante y la otra deja de competir por la atención.
+                  const off = { opacity: 0.42 };
                   return [
                     kpi('Liquidado', money(subtotales.total), `${filasEfectivas.length} cadetes`),
-                    kpi('Transferencia', money(subtotales.transferencia), `${nTransf} pagos · ${pctT}%`),
-                    kpi('Efectivo', money(subtotales.efectivo), `${nEfec} pagos · ${pctE}%`),
-                    kpi('Pendientes', pend, pend === 0 ? '✓ todo confirmado' : 'falta confirmar', pend === 0 ? BRAND.teal : BRAND.amber),
+                    kpi('Transferencia', money(subtotales.transferencia), `${nTransf} pagos · ${pctT}%`, null, filtroMetodo === 'efectivo' ? off : null),
+                    kpi('Efectivo', money(subtotales.efectivo), `${nEfec} pagos · ${pctE}%`, null, filtroMetodo === 'transferencia' ? off : null),
+                    kpi(alcanceLbl ? `Pendientes · ${alcanceLbl}` : 'Pendientes', pend, pend === 0 ? '✓ todo confirmado' : 'falta confirmar', pend === 0 ? BRAND.teal : BRAND.amber),
                   ];
                 })()}
               </div>
               {/* Progreso de confirmación */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: BRAND.muted, marginBottom: 5 }}>
-                  <span>Confirmación de la semana</span>
+                  <span>Confirmación{alcanceLbl ? <> · <b style={{ color: BRAND.white }}>solo {alcanceLbl}</b></> : ' de la semana'}</span>
                   <span><b style={{ color: BRAND.white }}>{avance.confirmados}</b> / {avance.total}{avance.faltaConfirmarMonto > 0 ? ` · falta ${money(avance.faltaConfirmarMonto)}` : ''}</span>
                 </div>
                 <div style={{ height: 8, borderRadius: 20, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
