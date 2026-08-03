@@ -830,7 +830,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
     });
   }, [doAction]);
 
-  const filtrados = tarifas.filter(t => !filtro || norm(t.nombre_lightdata || t.nombre).includes(norm(filtro)));
+  // El buscador también mira el titular: si te acordás del nombre de la cuenta y no del cadete.
+  const filtrados = tarifas.filter(t => !filtro || norm(`${t.nombre_lightdata || t.nombre} ${t.titular || ''}`).includes(norm(filtro)));
   const cadetesCp = tarifas.filter(t => t.nombre_lightdata); // el modal de tarifas sirve para cualquier cadete
   const selTarifa = tarifas.find(t => t.nombre_lightdata === cpSel) || null;
   const entregasCp = (cpsPorCadete && cpsPorCadete.get(norm(cpSel))) || [];
@@ -914,13 +915,14 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
           <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.teal }}>Cadetes ({tarifas.length})</div>
           <input style={inp} placeholder="Buscar..." value={filtro} onChange={e => setFiltro(e.target.value)} />
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760, fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920, fontSize: 12.5 }}>
           <thead>
             <tr style={{ color: BRAND.muted, textAlign: 'left' }}>
               <th style={{ padding: '4px 6px' }}>Nombre LightData</th>
               <th style={{ padding: '4px 6px' }}>Factura</th>
               <th style={{ padding: '4px 6px' }} title="Solo hace colectas: cobra el monto de cada colecta y no entra a la liquidación por entregas">Fletero</th>
               <th style={{ padding: '4px 6px' }}>Precio fijo</th>
+              <th style={{ padding: '4px 6px' }} title="Nombre completo del titular de la cuenta. A veces la transferencia va a nombre de otra persona — sirve para corroborar contra el CBU/alias antes de pagar.">Titular</th>
               <th style={{ padding: '4px 6px' }}>CUIL</th>
               <th style={{ padding: '4px 6px' }}>CBU</th>
               <th style={{ padding: '4px 6px' }}>Alias</th>
@@ -952,6 +954,23 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                     {draftVal(t, 'precio_fijo') == null && (t.modo !== 'cp') && (() => {
                       const zonas = [['CABA', t.tarifa_caba], ['G1', t.tarifa_gba1], ['G2', t.tarifa_gba2], ['G3', t.tarifa_gba3]].filter(x => x[1] != null);
                       return zonas.length ? <div style={{ fontSize: 10, color: BRAND.muted, marginTop: 3 }}>sin precio fijo — usa zona: {zonas.map(x => x[0] + ' ' + money(x[1])).join(' · ')}</div> : null;
+                    })()}
+                  </td>
+                  <td style={{ padding: '5px 6px' }}>
+                    {(() => {
+                      // Titular de la cuenta. Si NO coincide con el nombre del cadete se pinta en
+                      // ámbar: es justo el caso que hay que mirar dos veces antes de transferir.
+                      const tit = draftVal(t, 'titular') ?? '';
+                      const propio = norm(tit) && (norm(tit) === norm(t.nombre_lightdata || '') || norm(tit) === norm(t.nombre || ''));
+                      const distinto = !!norm(tit) && !propio;
+                      return (
+                        <input disabled={!esFactura}
+                          title={!esFactura ? bancoTitle : distinto ? 'La cuenta está a nombre de otra persona' : 'Nombre completo del titular de la cuenta'}
+                          style={{ ...bancoInp, width: 150, color: distinto ? BRAND.amber : undefined, fontWeight: distinto ? 600 : undefined }}
+                          placeholder={esFactura ? 'nombre completo' : '—'}
+                          value={tit}
+                          onChange={e => setDraft(t.id, 'titular', e.target.value)} />
+                      );
                     })()}
                   </td>
                   <td style={{ padding: '5px 6px' }}>
