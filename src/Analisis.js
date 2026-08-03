@@ -380,6 +380,7 @@ export default function Analisis({ semanas }) {
   const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
   const [lenteReg, setLenteReg] = useState("sla"); // tarjetas de Regiones: lente SLA u Horario
+  const [verLocs, setVerLocs] = useState(false); // "Localidades a vigilar" plegado por defecto
   const [verCapacidad, setVerCapacidad] = useState(false); // "Capacidad para redistribuir" colapsado por defecto
   const [verAlertasOp, setVerAlertasOp] = useState(false); // "Alertas operativas / calidad de datos" colapsado por defecto
   const [verAtender, setVerAtender] = useState(true); // "A atender" colapsable (abierto por defecto, es lo principal)
@@ -1169,8 +1170,8 @@ export default function Analisis({ semanas }) {
                   {(dAntes21 >= 0 ? "+" : "−") + fmt1(Math.abs(dAntes21))} pp <span style={{ color: C.muted, fontWeight: 400 }}>vs {prevLbl}</span>
                 </span>
               )}
-              <span onClick={() => { setLenteReg("hor"); setTimeout(() => { const el = document.getElementById("regiones-bloque"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 60); }}
-                style={{ marginLeft: "auto", fontSize: 11.5, color: C.teal, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>ver por región ▸</span>
+              {/* Acá había un "ver por región ▸": las tarjetas de Regiones están literalmente
+                  abajo, con su propio switch de lente. Era un link para bajar dos centímetros. */}
             </div>
             <div style={{ display: "flex", height: 11, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.06)", marginTop: 11 }}>
               <div style={{ width: `${antes21}%`, background: colorAntes21, transition: "width .5s ease" }} />
@@ -1308,11 +1309,16 @@ export default function Analisis({ semanas }) {
           ))}
         </div>
 
-        {/* Localidades a vigilar — al lado de los cadetes críticos: son parte de las acciones, no del detalle */}
+        {/* Localidades a vigilar — parte de las acciones, no del detalle. Plegado por defecto:
+            son muchas filas y tapaban lo que sigue; el contador en el encabezado alcanza para
+            saber si vale la pena abrirlo. */}
         {alertas.locs.length > 0 && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>📍 Localidades a vigilar</div>
-            {alertas.locs.map((a) => <AlertRow key={a.key} a={a} seg={segNode(a)} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
+            <div onClick={() => setVerLocs((v) => !v)} style={{ fontSize: 12.5, fontWeight: 700, marginBottom: verLocs ? 4 : 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: C.teal, fontSize: 12 }}>{verLocs ? "▾" : "▸"}</span>
+              <span>📍 Localidades a vigilar <span style={{ color: C.muted, fontWeight: 400, fontSize: 11.5 }}>· {alertas.locs.length}</span></span>
+            </div>
+            {verLocs && alertas.locs.map((a) => <AlertRow key={a.key} a={a} seg={segNode(a)} onClick={() => toggleDrill(a.kind, a.name, "locv")} abierto={isOpen(a.kind, a.name, "locv")} />)}
           </div>
         )}
 
