@@ -97,6 +97,7 @@ export default function PagosPagador({ tarifas }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filtro, setFiltro] = useState('pendientes');      // pendientes | pagados | todos
+  const [armado, setArmado] = useState(null);              // id de la fila esperando el 2º clic de "Mandó factura"
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | factura | efectivo
   const [copiado, setCopiado] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -313,8 +314,10 @@ export default function PagosPagador({ tarifas }) {
                       {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
                     </span>
                     {/* Estado de la factura (requisito, separado del método) — solo transferencia */}
+                    {/* Cuando la factura ya está, el chip baja de tono: es info resuelta, no compite
+                        con el verde del botón de pagar. Pendiente sigue en ámbar, que es lo que frena. */}
                     {f.factura && (f.facturaOk
-                      ? <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.teal, background: 'rgba(46,207,170,0.12)', border: '1px solid rgba(46,207,170,0.4)', whiteSpace: 'nowrap' }}>✅ Factura recibida</span>
+                      ? <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}><span style={{ color: BRAND.teal }}>✓</span> Factura recibida</span>
                       : <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', border: '1px solid rgba(255,176,32,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
                     )}
                     <span style={{ fontWeight: 700, fontSize: 15, minWidth: 130, textDecoration: f.pagado ? 'line-through' : 'none' }}>{f.nombre}</span>
@@ -332,9 +335,24 @@ export default function PagosPagador({ tarifas }) {
                       );
                     })() : sinFactura ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <button onClick={() => marcarFactura(f, true)} disabled={busyId === f.id} title="cuando mandó la factura: se habilita el pago"
-                          style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: busyId === f.id ? 'wait' : 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal, whiteSpace: 'nowrap' }}>
-                          Mandó factura
+                        {/* Ámbar, no verde: esta acción RESUELVE el chip ámbar "Factura pendiente".
+                            El verde queda reservado para la única acción de plata (Marcar pagado),
+                            que antes se confundía con esta por estar en el mismo lugar y del mismo color.
+                            Doble clic: el primero arma, el segundo aplica (se tocaba sin querer). */}
+                        <button
+                          onClick={() => {
+                            if (armado !== f.id) {
+                              setArmado(f.id);
+                              setTimeout(() => setArmado(a => (a === f.id ? null : a)), 3000);
+                            } else { setArmado(null); marcarFactura(f, true); }
+                          }}
+                          disabled={busyId === f.id}
+                          title={armado === f.id ? 'tocá de nuevo para confirmar' : 'cuando mandó la factura: se habilita el pago'}
+                          style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: busyId === f.id ? 'wait' : 'pointer', whiteSpace: 'nowrap',
+                            border: `1px solid ${BRAND.amber}`,
+                            background: armado === f.id ? BRAND.amber : 'rgba(255,176,32,0.12)',
+                            color: armado === f.id ? '#2b1a00' : BRAND.amber }}>
+                          {armado === f.id ? '¿Seguro? tocá otra vez' : 'Mandó factura'}
                         </button>
                       </span>
                     ) : pickId === f.id ? (
