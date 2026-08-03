@@ -152,6 +152,36 @@ const mini = { border: "1px solid rgba(255,255,255,0.09)", background: "rgba(255
 const miniOk = { ...mini, border: "1px solid rgba(46,230,182,0.4)", color: "#2ee6b6", background: "rgba(46,230,182,0.1)" };
 const secSt = { fontSize: 12, fontWeight: 600, color: C.ink3, margin: "22px 6px 12px" };
 
+// ── Paco, la mascota de Flexit (pixel-art, tomando mate) ──
+// Spritesheet de 3 frames (reposo → levanta → toma) en public/paco-sprites.png (216x161 en pantalla,
+// cada frame 72x161 @2x). Decorativo puro: pointer-events:none así jamás tapa botones ni tablas,
+// se oculta en pantallas chicas y queda quieto si el usuario tiene "reducir movimiento" activado.
+function PacoMate() {
+  return (
+    <>
+      <style>{`
+        .paco-mate {
+          position: fixed; right: 18px; bottom: 0; z-index: 2;
+          width: 72px; height: 161px; pointer-events: none;
+          background: url(${process.env.PUBLIC_URL || ""}/paco-sprites.png) 0 0 / 216px 161px no-repeat;
+          animation: paco-toma-mate 14s infinite;
+          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.35));
+        }
+        @keyframes paco-toma-mate {
+          0%, 60%      { background-position: 0 0; }
+          60.01%, 67%  { background-position: -72px 0; }
+          67.01%, 84%  { background-position: -144px 0; }
+          84.01%, 91%  { background-position: -72px 0; }
+          91.01%, 100% { background-position: 0 0; }
+        }
+        @media (max-width: 900px), (max-height: 560px) { .paco-mate { display: none; } }
+        @media (prefers-reduced-motion: reduce) { .paco-mate { animation: none; } }
+      `}</style>
+      <div className="paco-mate" aria-hidden="true" />
+    </>
+  );
+}
+
 export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout, comBadge = 0 }) {
   const hoy = todayStr();
   const ahora = useMemo(() => new Date(Date.now() - 3 * 3600 * 1000), []);
@@ -292,6 +322,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           así no dibujan un rectángulo tintado dentro del padding de la app (eso se veía como un
           "borde" alrededor del header). El contenido va por encima. */}
       <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "radial-gradient(1100px 600px at 12% -4%, rgba(0,255,180,0.05), transparent 60%), radial-gradient(1000px 640px at 92% 106%, rgba(0,180,255,0.04), transparent 60%)" }} />
+      {!isMobile && <PacoMate />}
       <div style={{ maxWidth: 820, margin: "0 auto", position: "relative", zIndex: 1, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: C.ink }}>
 
         {/* Header — logo + saludo a la izquierda, acciones a la derecha. Sin wrap: el saludo se
