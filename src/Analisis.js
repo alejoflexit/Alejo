@@ -390,6 +390,8 @@ export default function Analisis({ semanas }) {
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
   const [lenteReg, setLenteReg] = useState("sla"); // tarjetas de Regiones: lente SLA u Horario
   const [verLocs, setVerLocs] = useState(false); // "Localidades a vigilar" plegado por defecto
+  const [regionAbierta, setRegionAbierta] = useState(null); // detalle de región, inline debajo de las tarjetas
+  const [zonaAbierta, setZonaAbierta] = useState(null);     // dentro de ese detalle, qué zona muestra localidades
   // Corte horario del titular (idea del "Horario de corte" del ML21). 21 = el que mide Meli.
   // Se recuerda entre sesiones, pero el default siempre es 21 en una máquina nueva.
   const [corte, setCorte] = useState(() => {
@@ -1245,8 +1247,10 @@ export default function Analisis({ semanas }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <Tile label="SLA Meli (solo ML)" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null}
             spark={<Spark vals={sSla} color={C.good} />}
-            open={verIncompletos}
-            onClick={() => { setVerIncompletos(true); setJerNodos(new Set(["CABA", "Norte", "Oeste", "Sur"])); setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80); }} />
+            open={lenteReg === "sla" && !!regionAbierta}
+            // Antes esto también te tiraba al árbol del fondo de la página. Ahora baja apenas hasta
+            // las tarjetas de Regiones, que están acá nomás, con la lente SLA puesta.
+            onClick={() => { setLenteReg("sla"); setTimeout(() => { const el = document.getElementById("regiones-bloque"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 60); }} />
           <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} spark={<Spark vals={sEnv} color={C.good} />} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
           <Tile label="Pendientes" value={fmtInt(cur.g.pend)} dot={cur.g.pendRate >= 0.05 ? C.warn : null} sub={`${fmt1(cur.g.pendRate * 100)}% del total`} spark={<Spark vals={sPend} color={C.good} />} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="" bueno="down" prevLbl={prevLbl} /> : null} />
         </div>
@@ -1261,10 +1265,12 @@ export default function Analisis({ semanas }) {
               : d <= -CFG.regionFlecha ? { t: "↓", c: C.critText }
                 : d >= CFG.regionFlecha ? { t: "↑", c: C.goodText }
                   : { t: "→", c: C.muted };
+          // Tocar una región abre el detalle ACÁ MISMO, debajo de las tarjetas. Antes te mandaba
+          // con scroll al árbol del final de la página: perdías el contexto y aterrizabas en una
+          // sección que no era la que estabas mirando.
           const abrirRegion = (nombre) => {
-            setVerIncompletos(true);
-            setJerNodos((s) => new Set([...s, nombre]));
-            setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
+            setRegionAbierta((r) => (r === nombre ? null : nombre));
+            setZonaAbierta(null);
           };
           const hor = lenteReg === "hor"; // lente: SLA (solo ML) o Horario (% entregado antes de las 21)
           return (
@@ -1302,12 +1308,14 @@ export default function Analisis({ semanas }) {
                   const d = (pv != null && cv != null) ? cv - pv : null;
                   const f = flecha(d);
                   const pie = hor ? `${fmtInt(r.entregados)} entregas` : `${fmtInt(r.envios_ml)} ML`;
+                  const abierta = regionAbierta === r.nombre;
                   return (
                     <div key={r.nombre} onClick={() => abrirRegion(r.nombre)}
-                      style={{ flex: "1 1 125px", minWidth: 115, background: C.cardAlt, border: `1px solid ${C.border}`, borderLeft: `3px solid ${col}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
+                      style={{ flex: "1 1 125px", minWidth: 115, background: abierta ? "rgba(46,207,170,0.07)" : C.cardAlt, border: `1px solid ${abierta ? "rgba(46,207,170,0.45)" : C.border}`, borderLeft: `3px solid ${col}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
                       <div style={{ fontSize: 11.5, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: col, display: "inline-block", flex: "0 0 auto" }} />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nombre}</span>
+                        <span style={{ marginLeft: "auto", color: C.teal, fontSize: 11 }}>{abierta ? "▾" : "▸"}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 3 }}>
                         <span style={{ fontSize: 19, fontWeight: 700, color: col }}>{val != null ? fmt1(val) + "%" : "—"}</span>
@@ -1318,6 +1326,68 @@ export default function Analisis({ semanas }) {
                   );
                 })}
               </div>
+              {/* Detalle de la región, acá abajo. Misma lente que las tarjetas: si estás mirando
+                  Horario, las zonas también se ordenan y se leen por horario. */}
+              {(() => {
+                const reg = regionAbierta ? regs.find((x) => x.nombre === regionAbierta) : null;
+                if (!reg) return null;
+                const valDe = (o) => hor
+                  ? (totalHoras(o.horas) > 0 ? antesDeCorte(o.horas, corte) : (o.entregados > 0 ? 100 - o.post21Rate : null))
+                  : o.sla;
+                const colDe = (v) => hor ? horColor(v) : slaColor(v);
+                const zonas = (reg.zonasArr || []).slice().sort((a, b) => {
+                  const va = valDe(a), vb = valDe(b);
+                  if (va == null && vb == null) return b.envios_ml - a.envios_ml;
+                  if (va == null) return 1; if (vb == null) return -1;
+                  return va - vb; // peor primero
+                });
+                const regVal = valDe(reg);
+                return (
+                  <div style={{ marginTop: 10, background: C.card, border: "1px solid rgba(46,207,170,0.28)", borderRadius: 12, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{reg.nombre}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: colDe(regVal) }}>{regVal != null ? fmt1(regVal) + "%" : "—"}</span>
+                      <span style={{ fontSize: 11, color: C.muted }}>
+                        {hor ? `${fmtInt(reg.entregados)} entregas · antes de las ${String(corte).padStart(2, "0")}:00` : `${fmtInt(reg.envios_ml)} ML · SLA Meli`}
+                        {` · ${zonas.length} ${zonas.length === 1 ? "zona" : "zonas"}, peor primero`}
+                      </span>
+                      <span onClick={() => { setRegionAbierta(null); setZonaAbierta(null); }} style={{ marginLeft: "auto", fontSize: 11.5, color: C.muted, cursor: "pointer" }}>cerrar ✕</span>
+                    </div>
+                    <div className="flexit-scroll" style={{ maxHeight: 300, overflowY: "auto" }}>
+                      {zonas.map((z) => {
+                        const v = valDe(z), abierta = zonaAbierta === z.nombre;
+                        const locs = (z.localidades || []).slice().sort((a, b) => {
+                          const va = valDe(a), vb = valDe(b);
+                          if (va == null && vb == null) return b.envios_ml - a.envios_ml;
+                          if (va == null) return 1; if (vb == null) return -1;
+                          return va - vb;
+                        });
+                        return (
+                          <div key={z.nombre}>
+                            <div onClick={() => setZonaAbierta(abierta ? null : z.nombre)}
+                              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 4px", borderTop: `1px solid ${C.faint}`, cursor: locs.length ? "pointer" : "default" }}>
+                              <span style={{ width: 11, color: C.teal, fontSize: 11, flex: "0 0 auto" }}>{locs.length ? (abierta ? "▾" : "▸") : ""}</span>
+                              <span style={{ flex: "1 1 auto", fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{z.nombre}</span>
+                              <span style={{ flex: "0 0 auto", fontSize: 11, color: C.muted, minWidth: 54, textAlign: "right" }}>{hor ? fmtInt(z.entregados) : fmtInt(z.envios_ml)}</span>
+                              <span style={{ flex: "0 0 auto", fontSize: 12.5, fontWeight: 700, color: colDe(v), minWidth: 52, textAlign: "right" }}>{v != null ? fmt1(v) + "%" : "—"}</span>
+                            </div>
+                            {abierta && locs.map((l) => {
+                              const lv = valDe(l);
+                              return (
+                                <div key={l.nombre || l.localidad} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px 5px 23px", borderTop: `1px solid ${C.faint}`, background: "rgba(255,255,255,0.02)" }}>
+                                  <span style={{ flex: "1 1 auto", fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.nombre || l.localidad}</span>
+                                  <span style={{ flex: "0 0 auto", fontSize: 11, color: C.muted, minWidth: 54, textAlign: "right" }}>{hor ? fmtInt(l.entregados) : fmtInt(l.envios_ml)}</span>
+                                  <span style={{ flex: "0 0 auto", fontSize: 12, fontWeight: 600, color: colDe(lv), minWidth: 52, textAlign: "right" }}>{lv != null ? fmt1(lv) + "%" : "—"}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
               {hor && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>% de entregas antes de las {String(corte).padStart(2, "0")}:00 — el SLA puede estar intacto y la región estar entregando cada vez más tarde.</div>}
               {prevRegiones && prevRegiones.parcial && (
                 <div style={{ fontSize: 10.5, color: C.muted, marginTop: 4 }}>
