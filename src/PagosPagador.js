@@ -336,7 +336,7 @@ export default function PagosPagador({ tarifas }) {
                     })() : sinFactura ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         {/* Ámbar, no verde: esta acción RESUELVE el chip ámbar "Factura pendiente".
-                            El verde queda reservado para la única acción de plata (Marcar pagado),
+                            El verde queda reservado para la única acción de plata ("Ya pagué"),
                             que antes se confundía con esta por estar en el mismo lugar y del mismo color.
                             Doble clic: el primero arma, el segundo aplica (se tocaba sin querer). */}
                         <button
@@ -382,9 +382,13 @@ export default function PagosPagador({ tarifas }) {
                           )}
                         </span>
                       )}
-                      <button onClick={() => setPickId(f.id)}
+                      {/* "Ya pagué" y no "Pagar": la app NO transfiere — la transferencia la hace
+                          Alejo en el banco y acá solo queda registrada. Mismo criterio que
+                          "Mandó factura": el rótulo nombra un hecho que ya pasó afuera, no una
+                          acción que el sistema pueda ejecutar. */}
+                      <button onClick={() => setPickId(f.id)} title="registrar que ya le transferiste — después elegís Galicia o Mercado Pago"
                         style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: BRAND.teal, color: '#06231b', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                        ✓ Marcar pagado
+                        ✓ Ya pagué
                       </button>
                       </span>
                     )}
