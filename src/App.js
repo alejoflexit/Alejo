@@ -194,7 +194,7 @@ async function supabaseFetch(path, options = {}) {
 async function cargarDesdeSupabase() {
   let rows;
   try {
-    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,demorados_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
+    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,horas,demorados_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
   } catch(e) {
     // Columna demorados_detalle no existe aún — usar query sin ella
     rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta&order=fecha.asc&limit=50000");
@@ -206,7 +206,7 @@ async function cargarDesdeSupabase() {
     if (!map[r.label].dias[r.fecha]) map[r.label].dias[r.fecha] = [];
     map[r.label].dias[r.fecha].push({
       cadete: r.cadete, cantidad: r.cantidad, pendientes: r.pendientes,
-      demorados: r.demorados, envios_ml: r.envios_ml, post21: r.post21||0, dem21: r.dem21||0, envios_particular: r.envios_particular||0, inicio_ruta: r.inicio_ruta||null, fin_ruta: r.fin_ruta||null, fecha: r.fecha,
+      demorados: r.demorados, envios_ml: r.envios_ml, post21: r.post21||0, dem21: r.dem21||0, envios_particular: r.envios_particular||0, inicio_ruta: r.inicio_ruta||null, fin_ruta: r.fin_ruta||null, horas: r.horas||null, fecha: r.fecha,
       demoradosDetalle: r.demorados_detalle || [],
       sinDatosDetalle: r.sin_datos_detalle || [],
     });
@@ -236,6 +236,7 @@ async function guardarEnSupabase(datos, fecha, weekLabel) {
     label: weekLabel, fecha, cadete: m.cadete,
     cantidad: m.cantidad, pendientes: m.pendientes,
     demorados: m.demorados, envios_ml: m.envios_ml, post21: m.post21 || 0, dem21: m.dem21 || 0, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null,
+    horas: m.horas || {},
     demorados_detalle: m.demoradosDetalle || [],
     sin_datos_detalle: m.sinDatosDetalle || [],
   }));
@@ -243,7 +244,7 @@ async function guardarEnSupabase(datos, fecha, weekLabel) {
     await supabaseFetch("semanas", { method: "POST", body: JSON.stringify(rows) });
   } catch(e) {
     // Fallback sin columnas nuevas si aún no existen
-    const rowsFallback = rows.map(({ demorados_detalle, sin_datos_detalle, ...r }) => r);
+    const rowsFallback = rows.map(({ demorados_detalle, sin_datos_detalle, horas, ...r }) => r);
     await supabaseFetch("semanas", { method: "POST", body: JSON.stringify(rowsFallback) });
   }
 }
@@ -322,7 +323,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
         if (h >= 21) esPost21 = true;
       }
     }
-    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [], sinDatosDetalle: [] };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, horas: {}, demoradosDetalle: [], sinDatosDetalle: [] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
@@ -337,6 +338,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     if (esML)        map[cadete].envios_ml++;
     if (!esML)       map[cadete].envios_particular++;
     if (esPost21)    map[cadete].post21++;
+    if (esEntregado) sumarHora(map[cadete].horas, horaEntrega(fechaEstado));
     // Track inicio and fin de ruta from entregados
     if (esEntregado && fechaEstado) {
       const hora = fechaEstado.split(" ")[1];
@@ -356,6 +358,16 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   });
 }
+
+// Hora de entrega (0-23) desde "Fecha estado". El histograma por hora es lo que permite mover
+// el corte de las 21 en Análisis sin volver a procesar el Excel.
+function horaEntrega(fechaEstado) {
+  const h = String(fechaEstado || "").split(" ")[1];
+  if (!h) return null;
+  const n = parseInt(h.split(":")[0], 10);
+  return isNaN(n) || n < 0 || n > 23 ? null : n;
+}
+function sumarHora(obj, h) { if (h != null) obj[h] = (obj[h] || 0) + 1; }
 
 // --- Métricas por zona (localidad) — mismo criterio de demorados/dem21 que calcularDia, agrupado por localidad ---
 function normLoc(s) {
@@ -400,7 +412,7 @@ function calcularZonas(rows, fecha, noEsDemora = new Set()) {
     const esSameday = esEntregado && fechaEstadoADia(fechaEstado) === fecha;
 
     const norm = normLoc(locOrig);
-    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0 };
+    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0, horas: {} };
     const g = map[norm];
     if (locOrig) g.labels[locOrig] = (g.labels[locOrig] || 0) + 1;
     g.cantidad++;
@@ -409,6 +421,7 @@ function calcularZonas(rows, fecha, noEsDemora = new Set()) {
     if (esDemorado) g.demorados++;
     if (esRepro21) g.dem21++;
     if (esPost21) g.post21++;
+    if (esEntregado) sumarHora(g.horas, horaEntrega(fechaEstado));
     if (esML) g.envios_ml++;
     if (esNadie) g.nadie++;
     if (esSameday) g.sameday++;

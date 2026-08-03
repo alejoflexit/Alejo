@@ -185,7 +185,7 @@ function calcularDia(rows, fecha, noEsDemora) {
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
     const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
-    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null, demoradosDetalle:[], sinDatosDetalle:[] };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null, horas:{}, demoradosDetalle:[], sinDatosDetalle:[] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
@@ -201,6 +201,7 @@ function calcularDia(rows, fecha, noEsDemora) {
     if (!esML)       map[cadete].envios_particular++;
     if (esPost21)    map[cadete].post21++;
     if (esRepro21)   map[cadete].dem21++;
+    if (esEntregado) sumarHora(map[cadete].horas, horaEntrega(fechaEstado));
     if (esEntregado && fechaEstado) {
       const hora = fechaEstado.split(" ")[1];
       if (hora) {
@@ -211,6 +212,24 @@ function calcularDia(rows, fecha, noEsDemora) {
   }
   return Object.values(map);
 }
+
+// URL de export de LightData para una fecha (YYYY-MM-DD). ÚNICA fuente: si hay que tocar
+// parámetros (ojo con &obs=2, sin él se pierden los envíos con observación), se toca acá.
+function excelUrlDe(fecha) {
+  const [year, month, day] = fecha.split('-');
+  const fechaFmt = `${day}/${month}/${year}`;
+  return `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
+}
+
+// Hora de entrega (0-23) desde "Fecha estado" = "YYYY-MM-DD HH:MM". null si el Excel no la trae.
+// El histograma que se arma con esto es lo que permite mover el corte de las 21 sin reprocesar nada.
+function horaEntrega(fechaEstado) {
+  const h = String(fechaEstado || "").split(" ")[1];
+  if (!h) return null;
+  const n = parseInt(h.split(":")[0], 10);
+  return isNaN(n) || n < 0 || n > 23 ? null : n;
+}
+function sumarHora(obj, h) { if (h != null) obj[h] = (obj[h] || 0) + 1; }
 
 // --- Métricas por zona (localidad) — mismo criterio de demorados/dem21 que calcularDia, agrupado por localidad ---
 function normLoc(s) {
@@ -258,7 +277,7 @@ function calcularZonas(rows, fecha, noEsDemora, cpZona) {
     const esSameday = esEntregado && fechaEstadoADia(fechaEstado) === fecha;
 
     const norm = normLoc(locOrig); // "" = sin localidad
-    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, zonaCp: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0 };
+    if (!map[norm]) map[norm] = { localidad_norm: norm, labels: {}, zonaCp: {}, cantidad: 0, entregados: 0, pendientes: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, sameday: 0, horas: {} };
     const g = map[norm];
     if (locOrig) g.labels[locOrig] = (g.labels[locOrig] || 0) + 1;
     // zona por CP (zonas_cp): acumular para elegir la dominante de la localidad
@@ -273,6 +292,7 @@ function calcularZonas(rows, fecha, noEsDemora, cpZona) {
     if (esDemorado) g.demorados++;
     if (esRepro21) g.dem21++;
     if (esPost21) g.post21++;
+    if (esEntregado) sumarHora(g.horas, horaEntrega(fechaEstado));
     if (esML) g.envios_ml++;
     if (esNadie) g.nadie++;
     if (esSameday) g.sameday++;
@@ -283,6 +303,99 @@ function calcularZonas(rows, fecha, noEsDemora, cpZona) {
     const { labels, zonaCp, ...rest } = g;
     return { ...rest, localidad: labelTop, zona_cp: zonaCpTop };
   });
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BACKFILL del histograma por hora (columna `horas`).
+// Se dispara con BACKFILL_DESDE / BACKFILL_HASTA (YYYY-MM-DD) y NO toca ninguna otra
+// columna: baja el Excel de cada día, arma {hora: entregas} por cadete y por localidad,
+// y lo aplica con la función aplicar_horas (que solo escribe `horas`).
+// No verifica demoras contra el historial — el histograma no depende de eso, así que
+// se ahorra la parte cara del pipeline.
+// ─────────────────────────────────────────────────────────────────────────────
+async function rpcAplicarHoras(fecha, cadetes, zonas) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/aplicar_horas`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_fecha: fecha, p_cadetes: cadetes, p_zonas: zonas }),
+  });
+  if (!res.ok) throw new Error(`aplicar_horas ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+function filasDeExcel(buffer) {
+  const wb = XLSX.read(buffer, { type: "buffer" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  let headerRow = -1;
+  for (let i = 0; i < Math.min(10, raw.length); i++) {
+    if (raw[i] && raw[i].some((c) => String(c || "").includes("Cadete"))) { headerRow = i; break; }
+  }
+  if (headerRow === -1) throw new Error("no se encontró la columna Cadete");
+  const headers = raw[headerRow].map((h) => String(h || "").trim());
+  return raw.slice(headerRow + 1)
+    .filter((r) => r && r.some((c) => c !== null && c !== undefined && c !== ""))
+    .map((r) => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ""; }); return o; });
+}
+
+// Mismo criterio de "entregado" y de localidad_norm que calcularDia/calcularZonas.
+function histogramas(rows) {
+  const cadetes = {}, zonas = {};
+  for (const row of rows) {
+    const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
+    if (!["Entregado", "Entregado 2DA visita"].includes(estado)) continue;
+    const h = horaEntrega(String(row["Fecha estado"] || "").trim());
+    if (h == null) continue;
+    const cadete = String(row["Cadete"] || "").trim() || "⚠️ Sin asignar";
+    sumarHora(cadetes[cadete] || (cadetes[cadete] = {}), h);
+    const norm = normLoc(String(row["Localidad"] || "").trim());
+    sumarHora(zonas[norm] || (zonas[norm] = {}), h);
+  }
+  return { cadetes, zonas };
+}
+
+async function backfillHoras(desde, hasta) {
+  const fechas = [];
+  for (let d = new Date(desde + "T12:00:00"); d <= new Date(hasta + "T12:00:00"); d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 0) continue; // domingo: no se opera
+    fechas.push(d.toISOString().slice(0, 10));
+  }
+  console.log(`Backfill de horas: ${fechas.length} días (${desde} → ${hasta})`);
+
+  const browser = await puppeteer.launch({ args: chromium.args, defaultViewport: chromium.defaultViewport, executablePath: await chromium.executablePath(), headless: chromium.headless });
+  const page = await browser.newPage();
+  await page.goto("https://flexit.lightdata.app", { waitUntil: "networkidle2", timeout: 30000 });
+  await page.waitForSelector("input", { timeout: 15000 });
+  const inputs = await page.$$("input");
+  await inputs[0].type(LD_USER);
+  await inputs[1].type(LD_PASS);
+  await page.keyboard.press("Enter");
+  await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 });
+  console.log("Login LightData OK");
+
+  let ok = 0, vacios = 0, fallos = 0;
+  for (const fecha of fechas) {
+    try {
+      const r = await page.evaluate(async (url) => {
+        try { const res = await fetch(url, { credentials: "include" }); const b = await res.arrayBuffer(); return { ok: true, status: res.status, data: Array.from(new Uint8Array(b)) }; }
+        catch (e) { return { ok: false, error: String(e) }; }
+      }, excelUrlDe(fecha));
+      if (!r.ok || r.status !== 200 || r.data.length < 1000) { console.log(`· ${fecha}: excel vacío o error (${r.status || r.error})`); vacios++; continue; }
+      const rows = filasDeExcel(Buffer.from(r.data));
+      const { cadetes, zonas } = histogramas(rows);
+      if (!Object.keys(cadetes).length) { console.log(`· ${fecha}: 0 entregas con hora`); vacios++; continue; }
+      const res = await rpcAplicarHoras(fecha, cadetes, zonas);
+      console.log(`✓ ${fecha}: ${rows.length} filas → semanas ${res.semanas}, zonas ${res.zonas}`);
+      ok++;
+    } catch (e) {
+      console.error(`✗ ${fecha}: ${e.message}`);
+      fallos++;
+    }
+  }
+  await browser.close();
+  console.log(`Backfill terminado — ${ok} días aplicados, ${vacios} sin datos, ${fallos} con error`);
+  if (ok === 0) process.exit(1);
 }
 
 async function main() {
@@ -332,9 +445,7 @@ async function main() {
   const ldCookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
   // Descargar Excel via URL directa
-  const [year, month, day] = fecha.split('-');
-  const fechaFmt = `${day}/${month}/${year}`;
-  const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=10000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaFmt)}&fecha_hasta=${encodeURIComponent(fechaFmt)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
+  const excelUrl = excelUrlDe(fecha);
 
   console.log("Descargando Excel via fetch...");
   const response = await page.evaluate(async (url) => {
@@ -431,6 +542,7 @@ async function main() {
     post21: m.post21||0, dem21: m.dem21||0,
     envios_particular: m.envios_particular||0,
     inicio_ruta: m.inicio_ruta||null, fin_ruta: m.fin_ruta||null,
+    horas: m.horas || {},
     demorados_detalle: m.demoradosDetalle || [],
     sin_datos_detalle: m.sinDatosDetalle || [],
   }));
@@ -438,7 +550,7 @@ async function main() {
     await supabaseInsert("semanas", insertRows);
   } catch(e) {
     // Fallback sin columnas nuevas si aún no existen
-    const fallback = insertRows.map(({ demorados_detalle, sin_datos_detalle, ...r }) => r);
+    const fallback = insertRows.map(({ demorados_detalle, sin_datos_detalle, horas, ...r }) => r);
     await supabaseInsert("semanas", fallback);
   }
 
@@ -468,4 +580,7 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+// Modo backfill (workflow_dispatch con fechas) vs corrida diaria normal.
+const BF_DESDE = process.env.BACKFILL_DESDE, BF_HASTA = process.env.BACKFILL_HASTA;
+const arranque = (BF_DESDE && BF_HASTA) ? backfillHoras(BF_DESDE, BF_HASTA) : main();
+arranque.catch(e => { console.error(e); process.exit(1); });

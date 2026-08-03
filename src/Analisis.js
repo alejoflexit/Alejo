@@ -80,6 +80,15 @@ function rangoFechas(fechas) {
 function slaMeli(ml, dem, dem21) {
   return ml > 0 ? (ml - dem - (dem21 || 0)) / ml * 100 : null;
 }
+// --- histograma de entregas por hora (columna `horas`: {"18":12,"19":30,...}) ---
+// Es lo que hace movible el corte del titular: no hay que reprocesar el Excel, se suma distinto.
+function sumaHoras(dst, src) { if (!src) return dst; for (const k of Object.keys(src)) dst[k] = (dst[k] || 0) + (src[k] || 0); return dst; }
+function totalHoras(h) { let t = 0; if (h) for (const k of Object.keys(h)) t += h[k] || 0; return t; }
+// Entregas a partir del corte (>= corte) = "fuera de horario".
+function fueraDeCorte(h, corte) { let t = 0; if (h) for (const k of Object.keys(h)) { if (+k >= corte) t += h[k] || 0; } return t; }
+// % entregado ANTES del corte. null si esa fila/período todavía no tiene histograma cargado.
+function antesDeCorte(h, corte) { const t = totalHoras(h); return t > 0 ? (t - fueraDeCorte(h, corte)) / t * 100 : null; }
+
 function slaColor(s) { return s == null ? C.muted : s < CFG.slaCritico ? C.crit : s < CFG.slaOk ? C.warn : C.good; }
 function slaIcon(s) { return s == null ? "—" : s < CFG.slaCritico ? "🔴" : s < CFG.slaOk ? "⚠️" : "✅"; }
 // Color de la lente "Horario": % de entregas antes de las 21. Mismo criterio que el semáforo de
@@ -113,14 +122,14 @@ const hoyAR = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/
 // Agrega `semanas` (por cadete×día) para un conjunto de labels de semana.
 function aggWeeks(semanas, labelSet, topeMap) {
   const porCad = {};
-  const g = { cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, sin: 0, basura: 0, oper: { sinAsignar: 0, devuelto: 0, quedo: 0, repro: 0, otros: 0 } };
+  const g = { cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, sin: 0, basura: 0, horas: {}, oper: { sinAsignar: 0, devuelto: 0, quedo: 0, repro: 0, otros: 0 } };
   for (const s of semanas) {
     if (!labelSet.has(s.label)) continue;
     for (const dia of s.dias) {
       for (const m of dia.datos) {
         const name = norm(m.cadete);
         g.cant += m.cantidad; g.pend += m.pendientes; g.dem += m.demorados;
-        g.d21 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.ml += m.envios_ml;
+        g.d21 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.ml += m.envios_ml; sumaHoras(g.horas, m.horas);
         if (esSin(name)) { g.sin += m.cantidad; g.oper.sinAsignar += m.cantidad; continue; }
         if (esBasura(name)) { g.basura += m.cantidad; g.oper[claseOper(name)] += m.cantidad; continue; }
         const c = porCad[name] || (porCad[name] = { name, cant: 0, pend: 0, dem: 0, d21: 0, p21: 0, ml: 0, dias: 0, dd21: 0, finSum: 0, finDias: 0, diasSobreTope: 0, diasDem: 0, diasP21: 0, diasCargaAlta: 0, ultInc: "", tope: topeMap[name] || CFG.tope });
@@ -381,6 +390,13 @@ export default function Analisis({ semanas }) {
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
   const [lenteReg, setLenteReg] = useState("sla"); // tarjetas de Regiones: lente SLA u Horario
   const [verLocs, setVerLocs] = useState(false); // "Localidades a vigilar" plegado por defecto
+  // Corte horario del titular (idea del "Horario de corte" del ML21). 21 = el que mide Meli.
+  // Se recuerda entre sesiones, pero el default siempre es 21 en una máquina nueva.
+  const [corte, setCorte] = useState(() => {
+    const v = parseInt(localStorage.getItem("fx_corte_horario"), 10);
+    return v >= 12 && v <= 23 ? v : 21;
+  });
+  useEffect(() => { localStorage.setItem("fx_corte_horario", String(corte)); }, [corte]);
   const [verCapacidad, setVerCapacidad] = useState(false); // "Capacidad para redistribuir" colapsado por defecto
   const [verAlertasOp, setVerAlertasOp] = useState(false); // "Alertas operativas / calidad de datos" colapsado por defecto
   const [verAtender, setVerAtender] = useState(true); // "A atender" colapsable (abierto por defecto, es lo principal)
@@ -596,14 +612,14 @@ export default function Analisis({ semanas }) {
     const locMap = {};
     for (const r of filas) {
       const k = r.localidad_norm || "";
-      const g = locMap[k] || (locMap[k] = { localidad_norm: k, labels: {}, zonaCp: {}, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0 });
+      const g = locMap[k] || (locMap[k] = { localidad_norm: k, labels: {}, zonaCp: {}, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, horas: {} });
       if (r.localidad) g.labels[r.localidad] = (g.labels[r.localidad] || 0) + r.cantidad;
       if (r.zona_cp) g.zonaCp[r.zona_cp] = (g.zonaCp[r.zona_cp] || 0) + r.cantidad;
-      g.cantidad += r.cantidad; g.entregados += r.entregados; g.demorados += r.demorados; g.dem21 += r.dem21; g.post21 += r.post21; g.envios_ml += r.envios_ml; g.nadie += r.nadie;
+      g.cantidad += r.cantidad; g.entregados += r.entregados; g.demorados += r.demorados; g.dem21 += r.dem21; g.post21 += r.post21; g.envios_ml += r.envios_ml; g.nadie += r.nadie; sumaHoras(g.horas, r.horas);
     }
     const slaG = cur.g.sla;
-    const acc = (o, z) => { o.cantidad += z.cantidad; o.entregados += z.entregados; o.demorados += z.demorados; o.dem21 += z.dem21; o.post21 += z.post21; o.envios_ml += z.envios_ml; o.nadie += z.nadie; };
-    const nuevo = (nombre, extra) => ({ nombre, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, ...extra });
+    const acc = (o, z) => { o.cantidad += z.cantidad; o.entregados += z.entregados; o.demorados += z.demorados; o.dem21 += z.dem21; o.post21 += z.post21; o.envios_ml += z.envios_ml; o.nadie += z.nadie; sumaHoras(o.horas, z.horas); };
+    const nuevo = (nombre, extra) => ({ nombre, cantidad: 0, entregados: 0, demorados: 0, dem21: 0, post21: 0, envios_ml: 0, nadie: 0, horas: {}, ...extra });
     const fin = (o) => { o.sla = slaMeli(o.envios_ml, o.demorados, o.dem21); o.delta = (o.sla != null && slaG != null) ? o.sla - slaG : null; o.post21Rate = (o.entregados || o.cantidad) > 0 ? o.post21 / (o.entregados || o.cantidad) * 100 : 0; o.nadieRate = o.cantidad > 0 ? o.nadie / o.cantidad * 100 : 0; return o; };
 
     const regiones = {}; let totalML = 0, totalCant = 0, locsSinZona = 0, mlSinZona = 0, nLoc = 0;
@@ -659,15 +675,16 @@ export default function Analisis({ semanas }) {
         if (!fechas.has(r.fecha)) continue;
         const zona = r.zona_cp || zonaDe(r.localidad);
         const region = !zona ? "Sin zona asignada" : (regionMap[zona] || "Sin clasificar");
-        const g = map[region] || (map[region] = { ml: 0, dm: 0, d2: 0, ent: 0, p21: 0 });
+        const g = map[region] || (map[region] = { ml: 0, dm: 0, d2: 0, ent: 0, p21: 0, horas: {} });
         g.ml += r.envios_ml; g.dm += r.demorados; g.d2 += r.dem21;
-        g.ent += (r.entregados || 0); g.p21 += (r.post21 || 0);
+        g.ent += (r.entregados || 0); g.p21 += (r.post21 || 0); sumaHoras(g.horas, r.horas);
       }
       // Las DOS lentes: sla (solo ML) y hor (% entregado antes de las 21, sobre entregados).
       const out = {};
       for (const [k, g] of Object.entries(map)) out[k] = {
         sla: g.ml >= CFG.zonaMin ? slaMeli(g.ml, g.dm, g.d2) : null,
-        hor: g.ent > 0 ? (g.ent - g.p21) / g.ent * 100 : null,
+        horas: g.horas,
+        hor: g.ent > 0 ? (g.ent - g.p21) / g.ent * 100 : null, // fallback 21hs si no hay histograma
       };
       return out;
     };
@@ -738,14 +755,14 @@ export default function Analisis({ semanas }) {
       const s = semanas.find((x) => x.label === periodW);
       if (!s) return { modo: "día", datos: [] };
       return { modo: "día", datos: s.dias.map((dia) => {
-        let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, pend = 0;
-        for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); pend += m.pendientes; }
+        let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, pend = 0; const horas = {};
+        for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); pend += m.pendientes; sumaHoras(horas, m.horas); }
         const ent = cant - pend;
-        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, pend, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null };
+        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, pend, horas, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null };
       }) };
     }
     if (periodo.t === "ult4") {
-      return { modo: "semana", datos: completas.slice(-4).map((l) => { const a = aggWeeks(semanas, new Set([l]), topeMap); return { name: fmtSemLabel(l), cant: a.g.cant, pend: a.g.pend, sla: a.g.sla, p21r: a.g.entregados > 0 ? a.g.p21rate * 100 : null }; }) };
+      return { modo: "semana", datos: completas.slice(-4).map((l) => { const a = aggWeeks(semanas, new Set([l]), topeMap); return { name: fmtSemLabel(l), cant: a.g.cant, pend: a.g.pend, horas: a.g.horas, sla: a.g.sla, p21r: a.g.entregados > 0 ? a.g.p21rate * 100 : null }; }) };
     }
     const byMonth = {};
     semanas.forEach((s) => s.dias.forEach((dia) => {
@@ -810,10 +827,23 @@ export default function Analisis({ semanas }) {
   // Titular de horario — idea tomada del informe ML21 de LightData: el mismo dato que "Post-21"
   // pero en positivo y con la proporción a la vista. OJO: es NUESTRA definición (post21 sobre
   // entregados); el ML21 de LightData da un número más bajo y todavía no está reconciliado.
-  const antes21 = cur.g.entregados > 0 ? (1 - cur.g.p21rate) * 100 : null;
-  const dAntes21 = dP21 != null ? -dP21 : null; // el delta ya existía para la tile Post-21, dado vuelta
-  const colorAntes21 = cur.g.p21rate >= CFG.tarde_post21 ? C.crit : cur.g.p21rate >= CFG.tarde_post21 / 2 ? C.warn : C.good;
-  const peorPunto = (tendData.datos || []).filter((d) => d.p21r != null && d.p21r > 0).sort((a, b) => b.p21r - a.p21r)[0] || null;
+  // Con histograma (`horas`) el corte es movible; sin histograma se cae al 21:00 fijo de `post21`.
+  const hayHoras = totalHoras(cur.g.horas) > 0;
+  const antes21 = hayHoras ? antesDeCorte(cur.g.horas, corte)
+    : (cur.g.entregados > 0 ? (1 - cur.g.p21rate) * 100 : null);
+  const antes21Prev = (prev && hayHoras && totalHoras(prev.g.horas) > 0) ? antesDeCorte(prev.g.horas, corte)
+    : (prev && prev.g.entregados > 0 ? (1 - prev.g.p21rate) * 100 : null);
+  const dAntes21 = (antes21 != null && antes21Prev != null) ? antes21 - antes21Prev : (dP21 != null ? -dP21 : null);
+  const entregasConHora = hayHoras ? totalHoras(cur.g.horas) : cur.g.entregados;
+  const fueraCorte = hayHoras ? fueraDeCorte(cur.g.horas, corte) : cur.g.p21;
+  // El semáforo se calibra siempre contra el umbral de CFG, valga el corte que valga.
+  const tasaFuera = entregasConHora > 0 ? fueraCorte / entregasConHora : 0;
+  const colorAntes21 = tasaFuera >= CFG.tarde_post21 ? C.crit : tasaFuera >= CFG.tarde_post21 / 2 ? C.warn : C.good;
+  const puntosCorte = (tendData.datos || []).map((d) => {
+    const a = totalHoras(d.horas) > 0 ? antesDeCorte(d.horas, corte) : (d.p21r != null ? 100 - d.p21r : null);
+    return a != null ? { name: d.name, antes: a } : null;
+  }).filter(Boolean);
+  const peorPunto = puntosCorte.length ? puntosCorte.slice().sort((a, b) => a.antes - b.antes)[0] : null;
 
   const periodDesc = periodo.t === "sem" ? "Semana del " + fmtSemLabel(periodW) + (enCursoActual ? " (en curso)" : parcialActual ? " (parcial)" : "")
     : periodo.t === "ult4" ? "Últimas 4 semanas completas"
@@ -1163,24 +1193,39 @@ export default function Analisis({ semanas }) {
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.80)", fontWeight: 600 }}>
-                El <b style={{ fontSize: 22, fontWeight: 800, color: colorAntes21 }}>{fmt1(antes21)}%</b> de las entregas fue antes de las 21:00
+                El <b style={{ fontSize: 22, fontWeight: 800, color: colorAntes21 }}>{fmt1(antes21)}%</b> de las entregas fue antes de las {String(corte).padStart(2, "0")}:00
               </div>
               {dAntes21 != null && (
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: dAntes21 >= 0 ? C.goodText : C.critText }}>
                   {(dAntes21 >= 0 ? "+" : "−") + fmt1(Math.abs(dAntes21))} pp <span style={{ color: C.muted, fontWeight: 400 }}>vs {prevLbl}</span>
                 </span>
               )}
-              {/* Acá había un "ver por región ▸": las tarjetas de Regiones están literalmente
-                  abajo, con su propio switch de lente. Era un link para bajar dos centímetros. */}
+              {/* Horario de corte (como el del ML21). Solo se puede mover si el período tiene
+                  histograma por hora; en semanas viejas sin backfill queda el 21:00 de siempre. */}
+              <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: 11, color: C.muted }}>corte</span>
+                {hayHoras ? (
+                  <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                    <select value={corte} onChange={(e) => setCorte(+e.target.value)}
+                      style={{ appearance: "none", WebkitAppearance: "none", MozAppearance: "none", padding: "3px 22px 3px 10px", fontSize: 11.5, fontWeight: 700, borderRadius: 20, cursor: "pointer", border: `1px solid ${corte === 21 ? C.border : C.teal}`, background: corte === 21 ? "rgba(255,255,255,0.04)" : "rgba(46,207,170,0.16)", color: corte === 21 ? C.muted : C.teal, outline: "none" }}>
+                      {[18, 19, 20, 21, 22, 23].map((h) => <option key={h} value={h} style={{ background: "#141a2e", color: "#fff" }}>{String(h).padStart(2, "0")}:00</option>)}
+                    </select>
+                    <span style={{ position: "absolute", right: 9, pointerEvents: "none", fontSize: 8, color: corte === 21 ? C.muted : C.teal }}>▼</span>
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted }} title="Este período se cargó antes de que se guardara la hora de cada entrega">21:00 fijo</span>
+                )}
+              </span>
             </div>
             <div style={{ display: "flex", height: 11, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.06)", marginTop: 11 }}>
               <div style={{ width: `${antes21}%`, background: colorAntes21, transition: "width .5s ease" }} />
               <div style={{ width: `${100 - antes21}%`, background: C.crit, opacity: 0.85 }} />
             </div>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.muted, marginTop: 8 }}>
-              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: colorAntes21, display: "inline-block", marginRight: 6 }} />{fmtInt(cur.g.entregados - cur.g.p21)} en horario</span>
-              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: C.crit, display: "inline-block", marginRight: 6 }} />{fmtInt(cur.g.p21)} fuera de horario</span>
-              {peorPunto && <span style={{ marginLeft: "auto", color: "rgba(255,255,255,0.42)" }}>peor {tendData.modo}: {peorPunto.name} · {fmt1(100 - peorPunto.p21r)}%</span>}
+              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: colorAntes21, display: "inline-block", marginRight: 6 }} />{fmtInt(entregasConHora - fueraCorte)} en horario</span>
+              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: C.crit, display: "inline-block", marginRight: 6 }} />{fmtInt(fueraCorte)} fuera de horario</span>
+              {corte !== 21 && <span style={{ color: C.teal }}>· a las 21:00 era {fmt1(antesDeCorte(cur.g.horas, 21))}%</span>}
+              {peorPunto && <span style={{ marginLeft: "auto", color: "rgba(255,255,255,0.42)" }}>peor {tendData.modo}: {peorPunto.name} · {fmt1(peorPunto.antes)}%</span>}
             </div>
           </div>
         )}
@@ -1234,9 +1279,13 @@ export default function Analisis({ semanas }) {
                   // no el valor grande de la tarjeta contra un período incompleto.
                   const pvo = prevRegiones ? prevRegiones.prev[r.nombre] : null;
                   const cvo = prevRegiones ? prevRegiones.cmp[r.nombre] : null;
-                  const pv = pvo ? (hor ? pvo.hor : pvo.sla) : null;
-                  const cv = cvo ? (hor ? cvo.hor : cvo.sla) : null;
-                  const val = hor ? (r.entregados > 0 ? 100 - r.post21Rate : null) : r.sla;
+                  // Con histograma la lente Horario respeta el corte elegido; sin él, 21:00 fijo.
+                  const horDe = (o) => o ? (totalHoras(o.horas) > 0 ? antesDeCorte(o.horas, corte) : o.hor) : null;
+                  const pv = pvo ? (hor ? horDe(pvo) : pvo.sla) : null;
+                  const cv = cvo ? (hor ? horDe(cvo) : cvo.sla) : null;
+                  const val = hor
+                    ? (totalHoras(r.horas) > 0 ? antesDeCorte(r.horas, corte) : (r.entregados > 0 ? 100 - r.post21Rate : null))
+                    : r.sla;
                   const col = hor ? horColor(val) : slaColor(r.sla);
                   const d = (pv != null && cv != null) ? cv - pv : null;
                   const f = flecha(d);
@@ -1257,7 +1306,7 @@ export default function Analisis({ semanas }) {
                   );
                 })}
               </div>
-              {hor && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>% de entregas antes de las 21:00 — el SLA puede estar intacto y la región estar entregando cada vez más tarde.</div>}
+              {hor && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>% de entregas antes de las {String(corte).padStart(2, "0")}:00 — el SLA puede estar intacto y la región estar entregando cada vez más tarde.</div>}
               {prevRegiones && prevRegiones.parcial && (
                 <div style={{ fontSize: 10.5, color: C.muted, marginTop: 4 }}>
                   ⚠️ La flecha compara solo {prevRegiones.dias} {prevRegiones.dias === 1 ? "día" : "días"} — son los únicos con dato por zona en las dos semanas. El % grande sí es de todo el período.

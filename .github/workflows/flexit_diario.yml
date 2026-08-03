@@ -6,6 +6,18 @@ on:
     - cron: '0 5 * * *'   # 2am AR — backup
     - cron: '0 6 * * *'   # 3am AR — backup adicional
   workflow_dispatch:
+    # Dejando las dos fechas vacías corre la carga diaria de siempre.
+    # Completándolas, corre SOLO el backfill del histograma por hora (columna `horas`):
+    # no borra ni pisa nada más, se puede repetir sin riesgo.
+    inputs:
+      backfill_desde:
+        description: 'Backfill horas — desde (YYYY-MM-DD, vacío = carga diaria normal)'
+        required: false
+        default: ''
+      backfill_hasta:
+        description: 'Backfill horas — hasta (YYYY-MM-DD)'
+        required: false
+        default: ''
 
 jobs:
   carga:
@@ -30,5 +42,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          BACKFILL_DESDE: ${{ inputs.backfill_desde }}
+          BACKFILL_HASTA: ${{ inputs.backfill_hasta }}
         run: cd automation && node descargar_lightdata.js
-        timeout-minutes: 10
+        timeout-minutes: 45
