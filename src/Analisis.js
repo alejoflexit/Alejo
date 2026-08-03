@@ -90,7 +90,6 @@ function fueraDeCorte(h, corte) { let t = 0; if (h) for (const k of Object.keys(
 function antesDeCorte(h, corte) { const t = totalHoras(h); return t > 0 ? (t - fueraDeCorte(h, corte)) / t * 100 : null; }
 
 function slaColor(s) { return s == null ? C.muted : s < CFG.slaCritico ? C.crit : s < CFG.slaOk ? C.warn : C.good; }
-function slaIcon(s) { return s == null ? "—" : s < CFG.slaCritico ? "🔴" : s < CFG.slaOk ? "⚠️" : "✅"; }
 // Color de la lente "Horario": % de entregas antes de las 21. Mismo criterio que el semáforo de
 // la tile Post-21 (CFG.tarde_post21 = 12% tarde / la mitad = en riesgo), dado vuelta.
 function horColor(v) { return v == null ? C.muted : v <= 100 - CFG.tarde_post21 * 100 ? C.crit : v <= 100 - CFG.tarde_post21 * 50 ? C.warn : C.good; }
@@ -324,7 +323,6 @@ export default function Analisis({ semanas }) {
   const [zonaNames, setZonaNames] = useState([]); // nombres de zonas operativas (zonas_cp) para derivar "Zona op."
   const [regionMap, setRegionMap] = useState({}); // zona -> región (zonas_regiones), cargado 1 vez
   const [aliasMap, setAliasMap] = useState({}); // localidad_norm -> zona (localidad_zona_alias), overrides manuales
-  const [jerNodos, setJerNodos] = useState(() => new Set()); // acordeón: qué regiones/zonas están abiertas
   const [zonasErr, setZonasErr] = useState("");
   const [informes, setInformes] = useState(null); // null=cargando, []=sin informes
   const [seguim, setSeguim] = useState(null); // seguimiento de decisiones (marcas "hecho"); null=cargando
@@ -392,6 +390,11 @@ export default function Analisis({ semanas }) {
   const [verLocs, setVerLocs] = useState(false); // "Localidades a vigilar" plegado por defecto
   const [regionAbierta, setRegionAbierta] = useState(null); // detalle de región, inline debajo de las tarjetas
   const [zonaAbierta, setZonaAbierta] = useState(null);     // dentro de ese detalle, qué zona muestra localidades
+  // Tabla de localidades del final: buscador, filtro por región, orden y "ver todas" (muestra chica).
+  const [locBusca, setLocBusca] = useState("");
+  const [locRegion, setLocRegion] = useState("Todas");
+  const [locTodas, setLocTodas] = useState(false);
+  const [locSort, setLocSort] = useState({ col: "hor", dir: "asc" }); // peor horario primero
   // Corte horario del titular (idea del "Horario de corte" del ML21). 21 = el que mide Meli.
   // Se recuerda entre sesiones, pero el default siempre es 21 en una máquina nueva.
   const [corte, setCorte] = useState(() => {
@@ -599,7 +602,6 @@ export default function Analisis({ semanas }) {
   }, [zonasRaw]);
   // Zona operativa derivada de la localidad (match tolerante contra zonas_cp; sin match único → null).
   const zonaDe = (loc) => { if (!zonaNames.length) return null; const nl = normZ(loc); if (aliasMap[nl]) return aliasMap[nl]; const ex = zonaNames.find((z) => normZ(z) === nl); if (ex) return ex; const ms = zonaNames.filter((z) => matchZona(nl, normZ(z))); return ms.length === 1 ? ms[0] : null; };
-  const jerToggle = (k) => setJerNodos((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // Jerarquía Región → Zona → Localidad. Suma envios_ml/demorados/dem21 y recalcula SLA en cada nivel
   // (nunca promediar %). Localidad sin match de zona → "Sin zona asignada"; zona sin región → "Sin clasificar".
@@ -1726,73 +1728,122 @@ export default function Analisis({ semanas }) {
           {informeStd.vigilar && <div><div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 3 }}>👁️ A vigilar (analista)</div><div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}><Markdown md={informeStd.vigilar} /></div></div>}
         </div>
       )}
-      <h3 id="jer-sla" style={{ fontSize: 14, margin: "0 0 8px" }}>SLA por región → zona → localidad <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(oportunidades geográficas)</span></h3>
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 22 }}>
-        {jerarquia == null ? (
-          <div style={{ color: C.muted, fontSize: 12 }}>Cargando…</div>
-        ) : jerarquia.vacio ? (
-          <div style={{ color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
-            {jerarquia.desde
-              ? `Todavía no hay datos por localidad para este período. La captura arrancó el ${fmtDMY(jerarquia.desde)} — elegí un período desde esa fecha.`
-              : "Los datos por localidad se empiezan a capturar desde hoy (la Action nocturna guarda la primera foto esta noche). No hay histórico hacia atrás."}
-            {zonasErr ? <div style={{ marginTop: 6, color: C.critText, fontSize: 11 }}>({zonasErr})</div> : null}
-          </div>
-        ) : (
-          <>
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <span>Tocá una región para ver sus zonas, y una zona para sus localidades. Suma de envíos ML; el SLA se recalcula sobre las sumas (misma fórmula, nunca promedia %). Δ vs SLA global ({cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"}). Peor primero; muestra chica (&lt;{CFG.zonaMin}) agrupada.</span>
-              <span style={{ color: jerarquia.pctSinZona >= 10 ? C.critText : C.muted, fontWeight: 600, whiteSpace: "nowrap" }}>Localidades sin zona op.: {fmtInt(jerarquia.locsSinZona)} · {fmt1(jerarquia.pctSinZona)}% del volumen</span>
-            </div>
-            {jerarquia.avisoDesde && (
-              <div style={{ fontSize: 11.5, color: C.warn, background: "rgba(232,184,75,0.10)", border: "1px solid rgba(232,184,75,0.28)", borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.45 }}>
-                ⚠️ Los datos por zona se capturan desde el <b>{fmtDMY(jerarquia.avisoDesde)}</b>. El período elegido es más largo, así que el SLA por zona de acá abajo solo refleja <b>desde esa fecha</b> — no todo el período.
-              </div>
-            )}
-            {(() => {
-              const rows = [];
-              const cel = (o, nivel, muted) => (
-                <>
-                  <span style={{ flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: nivel === 0 ? 700 : nivel === 1 ? 600 : 400, fontSize: nivel === 0 ? 13 : 12.5, color: muted ? C.muted : C.ink }}>
-                    {nivel === 2 ? slaIcon(o.sla) + " " : ""}{o.nombre || o.localidad}
-                  </span>
-                  <span style={{ flex: "0 0 auto", fontSize: 11, color: C.muted, minWidth: 46, textAlign: "right" }}>{fmtInt(o.envios_ml)}</span>
-                  <span style={{ flex: "0 0 auto", fontSize: 12.5, fontWeight: 600, color: slaColor(o.sla), minWidth: 50, textAlign: "right" }}>{o.sla != null ? fmt1(o.sla) + "%" : "—"}</span>
-                  <span style={{ flex: "0 0 auto", fontSize: 11, minWidth: 42, textAlign: "right", color: o.delta == null ? C.muted : o.delta >= 0 ? C.goodText : C.critText }}>{o.delta == null ? "" : (o.delta >= 0 ? "+" : "−") + fmt1(Math.abs(o.delta))}</span>
-                </>
-              );
-              const fila = (key, nivel, contenido, opts = {}) => rows.push(
-                <div key={key} onClick={opts.onClick} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", paddingLeft: 6 + nivel * 16, borderBottom: `1px solid ${C.faint}`, cursor: opts.onClick ? "pointer" : "default", background: opts.hi ? "rgba(46,207,170,0.07)" : "transparent" }}>
-                  <span style={{ width: 12, flex: "0 0 auto", color: C.teal, fontSize: 12 }}>{opts.chev === undefined ? "" : opts.chev ? "▾" : "▸"}</span>
-                  {contenido}
-                </div>
-              );
-              const resumen = (key, nivel, texto) => rows.push(
-                <div key={key} style={{ padding: "6px 6px", paddingLeft: 6 + nivel * 16 + 20, fontSize: 11.5, fontStyle: "italic", color: C.muted, borderBottom: `1px solid ${C.faint}` }}>{texto}</div>
-              );
-              for (const reg of jerarquia.regiones) {
-                const rAbierto = jerNodos.has(reg.nombre);
-                fila(reg.nombre, 0, cel(reg, 0, false), { chev: rAbierto, hi: rAbierto, onClick: () => jerToggle(reg.nombre) });
-                if (!rAbierto) continue;
-                const zBig = reg.zonasArr.filter((z) => z.envios_ml >= CFG.zonaMin);
-                const zChicas = reg.zonasArr.filter((z) => z.envios_ml < CFG.zonaMin);
-                if (!reg.zonasArr.length) resumen(reg.nombre + "-vacio", 1, "sin localidades en el período");
-                for (const zn of zBig) {
-                  const zKey = reg.nombre + "||" + zn.nombre;
-                  const zAbierto = jerNodos.has(zKey);
-                  fila(zKey, 1, cel(zn, 1, false), { chev: zAbierto, hi: zAbierto, onClick: () => jerToggle(zKey) });
-                  if (!zAbierto) continue;
-                  const lBig = zn.localidades.filter((l) => l.cantidad >= CFG.zonaMin);
-                  const lChicas = zn.localidades.filter((l) => l.cantidad < CFG.zonaMin);
-                  for (const l of lBig) fila(zKey + "||" + l.localidad_norm, 2, cel(l, 2, false), { onClick: () => toggleDrill("localidad", l.localidad, "loc") });
-                  if (lChicas.length) resumen(zKey + "-chicas", 2, `+ ${lChicas.length} localidad${lChicas.length === 1 ? "" : "es"} muestra chica · ${fmtInt(lChicas.reduce((a, l) => a + l.envios_ml, 0))} ML`);
-                }
-                if (zChicas.length) resumen(reg.nombre + "-zchicas", 1, `+ ${zChicas.length} zona${zChicas.length === 1 ? "" : "s"} muestra chica · ${fmtInt(zChicas.reduce((a, z) => a + z.envios_ml, 0))} ML`);
-              }
-              return <div>{rows}</div>;
-            })()}
-          </>
-        )}
+      {/* Tabla plana de localidades (opción A, elegida por Alejo el 03/08). Reemplaza al árbol
+          región → zona → localidad, que hacía lo mismo que el detalle inline de las tarjetas de
+          Regiones y encima obligaba a abrir tres ramas para llegar a una localidad.
+          Acá el trabajo es otro: ENCONTRAR una localidad puntual y ver todas ordenadas — por eso
+          buscador, filtro por región y columnas ordenables. Y las dos lentes conviven como
+          columnas (SLA y "antes del corte"), porque el SLA casi no discrimina: José C. Paz tiene
+          SLA 95,95% y entrega el 72,5% antes de las 21. */}
+      {jerarquia == null ? (
+        <div style={{ color: C.muted, fontSize: 12, marginBottom: 22 }}>Cargando localidades…</div>
+      ) : jerarquia.vacio ? (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 22, color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
+          {jerarquia.desde
+            ? `Todavía no hay datos por localidad para este período. La captura arrancó el ${fmtDMY(jerarquia.desde)} — elegí un período desde esa fecha.`
+            : "Los datos por localidad se empiezan a capturar desde hoy (la Action nocturna guarda la primera foto esta noche). No hay histórico hacia atrás."}
+          {zonasErr ? <div style={{ marginTop: 6, color: C.critText, fontSize: 11 }}>({zonasErr})</div> : null}
+        </div>
+      ) : (
+      <>
+      <div id="jer-sla" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "0 0 10px" }}>
+        <input value={locBusca} onChange={(e) => setLocBusca(e.target.value)} placeholder="🔎 buscar localidad…"
+          style={{ height: 30, padding: "0 12px", borderRadius: 20, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.ink, fontSize: 12, outline: "none", fontFamily: "inherit", minWidth: 190 }} />
+        <span style={{ display: "inline-flex", gap: 4, padding: 3, borderRadius: 10, background: "rgba(0,0,0,0.3)", border: `1px solid ${C.border}` }}>
+          {["Todas", ...REG_ORDEN.filter((r) => !r.startsWith("Sin"))].map((r) => {
+            const on = locRegion === r;
+            return (
+              <button key={r} onClick={() => setLocRegion(r)}
+                style={{ height: 24, padding: "0 11px", borderRadius: 7, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${on ? "rgba(46,207,170,0.45)" : "transparent"}`, background: on ? "rgba(46,207,170,0.16)" : "transparent", color: on ? C.teal : C.muted }}>{r}</button>
+            );
+          })}
+        </span>
+        <span onClick={() => setLocTodas((v) => !v)} style={{ marginLeft: "auto", fontSize: 11, color: C.muted, cursor: "pointer", whiteSpace: "nowrap" }}>
+          {locTodas ? "mostrando todas · " : `mínimo ${CFG.zonaMin} envíos ML · `}<span style={{ color: C.teal, fontWeight: 600 }}>{locTodas ? "ocultar muestra chica" : "ver todas"}</span>
+        </span>
       </div>
+      {jerarquia.avisoDesde && (
+        <div style={{ fontSize: 11.5, color: C.warn, background: "rgba(232,184,75,0.10)", border: "1px solid rgba(232,184,75,0.28)", borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.45 }}>
+          ⚠️ Los datos por zona se capturan desde el <b>{fmtDMY(jerarquia.avisoDesde)}</b>. El período elegido es más largo, así que esta tabla solo refleja <b>desde esa fecha</b> — no todo el período.
+        </div>
+      )}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", marginBottom: 22 }}>
+        {(() => {
+          // Aplanar la jerarquía: una fila por localidad, con su zona operativa y su región.
+          const filas = [];
+          for (const reg of jerarquia.regiones) {
+            for (const zn of reg.zonasArr) {
+              for (const l of zn.localidades) {
+                filas.push({
+                  localidad: l.localidad, norm: l.localidad_norm, zona: zn.nombre, region: reg.nombre,
+                  ml: l.envios_ml, ent: l.entregados, sla: l.sla, delta: l.delta,
+                  hor: totalHoras(l.horas) > 0 ? antesDeCorte(l.horas, corte) : (l.entregados > 0 ? 100 - l.post21Rate : null),
+                });
+              }
+            }
+          }
+          const q = norm(locBusca).toLowerCase();
+          const vis = filas.filter((f) => (locTodas || f.ml >= CFG.zonaMin)
+            && (locRegion === "Todas" || f.region === locRegion)
+            && (!q || String(f.localidad).toLowerCase().includes(q) || String(f.zona).toLowerCase().includes(q)));
+          const num = (v) => (v == null ? (locSort.dir === "asc" ? Infinity : -Infinity) : v);
+          vis.sort((a, b) => {
+            const va = num(a[locSort.col]), vb = num(b[locSort.col]);
+            if (typeof a[locSort.col] === "string") {
+              return locSort.dir === "asc" ? String(a[locSort.col]).localeCompare(String(b[locSort.col])) : String(b[locSort.col]).localeCompare(String(a[locSort.col]));
+            }
+            return locSort.dir === "asc" ? va - vb : vb - va;
+          });
+          const orden = (col) => setLocSort((s) => s.col === col ? { col, dir: s.dir === "asc" ? "desc" : "asc" } : { col, dir: col === "localidad" || col === "zona" || col === "region" ? "asc" : "asc" });
+          const th2 = (col, label, right) => (
+            <th onClick={() => orden(col)} style={{ padding: "0 9px 8px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer", textAlign: right ? "right" : "left", color: locSort.col === col ? C.teal : "rgba(255,255,255,0.45)" }}>
+              {label}{locSort.col === col ? (locSort.dir === "asc" ? " ↑" : " ↓") : ""}
+            </th>
+          );
+          const td = { padding: "7px 9px", borderTop: `1px solid ${C.faint}`, fontSize: 12.5, textAlign: "right", whiteSpace: "nowrap", color: "rgba(255,255,255,0.86)" };
+          const tdL = { ...td, textAlign: "left" };
+          return (
+            <>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <span>{vis.length} localidad{vis.length === 1 ? "" : "es"} · tocá una columna para ordenar · Δ es contra el SLA global ({cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"})</span>
+                <span style={{ color: jerarquia.pctSinZona >= 10 ? C.critText : C.muted, fontWeight: 600, whiteSpace: "nowrap" }}>Localidades sin zona op.: {fmtInt(jerarquia.locsSinZona)} · {fmt1(jerarquia.pctSinZona)}% del volumen</span>
+              </div>
+              <div className="flexit-scroll" style={{ maxHeight: 460, overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr>
+                    {th2("localidad", "Localidad")}{th2("zona", "Zona op.")}{th2("region", "Región")}
+                    {th2("ml", "Envíos ML", true)}{th2("sla", "SLA Meli", true)}{th2("hor", `Antes de las ${String(corte).padStart(2, "0")}:00`, true)}{th2("delta", "Δ vs global", true)}
+                  </tr></thead>
+                  <tbody>
+                    {vis.map((f) => (
+                      <tr key={f.region + "|" + f.zona + "|" + f.norm} onClick={() => toggleDrill("localidad", f.localidad, "loc")} style={{ cursor: "pointer" }}>
+                        <td style={{ ...tdL, fontWeight: 600 }}>{f.localidad}</td>
+                        <td style={{ ...tdL, fontSize: 11.5, color: C.muted }}>{f.zona}</td>
+                        <td style={{ ...tdL, fontSize: 11.5, color: C.muted }}>{f.region}</td>
+                        <td style={td}>{fmtInt(f.ml)}</td>
+                        <td style={{ ...td, color: slaColor(f.sla), fontWeight: 700 }}>{f.sla != null ? fmt1(f.sla) + "%" : "—"}</td>
+                        <td style={{ ...td, color: horColor(f.hor), fontWeight: 700 }}>
+                          {f.hor != null ? fmt1(f.hor) + "%" : "—"}
+                          {f.hor != null && (
+                            <span style={{ display: "inline-block", width: 74, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.08)", overflow: "hidden", verticalAlign: "middle", marginLeft: 8 }}>
+                              <span style={{ display: "block", height: "100%", width: `${f.hor}%`, background: horColor(f.hor) }} />
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ ...td, fontSize: 11, color: f.delta == null ? C.muted : f.delta >= 0 ? C.goodText : C.critText }}>{f.delta == null ? "" : (f.delta >= 0 ? "+" : "−") + fmt1(Math.abs(f.delta)) + " pp"}</td>
+                      </tr>
+                    ))}
+                    {!vis.length && <tr><td colSpan={7} style={{ ...tdL, color: C.muted, fontSize: 12 }}>Ninguna localidad con ese filtro.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          );
+        })()}
+      </div>
+      </>
+      )}
       </>
       )}
 
