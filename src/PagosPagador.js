@@ -96,7 +96,7 @@ export default function PagosPagador({ tarifas }) {
   const [loadingSemanas, setLoadingSemanas] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filtro, setFiltro] = useState('pendientes');      // pendientes | pagados | todos
+  const [filtro, setFiltro] = useState('listos');          // listos | pendientes | pagados | falta_factura | todos
   const [armado, setArmado] = useState(null);              // id de la fila esperando el 2º clic de "Mandó factura"
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | factura | efectivo
   const [copiado, setCopiado] = useState(null);
@@ -157,10 +157,14 @@ export default function PagosPagador({ tarifas }) {
 
   // "Falta factura" = transferencia que todavía no pasó factura y no está pagada. Se marca acá, en Pagar.
   const faltaFactura = f => f.factura && !f.facturaOk && !f.pagado;
+  // "Listo para pagar" = no está pagado y no le falta nada: o es efectivo, o ya mandó la factura.
+  // Es la cola de trabajo del que transfiere; por eso es el filtro por defecto de esta pantalla.
+  const listoParaPagar = f => !f.pagado && (!f.factura || f.facturaOk);
 
   const filasFiltradas = useMemo(() => {
     let r = filas;
-    if (filtro === 'pagados') r = r.filter(f => f.pagado);
+    if (filtro === 'listos') r = r.filter(listoParaPagar);
+    else if (filtro === 'pagados') r = r.filter(f => f.pagado);
     else if (filtro === 'pendientes') r = r.filter(f => !f.pagado);
     else if (filtro === 'falta_factura') r = r.filter(faltaFactura);
     if (filtroMetodo === 'factura') r = r.filter(f => f.factura);
@@ -170,6 +174,7 @@ export default function PagosPagador({ tarifas }) {
   }, [filas, filtro, filtroMetodo, filtroMedio]);
 
   const counts = useMemo(() => ({
+    listos: filas.filter(listoParaPagar).length,
     pendientes: filas.filter(f => !f.pagado).length,
     pagados: filas.filter(f => f.pagado).length,
     falta_factura: filas.filter(faltaFactura).length,
@@ -275,6 +280,12 @@ export default function PagosPagador({ tarifas }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
+              {/* "Listos para pagar" primero y en verde: es la cola del que transfiere y la única
+                  que lleva a la acción de plata. El resto (revisar pendientes, marcar facturas,
+                  auditar pagados) son tareas de Alejo y quedan en azul, detrás. */}
+              <button onClick={() => setFiltro(filtro === 'listos' ? 'todos' : 'listos')} style={{ ...pill(filtro === 'listos', BRAND.teal), fontWeight: 700 }}>
+                💸 Listos para pagar {counts.listos > 0 && <span style={{ opacity: 0.7 }}>({counts.listos})</span>}
+              </button>
               {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['falta_factura', 'Falta factura']].map(([k, l]) => (
                 <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k, BRAND.blue)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
               ))}
@@ -300,7 +311,15 @@ export default function PagosPagador({ tarifas }) {
           {loading && <div style={{ color: BRAND.muted, fontSize: 13, padding: 20, textAlign: 'center' }}>Cargando…</div>}
 
           {!loading && filasFiltradas.length === 0 && (
-            <div style={{ color: BRAND.muted, fontSize: 13, padding: '2rem', textAlign: 'center' }}>Nada para mostrar con este filtro.</div>
+            <div style={{ color: BRAND.muted, fontSize: 13, padding: '2rem', textAlign: 'center' }}>
+              {filtro === 'listos'
+                // Vacío acá NO es "no hay nada": puede que falten facturas. Decirlo, si no el que
+                // paga cierra la pantalla creyendo que terminó.
+                ? (counts.falta_factura > 0
+                  ? <>No queda nada para transferir. Hay <b style={{ color: BRAND.amber }}>{counts.falta_factura}</b> esperando factura.</>
+                  : counts.pendientes === 0 ? '✓ Semana pagada por completo.' : 'Nada listo para pagar por ahora.')
+                : 'Nada para mostrar con este filtro.'}
+            </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
