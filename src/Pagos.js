@@ -1311,6 +1311,7 @@ function PagosInner({ session }) {
   const [colectaOv, setColectaOv] = useState({}); // key -> colecta editada a mano
   const [splitOv, setSplitOv] = useState({}); // key -> reparto de envíos por tarifa editado a mano {0,1,2,3}
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | transferencia | efectivo
+  const [filtroEstado, setFiltroEstado] = useState('todos'); // todos | confirmar | confirmado | pagado
   const [expandido, setExpandido] = useState(null); // key de la fila con detalle abierto
   const [ajusteForm, setAjusteForm] = useState({ concepto: '', monto: '' });
   const [busyAccion, setBusyAccion] = useState(false);
@@ -1432,10 +1433,22 @@ function PagosInner({ session }) {
     });
   }, [filasEfectivas]);
 
-  // la vista filtra por método; el Excel exporta SIEMPRE todas (Tarea 1)
+  const cierrePorCadete = useMemo(() => new Map(cierres.map(c => [norm(c.cadete), c])), [cierres]);
+
+  // Estado de una fila, mismo criterio que la columna Estado de la tabla:
+  // sin cierre o borrador → falta confirmar; con cierre pagado → pagado; el resto → confirmado.
+  const estadoDeFila = useCallback((f) => {
+    const c = cierrePorCadete.get(norm(f.nombre));
+    if (!c || c.estado === 'borrador') return 'confirmar';
+    return c.pagado ? 'pagado' : 'confirmado';
+  }, [cierrePorCadete]);
+
+  // la vista filtra por método y por estado; el Excel exporta SIEMPRE todas (Tarea 1)
   const filasVisibles = useMemo(() =>
-    filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura),
-    [filasOrdenadas, filtroMetodo]);
+    filasOrdenadas
+      .filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura)
+      .filter(f => filtroEstado === 'todos' ? true : estadoDeFila(f) === filtroEstado),
+    [filasOrdenadas, filtroMetodo, filtroEstado, estadoDeFila]);
 
   // Tarea 2: setter que persiste las ediciones de cantidad de la semana en localStorage
   const setOverridesPersist = useCallback((updater) => {
@@ -1516,7 +1529,6 @@ function PagosInner({ session }) {
   const thNum = { ...thSt, textAlign: 'right' };
 
   // Cierre por cadete (normalizado): cada fila se cuelga su cierre para saber si está trabada.
-  const cierrePorCadete = useMemo(() => new Map(cierres.map(c => [norm(c.cadete), c])), [cierres]);
   const avance = useMemo(() => {
     let confirmados = 0, faltaConfirmarMonto = 0;
     filasEfectivas.forEach(f => {
@@ -1815,12 +1827,30 @@ function PagosInner({ session }) {
 
           {!cargando && (
             <>
-              {/* Filtro método (fila propia) */}
+              {/* Filtros: método y estado. El de estado es para pagar de a tandas — "falta
+                  confirmar" es la cola de trabajo real; con el contador al lado para saber
+                  cuántas quedan sin tener que contarlas. */}
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Método</span>
                 {[['todos', 'Todos'], ['transferencia', 'Transferencia'], ['efectivo', 'Efectivo']].map(([k, l]) => (
                   <button key={k} onClick={() => setFiltroMetodo(k)} style={btnPill(filtroMetodo === k)}>{l}</button>
                 ))}
+                <span style={{ width: 1, alignSelf: 'stretch', background: BRAND.border, margin: '0 4px' }} />
+                <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estado</span>
+                {(() => {
+                  // El conteo respeta el filtro de método: si estás mirando Transferencia,
+                  // "falta confirmar 12" son 12 de transferencia, no de toda la semana.
+                  const base = filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura);
+                  const cuenta = (k) => k === 'todos' ? base.length : base.filter(f => estadoDeFila(f) === k).length;
+                  return [['todos', 'Todos'], ['confirmar', 'Falta confirmar'], ['confirmado', 'Confirmado'], ['pagado', 'Pagado']].map(([k, l]) => {
+                    const n = cuenta(k);
+                    return (
+                      <button key={k} onClick={() => setFiltroEstado(k)} style={{ ...btnPill(filtroEstado === k), opacity: n === 0 && k !== 'todos' ? 0.45 : 1 }}>
+                        {l} <span style={{ opacity: 0.7, fontWeight: 400 }}>{n}</span>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
               {/* KPIs ejecutivos — números en blanco, sin verde de fondo */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 12 }}>
@@ -1940,17 +1970,28 @@ function PagosInner({ session }) {
                               <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, color: BRAND.muted, background: BRAND.chipBg, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                                 {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
                               </span>
-                              <button onClick={e => { e.stopPropagation(); copiarMensaje(f); }}
-                                title={'copiar mensaje para el cadete: "Hola ..., esta semana me figuran X envíos y $Y de colecta". Al copiarlo queda marcado como avisado.'}
-                                style={{ marginLeft: 6, fontSize: 14, padding: '4px 7px', borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: copiadoKey === f.key ? BRAND.teal : BRAND.muted }}>
-                                {copiadoKey === f.key ? '✓' : '💬'}
-                              </button>
-                              {(() => { const av = avisados.has(norm(f.nombre)); return (
-                                <button onClick={e => { e.stopPropagation(); toggleAviso(f); }} title={av ? 'ya le avisaste — tocá para desmarcar' : 'se marca solo al copiar el mensaje; tocá si le avisaste por afuera'}
-                                  style={{ marginLeft: 4, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: av ? 'rgba(46,207,170,0.12)' : 'none', border: `1px solid ${av ? 'rgba(46,207,170,0.45)' : BRAND.border}`, borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: av ? BRAND.teal : BRAND.muted }}>
-                                  {av ? '✓ Avisado' : 'Avisar'}
-                                </button>
-                              ); })()}
+                              {/* UN solo control, no dos. Sin avisar = 💬 (copiar el mensaje);
+                                  al copiarlo queda "✓ Avisado"; tocando el chip vuelve a 💬 y se
+                                  desmarca. Antes convivían el 💬 y un chip "Avisar" aparte, que
+                                  hacían casi lo mismo y ocupaban el doble. */}
+                              {(() => {
+                                const av = avisados.has(norm(f.nombre));
+                                const copiado = copiadoKey === f.key;
+                                if (av || copiado) return (
+                                  <button onClick={e => { e.stopPropagation(); toggleAviso(f); }}
+                                    title="ya le avisaste — tocá para desmarcar y volver a copiar el mensaje"
+                                    style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: 'rgba(46,207,170,0.12)', border: '1px solid rgba(46,207,170,0.45)', borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: BRAND.teal, whiteSpace: 'nowrap' }}>
+                                    {copiado ? '✓ Copiado' : '✓ Avisado'}
+                                  </button>
+                                );
+                                return (
+                                  <button onClick={e => { e.stopPropagation(); copiarMensaje(f); }}
+                                    title={'copiar mensaje para el cadete: "Buen día ..., tengo X envíos entregados y $Y de colecta". Al copiarlo queda marcado como avisado.'}
+                                    style={{ marginLeft: 6, fontSize: 14, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${BRAND.border}`, cursor: 'pointer', color: BRAND.muted, verticalAlign: 'middle', lineHeight: 1 }}>
+                                    💬
+                                  </button>
+                                );
+                              })()}
                               {f.modo === 'cp' && (
                                 <button onClick={() => setExpandido(open ? null : f.key)} title="ver detalle por CP" style={{ marginLeft: 2, fontSize: 13, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>👁</button>
                               )}
