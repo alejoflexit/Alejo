@@ -82,6 +82,9 @@ function slaMeli(ml, dem, dem21) {
 }
 function slaColor(s) { return s == null ? C.muted : s < CFG.slaCritico ? C.crit : s < CFG.slaOk ? C.warn : C.good; }
 function slaIcon(s) { return s == null ? "—" : s < CFG.slaCritico ? "🔴" : s < CFG.slaOk ? "⚠️" : "✅"; }
+// Color de la lente "Horario": % de entregas antes de las 21. Mismo criterio que el semáforo de
+// la tile Post-21 (CFG.tarde_post21 = 12% tarde / la mitad = en riesgo), dado vuelta.
+function horColor(v) { return v == null ? C.muted : v <= 100 - CFG.tarde_post21 * 100 ? C.crit : v <= 100 - CFG.tarde_post21 * 50 ? C.warn : C.good; }
 
 async function sbGet(path) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -158,7 +161,26 @@ function aggWeekFirstDays(semanas, label, nDays, topeMap) {
 }
 
 // ---- subcomponentes chicos ----
-function Tile({ label, value, delta, dot, sub, onClick, open }) {
+// Sparkline de la tile: la forma del período adentro del número. El promedio tapa el pico
+// (ej: post-21 al 11% el lunes y 4% el resto da 5,9% y parece una semana pareja).
+// Sin ejes ni tooltip a propósito — es contexto, no un gráfico; el gráfico está en Tendencia.
+function Spark({ vals, color, w = 62, h = 24 }) {
+  const v = (vals || []).filter((x) => x != null && !isNaN(x));
+  if (v.length < 3) return null;
+  const mn = Math.min(...v), mx = Math.max(...v), r = (mx - mn) || 1;
+  const pts = v.map((x, i) => [(i / (v.length - 1)) * (w - 2) + 1, h - 2 - ((x - mn) / r) * (h - 5)]);
+  const d = pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+  const last = pts[pts.length - 1];
+  return (
+    <svg width={w} height={h} style={{ flex: "0 0 auto", overflow: "visible" }} aria-hidden="true">
+      <polygon points={`1,${h} ${d} ${w - 1},${h}`} fill={color} opacity="0.10" />
+      <polyline points={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" opacity="0.9" />
+      <circle cx={last[0].toFixed(1)} cy={last[1].toFixed(1)} r="2.1" fill={color} />
+    </svg>
+  );
+}
+
+function Tile({ label, value, delta, dot, sub, onClick, open, spark }) {
   return (
     <div onClick={onClick} style={{ background: C.cardAlt, border: `1px solid ${onClick && open ? C.teal : C.border}`, borderRadius: 12, padding: "14px 16px", minWidth: 120, flex: "1 1 130px", cursor: onClick ? "pointer" : "default" }}>
       <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
@@ -166,9 +188,14 @@ function Tile({ label, value, delta, dot, sub, onClick, open }) {
         {label}
         {onClick && <span style={{ marginLeft: "auto", color: C.teal, fontSize: 12 }}>{open ? "▾" : "▸"}</span>}
       </div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: C.ink, marginTop: 4 }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{sub}</div>}
-      {delta}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 24, fontWeight: 700, color: C.ink, marginTop: 4 }}>{value}</div>
+          {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{sub}</div>}
+          {delta}
+        </div>
+        {spark}
+      </div>
     </div>
   );
 }
@@ -352,6 +379,7 @@ export default function Analisis({ semanas }) {
   const [verAvanzadas, setVerAvanzadas] = useState(false); // ranking: columnas avanzadas ocultas por defecto
   const [verInforme, setVerInforme] = useState(false); // informe completo del analista colapsado
   const [verIncompletos, setVerIncompletos] = useState(false); // bloque "Datos aún incompletos" colapsado
+  const [lenteReg, setLenteReg] = useState("sla"); // tarjetas de Regiones: lente SLA u Horario
   const [verCapacidad, setVerCapacidad] = useState(false); // "Capacidad para redistribuir" colapsado por defecto
   const [verAlertasOp, setVerAlertasOp] = useState(false); // "Alertas operativas / calidad de datos" colapsado por defecto
   const [verAtender, setVerAtender] = useState(true); // "A atender" colapsable (abierto por defecto, es lo principal)
@@ -610,25 +638,40 @@ export default function Analisis({ semanas }) {
   // Misma comparación que los KPIs: si la semana está en curso, contra los mismos N días de la semana anterior.
   const prevRegiones = useMemo(() => {
     if (!zonasRaw || !zonasRaw.length || !prevLabels) return null;
-    let fechasPrev;
-    if (enCursoActual && prevLabels.length === 1) {
-      const w = weeks.find((x) => x.label === prevLabels[0]);
-      fechasPrev = new Set(w ? w.fechas.slice(0, nCurDias) : []);
-    } else {
-      fechasPrev = new Set(weeks.filter((w) => prevLabels.includes(w.label)).flatMap((w) => w.fechas));
-    }
-    const map = {};
-    for (const r of zonasRaw) {
-      if (!fechasPrev.has(r.fecha)) continue;
-      const zona = r.zona_cp || zonaDe(r.localidad);
-      const region = !zona ? "Sin zona asignada" : (regionMap[zona] || "Sin clasificar");
-      const g = map[region] || (map[region] = { ml: 0, dm: 0, d2: 0 });
-      g.ml += r.envios_ml; g.dm += r.demorados; g.d2 += r.dem21;
-    }
-    const out = {};
-    for (const [k, g] of Object.entries(map)) out[k] = g.ml >= CFG.zonaMin ? slaMeli(g.ml, g.dm, g.d2) : null;
-    return out;
-  }, [zonasRaw, prevLabels, weeks, regionMap, enCursoActual, nCurDias]); // eslint-disable-line react-hooks/exhaustive-deps
+    // OJO — `semanas_zonas` NO tiene todos los días (la captura arrancó el 23/07 y no hubo backfill).
+    // Comparar la semana completa contra 3 días de la anterior daba flechas falsas: el lunes es el
+    // peor día y si falta de un lado, el otro lado "empeora" solo. Por eso la flecha compara
+    // únicamente las posiciones de la semana (lun, mar, …) que tienen dato de zona en AMBOS lados.
+    const conDato = new Set(zonasRaw.map((r) => r.fecha));
+    const wPrev = weeks.filter((w) => prevLabels.includes(w.label));
+    const wCur = weeks.filter((w) => periodLabels.includes(w.label));
+    const posDe = (ws) => { const s = new Set(); ws.forEach((w) => w.fechas.forEach((f, i) => { if (conDato.has(f)) s.add(i); })); return s; };
+    let posPrev = posDe(wPrev);
+    if (enCursoActual && prevLabels.length === 1) posPrev = new Set([...posPrev].filter((i) => i < nCurDias));
+    const posCur = posDe(wCur);
+    const posOk = new Set([...posPrev].filter((i) => posCur.has(i)));
+    if (!posOk.size) return null;
+    const fechasDe = (ws) => new Set(ws.flatMap((w) => w.fechas.filter((f, i) => posOk.has(i))));
+    const agg = (fechas) => {
+      const map = {};
+      for (const r of zonasRaw) {
+        if (!fechas.has(r.fecha)) continue;
+        const zona = r.zona_cp || zonaDe(r.localidad);
+        const region = !zona ? "Sin zona asignada" : (regionMap[zona] || "Sin clasificar");
+        const g = map[region] || (map[region] = { ml: 0, dm: 0, d2: 0, ent: 0, p21: 0 });
+        g.ml += r.envios_ml; g.dm += r.demorados; g.d2 += r.dem21;
+        g.ent += (r.entregados || 0); g.p21 += (r.post21 || 0);
+      }
+      // Las DOS lentes: sla (solo ML) y hor (% entregado antes de las 21, sobre entregados).
+      const out = {};
+      for (const [k, g] of Object.entries(map)) out[k] = {
+        sla: g.ml >= CFG.zonaMin ? slaMeli(g.ml, g.dm, g.d2) : null,
+        hor: g.ent > 0 ? (g.ent - g.p21) / g.ent * 100 : null,
+      };
+      return out;
+    };
+    return { prev: agg(fechasDe(wPrev)), cmp: agg(fechasDe(wCur)), dias: posOk.size, parcial: posOk.size < posCur.size };
+  }, [zonasRaw, prevLabels, periodLabels, weeks, regionMap, enCursoActual, nCurDias]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
   const informeStd = useMemo(() => {
@@ -697,11 +740,11 @@ export default function Analisis({ semanas }) {
         let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, pend = 0;
         for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); pend += m.pendientes; }
         const ent = cant - pend;
-        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null };
+        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, pend, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null };
       }) };
     }
     if (periodo.t === "ult4") {
-      return { modo: "semana", datos: completas.slice(-4).map((l) => { const a = aggWeeks(semanas, new Set([l]), topeMap); return { name: fmtSemLabel(l), cant: a.g.cant, sla: a.g.sla, p21r: a.g.entregados > 0 ? a.g.p21rate * 100 : null }; }) };
+      return { modo: "semana", datos: completas.slice(-4).map((l) => { const a = aggWeeks(semanas, new Set([l]), topeMap); return { name: fmtSemLabel(l), cant: a.g.cant, pend: a.g.pend, sla: a.g.sla, p21r: a.g.entregados > 0 ? a.g.p21rate * 100 : null }; }) };
     }
     const byMonth = {};
     semanas.forEach((s) => s.dias.forEach((dia) => {
@@ -709,7 +752,7 @@ export default function Analisis({ semanas }) {
       const g = byMonth[mk] || (byMonth[mk] = { cant: 0, ml: 0, dm: 0, d2: 0, p21: 0, pend: 0 });
       for (const m of dia.datos) { g.cant += m.cantidad; g.ml += m.envios_ml; g.dm += m.demorados; g.d2 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.pend += m.pendientes; }
     }));
-    return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); const ent = g.cant - g.pend; return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, sla: slaMeli(g.ml, g.dm, g.d2), p21r: ent > 0 ? g.p21 / ent * 100 : null }; }) };
+    return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); const ent = g.cant - g.pend; return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, pend: g.pend, sla: slaMeli(g.ml, g.dm, g.d2), p21r: ent > 0 ? g.p21 / ent * 100 : null }; }) };
   }, [periodo.t, periodW, completas, semanas, topeMap]);
 
   // Calendario del histórico: stats por fecha (todas las semanas cargadas) para la vista mensual.
@@ -757,6 +800,19 @@ export default function Analisis({ semanas }) {
   const dSla = (prev && cur.g.sla != null && prev.g.sla != null) ? cur.g.sla - prev.g.sla : null;
   const dPend = (prev && (!parcialActual || enCursoActual)) ? cur.g.pend - prev.g.pend : null;
   const dP21 = (prev && cur.g.entregados > 0 && prev.g.entregados > 0) ? (cur.g.p21rate - prev.g.p21rate) * 100 : null;
+
+  // Series del período para el sparkline de cada tile — mismos datos que el gráfico de Tendencia,
+  // así no hay dos verdades. Con menos de 3 puntos el Spark no dibuja nada.
+  const serieDe = (k) => (tendData && tendData.datos.length >= 3 ? tendData.datos.map((d) => d[k]) : null);
+  const sEnv = serieDe("cant"), sSla = serieDe("sla"), sPend = serieDe("pend");
+
+  // Titular de horario — idea tomada del informe ML21 de LightData: el mismo dato que "Post-21"
+  // pero en positivo y con la proporción a la vista. OJO: es NUESTRA definición (post21 sobre
+  // entregados); el ML21 de LightData da un número más bajo y todavía no está reconciliado.
+  const antes21 = cur.g.entregados > 0 ? (1 - cur.g.p21rate) * 100 : null;
+  const dAntes21 = dP21 != null ? -dP21 : null; // el delta ya existía para la tile Post-21, dado vuelta
+  const colorAntes21 = cur.g.p21rate >= CFG.tarde_post21 ? C.crit : cur.g.p21rate >= CFG.tarde_post21 / 2 ? C.warn : C.good;
+  const peorPunto = (tendData.datos || []).filter((d) => d.p21r != null && d.p21r > 0).sort((a, b) => b.p21r - a.p21r)[0] || null;
 
   const periodDesc = periodo.t === "sem" ? "Semana del " + fmtSemLabel(periodW) + (enCursoActual ? " (en curso)" : parcialActual ? " (parcial)" : "")
     : periodo.t === "ult4" ? "Últimas 4 semanas completas"
@@ -1099,13 +1155,42 @@ export default function Analisis({ semanas }) {
       {/* === Decisiones de la semana (v2) === */}
       <div style={{ marginBottom: 24 }}>
         <h3 style={{ fontSize: 15, margin: "0 0 10px" }}>{tituloBloque}</h3>
+        {/* Titular de horario (idea del ML21): reemplaza a la tile "Post-21 (flota)" — es el mismo
+            dato en positivo, con la proporción visible. NO se suma a las tiles: las tiles bajaron
+            de 4 a 3. Menos piezas, no más. */}
+        {antes21 != null && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.80)", fontWeight: 600 }}>
+                El <b style={{ fontSize: 22, fontWeight: 800, color: colorAntes21 }}>{fmt1(antes21)}%</b> de las entregas fue antes de las 21:00
+              </div>
+              {dAntes21 != null && (
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: dAntes21 >= 0 ? C.goodText : C.critText }}>
+                  {(dAntes21 >= 0 ? "+" : "−") + fmt1(Math.abs(dAntes21))} pp <span style={{ color: C.muted, fontWeight: 400 }}>vs {prevLbl}</span>
+                </span>
+              )}
+              <span onClick={() => { setLenteReg("hor"); setTimeout(() => { const el = document.getElementById("regiones-bloque"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 60); }}
+                style={{ marginLeft: "auto", fontSize: 11.5, color: C.teal, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>ver por región ▸</span>
+            </div>
+            <div style={{ display: "flex", height: 11, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.06)", marginTop: 11 }}>
+              <div style={{ width: `${antes21}%`, background: colorAntes21, transition: "width .5s ease" }} />
+              <div style={{ width: `${100 - antes21}%`, background: C.crit, opacity: 0.85 }} />
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.muted, marginTop: 8 }}>
+              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: colorAntes21, display: "inline-block", marginRight: 6 }} />{fmtInt(cur.g.entregados - cur.g.p21)} en horario</span>
+              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: C.crit, display: "inline-block", marginRight: 6 }} />{fmtInt(cur.g.p21)} fuera de horario</span>
+              {peorPunto && <span style={{ marginLeft: "auto", color: "rgba(255,255,255,0.42)" }}>peor {tendData.modo}: {peorPunto.name} · {fmt1(100 - peorPunto.p21r)}%</span>}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <Tile label="SLA Meli (solo ML)" value={cur.g.sla != null ? fmt1(cur.g.sla) + "%" : "—"} dot={slaColor(cur.g.sla)} delta={dSla != null ? <DeltaSpan delta={dSla} unidad="pp" bueno="up" prevLbl={prevLbl} /> : null}
+            spark={<Spark vals={sSla} color={C.good} />}
             open={verIncompletos}
             onClick={() => { setVerIncompletos(true); setJerNodos(new Set(["CABA", "Norte", "Oeste", "Sur"])); setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80); }} />
-          <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
-          <Tile label="Pendientes" value={fmtInt(cur.g.pend)} dot={cur.g.pendRate >= 0.05 ? C.warn : null} sub={`${fmt1(cur.g.pendRate * 100)}% del total`} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="" bueno="down" prevLbl={prevLbl} /> : null} />
-          <Tile label="Post-21 (flota)" value={cur.g.entregados > 0 ? fmt1(cur.g.p21rate * 100) + "%" : "—"} dot={cur.g.p21rate >= CFG.tarde_post21 ? C.crit : cur.g.p21rate >= CFG.tarde_post21 / 2 ? C.warn : C.good} sub="de las entregas, después de las 21" delta={dP21 != null ? <DeltaSpan delta={dP21} unidad="pp" bueno="down" prevLbl={prevLbl} /> : null} />
+          <Tile label="Envíos (ML + particulares)" value={fmtInt(cur.g.cant)} spark={<Spark vals={sEnv} color={C.good} />} delta={dVol != null ? <DeltaSpan delta={dVol} unidad="" bueno="up" prevLbl={prevLbl} /> : (parcialActual ? <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>semana en curso</div> : null)} />
+          <Tile label="Pendientes" value={fmtInt(cur.g.pend)} dot={cur.g.pendRate >= 0.05 ? C.warn : null} sub={`${fmt1(cur.g.pendRate * 100)}% del total`} spark={<Spark vals={sPend} color={C.good} />} delta={dPend != null ? <DeltaSpan delta={dPend} unidad="" bueno="down" prevLbl={prevLbl} /> : null} />
         </div>
 
         {/* Regiones — la geografía primero: el problema suele empezar en una zona, no en una persona */}
@@ -1123,33 +1208,60 @@ export default function Analisis({ semanas }) {
             setJerNodos((s) => new Set([...s, nombre]));
             setTimeout(() => { const el = document.getElementById("jer-sla"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
           };
+          const hor = lenteReg === "hor"; // lente: SLA (solo ML) o Horario (% entregado antes de las 21)
           return (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+            <div id="regiones-bloque" style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>🗺️ Regiones</span>
                 <span style={{ fontSize: 11, color: C.muted }}>¿qué zona se está rompiendo? · tocá una región para el detalle</span>
+                {/* Dos lentes sobre las MISMAS tarjetas — no son tarjetas nuevas. El SLA casi no se
+                    mueve (todo verde, cero señal); el horario sí discrimina. */}
+                <span style={{ marginLeft: "auto", display: "inline-flex", gap: 4, padding: 3, borderRadius: 10, background: "rgba(0,0,0,0.3)", border: `1px solid ${C.border}` }}>
+                  {[["sla", "SLA"], ["hor", "Horario"]].map(([k, lb]) => {
+                    const on = lenteReg === k;
+                    return (
+                      <button key={k} onClick={() => setLenteReg(k)}
+                        style={{ height: 26, padding: "0 12px", borderRadius: 7, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                          border: `1px solid ${on ? "rgba(46,207,170,0.45)" : "transparent"}`, background: on ? "rgba(46,207,170,0.16)" : "transparent", color: on ? C.teal : C.muted }}>{lb}</button>
+                    );
+                  })}
+                </span>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 {regs.map((r) => {
-                  const pv = prevRegiones ? prevRegiones[r.nombre] : null;
-                  const d = (pv != null && r.sla != null) ? r.sla - pv : null;
+                  // La flecha compara el MISMO subconjunto de días de las dos semanas (ver prevRegiones),
+                  // no el valor grande de la tarjeta contra un período incompleto.
+                  const pvo = prevRegiones ? prevRegiones.prev[r.nombre] : null;
+                  const cvo = prevRegiones ? prevRegiones.cmp[r.nombre] : null;
+                  const pv = pvo ? (hor ? pvo.hor : pvo.sla) : null;
+                  const cv = cvo ? (hor ? cvo.hor : cvo.sla) : null;
+                  const val = hor ? (r.entregados > 0 ? 100 - r.post21Rate : null) : r.sla;
+                  const col = hor ? horColor(val) : slaColor(r.sla);
+                  const d = (pv != null && cv != null) ? cv - pv : null;
                   const f = flecha(d);
+                  const pie = hor ? `${fmtInt(r.entregados)} entregas` : `${fmtInt(r.envios_ml)} ML`;
                   return (
                     <div key={r.nombre} onClick={() => abrirRegion(r.nombre)}
-                      style={{ flex: "1 1 125px", minWidth: 115, background: C.cardAlt, border: `1px solid ${C.border}`, borderLeft: `3px solid ${slaColor(r.sla)}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
+                      style={{ flex: "1 1 125px", minWidth: 115, background: C.cardAlt, border: `1px solid ${C.border}`, borderLeft: `3px solid ${col}`, borderRadius: 12, padding: "10px 12px", cursor: "pointer" }}>
                       <div style={{ fontSize: 11.5, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: slaColor(r.sla), display: "inline-block", flex: "0 0 auto" }} />
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: col, display: "inline-block", flex: "0 0 auto" }} />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nombre}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 3 }}>
-                        <span style={{ fontSize: 19, fontWeight: 700, color: slaColor(r.sla) }}>{r.sla != null ? fmt1(r.sla) + "%" : "—"}</span>
+                        <span style={{ fontSize: 19, fontWeight: 700, color: col }}>{val != null ? fmt1(val) + "%" : "—"}</span>
                         {f && <span style={{ fontSize: 14, fontWeight: 700, color: f.c }}>{f.t}</span>}
                       </div>
-                      <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{fmtInt(r.envios_ml)} ML{d != null ? " · " + (d >= 0 ? "+" : "−") + fmt1(Math.abs(d)) + " pp" : ""}</div>
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{pie}{d != null ? " · " + (d >= 0 ? "+" : "−") + fmt1(Math.abs(d)) + " pp" : ""}</div>
                     </div>
                   );
                 })}
               </div>
+              {hor && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>% de entregas antes de las 21:00 — el SLA puede estar intacto y la región estar entregando cada vez más tarde.</div>}
+              {prevRegiones && prevRegiones.parcial && (
+                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 4 }}>
+                  ⚠️ La flecha compara solo {prevRegiones.dias} {prevRegiones.dias === 1 ? "día" : "días"} — son los únicos con dato por zona en las dos semanas. El % grande sí es de todo el período.
+                </div>
+              )}
               {sinML > 0 && jerarquia.pctSinZona >= 5 && (
                 <div style={{ fontSize: 10.5, color: C.muted, marginTop: 5 }}>+ {fmtInt(sinML)} envíos ML sin zona asignada — no entran en las tarjetas de región</div>
               )}
