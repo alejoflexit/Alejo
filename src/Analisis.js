@@ -694,9 +694,21 @@ export default function Analisis({ semanas }) {
   // Informe del analista parseado (para el Titular + enriquecer las tarjetas con su acción en prosa).
   const informeStd = useMemo(() => {
     if (!informes || !informes.length) return null;
-    const row = informes.find((x) => x.informe_md);
-    const p = row ? parseInforme(row.informe_md) : null;
-    if (!p) return null;
+    // BUG que tapaba el bloque entero: se agarraba el informe MÁS NUEVO, que casi siempre es un
+    // diario ("Parque Chacabuco saturada", 3 líneas sin encabezados markdown). parseInforme no
+    // encontraba "## Titular", devolvía titular vacío y el render — condicionado a titular — no
+    // mostraba nada. El semanal, que es el que trae el análisis de verdad, quedaba invisible.
+    // Ahora: primero el semanal; el diario solo si no hay ninguno.
+    const row = informes.find((x) => x.informe_md && x.tipo === "semanal") || informes.find((x) => x.informe_md);
+    if (!row) return null;
+    const p = parseInforme(row.informe_md) || { items: [] };
+    // Los diarios no tienen encabezados: el titular sale del resumen de Telegram o de la 1ª línea.
+    if (!p.titular) {
+      p.titular = (row.resumen_tg || "").trim()
+        || String(row.informe_md).split("\n").map((l) => l.replace(/^[-*\s]+/, "").trim()).find(Boolean)
+        || "";
+    }
+    if (!p.items) p.items = [];
     const porCadete = {}; let capacidad = null;
     p.items.forEach((it) => {
       const nm = norm(it.nombre);
