@@ -109,8 +109,7 @@ $script:timer.Add_Tick({
   $script:i = ($script:i + 1) % $script:seq.Count
   $script:img.Source = $script:frames[$script:seq[$script:i]]
 })
-# Respeto de "reducir movimiento": si Windows tiene las animaciones desactivadas, Paco queda quieto
-if ([System.Windows.SystemParameters]::ClientAreaAnimation) { $script:timer.Start() }
+$script:timer.Start()
 
 $script:window.Add_Closed({ Save-Pos; $script:timer.Stop() })
 [void]$script:window.ShowDialog()
