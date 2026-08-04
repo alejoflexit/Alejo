@@ -21,7 +21,7 @@ $script:appUrl = 'https://flota-logistica-iota.vercel.app/'
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
         Width="100" Height="224" Title="Paco">
-  <Image x:Name="img" Stretch="Uniform" />
+  <Image x:Name="img" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
 </Window>
 "@
 $script:window = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
