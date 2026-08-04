@@ -154,15 +154,22 @@ const secSt = { fontSize: 12, fontWeight: 600, color: C.ink3, margin: "22px 6px 
 
 // ── Paco, la mascota de Flexit (pixel-art, tomando mate) ──
 // Spritesheet de 3 frames (reposo → levanta → toma) en public/paco-sprites.png (216x161 en pantalla,
-// cada frame 72x161 @2x). Decorativo puro: pointer-events:none así jamás tapa botones ni tablas,
-// se oculta en pantallas chicas y queda quieto si el usuario tiene "reducir movimiento" activado.
+// cada frame 72x161 @2x). Se oculta en pantallas chicas y queda quieto con "reducir movimiento".
+// Easter egg: doble clic sobre Paco abre el modal para llevárselo al escritorio (widget Windows
+// hosteado en public/paco/ + public/paco-widget.zip). Sin pistas visuales a propósito.
 function PacoMate() {
+  const [egg, setEgg] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const cmd = "irm https://flota-logistica-iota.vercel.app/paco/instalar.ps1 | iex";
+  const copiar = () => {
+    try { navigator.clipboard.writeText(cmd); setCopiado(true); setTimeout(() => setCopiado(false), 2000); } catch { }
+  };
   return (
     <>
       <style>{`
         .paco-mate {
           position: fixed; right: 18px; bottom: 0; z-index: 2;
-          width: 72px; height: 161px; pointer-events: none;
+          width: 72px; height: 161px; cursor: default; user-select: none;
           background: url(${process.env.PUBLIC_URL || ""}/paco-sprites.png) 0 0 / 216px 161px no-repeat;
           animation: paco-toma-mate 14s infinite;
           filter: drop-shadow(0 6px 12px rgba(0,0,0,0.35));
@@ -177,7 +184,33 @@ function PacoMate() {
         @media (max-width: 900px), (max-height: 560px) { .paco-mate { display: none; } }
         @media (prefers-reduced-motion: reduce) { .paco-mate { animation: none; } }
       `}</style>
-      <div className="paco-mate" aria-hidden="true" />
+      <div className="paco-mate" aria-hidden="true" onDoubleClick={() => setEgg(true)} />
+      {egg && (
+        <div onClick={() => setEgg(false)} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(8,8,24,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ ...cardBase, background: "rgba(24,25,42,0.97)", maxWidth: 440, width: "100%", padding: "26px 28px", color: C.ink, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+            <div style={{ fontSize: 19, fontWeight: 700, fontFamily: C.grotesk, marginBottom: 6 }}>🧉 ¡Encontraste a Paco!</div>
+            <div style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.5, marginBottom: 18 }}>
+              Llevátelo a tu escritorio: queda flotando en la pantalla, siempre visible, tomando mate.
+              Doble clic sobre él te abre Flexit. Solo para Windows.
+            </div>
+            <a href={`${process.env.PUBLIC_URL || ""}/paco-widget.zip`} download="paco-widget.zip"
+              style={{ display: "block", textAlign: "center", background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.4)", color: C.teal, borderRadius: 12, padding: "12px 16px", fontSize: 14, fontWeight: 700, textDecoration: "none", fontFamily: C.grotesk }}>
+              ⬇ Descargar instalador (ZIP)
+            </a>
+            <div style={{ fontSize: 12, color: C.ink3, margin: "8px 0 16px", textAlign: "center" }}>
+              Descomprimilo y hacé doble clic en <b>INSTALAR.bat</b>
+            </div>
+            <div style={{ fontSize: 12, color: C.ink2, marginBottom: 6 }}>O si preferís, pegá esto en PowerShell:</div>
+            <div onClick={copiar} title="Clic para copiar"
+              style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.line}`, borderRadius: 9, padding: "9px 12px", fontSize: 11.5, fontFamily: "Consolas, monospace", color: copiado ? C.teal : C.ink2, cursor: "pointer", wordBreak: "break-all" }}>
+              {copiado ? "✓ Copiado — pegalo en PowerShell y Enter" : cmd}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+              <button onClick={() => setEgg(false)} style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${C.line}`, background: "transparent", color: C.ink2, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
