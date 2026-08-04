@@ -1,4 +1,4 @@
-# ── Paco flotante — mascota de Flexit siempre visible en pantalla ──
+﻿# ── Paco flotante — mascota de Flexit siempre visible en pantalla ──
 # Se lanza oculto con paco.vbs. Controles:
 #   · Arrastrar con el mouse: lo movés a donde quieras (la posición se recuerda).
 #   · Doble clic: abre la app Flexit.
