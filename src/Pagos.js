@@ -1379,6 +1379,9 @@ function PagosInner({ session }) {
   const [histBusy, setHistBusy] = useState(false);
   const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
   const [copiadoKey, setCopiadoKey] = useState(null); // fila cuyo mensaje se acaba de copiar
+  const [divKey, setDivKey] = useState(null);         // fila con el divisor de pago abierto
+  const [divFactura, setDivFactura] = useState('');   // lo que factura: eso sale por transferencia
+  const [divVia, setDivVia] = useState('galicia');    // banco por el que sale la parte facturada
 
   // mensaje para mandarle al cadete por WhatsApp y chequear diferencias
   function copiarMensaje(f) {
@@ -1717,6 +1720,31 @@ function PagosInner({ session }) {
       } else {
         await sb('pagos_cierres', { method: 'POST', body: JSON.stringify([payload]) });
       }
+      await refreshCierres(semanaLunes);
+    } catch (e) { setError(e.message); }
+    finally { setBusyAccion(false); }
+  }
+
+  // Dividir el pago de un chofer: factura una parte (sale por transferencia) y el resto lo
+  // cobra en mano. Se guarda en pagos_cierres.pagos y NO marca nada como pagado — en la
+  // pantalla Pagar cada parte pasa a ser una fila propia, que se confirma por separado:
+  // la transferencia cuando llega la factura, el efectivo cuando se le da la plata.
+  // Si el chofer todavía no está confirmado, la fila se crea en borrador para tener dónde
+  // guardarlo; confirmarlo después no pisa la división.
+  async function guardarDivision(f, cierre, partes) {
+    const limpias = (partes || []).filter(p => (+p.monto || 0) > 0).map(p => ({ via: p.via, monto: Math.round(+p.monto) }));
+    const valor = limpias.length > 1 ? limpias : null; // una sola parte no es una división
+    setBusyAccion(true); setError('');
+    try {
+      if (cierre && cierre.id) {
+        await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ pagos: valor }) });
+      } else if (valor) {
+        await sb('pagos_cierres', { method: 'POST', body: JSON.stringify([{
+          semana_label: semanaLunes, cadete: f.nombre, total: f.total,
+          metodo: f.factura ? 'transferencia' : 'efectivo', estado: 'borrador', pagos: valor,
+        }]) });
+      }
+      setDivKey(null); setDivFactura('');
       await refreshCierres(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -2212,6 +2240,44 @@ function PagosInner({ session }) {
                               {f.modo === 'cp' && (
                                 <button onClick={() => setExpandido(open ? null : f.key)} title="ver detalle por CP" style={{ marginLeft: 2, fontSize: 13, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>👁</button>
                               )}
+                              {/* Dividir: parte por transferencia (lo que factura) y parte en efectivo.
+                                  Se decide acá, junto con el método, que es donde Alejo ya está mirando
+                                  cómo le paga a cada uno. En Pagar salen como dos filas separadas. */}
+                              {!cierre?.pagado && (
+                                <button onClick={e => {
+                                    e.stopPropagation();
+                                    const abrir = divKey !== f.key;
+                                    setDivKey(abrir ? f.key : null);
+                                    const banco = (cierre?.pagos || []).find(p => p.via !== 'efectivo');
+                                    setDivFactura(abrir && banco ? String(banco.monto) : '');
+                                    setDivVia(banco ? banco.via : 'galicia');
+                                  }}
+                                  title="dividir: una parte por transferencia y otra en efectivo"
+                                  style={{ marginLeft: 2, fontSize: 12, fontWeight: 700, color: divKey === f.key ? BRAND.teal : BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>½</button>
+                              )}
+                              {/* La división ya guardada, a la vista: es parte del método de pago. */}
+                              {Array.isArray(cierre?.pagos) && cierre.pagos.length > 1 && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 6, flexWrap: 'wrap' }}>
+                                  {cierre.pagos.map((p, k) => {
+                                    const mp = MEDIOS_PAGO[p.via] || { nombre: p.via, text: BRAND.muted };
+                                    return (
+                                      <span key={k} title={p.pagado ? 'ya pagada' : 'todavía sin pagar'}
+                                        style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20, whiteSpace: 'nowrap',
+                                          color: mp.text, background: BRAND.chipBg, border: `1px solid ${BRAND.border}`, opacity: p.pagado ? 0.55 : 1 }}>
+                                        {p.pagado ? '✓ ' : ''}{mp.nombre} {money(p.monto)}
+                                      </span>
+                                    );
+                                  })}
+                                  {/* Si el total cambió después de dividir (un ajuste, un reabrir),
+                                      las partes quedan viejas: hay que verlo, no descubrirlo pagando. */}
+                                  {(() => {
+                                    const suma = cierre.pagos.reduce((a, p) => a + (+p.monto || 0), 0);
+                                    const dif = Math.round((f.total || 0) - suma);
+                                    if (Math.abs(dif) <= 1) return null;
+                                    return <span title="el total cambió después de dividir — volvé a dividir" style={{ fontSize: 10.5, fontWeight: 700, color: BRAND.amber, whiteSpace: 'nowrap' }}>⚠ {dif > 0 ? `faltan ${money(dif)}` : `sobran ${money(-dif)}`}</span>;
+                                  })()}
+                                </span>
+                              )}
                             </td>
                             {/* Medio: identidad del banco/billetera, solo cuando ya se pagó por transferencia */}
                             <td style={{ padding: '8px 12px' }}>
@@ -2246,6 +2312,65 @@ function PagosInner({ session }) {
                               </div>
                             </td>
                           </tr>
+                          {divKey === f.key && (() => {
+                            const total = f.total || 0;
+                            const fact = Math.min(Math.max(Math.round(+divFactura || 0), 0), total);
+                            const resto = total - fact;
+                            const excede = (+divFactura || 0) > total;
+                            const mp = MEDIOS_PAGO[divVia];
+                            const yaDividido = Array.isArray(cierre?.pagos) && cierre.pagos.length > 1;
+                            return (
+                              <tr>
+                                <td colSpan={nCols} style={{ padding: '11px 16px', background: 'rgba(139,123,232,0.07)', borderLeft: `3px solid ${MEDIOS_PAGO.mixto.color}` }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{f.nombre} factura por</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.28)', border: `1px solid ${excede ? BRAND.red : BRAND.border}`, borderRadius: 9, padding: '4px 10px' }}>
+                                      <span style={{ color: BRAND.muted, fontSize: 13 }}>$</span>
+                                      <input autoFocus inputMode="numeric" value={divFactura} onChange={e => setDivFactura(e.target.value.replace(/[^0-9]/g, ''))}
+                                        placeholder="0" style={{ width: 110, textAlign: 'right', background: 'transparent', border: 'none', color: BRAND.white, fontSize: 14, fontWeight: 700, outline: 'none' }} />
+                                    </span>
+                                    <button onClick={() => setDivFactura(String(Math.round(total / 2)))}
+                                      style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 20, color: BRAND.muted, cursor: 'pointer', fontSize: 11, padding: '3px 10px' }}>la mitad</button>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ fontSize: 11, color: BRAND.muted }}>se transfiere por</span>
+                                      {['galicia', 'mercadopago'].map(k => {
+                                        const mm = MEDIOS_PAGO[k], on = divVia === k;
+                                        return (
+                                          <button key={k} onClick={() => setDivVia(k)}
+                                            style={{ height: 26, padding: '0 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
+                                              border: `1px solid ${on ? mm.color : BRAND.border}`, background: on ? `${mm.color}22` : 'transparent', color: on ? mm.text : BRAND.muted }}>
+                                            {mm.nombre}
+                                          </button>
+                                        );
+                                      })}
+                                    </span>
+                                    <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                                      {excede
+                                        ? <span style={{ color: BRAND.red, fontSize: 12.5, fontWeight: 700 }}>No puede facturar más que el total ({money(total)}).</span>
+                                        : <span style={{ fontSize: 12.5, fontWeight: 700 }}>
+                                            <span style={{ color: mp.text }}>🏦 {mp.nombre} {money(fact)}</span>
+                                            <span style={{ color: BRAND.muted, fontWeight: 400 }}> + </span>
+                                            <span style={{ color: MEDIOS_PAGO.efectivo.text }}>💵 Efectivo {money(resto)}</span>
+                                          </span>}
+                                      {yaDividido && (
+                                        <button onClick={() => guardarDivision(f, cierre, [])} disabled={busyAccion}
+                                          style={{ background: 'none', border: 'none', color: BRAND.amber, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>quitar división</button>
+                                      )}
+                                      <button onClick={() => { setDivKey(null); setDivFactura(''); }}
+                                        style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
+                                      <button disabled={busyAccion || excede || fact <= 0 || resto <= 0}
+                                        onClick={() => guardarDivision(f, cierre, [{ via: divVia, monto: fact }, { via: 'efectivo', monto: resto }])}
+                                        title="quedan dos pagos separados en la pantalla Pagar; no marca nada como pagado"
+                                        style={{ padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0 || resto <= 0) ? 'not-allowed' : 'pointer',
+                                          background: (excede || fact <= 0 || resto <= 0) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (excede || fact <= 0 || resto <= 0) ? BRAND.muted : '#04121a' }}>
+                                        Dividir en dos pagos
+                                      </button>
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })()}
                           {open && (
                             <tr>
                               <td colSpan={nCols} style={{ padding: '10px 16px', background: 'rgba(46,207,170,0.05)', borderLeft: `3px solid ${BRAND.teal}` }}>
