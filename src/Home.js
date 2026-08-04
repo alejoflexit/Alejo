@@ -301,13 +301,27 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   useEffect(() => { recargarNotas(); }, [recargarNotas]);
   useNotasRealtime(useCallback((row, ev) => setNotas((prev) => aplicarCambioNota(prev, row, ev)), []), !!session);
 
-  // Liquidación (solo lun/mar, solo admin)
+  // Liquidación (solo lun/mar, solo admin).
+  // Dos bugs que hacían que esto mostrara siempre "0 cadetes confirmados":
+  //   1) buscaba el lunes de HOY. El lunes se liquida la semana que YA TERMINÓ, así que va el
+  //      lunes anterior (−7 días). Con el lunes de hoy la semana ni siquiera empezó.
+  //   2) armaba el label como "03/08", pero `pagos_cierres.semana_label` es ISO ("2026-07-27").
+  //      La query no matcheaba nada y devolvía [], que se leía como "cero confirmados".
+  // Además contaba filas: un cierre en borrador NO está confirmado.
   useEffect(() => {
     if (!isAdmin || !esLunMar) return;
-    const l = new Date(hoy + "T12:00:00"); const off = (l.getDay() + 6) % 7; l.setDate(l.getDate() - off);
-    const label = `${String(l.getDate()).padStart(2, "0")}/${String(l.getMonth() + 1).padStart(2, "0")}`;
-    sbFetch(`pagos_cierres?select=cadete,pagado&semana_label=eq.${encodeURIComponent(label)}`)
-      .then((rows) => { if (Array.isArray(rows)) setLiq({ label, confirmados: rows.length, pagados: rows.filter((r) => r.pagado).length }); })
+    const l = new Date(hoy + "T12:00:00");
+    l.setDate(l.getDate() - ((l.getDay() + 6) % 7) - 7); // lunes de la semana que se liquida
+    const lunesISO = `${l.getFullYear()}-${String(l.getMonth() + 1).padStart(2, "0")}-${String(l.getDate()).padStart(2, "0")}`;
+    const sab = new Date(l); sab.setDate(sab.getDate() + 5);
+    const dm = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    sbFetch(`pagos_cierres?select=cadete,pagado,estado&semana_label=eq.${encodeURIComponent(lunesISO)}`)
+      .then((rows) => {
+        if (!Array.isArray(rows)) return;
+        const confirmados = rows.filter((r) => r.estado === "confirmado").length;
+        const pagados = rows.filter((r) => r.pagado).length;
+        setLiq({ label: `${dm(l)} al ${dm(sab)}`, confirmados, pagados });
+      })
       .catch(() => {});
   }, [isAdmin, esLunMar, hoy]);
 
@@ -326,7 +340,9 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
 
   // Foco del día (el protagonista)
   const foco = (() => {
-    if (isAdmin && esLunMar && liq && liq.confirmados < 41) return "liq";
+    // La liquidación es el foco mientras quede algo por hacer: o no confirmaste ninguno,
+    // o hay confirmados sin pagar. (Antes el corte era un 41 hardcodeado.)
+    if (isAdmin && esLunMar && liq && (liq.confirmados === 0 || liq.pagados < liq.confirmados)) return "liq";
     if (session && franja === "dia" && col && col.sinChofer > 0) return "colectas";
     // 13:00–15:30 el protagonista es Arribos (llegan los choferes) mientras falte alguno
     if (session && ventanaArribos && col && col.totalArr > 0 && col.llegaron < col.totalArr) return "arribos";
@@ -397,7 +413,11 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           </>)}
           {foco === "liq" && (<>
             <div style={focoTitulo}>Liquidación {liq.label}</div>
-            <div style={focoBajada}>{liq.confirmados} cadetes confirmados{liq.pagados ? ` · ${liq.pagados} pagados` : ""}. Falta cerrar el resto.</div>
+            <div style={focoBajada}>
+              {liq.confirmados === 0
+                ? "Todavía no confirmaste ningún cadete. Ahí arranca."
+                : `${liq.confirmados} confirmados · ${liq.pagados} pagados${liq.confirmados > liq.pagados ? ` · faltan ${liq.confirmados - liq.pagados} por pagar` : ""}.`}
+            </div>
             <button onClick={() => onNav("pagos")} style={ctaSt}>Ir a liquidaciones <Icon id="arrow" size={15} color="#04150f" /></button>
           </>)}
           {foco === "ok" && (<>
