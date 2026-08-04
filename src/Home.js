@@ -169,6 +169,7 @@ function PacoEgg({ onClose }) {
           width: 72px; height: 161px; margin: 0 auto 14px;
           background: url(${process.env.PUBLIC_URL || ""}/paco-sprites.png) 0 0 / 216px 161px no-repeat;
           animation: paco-toma-mate 8s infinite;
+          image-rendering: pixelated;
         }
         @keyframes paco-toma-mate {
           0%, 46%      { background-position: 0 0; }
