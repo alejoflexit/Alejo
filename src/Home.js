@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { slaMeli } from "./slaShared";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -39,7 +40,7 @@ const cardBase = {
   position: "relative", background: C.glass, border: `1px solid ${C.line}`, borderRadius: 20,
   boxShadow: C.shadow, WebkitBackdropFilter: "blur(18px) saturate(140%)", backdropFilter: "blur(18px) saturate(140%)",
 };
-const slaMeli = (ml, dem, d21) => (ml > 0 ? (ml - dem - (d21 || 0)) / ml * 100 : null);
+// slaMeli viene de slaShared.js — una sola definición de la fórmula para toda la app.
 const fmt = (n) => Number(n || 0).toLocaleString("es-AR");
 const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];

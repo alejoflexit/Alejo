@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { authedFetch } from "./auth";
+import { slaMeli } from "./slaShared";
 
 // Pestaña "Análisis" — port del prototipo prototipos/panel-analisis.html a React.
 // Datos: `semanas` (por cadete×día, prop desde App) + semanas_zonas y cadete_topes de Supabase.
@@ -76,10 +77,7 @@ function rangoFechas(fechas) {
   return am === bm ? `${+ad}–${+bd} ${MES[+am - 1]}` : `${+ad} ${MES[+am - 1]}–${+bd} ${MES[+bm - 1]}`;
 }
 
-// Una única fórmula de SLA Meli para toda la pestaña: (ML − demorados − repro 21) / ML.
-function slaMeli(ml, dem, dem21) {
-  return ml > 0 ? (ml - dem - (dem21 || 0)) / ml * 100 : null;
-}
+// La fórmula de SLA Meli ahora vive en slaShared.js (una sola definición para toda la app).
 // --- histograma de entregas por hora (columna `horas`: {"18":12,"19":30,...}) ---
 // Es lo que hace movible el corte del titular: no hay que reprocesar el Excel, se suma distinto.
 function sumaHoras(dst, src) { if (!src) return dst; for (const k of Object.keys(src)) dst[k] = (dst[k] || 0) + (src[k] || 0); return dst; }

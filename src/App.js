@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from 
 import Home from "./Home";
 import { getSession, login, logout, authedFetch } from "./auth";
 import { cargarComentarios, useComentariosRealtime, aplicarCambioNota } from "./colectasShared";
+import { slaMeli } from "./slaShared";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
@@ -217,7 +218,7 @@ async function cargarDesdeSupabase() {
     dias: Object.entries(s.dias).map(([fecha, datos]) => {
       const enriched = datos.map(m => {
         const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
-        const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados - (m.dem21||0)) / m.envios_ml * 100 : null;
+        const sla = slaMeli(m.envios_ml, m.demorados, m.dem21);
         return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: sla !== null ? +sla.toFixed(2) : null, evaluacion: evaluar(m.demorados + (m.dem21||0), sla) };
       });
       return { fecha, datos: enriched };
@@ -359,8 +360,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
   }
   return Object.values(map).map(m => {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
-    const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
-    const slaReal = m.envios_ml > 0 ? (m.envios_ml - m.demorados - m.dem21) / m.envios_ml * 100 : null;
+    const slaReal = slaMeli(m.envios_ml, m.demorados, m.dem21);
     return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   });
 }
@@ -464,8 +464,7 @@ function acumularSemana(dias) {
   }
   return Object.values(map).map(m => {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
-    const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
-    const slaRealAcum = m.envios_ml > 0 ? (m.envios_ml - m.demorados - m.dem21) / m.envios_ml * 100 : null;
+    const slaRealAcum = slaMeli(m.envios_ml, m.demorados, m.dem21);
     return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaRealAcum !== null ? +slaRealAcum.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaRealAcum), post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   }).sort((a, b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
 }
@@ -914,8 +913,9 @@ export default function App() {
   const slaFlexit       = totalEnvios > 0 ? +((totalEnvios - totalPendientes) / totalEnvios * 100).toFixed(1) : null;
   const totalMLDia     = acumulado.reduce((s,m) => s+m.envios_ml, 0);
   const totalDemDia    = acumulado.reduce((s,m) => s+m.demorados, 0);
-  // SLA Meli headline: descuenta demorados Y dem21 (reprogramados 21hs), igual que la tabla por cadete.
-  const slaPromedio    = totalMLDia > 0 ? +((totalMLDia - totalDemDia - totalDem21) / totalMLDia * 100).toFixed(2) : null;
+  // SLA Meli headline: misma fórmula compartida que la tabla por cadete (slaShared).
+  const slaPromedioRaw = slaMeli(totalMLDia, totalDemDia, totalDem21);
+  const slaPromedio    = slaPromedioRaw !== null ? +slaPromedioRaw.toFixed(2) : null;
 
   const tendencia   = cadeteSeleccionado ? tendenciaCadete(cadeteSeleccionado, semanas) : [];
 
@@ -934,7 +934,7 @@ export default function App() {
       }
     }
     return Object.values(map).map(m => {
-      const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados - (m.dem21||0)) / m.envios_ml * 100 : null;
+      const sla = slaMeli(m.envios_ml, m.demorados, m.dem21);
       return { ...m, slaMeli: sla !== null ? +sla.toFixed(2) : null };
     }).sort((a,b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
   };
@@ -954,8 +954,10 @@ export default function App() {
   const totalMLMes = mesData.reduce((s,m) => s+m.envios_ml, 0);
   const totalEnviosMes = mesData.reduce((s,m) => s+m.cantidad, 0);
   const totalParticularMes = totalEnviosMes - totalMLMes;
-  const totalDemMes = mesData.reduce((s,m) => s+m.demorados+(m.dem21||0), 0);
-  const slaPromedioMes = totalMLMes > 0 ? +((totalMLMes - totalDemMes) / totalMLMes * 100).toFixed(2) : null;
+  const totalDemMesSolo = mesData.reduce((s,m) => s+m.demorados, 0);
+  const totalDem21Mes = mesData.reduce((s,m) => s+(m.dem21||0), 0);
+  const slaPromedioMesRaw = slaMeli(totalMLMes, totalDemMesSolo, totalDem21Mes);
+  const slaPromedioMes = slaPromedioMesRaw !== null ? +slaPromedioMesRaw.toFixed(2) : null;
   const criticosMes = mesData.filter(m => m.slaMeli !== null && m.slaMeli < 95);
   const okMes = mesData.filter(m => m.slaMeli !== null && m.slaMeli >= 98);
   const reincidentes = mesData.filter(m => m.dias_con_demora >= 3).sort((a,b) => b.dias_con_demora - a.dias_con_demora);
@@ -963,8 +965,10 @@ export default function App() {
   // SLA por dia para grafico
   const slaPorDia = diasDelMes.map(dia => {
     const totalML = dia.datos.reduce((s,m) => s+m.envios_ml, 0);
-    const demML = dia.datos.reduce((s,m) => s+m.demorados+(m.dem21||0), 0);
-    const sla = totalML > 0 ? +((totalML-demML)/totalML*100).toFixed(1) : null;
+    const demSolo = dia.datos.reduce((s,m) => s+m.demorados, 0);
+    const d21Dia = dia.datos.reduce((s,m) => s+(m.dem21||0), 0);
+    const slaRaw = slaMeli(totalML, demSolo, d21Dia);
+    const sla = slaRaw !== null ? +slaRaw.toFixed(1) : null;
     const p = dia.fecha.split("-");
     return { fecha: `${p[2]}/${p[1]}`, sla };
   });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getSession, authedFetch } from "./auth";
+import { slaMeli } from "./slaShared";
 
 // Zonas — saturación por TERRITORIO y por zona, EN VIVO (spec-zonas-en-vivo).
 // Fuente: bridge del VPS GET /zonas (Excel de ENVIOS con Fecha Flexit = hoy, cache 5 min).
@@ -91,7 +92,7 @@ const CAL = {
   operativos: [/^repro gramar/i, /^quedo en el/i, /^devuelto deposito/i, /^⚠️/], // usuarios internos, no cadetes
 };
 const DOW = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-const slaMeliDia = (ml, dem, d21) => (ml > 0 ? (ml - dem - (d21 || 0)) / ml * 100 : null);
+const slaMeliDia = slaMeli; // alias local histórico — la fórmula vive en slaShared.js
 const round5 = (x) => Math.round(x / 5) * 5;
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const percentil = (arr, p) => { if (!arr.length) return 0; const s = arr.slice().sort((a, b) => a - b); const i = (s.length - 1) * p; const lo = Math.floor(i), hi = Math.ceil(i); return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (i - lo); };
@@ -492,7 +493,7 @@ export default function Zonas() {
       for (const r of (filas || [])) {
         const ml = r.envios_ml || 0;
         if (ml < BANDA.minMl) continue;                       // días muy chicos no opinan
-        const sla = (ml - (r.demorados || 0) - (r.dem21 || 0)) / ml * 100;
+        const sla = slaMeli(ml, r.demorados, r.dem21);
         const k = norm(r.cadete);
         const a = acc.get(k) || { dias: 0, malos: 0 };
         a.dias++; if (sla < BANDA.slaMalo) a.malos++;
