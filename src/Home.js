@@ -166,20 +166,16 @@ function PacoEgg({ onClose }) {
     <>
       <style>{`
         .paco-egg-sprite {
-          width: 136px; height: 224px; margin: 0 auto 10px;
-          background: url(${process.env.PUBLIC_URL || ""}/paco-sprites6.png) 0 0 / 816px 224px no-repeat;
-          animation: paco-vive 45s infinite;
+          width: 72px; height: 161px; margin: 0 auto 14px;
+          background: url(${process.env.PUBLIC_URL || ""}/paco-sprites.png) 0 0 / 216px 161px no-repeat;
+          animation: paco-toma-mate 18s infinite;
           image-rendering: pixelated;
         }
-        /* 6 frames: 0 mate-reposo, 1 mate-levanta, 2 mate-toma, 3 paq-reposo, 4 paq-lanza, 5 paq-recibe.
-           Alterna ciclo del mate (~24s) y del paquete (~21s). */
-        @keyframes paco-vive {
-          0%, 39.99%, 48.88%, 53.32%           { background-position: 0 0; }
-          40%, 41.1%, 47.77%, 48.87%           { background-position: -136px 0; }
-          41.11%, 47.76%                       { background-position: -272px 0; }
-          53.33%, 86.66%, 95.56%, 100%         { background-position: -408px 0; }
-          86.67%, 87.77%, 91.11%, 92.21%       { background-position: -544px 0; }
-          87.78%, 91.1%, 92.22%, 95.55%        { background-position: -680px 0; }
+        /* 3 frames: reposo → levanta → toma mate → levanta → reposo (mismo ciclo que el widget) */
+        @keyframes paco-toma-mate {
+          0%, 77.77%                    { background-position: 0 0; }
+          77.78%, 80.55%, 97.23%, 100%  { background-position: -72px 0; }
+          80.56%, 97.22%                { background-position: -144px 0; }
         }
         @media (prefers-reduced-motion: reduce) { .paco-egg-sprite { animation: none; } }
       `}</style>
