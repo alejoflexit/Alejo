@@ -202,10 +202,11 @@ export default function PagosPagador({ tarifas }) {
     const porMedio = {};
     Object.keys(MEDIOS).forEach(k => {
       porMedio[k] = filas.reduce((s, f) => {
-        // Con pago dividido cada medio se lleva SU parte, aunque la fila todavía no esté saldada:
-        // la plata ya salió. Sin división, el total entero va al medio del pago simple.
+        if (!f.pagado) return s; // una división sin pagar es un plan, no plata que salió
+        // Pagada y dividida: cada medio se lleva SU parte. Sin división, el total entero
+        // va al medio del pago simple.
         if (f.pagos && f.pagos.length) return s + f.pagos.filter(p => p.via === k).reduce((a, p) => a + (+p.monto || 0), 0);
-        return s + (f.pagado && f.pagadoVia === k ? (f.total || 0) : 0);
+        return s + (f.pagadoVia === k ? (f.total || 0) : 0);
       }, 0);
     });
     return { pagados, total: filas.length, faltan, faltaFacturaN: sinFactura.length, faltaFacturaMonto: sinFactura.reduce((s, f) => s + (f.total || 0), 0), pct, porMedio };
@@ -235,35 +236,52 @@ export default function PagosPagador({ tarifas }) {
     } finally { setBusyId(null); }
   }
 
-  // Pago dividido: el cadete factura pero cobra una parte en mano (caso Sharon). Se guardan las
-  // partes en `pagos`; la fila queda saldada solo cuando la suma cubre el total (1 peso de
-  // tolerancia por el redondeo). Si no llega, sigue apareciendo en "Listos para pagar" con lo
-  // que falta a la vista — un pago a medias no puede desaparecer de la cola.
-  async function registrarDividido(f, partes) {
+  // División del pago: el cadete factura pero cobra una parte en mano (caso Sharon).
+  // OJO — dividir NO es pagar. Acá solo se deja escrito CÓMO se le va a pagar (cuánto por
+  // transferencia y cuánto en efectivo); la plata no salió todavía. Por eso `pagado` no se
+  // toca y la fila SIGUE en "Listos para pagar": el que transfiere la ve con el plan a la
+  // vista y recién cuando manda la plata toca "Ya pagué". Son dos personas y dos momentos
+  // distintos: Alejo arma la división, Adrián la ejecuta.
+  async function guardarDivision(f, partes) {
     const limpias = partes.filter(p => (+p.monto || 0) > 0).map(p => ({ via: p.via, monto: Math.round(+p.monto) }));
-    if (!limpias.length) return;
-    const suma = limpias.reduce((s, p) => s + p.monto, 0);
-    const saldado = suma >= (f.total || 0) - 1;
-    const via = limpias.length === 1 ? limpias[0].via : 'mixto';
-    const antes = { pagado: f.pagado, pagado_via: f.pagadoVia, pagos: f.pagos };
+    const valor = limpias.length ? limpias : null;
+    const antes = f.pagos;
     setBusyId(f.id); setDivId(null);
-    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: saldado, pagado_via: saldado ? via : null, pagos: limpias } : c));
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagos: valor } : c));
     try {
-      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: saldado, pagado_via: saldado ? via : null, pagos: limpias }) });
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagos: valor }) });
     } catch (e) {
-      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: antes.pagado, pagado_via: antes.pagado_via, pagos: antes.pagos } : c));
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagos: antes } : c));
       setError(e.message);
     } finally { setBusyId(null); }
   }
 
-  // deshacer el pago (vuelve a pendiente y borra el medio)
+  // Confirmar el pago de una fila ya dividida: la plata salió en dos partes pero el hecho es
+  // uno solo, así que no hay que elegir banco — la división ya dice por dónde sale cada parte.
+  // El medio queda 'mixto' (o el único que haya) y la división se conserva como respaldo.
+  async function pagarDividido(f) {
+    const partes = f.pagos || [];
+    if (!partes.length) return;
+    const via = partes.length === 1 ? partes[0].via : 'mixto';
+    setBusyId(f.id); setPickId(null);
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: via } : c));
+    try {
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: true, pagado_via: via }) });
+    } catch (e) {
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null } : c));
+      setError(e.message);
+    } finally { setBusyId(null); }
+  }
+
+  // deshacer el pago (vuelve a pendiente y borra el medio). La división NO se borra: sigue
+  // siendo el plan de cómo pagarle, y volver atrás un pago no lo cambia.
   async function desmarcar(f) {
     setBusyId(f.id); setPickId(null);
-    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null, pagos: null } : c));
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null } : c));
     try {
-      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: false, pagado_via: null, pagos: null }) });
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: false, pagado_via: null }) });
     } catch (e) {
-      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: f.pagadoVia, pagos: f.pagos } : c));
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: f.pagadoVia } : c));
       setError(e.message);
     } finally { setBusyId(null); }
   }
@@ -410,6 +428,16 @@ export default function PagosPagador({ tarifas }) {
                           {armado === f.id ? '¿Seguro? tocá otra vez' : 'Mandó factura'}
                         </button>
                       </span>
+                    ) : pickId === f.id && f.pagos && f.pagos.length ? (
+                      /* Ya está dividida: no hay banco que elegir, la división dice por dónde
+                         sale cada parte. Un solo botón confirma que la plata salió. */
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <button onClick={() => pagarDividido(f)} disabled={busyId === f.id} title="confirmar el pago de las dos partes"
+                          style={{ height: 36, padding: '0 14px', borderRadius: 10, fontSize: 12.5, fontWeight: 800, cursor: busyId === f.id ? 'wait' : 'pointer', border: 'none', background: BRAND.teal, color: '#06231b', whiteSpace: 'nowrap' }}>
+                          ✓ Sí, pagué {f.pagos.map(p => `${(MEDIOS[p.via] || {}).nombre || p.via} ${money(p.monto)}`).join(' + ')}
+                        </button>
+                        <button onClick={() => setPickId(null)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
+                      </span>
                     ) : pickId === f.id ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         {MEDIOS_SIMPLES.map(k => MEDIOS[k]).map((m, i) => { const k = MEDIOS_SIMPLES[i]; return (
@@ -441,25 +469,35 @@ export default function PagosPagador({ tarifas }) {
                           Alejo en el banco y acá solo queda registrada. Mismo criterio que
                           "Mandó factura": el rótulo nombra un hecho que ya pasó afuera, no una
                           acción que el sistema pueda ejecutar. */}
-                      <button onClick={() => { setDivId(divId === f.id ? null : f.id); setDivFactura(''); setDivVia('galicia'); setPickId(null); }}
-                        title="pagar una parte por transferencia y otra en efectivo"
+                      <button onClick={() => {
+                          const abrir = divId !== f.id;
+                          setDivId(abrir ? f.id : null); setPickId(null);
+                          // al reabrir, precargar la división que ya está guardada
+                          const banco = (f.pagos || []).find(p => p.via !== 'efectivo');
+                          setDivFactura(abrir && banco ? String(banco.monto) : '');
+                          setDivVia(banco ? banco.via : 'galicia');
+                        }}
+                        title="dejar anotado cuánto va por transferencia y cuánto en efectivo (no lo marca pagado)"
                         style={{ height: 36, padding: '0 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
                           border: `1px solid ${divId === f.id ? BRAND.teal : BRAND.border}`, background: divId === f.id ? 'rgba(46,207,170,0.12)' : 'transparent', color: divId === f.id ? BRAND.teal : BRAND.muted }}>
-                        ½ Dividir
+                        {f.pagos && f.pagos.length ? '½ Editar división' : '½ Dividir'}
                       </button>
-                      <button onClick={() => setPickId(f.id)} title="registrar que ya le transferiste — después elegís Galicia o Mercado Pago"
+                      <button onClick={() => setPickId(f.id)}
+                        title={f.pagos && f.pagos.length ? 'registrar que ya salieron las dos partes' : 'registrar que ya le transferiste — después elegís Galicia o Mercado Pago'}
                         style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: BRAND.teal, color: '#06231b', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                         ✓ Ya pagué
                       </button>
                       </span>
                     )}
                   </div>
-                  {/* Pago dividido en curso o ya registrado: la plata que salió, a la vista. */}
+                  {/* La división, a la vista. Sin pagar es un PLAN ("se paga así"); una vez
+                      confirmada es el detalle de la plata que salió. */}
                   {f.pagos && f.pagos.length > 0 && (() => {
                     const suma = f.pagos.reduce((a, p) => a + (+p.monto || 0), 0);
                     const falta = Math.max(0, (f.total || 0) - suma);
                     return (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                        <span style={{ color: BRAND.muted, fontSize: 11.5, fontWeight: 600 }}>{f.pagado ? 'Se pagó:' : 'Se paga así:'}</span>
                         {f.pagos.map((p, i) => {
                           const m = MEDIOS[p.via] || { nombre: p.via, color: BRAND.muted };
                           return (
@@ -469,9 +507,8 @@ export default function PagosPagador({ tarifas }) {
                             </span>
                           );
                         })}
-                        {falta > 0
-                          ? <span style={{ color: BRAND.amber, fontWeight: 700 }}>falta {money(falta)}</span>
-                          : <span style={{ color: BRAND.teal, fontWeight: 700 }}>✓ saldado</span>}
+                        {falta > 0 && <span style={{ color: BRAND.amber, fontWeight: 700 }}>falta repartir {money(falta)}</span>}
+                        {!f.pagado && <span style={{ color: BRAND.muted, fontSize: 11.5 }}>— todavía sin pagar</span>}
                       </div>
                     );
                   })()}
@@ -523,17 +560,23 @@ export default function PagosPagador({ tarifas }) {
                               <span style={{ fontSize: 11, color: BRAND.muted }}>(el resto)</span>
                             </>
                           )}
-                          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 10, alignItems: 'center' }}>
+                            {f.pagos && f.pagos.length > 0 && (
+                              <button onClick={() => guardarDivision(f, [])} disabled={busyId === f.id}
+                                style={{ background: 'none', border: 'none', color: BRAND.amber, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>quitar división</button>
+                            )}
                             <button onClick={() => { setDivId(null); setDivFactura(''); }}
                               style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
                             <button disabled={busyId === f.id || excede || fact <= 0}
-                              onClick={() => registrarDividido(f, [{ via: divVia, monto: fact }, { via: 'efectivo', monto: resto }])}
+                              onClick={() => guardarDivision(f, [{ via: divVia, monto: fact }, { via: 'efectivo', monto: resto }])}
+                              title="queda anotado; el pago lo confirma quien transfiere"
                               style={{ height: 32, padding: '0 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0) ? 'not-allowed' : 'pointer',
                                 background: (excede || fact <= 0) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (excede || fact <= 0) ? BRAND.muted : '#06231b' }}>
-                              Registrar
+                              Guardar división
                             </button>
                           </span>
                         </div>
+                        <div style={{ fontSize: 11.5, color: BRAND.muted }}>Guardar la división no marca el pago: la fila queda en “Listos para pagar” con el reparto a la vista, y el que transfiere confirma con “Ya pagué”.</div>
                       </div>
                     );
                   })()}
