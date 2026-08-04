@@ -5,7 +5,7 @@
 #   · Clic derecho: menú con "Abrir Flexit" y "Cerrar a Paco".
 
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
 
 # Instancia única: si Paco ya está en pantalla, no abrir otro
 $script:mutex = New-Object System.Threading.Mutex($false, 'PacoFlexitWidget')
@@ -57,40 +57,76 @@ function Save-Pos {
   try { "$([int]$script:window.Left),$([int]$script:window.Top)" | Set-Content $script:posFile } catch { }
 }
 
-# Abrir Flexit: el acceso directo de la app instalada si existe; si no, Chrome en modo app
+# Abrir Flexit (con sección opcional vía #hash): Chrome en modo app; fallback navegador
+$script:chrome = $null
+foreach ($c in @(
+    (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe'))) {
+  if ($c -and (Test-Path $c)) { $script:chrome = $c; break }
+}
 $startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
 $script:lnk = Get-ChildItem $startMenu -Recurse -Filter 'Flexit.lnk' -ErrorAction SilentlyContinue | Select-Object -First 1
+function Open-Url([string]$url) {
+  try {
+    if ($script:chrome) { Start-Process $script:chrome "--app=$url" } else { Start-Process $url }
+  } catch { }
+}
 function Open-Flexit {
   try {
-    if ($script:lnk) { Start-Process $script:lnk.FullName; return }
-    $chromes = @(
-      (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
-      (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
-      (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')
-    )
-    foreach ($c in $chromes) {
-      if ($c -and (Test-Path $c)) { Start-Process $c "--app=$($script:appUrl)"; return }
-    }
-    Start-Process $script:appUrl
+    if ($script:lnk) { Start-Process $script:lnk.FullName } else { Open-Url $script:appUrl }
   } catch { }
 }
 
-# Arrastrar / doble clic
+# Arrastre FLUIDO: movemos la ventana a mano en cada MouseMove (no usamos DragMove,
+# que en Windows "ajustado para rendimiento" muestra solo un rectángulo)
+$script:dragStart = $null
 $script:window.Add_MouseLeftButtonDown({
   param($s, $e)
-  if ($e.ClickCount -ge 2) { Open-Flexit }
-  else { try { $script:window.DragMove(); Save-Pos } catch { } }
+  if ($e.ClickCount -ge 2) { Open-Flexit; return }
+  $cur = [System.Windows.Forms.Cursor]::Position
+  $script:dragStart = @($cur.X, $cur.Y, $script:window.Left, $script:window.Top)
+  [void]$script:window.CaptureMouse()
+})
+$script:window.Add_MouseMove({
+  param($s, $e)
+  if ($script:dragStart -and $e.LeftButton -eq [System.Windows.Input.MouseButtonState]::Pressed) {
+    $cur = [System.Windows.Forms.Cursor]::Position
+    $m = [System.Windows.PresentationSource]::FromVisual($script:window).CompositionTarget.TransformFromDevice
+    $script:window.Left = $script:dragStart[2] + ($cur.X - $script:dragStart[0]) * $m.M11
+    $script:window.Top  = $script:dragStart[3] + ($cur.Y - $script:dragStart[1]) * $m.M22
+  }
+})
+$script:window.Add_MouseLeftButtonUp({
+  if ($script:dragStart) {
+    $script:dragStart = $null
+    $script:window.ReleaseMouseCapture()
+    Save-Pos
+  }
 })
 
-# Menú de clic derecho
+# Menú de clic derecho: abrir + atajos por sección + cerrar
 $menu = New-Object System.Windows.Controls.ContextMenu
 $miOpen = New-Object System.Windows.Controls.MenuItem
 $miOpen.Header = 'Abrir Flexit'
 $miOpen.Add_Click({ Open-Flexit })
+[void]$menu.Items.Add($miOpen)
+[void]$menu.Items.Add((New-Object System.Windows.Controls.Separator))
+$secciones = [ordered]@{
+  'Métricas' = 'metricas'; 'Colectas' = 'colectas'; 'Arribos' = 'arribos'; 'Zonas' = 'zonas'
+  'Pizarra' = 'pizarra'; 'Tiquetera' = 'tiquetera'; 'Liquidaciones' = 'pagos'
+}
+foreach ($kv in $secciones.GetEnumerator()) {
+  $mi = New-Object System.Windows.Controls.MenuItem
+  $mi.Header = $kv.Key
+  $mi.Tag = $kv.Value
+  $mi.Add_Click({ param($ss, $ee) Open-Url ($script:appUrl + '#' + $ss.Tag) })
+  [void]$menu.Items.Add($mi)
+}
+[void]$menu.Items.Add((New-Object System.Windows.Controls.Separator))
 $miClose = New-Object System.Windows.Controls.MenuItem
 $miClose.Header = 'Cerrar a Paco'
 $miClose.Add_Click({ $script:window.Close() })
-[void]$menu.Items.Add($miOpen)
 [void]$menu.Items.Add($miClose)
 $script:window.ContextMenu = $menu
 
