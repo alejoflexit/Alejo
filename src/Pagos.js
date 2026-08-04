@@ -29,6 +29,10 @@ const BRAND = {
 const MEDIOS_PAGO = {
   galicia:     { nombre: 'Galicia',      color: '#FF6A13', text: '#FFB078' },
   mercadopago: { nombre: 'Mercado Pago', color: '#009EE3', text: '#7FD4F4' },
+  // Pago dividido (un cadete que factura pero cobra una parte en mano): el detalle de cuánto
+  // fue por cada medio vive en pagos_cierres.pagos y se ve en la pantalla Pagar.
+  efectivo:    { nombre: 'Efectivo',     color: '#2ECFAA', text: '#7FE3C9' },
+  mixto:       { nombre: 'Dividido',     color: '#8B7BE8', text: '#B7ADF0' },
 };
 
 // ───────────────────────── helpers ─────────────────────────

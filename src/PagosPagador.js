@@ -27,7 +27,11 @@ const BRAND = {
 const MEDIOS = {
   galicia:     { nombre: 'Galicia',      logo: LOGO_GALICIA, color: '#FF6A13' },
   mercadopago: { nombre: 'Mercado Pago', logo: LOGO_MP,      color: '#009EE3' },
+  // Efectivo solo aparece dentro del pago dividido: un cadete que factura pero cobra una parte
+  // en mano. Para el pago simple los medios siguen siendo los dos bancarios.
+  efectivo:    { nombre: 'Efectivo',     logo: null,         color: '#2ECFAA', soloDividido: true },
 };
+const MEDIOS_SIMPLES = Object.keys(MEDIOS).filter(k => !MEDIOS[k].soloDividido);
 
 function norm(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -97,7 +101,9 @@ export default function PagosPagador({ tarifas }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filtro, setFiltro] = useState('listos');          // listos | pendientes | pagados | falta_factura | todos
-  const [armado, setArmado] = useState(null);              // id de la fila esperando el 2º clic de "Mandó factura"
+  const [armado, setArmado] = useState(null);
+  const [divId, setDivId] = useState(null);      // fila con el editor de pago dividido abierto
+  const [divPartes, setDivPartes] = useState({}); // via -> monto tipeado              // id de la fila esperando el 2º clic de "Mandó factura"
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | factura | efectivo
   const [copiado, setCopiado] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -146,6 +152,7 @@ export default function PagosPagador({ tarifas }) {
         facturaOk: !!c.factura_ok, // Tarea 3: la transferencia se traba hasta que Alejo marque "mandó factura"
         pagado: !!c.pagado,
         pagadoVia: c.pagado_via || null,
+        pagos: Array.isArray(c.pagos) ? c.pagos : null, // pago dividido: [{via, monto}]
         alias, cuil: t.cuil || '', cbu,
         sinDatos: c.metodo === 'transferencia' && !alias && !cbu, // no hay forma de transferir
       };
@@ -192,7 +199,14 @@ export default function PagosPagador({ tarifas }) {
     const pct = filas.length ? Math.round(pagados / filas.length * 100) : 0;
     // total transferido/pagado por cada medio
     const porMedio = {};
-    Object.keys(MEDIOS).forEach(k => { porMedio[k] = filas.filter(f => f.pagado && f.pagadoVia === k).reduce((s, f) => s + (f.total || 0), 0); });
+    Object.keys(MEDIOS).forEach(k => {
+      porMedio[k] = filas.reduce((s, f) => {
+        // Con pago dividido cada medio se lleva SU parte, aunque la fila todavía no esté saldada:
+        // la plata ya salió. Sin división, el total entero va al medio del pago simple.
+        if (f.pagos && f.pagos.length) return s + f.pagos.filter(p => p.via === k).reduce((a, p) => a + (+p.monto || 0), 0);
+        return s + (f.pagado && f.pagadoVia === k ? (f.total || 0) : 0);
+      }, 0);
+    });
     return { pagados, total: filas.length, faltan, faltaFacturaN: sinFactura.length, faltaFacturaMonto: sinFactura.reduce((s, f) => s + (f.total || 0), 0), pct, porMedio };
   }, [filas]);
 
@@ -211,11 +225,32 @@ export default function PagosPagador({ tarifas }) {
   // marcar pagado eligiendo el medio (galicia | mercadopago); queda guardado en pagos_cierres.pagado_via
   async function marcarPagado(f, via) {
     setBusyId(f.id); setPickId(null);
-    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: via } : c));
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: via, pagos: null } : c));
     try {
-      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: true, pagado_via: via }) });
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: true, pagado_via: via, pagos: null }) });
     } catch (e) {
       setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null } : c));
+      setError(e.message);
+    } finally { setBusyId(null); }
+  }
+
+  // Pago dividido: el cadete factura pero cobra una parte en mano (caso Sharon). Se guardan las
+  // partes en `pagos`; la fila queda saldada solo cuando la suma cubre el total (1 peso de
+  // tolerancia por el redondeo). Si no llega, sigue apareciendo en "Listos para pagar" con lo
+  // que falta a la vista — un pago a medias no puede desaparecer de la cola.
+  async function registrarDividido(f, partes) {
+    const limpias = partes.filter(p => (+p.monto || 0) > 0).map(p => ({ via: p.via, monto: Math.round(+p.monto) }));
+    if (!limpias.length) return;
+    const suma = limpias.reduce((s, p) => s + p.monto, 0);
+    const saldado = suma >= (f.total || 0) - 1;
+    const via = limpias.length === 1 ? limpias[0].via : 'mixto';
+    const antes = { pagado: f.pagado, pagado_via: f.pagadoVia, pagos: f.pagos };
+    setBusyId(f.id); setDivId(null);
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: saldado, pagado_via: saldado ? via : null, pagos: limpias } : c));
+    try {
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: saldado, pagado_via: saldado ? via : null, pagos: limpias }) });
+    } catch (e) {
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: antes.pagado, pagado_via: antes.pagado_via, pagos: antes.pagos } : c));
       setError(e.message);
     } finally { setBusyId(null); }
   }
@@ -223,11 +258,11 @@ export default function PagosPagador({ tarifas }) {
   // deshacer el pago (vuelve a pendiente y borra el medio)
   async function desmarcar(f) {
     setBusyId(f.id); setPickId(null);
-    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null } : c));
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null, pagos: null } : c));
     try {
-      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: false, pagado_via: null }) });
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: false, pagado_via: null, pagos: null }) });
     } catch (e) {
-      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: f.pagadoVia } : c));
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: f.pagadoVia, pagos: f.pagos } : c));
       setError(e.message);
     } finally { setBusyId(null); }
   }
@@ -376,12 +411,12 @@ export default function PagosPagador({ tarifas }) {
                       </span>
                     ) : pickId === f.id ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        {Object.entries(MEDIOS).map(([k, m]) => (
+                        {MEDIOS_SIMPLES.map(k => MEDIOS[k]).map((m, i) => { const k = MEDIOS_SIMPLES[i]; return (
                           <button key={k} onClick={() => marcarPagado(f, k)} disabled={busyId === f.id} title={`Marcar pagado por ${m.nombre}`}
                             style={{ height: 36, padding: '0 13px', borderRadius: 10, fontSize: 12.5, fontWeight: 800, cursor: busyId === f.id ? 'wait' : 'pointer', color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}`, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
                             <img src={m.logo} alt="" width="22" height="22" style={{ display: 'block' }} /> {m.nombre}
                           </button>
-                        ))}
+                        ); })}
                         <button onClick={() => setPickId(null)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
                       </span>
                     ) : (
@@ -405,6 +440,12 @@ export default function PagosPagador({ tarifas }) {
                           Alejo en el banco y acá solo queda registrada. Mismo criterio que
                           "Mandó factura": el rótulo nombra un hecho que ya pasó afuera, no una
                           acción que el sistema pueda ejecutar. */}
+                      <button onClick={() => { setDivId(divId === f.id ? null : f.id); setDivPartes({}); setPickId(null); }}
+                        title="pagar una parte por transferencia y otra en efectivo"
+                        style={{ height: 36, padding: '0 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+                          border: `1px solid ${divId === f.id ? BRAND.teal : BRAND.border}`, background: divId === f.id ? 'rgba(46,207,170,0.12)' : 'transparent', color: divId === f.id ? BRAND.teal : BRAND.muted }}>
+                        ½ Dividir
+                      </button>
                       <button onClick={() => setPickId(f.id)} title="registrar que ya le transferiste — después elegís Galicia o Mercado Pago"
                         style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: BRAND.teal, color: '#06231b', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                         ✓ Ya pagué
@@ -412,6 +453,71 @@ export default function PagosPagador({ tarifas }) {
                       </span>
                     )}
                   </div>
+                  {/* Pago dividido en curso o ya registrado: la plata que salió, a la vista. */}
+                  {f.pagos && f.pagos.length > 0 && (() => {
+                    const suma = f.pagos.reduce((a, p) => a + (+p.monto || 0), 0);
+                    const falta = Math.max(0, (f.total || 0) - suma);
+                    return (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                        {f.pagos.map((p, i) => {
+                          const m = MEDIOS[p.via] || { nombre: p.via, color: BRAND.muted };
+                          return (
+                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 20, fontWeight: 700,
+                              color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}66`, whiteSpace: 'nowrap' }}>
+                              {m.logo ? <img src={m.logo} alt="" width="16" height="16" style={{ display: 'block', borderRadius: 3 }} /> : '💵'} {m.nombre} {money(p.monto)}
+                            </span>
+                          );
+                        })}
+                        {falta > 0
+                          ? <span style={{ color: BRAND.amber, fontWeight: 700 }}>falta {money(falta)}</span>
+                          : <span style={{ color: BRAND.teal, fontWeight: 700 }}>✓ saldado</span>}
+                      </div>
+                    );
+                  })()}
+
+                  {divId === f.id && (() => {
+                    const suma = Object.values(divPartes).reduce((a, v) => a + (+v || 0), 0);
+                    const falta = (f.total || 0) - suma;
+                    const set = (via, v) => setDivPartes(d => ({ ...d, [via]: v }));
+                    return (
+                      <div style={{ border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.06)', borderRadius: 10, padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                        <div style={{ fontSize: 11.5, color: BRAND.muted }}>Repartí los <b style={{ color: BRAND.white }}>{money(f.total)}</b> entre los medios. Lo que no completes queda pendiente.</div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {Object.keys(MEDIOS).map(k => {
+                            const m = MEDIOS[k];
+                            return (
+                              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${m.color}66`, background: `${m.color}14`, borderRadius: 10, padding: '5px 10px' }}>
+                                {m.logo ? <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block', borderRadius: 3 }} /> : <span>💵</span>}
+                                <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.nombre}</span>
+                                <input inputMode="numeric" value={divPartes[k] ?? ''} onChange={e => set(k, e.target.value.replace(/[^0-9]/g, ''))}
+                                  placeholder="0" style={{ width: 110, textAlign: 'right', background: 'rgba(0,0,0,0.3)', border: `1px solid ${BRAND.border}`, borderRadius: 8, color: BRAND.white, fontSize: 13, fontWeight: 700, padding: '4px 8px', outline: 'none' }} />
+                                {falta > 0 && (
+                                  <button onClick={() => set(k, String(Math.round((+divPartes[k] || 0) + falta)))} title="completar con lo que falta"
+                                    style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>resto</button>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 12, color: falta === 0 ? BRAND.teal : falta > 0 ? BRAND.amber : BRAND.red, fontWeight: 700 }}>
+                            {falta === 0 ? '✓ cuadra exacto' : falta > 0 ? `falta ${money(falta)}` : `te pasaste ${money(-falta)}`}
+                          </span>
+                          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8 }}>
+                            <button onClick={() => { setDivId(null); setDivPartes({}); }}
+                              style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
+                            <button disabled={busyId === f.id || suma <= 0 || falta < 0}
+                              onClick={() => registrarDividido(f, Object.entries(divPartes).map(([via, monto]) => ({ via, monto })))}
+                              style={{ height: 32, padding: '0 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: (suma <= 0 || falta < 0) ? 'not-allowed' : 'pointer',
+                                background: (suma <= 0 || falta < 0) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (suma <= 0 || falta < 0) ? BRAND.muted : '#06231b' }}>
+                              Registrar
+                            </button>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {f.factura && (f.alias || f.cuil || f.cbu || f.sinDatos) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                       <CopyField label="Alias" valor={f.alias} campoKey={`alias-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
