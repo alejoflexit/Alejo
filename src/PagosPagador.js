@@ -103,7 +103,8 @@ export default function PagosPagador({ tarifas }) {
   const [filtro, setFiltro] = useState('listos');          // listos | pendientes | pagados | falta_factura | todos
   const [armado, setArmado] = useState(null);
   const [divId, setDivId] = useState(null);      // fila con el editor de pago dividido abierto
-  const [divPartes, setDivPartes] = useState({}); // via -> monto tipeado              // id de la fila esperando el 2º clic de "Mandó factura"
+  const [divFactura, setDivFactura] = useState(''); // monto facturado: eso va por transferencia
+  const [divVia, setDivVia] = useState('galicia');   // banco por el que sale la parte facturada              // id de la fila esperando el 2º clic de "Mandó factura"
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | factura | efectivo
   const [copiado, setCopiado] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -440,7 +441,7 @@ export default function PagosPagador({ tarifas }) {
                           Alejo en el banco y acá solo queda registrada. Mismo criterio que
                           "Mandó factura": el rótulo nombra un hecho que ya pasó afuera, no una
                           acción que el sistema pueda ejecutar. */}
-                      <button onClick={() => { setDivId(divId === f.id ? null : f.id); setDivPartes({}); setPickId(null); }}
+                      <button onClick={() => { setDivId(divId === f.id ? null : f.id); setDivFactura(''); setDivVia('galicia'); setPickId(null); }}
                         title="pagar una parte por transferencia y otra en efectivo"
                         style={{ height: 36, padding: '0 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
                           border: `1px solid ${divId === f.id ? BRAND.teal : BRAND.border}`, background: divId === f.id ? 'rgba(46,207,170,0.12)' : 'transparent', color: divId === f.id ? BRAND.teal : BRAND.muted }}>
@@ -475,41 +476,60 @@ export default function PagosPagador({ tarifas }) {
                     );
                   })()}
 
+                  {/* Un solo número: lo que factura. Eso sale por transferencia y el resto queda en
+                      efectivo — que es como Alejo lo piensa. Antes eran tres campos para repartir a
+                      mano; el monto facturado es el dato que él ya tiene y de ahí se deduce todo. */}
                   {divId === f.id && (() => {
-                    const suma = Object.values(divPartes).reduce((a, v) => a + (+v || 0), 0);
-                    const falta = (f.total || 0) - suma;
-                    const set = (via, v) => setDivPartes(d => ({ ...d, [via]: v }));
+                    const total = f.total || 0;
+                    const fact = Math.min(Math.max(Math.round(+divFactura || 0), 0), total);
+                    const resto = total - fact;
+                    const excede = (+divFactura || 0) > total;
+                    const m = MEDIOS[divVia];
                     return (
-                      <div style={{ border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.06)', borderRadius: 10, padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-                        <div style={{ fontSize: 11.5, color: BRAND.muted }}>Repartí los <b style={{ color: BRAND.white }}>{money(f.total)}</b> entre los medios. Lo que no completes queda pendiente.</div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          {Object.keys(MEDIOS).map(k => {
-                            const m = MEDIOS[k];
-                            return (
-                              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${m.color}66`, background: `${m.color}14`, borderRadius: 10, padding: '5px 10px' }}>
-                                {m.logo ? <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block', borderRadius: 3 }} /> : <span>💵</span>}
-                                <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.nombre}</span>
-                                <input inputMode="numeric" value={divPartes[k] ?? ''} onChange={e => set(k, e.target.value.replace(/[^0-9]/g, ''))}
-                                  placeholder="0" style={{ width: 110, textAlign: 'right', background: 'rgba(0,0,0,0.3)', border: `1px solid ${BRAND.border}`, borderRadius: 8, color: BRAND.white, fontSize: 13, fontWeight: 700, padding: '4px 8px', outline: 'none' }} />
-                                {falta > 0 && (
-                                  <button onClick={() => set(k, String(Math.round((+divPartes[k] || 0) + falta)))} title="completar con lo que falta"
-                                    style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>resto</button>
-                                )}
-                              </span>
-                            );
-                          })}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 12, color: falta === 0 ? BRAND.teal : falta > 0 ? BRAND.amber : BRAND.red, fontWeight: 700 }}>
-                            {falta === 0 ? '✓ cuadra exacto' : falta > 0 ? `falta ${money(falta)}` : `te pasaste ${money(-falta)}`}
+                      <div style={{ border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.06)', borderRadius: 10, padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 700 }}>Factura por</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.3)', border: `1px solid ${excede ? BRAND.red : BRAND.border}`, borderRadius: 9, padding: '4px 10px' }}>
+                            <span style={{ color: BRAND.muted, fontSize: 13 }}>$</span>
+                            <input autoFocus inputMode="numeric" value={divFactura} onChange={e => setDivFactura(e.target.value.replace(/[^0-9]/g, ''))}
+                              placeholder="0" style={{ width: 120, textAlign: 'right', background: 'transparent', border: 'none', color: BRAND.white, fontSize: 14, fontWeight: 700, outline: 'none' }} />
                           </span>
-                          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8 }}>
-                            <button onClick={() => { setDivId(null); setDivPartes({}); }}
+                          <button onClick={() => setDivFactura(String(Math.round(total / 2)))}
+                            style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 20, color: BRAND.muted, cursor: 'pointer', fontSize: 11, padding: '3px 10px' }}>la mitad</button>
+                          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, color: BRAND.muted }}>se transfiere por</span>
+                            {MEDIOS_SIMPLES.map(k => {
+                              const mm = MEDIOS[k], on = divVia === k;
+                              return (
+                                <button key={k} onClick={() => setDivVia(k)} title={mm.nombre}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 10px', borderRadius: 9, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
+                                    border: `1px solid ${on ? mm.color : BRAND.border}`, background: on ? `${mm.color}1f` : 'transparent', color: on ? mm.color : BRAND.muted }}>
+                                  <img src={mm.logo} alt="" width="16" height="16" style={{ display: 'block', borderRadius: 3 }} /> {mm.nombre}
+                                </button>
+                              );
+                            })}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderTop: `1px solid ${BRAND.border}`, paddingTop: 9 }}>
+                          {excede ? (
+                            <span style={{ color: BRAND.red, fontSize: 12.5, fontWeight: 700 }}>La factura no puede ser mayor al total ({money(total)}).</span>
+                          ) : (
+                            <>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: m.color }}>
+                                <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block', borderRadius: 3 }} /> {m.nombre} {money(fact)}
+                              </span>
+                              <span style={{ color: BRAND.muted }}>+</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: MEDIOS.efectivo.color }}>💵 Efectivo {money(resto)}</span>
+                              <span style={{ fontSize: 11, color: BRAND.muted }}>(el resto)</span>
+                            </>
+                          )}
+                          <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                            <button onClick={() => { setDivId(null); setDivFactura(''); }}
                               style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
-                            <button disabled={busyId === f.id || suma <= 0 || falta < 0}
-                              onClick={() => registrarDividido(f, Object.entries(divPartes).map(([via, monto]) => ({ via, monto })))}
-                              style={{ height: 32, padding: '0 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: (suma <= 0 || falta < 0) ? 'not-allowed' : 'pointer',
-                                background: (suma <= 0 || falta < 0) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (suma <= 0 || falta < 0) ? BRAND.muted : '#06231b' }}>
+                            <button disabled={busyId === f.id || excede || fact <= 0}
+                              onClick={() => registrarDividido(f, [{ via: divVia, monto: fact }, { via: 'efectivo', monto: resto }])}
+                              style={{ height: 32, padding: '0 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0) ? 'not-allowed' : 'pointer',
+                                background: (excede || fact <= 0) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (excede || fact <= 0) ? BRAND.muted : '#06231b' }}>
                               Registrar
                             </button>
                           </span>
