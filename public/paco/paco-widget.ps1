@@ -113,8 +113,7 @@ $miOpen.Add_Click({ Open-Flexit })
 [void]$menu.Items.Add($miOpen)
 [void]$menu.Items.Add((New-Object System.Windows.Controls.Separator))
 $secciones = [ordered]@{
-  'Métricas' = 'metricas'; 'Colectas' = 'colectas'; 'Arribos' = 'arribos'; 'Zonas' = 'zonas'
-  'Pizarra' = 'pizarra'; 'Tiquetera' = 'tiquetera'; 'Liquidaciones' = 'pagos'
+  'Pizarra' = 'pizarra'; 'Colectas' = 'colectas'; 'Métricas' = 'metricas'
 }
 foreach ($kv in $secciones.GetEnumerator()) {
   $mi = New-Object System.Windows.Controls.MenuItem
