@@ -194,7 +194,7 @@ async function supabaseFetch(path, options = {}) {
 async function cargarDesdeSupabase() {
   let rows;
   try {
-    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,horas,demorados_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
+    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,horas,demorados_detalle,dem21_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
   } catch(e) {
     // Columna demorados_detalle no existe aún — usar query sin ella
     rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta&order=fecha.asc&limit=50000");
@@ -208,6 +208,7 @@ async function cargarDesdeSupabase() {
       cadete: r.cadete, cantidad: r.cantidad, pendientes: r.pendientes,
       demorados: r.demorados, envios_ml: r.envios_ml, post21: r.post21||0, dem21: r.dem21||0, envios_particular: r.envios_particular||0, inicio_ruta: r.inicio_ruta||null, fin_ruta: r.fin_ruta||null, horas: r.horas||null, fecha: r.fecha,
       demoradosDetalle: r.demorados_detalle || [],
+      dem21Detalle: r.dem21_detalle || [],
       sinDatosDetalle: r.sin_datos_detalle || [],
     });
   }
@@ -238,13 +239,14 @@ async function guardarEnSupabase(datos, fecha, weekLabel) {
     demorados: m.demorados, envios_ml: m.envios_ml, post21: m.post21 || 0, dem21: m.dem21 || 0, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null,
     horas: m.horas || {},
     demorados_detalle: m.demoradosDetalle || [],
+    dem21_detalle: m.dem21Detalle || [],
     sin_datos_detalle: m.sinDatosDetalle || [],
   }));
   try {
     await supabaseFetch("semanas", { method: "POST", body: JSON.stringify(rows) });
   } catch(e) {
     // Fallback sin columnas nuevas si aún no existen
-    const rowsFallback = rows.map(({ demorados_detalle, sin_datos_detalle, horas, ...r }) => r);
+    const rowsFallback = rows.map(({ demorados_detalle, dem21_detalle, sin_datos_detalle, horas, ...r }) => r);
     await supabaseFetch("semanas", { method: "POST", body: JSON.stringify(rowsFallback) });
   }
 }
@@ -323,7 +325,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
         if (h >= 21) esPost21 = true;
       }
     }
-    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, horas: {}, demoradosDetalle: [], sinDatosDetalle: [] };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, horas: {}, demoradosDetalle: [], dem21Detalle: [], sinDatosDetalle: [] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
@@ -349,13 +351,17 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     }
     // Repro 21hs: reprogramado por meli + ML + hora >= 21
     const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
-    if (esRepro21) map[cadete].dem21++;
+    if (esRepro21) {
+      map[cadete].dem21++;
+      // Mismo detalle que los demorados, para poder verlos y copiarlos en Métricas.
+      map[cadete].dem21Detalle.push({ id: idInterno, dir: [dirBase, loc].filter(Boolean).join(", "), estado });
+    }
   }
   return Object.values(map).map(m => {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
     const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
     const slaReal = m.envios_ml > 0 ? (m.envios_ml - m.demorados - m.dem21) / m.envios_ml * 100 : null;
-    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   });
 }
 
@@ -437,11 +443,12 @@ function acumularSemana(dias) {
   const map = {};
   for (const dia of dias) {
     for (const m of dia.datos) {
-      if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [], sinDatosDetalle: [] };
+      if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [], dem21Detalle: [], sinDatosDetalle: [] };
       map[m.cadete].cantidad  += m.cantidad;
       map[m.cadete].pendientes+= m.pendientes;
       map[m.cadete].demorados += m.demorados;
       map[m.cadete].demoradosDetalle = (map[m.cadete].demoradosDetalle || []).concat(m.demoradosDetalle || []);
+      map[m.cadete].dem21Detalle = (map[m.cadete].dem21Detalle || []).concat(m.dem21Detalle || []);
       map[m.cadete].sinDatosDetalle = (map[m.cadete].sinDatosDetalle || []).concat(m.sinDatosDetalle || []);
       map[m.cadete].envios_ml += m.envios_ml;
       map[m.cadete].post21    += (m.post21 || 0);
@@ -459,7 +466,7 @@ function acumularSemana(dias) {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
     const sla = m.envios_ml > 0 ? (m.envios_ml - m.demorados) / m.envios_ml * 100 : null;
     const slaRealAcum = m.envios_ml > 0 ? (m.envios_ml - m.demorados - m.dem21) / m.envios_ml * 100 : null;
-    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaRealAcum !== null ? +slaRealAcum.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaRealAcum), post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaRealAcum !== null ? +slaRealAcum.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaRealAcum), post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   }).sort((a, b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
 }
 
@@ -529,7 +536,10 @@ function SemaforoCard({ m, onClick, selected }) {
 
 const ttStyle = { background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, fontSize:12, color:"#fff" };
 
-function DemoradosPopover({ detalle, count, cadete }) {
+// Contador clickeable con el detalle de los envíos que lo componen y un botón para copiar las
+// direcciones. Lo usan las columnas "Demorados ML" y "Repro 21hs" — mismo comportamiento, distinto
+// rótulo y color, porque son dos listas que Alejo manda por separado.
+function DemoradosPopover({ detalle, count, cadete, acento = "#E24B4A", icono = "🔴", singular = "demorado", plural = "demorados" }) {
   const [show, setShow] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const ref = React.useRef(null);
@@ -550,14 +560,14 @@ function DemoradosPopover({ detalle, count, cadete }) {
     <div ref={ref} style={{ position:"relative", display:"inline-block" }}>
       <span
         onClick={(e) => { e.stopPropagation(); if (hasDetalle) { setShow(s => !s); setCopied(false); } }}
-        style={{ color:"#E24B4A", fontWeight:700, cursor: hasDetalle ? "pointer" : "default", borderBottom: hasDetalle ? "1px dashed rgba(226,75,74,0.5)" : "none" }}>
+        style={{ color:acento, fontWeight:700, cursor: hasDetalle ? "pointer" : "default", borderBottom: hasDetalle ? `1px dashed ${acento}80` : "none" }}>
         {count}
       </span>
       {show && hasDetalle && (
-        <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:"#0D0D2B", border:"1px solid rgba(226,75,74,0.4)", borderRadius:10, padding:"10px", zIndex:999, minWidth:240, maxWidth:320, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:"#0D0D2B", border:`1px solid ${acento}66`, borderRadius:10, padding:"10px", zIndex:999, minWidth:240, maxWidth:320, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
             <div>
-              <span style={{ color:"#E24B4A", fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>🔴 {count} demorado{count>1?"s":""}</span>
+              <span style={{ color:acento, fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>{icono} {count} {count===1?singular:plural}</span>
               {cadete && <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginTop:4 }}>{cadete}</div>}
             </div>
             <button onClick={copyAll} title="Copiar todas las direcciones" style={{ background:"none", border:"none", cursor:"pointer", color: copied ? "#2ECFAA" : "rgba(255,255,255,0.4)", fontSize:16, padding:"2px 4px", display:"flex", alignItems:"center" }}>
@@ -1550,7 +1560,9 @@ export default function App() {
                           <td style={{ padding:"10px 14px", fontSize:13, color:"#2ECFAA", borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.cantidad-m.pendientes}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:m.pendientes>0?"#3A8FD4":BRAND.muted, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.pendientes}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}><DemoradosPopover count={m.demorados} detalle={m.demoradosDetalle} cadete={m.cadete} /></td>
-                          <td style={{ padding:"10px 14px", fontSize:13, color:(m.dem21||0)>0?"#E24B4A":BRAND.muted, fontWeight:(m.dem21||0)>0?700:400, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.dem21||0}</td>
+                          <td style={{ padding:"10px 14px", fontSize:13, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>
+                            <DemoradosPopover count={m.dem21||0} detalle={m.dem21Detalle} cadete={m.cadete} acento="#EF9F27" icono="🟠" singular="repro 21hs" plural="repro 21hs" />
+                          </td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:(m.post21||0)>0?"#EF9F27":BRAND.muted, fontWeight:(m.post21||0)>0?600:400, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.post21||0}</td>
 
                           <td style={{ padding:"10px 14px", fontSize:13, color:BRAND.muted, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.pctEntrega.toFixed(1)}%</td>
