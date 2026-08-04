@@ -20,7 +20,7 @@ $script:appUrl = 'https://flota-logistica-iota.vercel.app/'
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
-        Width="100" Height="224" Title="Paco">
+        Width="136" Height="224" Title="Paco">
   <Image x:Name="img" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
 </Window>
 "@
@@ -36,7 +36,10 @@ function Load-Frame([string]$name) {
   $bmp.Freeze()
   return $bmp
 }
-$script:frames = @( (Load-Frame 'paco-reposo.png'), (Load-Frame 'paco-levanta.png'), (Load-Frame 'paco-toma.png') )
+$script:frames = @(
+  (Load-Frame 'mate-reposo.png'), (Load-Frame 'mate-levanta.png'), (Load-Frame 'mate-toma.png'),
+  (Load-Frame 'paquete-reposo.png'), (Load-Frame 'paquete-lanza.png'), (Load-Frame 'paquete-recibe.png')
+)
 $script:img.Source = $script:frames[0]
 
 # Posición inicial: la última guardada, o abajo a la derecha
@@ -94,8 +97,11 @@ $miClose.Add_Click({ $script:window.Close() })
 [void]$menu.Items.Add($miClose)
 $script:window.ContextMenu = $menu
 
-# Animación (ticks de 500ms): reposo 10s → levanta → toma mate 2.5s → levanta → reposo
-$script:seq = (,0 * 20) + ,1 + (,2 * 5) + ,1
+# Animación (ticks de 500ms), alternando mate y paquete (~45s el ciclo completo):
+#   mate: reposo 18s → levanta → toma 3s → levanta → reposo 2s
+#   paquete: reposo 15s → lanza/recibe x2 → reposo 2s
+$script:seq = (,0 * 36) + ,1 + (,2 * 6) + ,1 + (,0 * 4) +
+              (,3 * 30) + ,4 + (,5 * 3) + ,4 + (,5 * 3) + (,3 * 4)
 $script:i = 0
 $script:timer = New-Object System.Windows.Threading.DispatcherTimer
 $script:timer.Interval = [TimeSpan]::FromMilliseconds(500)
@@ -103,7 +109,8 @@ $script:timer.Add_Tick({
   $script:i = ($script:i + 1) % $script:seq.Count
   $script:img.Source = $script:frames[$script:seq[$script:i]]
 })
-$script:timer.Start()
+# Respeto de "reducir movimiento": si Windows tiene las animaciones desactivadas, Paco queda quieto
+if ([System.Windows.SystemParameters]::ClientAreaAnimation) { $script:timer.Start() }
 
 $script:window.Add_Closed({ Save-Pos; $script:timer.Stop() })
 [void]$script:window.ShowDialog()
