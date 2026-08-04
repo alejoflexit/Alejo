@@ -1501,21 +1501,29 @@ function PagosInner({ session }) {
 
   const filasEfectivas = useMemo(() => calc.filas.map(f => filaConOverride(f, overrides[f.key], colectaOv[f.key], splitOv[f.key])), [calc.filas, overrides, colectaOv, splitOv]);
 
+  const cierrePorCadete = useMemo(() => new Map(cierres.map(c => [norm(c.cadete), c])), [cierres]);
+
+  // Cadetes sacados de ESTA semana (aparecen en LightData pero no hay que pagarles).
+  // Salen de la tabla, de los totales, de la confirmación, del Excel y de Pagar; la fila
+  // queda guardada para poder volver atrás.
+  const excluidos = useMemo(() => new Set(cierres.filter(c => c.estado === 'excluido').map(c => norm(c.cadete))), [cierres]);
+
   // orden canónico (Factura primero, luego A-Z) — lo usa la vista y el Excel
-  const filasOrdenadas = useMemo(() => {
+  const filasTodas = useMemo(() => {
     return [...filasEfectivas].sort((a, b) => {
       if (a.factura !== b.factura) return a.factura ? -1 : 1;
       return a.nombre.localeCompare(b.nombre, 'es');
     });
   }, [filasEfectivas]);
-
-  const cierrePorCadete = useMemo(() => new Map(cierres.map(c => [norm(c.cadete), c])), [cierres]);
+  const filasOrdenadas = useMemo(() => filasTodas.filter(f => !excluidos.has(norm(f.nombre))), [filasTodas, excluidos]);
+  const filasExcluidas = useMemo(() => filasTodas.filter(f => excluidos.has(norm(f.nombre))), [filasTodas, excluidos]);
 
   // Estado de una fila, mismo criterio que la columna Estado de la tabla:
   // sin cierre o borrador → falta confirmar; con cierre pagado → pagado; el resto → confirmado.
   const estadoDeFila = useCallback((f) => {
     const c = cierrePorCadete.get(norm(f.nombre));
     if (!c || c.estado === 'borrador') return 'confirmar';
+    if (c.estado === 'excluido') return 'excluido';
     return c.pagado ? 'pagado' : 'confirmado';
   }, [cierrePorCadete]);
 
@@ -1526,10 +1534,15 @@ function PagosInner({ session }) {
     filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura),
     [filasOrdenadas, filtroMetodo]);
 
-  // la vista además filtra por estado; el Excel exporta SIEMPRE todas (Tarea 1)
-  const filasVisibles = useMemo(() =>
-    filasPorMetodo.filter(f => filtroEstado === 'todos' ? true : estadoDeFila(f) === filtroEstado),
-    [filasPorMetodo, filtroEstado, estadoDeFila]);
+  // la vista además filtra por estado; el Excel exporta SIEMPRE todas (Tarea 1).
+  // "Excluidos" es el único filtro que trae filas de afuera del alcance: son justamente las
+  // que se sacaron de la semana, y hay que poder verlas para volver a meterlas.
+  const filasVisibles = useMemo(() => {
+    if (filtroEstado === 'excluido') {
+      return filasExcluidas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura);
+    }
+    return filasPorMetodo.filter(f => filtroEstado === 'todos' ? true : estadoDeFila(f) === filtroEstado);
+  }, [filasPorMetodo, filasExcluidas, filtroEstado, filtroMetodo, estadoDeFila]);
 
   // Si un guardado a Supabase falla, NO se deja el cambio como "guardado": se avisa y se recarga
   // la verdad de la nube. Si la nube está inaccesible (sin red), el borrador queda en el navegador
@@ -1646,7 +1659,7 @@ function PagosInner({ session }) {
     setSplitOvPersist(prev => { const nn = { ...prev }; delete nn[f.key]; return nn; });
   }, [setSplitOvPersist]);
 
-  const nEdiciones = useMemo(() => filasEfectivas.filter(f => f.editado).length, [filasEfectivas]);
+  const nEdiciones = useMemo(() => filasOrdenadas.filter(f => f.editado).length, [filasOrdenadas]);
 
   // Tarea 6: totales de las filas visibles (respeta el filtro de método) para la fila de pie
   const totalesVisibles = useMemo(() => filasVisibles.reduce((a, f) => ({
@@ -1655,12 +1668,12 @@ function PagosInner({ session }) {
   }), { monto: 0, colecta: 0, ajuste: 0, total: 0 }), [filasVisibles]);
 
   const subtotales = useMemo(() => {
-    const base = filasEfectivas;
+    const base = filasOrdenadas; // sin los excluidos: no se les paga, no suman
     const total = base.reduce((s, f) => s + (f.total || 0), 0);
     const transferencia = base.filter(f => f.factura).reduce((s, f) => s + (f.total || 0), 0);
     const efectivo = base.filter(f => !f.factura).reduce((s, f) => s + (f.total || 0), 0);
     return { total, transferencia, efectivo };
-  }, [filasEfectivas]);
+  }, [filasOrdenadas]);
 
   // Nombre del alcance activo (para los rótulos de KPIs y de la barra). '' = toda la semana.
   const alcanceLbl = filtroMetodo === 'transferencia' ? 'transferencias' : filtroMetodo === 'efectivo' ? 'efectivo' : '';
@@ -1720,6 +1733,40 @@ function PagosInner({ session }) {
       } else {
         await sb('pagos_cierres', { method: 'POST', body: JSON.stringify([payload]) });
       }
+      await refreshCierres(semanaLunes);
+    } catch (e) { setError(e.message); }
+    finally { setBusyAccion(false); }
+  }
+
+  // Sacar un chofer de ESTA semana: aparece en LightData pero no hay que pagarle (hizo dos
+  // envíos sueltos, ya cobró aparte, no es de la flota). No se borra nada: la fila queda en
+  // 'excluido' y se puede volver atrás desde el filtro "Excluidos". Un chofer ya pagado no
+  // se puede excluir — eso sería tapar plata que salió.
+  async function excluirChofer(f, cierre) {
+    if (cierre && cierre.pagado) return;
+    if (!window.confirm(`Sacar a ${f.nombre} de esta semana?\n\nDeja de contar en los totales y en la confirmación, y no aparece en Pagar. Podés volver a incluirlo desde el filtro "Excluidos".`)) return;
+    setBusyAccion(true); setError('');
+    try {
+      const payload = { estado: 'excluido', excluido_at: new Date().toISOString() };
+      if (cierre && cierre.id) {
+        await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      } else {
+        await sb('pagos_cierres', { method: 'POST', body: JSON.stringify([{
+          semana_label: semanaLunes, cadete: f.nombre, total: f.total,
+          metodo: f.factura ? 'transferencia' : 'efectivo', ...payload,
+        }]) });
+      }
+      await refreshCierres(semanaLunes);
+    } catch (e) { setError(e.message); }
+    finally { setBusyAccion(false); }
+  }
+
+  // Volver a meter en la semana a un chofer excluido: queda como estaba antes, sin confirmar.
+  async function incluirChofer(cierre) {
+    if (!cierre || !cierre.id) return;
+    setBusyAccion(true); setError('');
+    try {
+      await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ estado: 'borrador', excluido_at: null }) });
       await refreshCierres(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -2083,8 +2130,12 @@ function PagosInner({ session }) {
                   // El conteo respeta el filtro de método: si estás mirando Transferencia,
                   // "falta confirmar 12" son 12 de transferencia, no de toda la semana.
                   const base = filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura);
-                  const cuenta = (k) => k === 'todos' ? base.length : base.filter(f => estadoDeFila(f) === k).length;
-                  return [['todos', 'Todos'], ['confirmar', 'Falta confirmar'], ['confirmado', 'Confirmado'], ['pagado', 'Pagado']].map(([k, l]) => {
+                  const nExcl = filasExcluidas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura).length;
+                  const cuenta = (k) => k === 'todos' ? base.length : k === 'excluido' ? nExcl : base.filter(f => estadoDeFila(f) === k).length;
+                  // "Excluidos" solo aparece si hay alguno: si nunca sacaste a nadie, no ensucia.
+                  const pills = [['todos', 'Todos'], ['confirmar', 'Falta confirmar'], ['confirmado', 'Confirmado'], ['pagado', 'Pagado']];
+                  if (nExcl > 0 || filtroEstado === 'excluido') pills.push(['excluido', '🚫 Excluidos']);
+                  return pills.map(([k, l]) => {
                     const n = cuenta(k);
                     return (
                       <button key={k} onClick={() => setFiltroEstado(k)} style={{ ...btnPill(filtroEstado === k), opacity: n === 0 && k !== 'todos' ? 0.45 : 1 }}>
@@ -2097,8 +2148,8 @@ function PagosInner({ session }) {
               {/* KPIs ejecutivos — números en blanco, sin verde de fondo */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 12 }}>
                 {(() => {
-                  const nTransf = filasEfectivas.filter(f => f.factura).length;
-                  const nEfec = filasEfectivas.length - nTransf;
+                  const nTransf = filasOrdenadas.filter(f => f.factura).length;
+                  const nEfec = filasOrdenadas.length - nTransf;
                   const pctT = subtotales.total ? Math.round(subtotales.transferencia / subtotales.total * 100) : 0;
                   const pctE = subtotales.total ? Math.round(subtotales.efectivo / subtotales.total * 100) : 0;
                   const pend = Math.max(0, avance.total - avance.confirmados);
@@ -2113,7 +2164,7 @@ function PagosInner({ session }) {
                   // adelante y la otra deja de competir por la atención.
                   const off = { opacity: 0.42 };
                   return [
-                    kpi('Liquidado', money(subtotales.total), `${filasEfectivas.length} cadetes`),
+                    kpi('Liquidado', money(subtotales.total), `${filasOrdenadas.length} cadete${filasOrdenadas.length === 1 ? '' : 's'}`),
                     kpi('Transferencia', money(subtotales.transferencia), `${nTransf} pagos · ${pctT}%`, null, filtroMetodo === 'efectivo' ? off : null),
                     kpi('Efectivo', money(subtotales.efectivo), `${nEfec} pagos · ${pctE}%`, null, filtroMetodo === 'transferencia' ? off : null),
                     kpi(alcanceLbl ? `Pendientes · ${alcanceLbl}` : 'Pendientes', pend, pend === 0 ? '✓ todo confirmado' : 'falta confirmar', pend === 0 ? BRAND.teal : BRAND.amber),
@@ -2295,9 +2346,21 @@ function PagosInner({ session }) {
                             {/* Estado: neutro (el verde queda solo para el botón Confirmar) */}
                             <td style={{ padding: '8px 12px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-                                {(!cierre || cierre.estado === 'borrador') ? (
-                                  <button disabled={busyAccion} onClick={() => confirmarChofer(f, cierre)}
-                                    style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
+                                {cierre && cierre.estado === 'excluido' ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.muted, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>🚫 Fuera de la semana</span>
+                                    <button disabled={busyAccion} onClick={() => incluirChofer(cierre)} title="volver a incluirlo en esta semana"
+                                      style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.teal, cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '1px 8px', lineHeight: 1.5 }}>volver a incluir</button>
+                                  </span>
+                                ) : (!cierre || cierre.estado === 'borrador') ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <button disabled={busyAccion} onClick={() => confirmarChofer(f, cierre)}
+                                      style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
+                                    {/* Sacarlo de la semana: gris y chiquito al lado de Confirmar. Es la
+                                        salida para el que aparece en LightData pero no hay que pagarle. */}
+                                    <button disabled={busyAccion} onClick={() => excluirChofer(f, cierre)} title="no pagarle esta semana: lo saca de la tabla y de los totales"
+                                      style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 7px', lineHeight: 1.4 }}>✕</button>
+                                  </span>
                                 ) : cierre.pagado ? (
                                   <span title="ya se pagó — no se puede reabrir" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.white, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                                     <span style={{ color: BRAND.teal }}>✓</span> Pagado
@@ -2307,6 +2370,8 @@ function PagosInner({ session }) {
                                     <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.muted, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>✓ Confirmado</span>
                                     <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="reabrir para editar (mientras no esté pagado)"
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 6px', lineHeight: 1.4 }}>↺</button>
+                                    <button disabled={busyAccion} onClick={() => excluirChofer(f, cierre)} title="no pagarle esta semana: lo saca de la tabla y de los totales"
+                                      style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 7px', lineHeight: 1.4 }}>✕</button>
                                   </span>
                                 )}
                               </div>
