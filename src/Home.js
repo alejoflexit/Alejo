@@ -152,13 +152,11 @@ const mini = { border: "1px solid rgba(255,255,255,0.09)", background: "rgba(255
 const miniOk = { ...mini, border: "1px solid rgba(46,230,182,0.4)", color: "#2ee6b6", background: "rgba(46,230,182,0.1)" };
 const secSt = { fontSize: 12, fontWeight: 600, color: C.ink3, margin: "22px 6px 12px" };
 
-// ── Paco, la mascota de Flexit (pixel-art, tomando mate) ──
-// Spritesheet de 3 frames (reposo → levanta → toma) en public/paco-sprites.png (216x161 en pantalla,
-// cada frame 72x161 @2x). Se oculta en pantallas chicas y queda quieto con "reducir movimiento".
-// Easter egg: doble clic sobre Paco abre el modal para llevárselo al escritorio (widget Windows
-// hosteado en public/paco/ + public/paco-widget.zip). Sin pistas visuales a propósito.
-function PacoMate() {
-  const [egg, setEgg] = useState(false);
+// ── Easter egg: Paco, la mascota secreta de Flexit ──
+// Doble clic en el logo del header del Home abre este modal para llevarse el widget de escritorio
+// (hosteado en public/paco/ + public/paco-widget.zip). Paco NO aparece en la interfaz normal —
+// es solo la sorpresa. El sprite animado (public/paco-sprites.png, 3 frames de 72x161 @2x) vive acá.
+function PacoEgg({ onClose }) {
   const [copiado, setCopiado] = useState(false);
   const cmd = "irm https://flota-logistica-iota.vercel.app/paco/instalar.ps1 | iex";
   const copiar = () => {
@@ -167,28 +165,25 @@ function PacoMate() {
   return (
     <>
       <style>{`
-        .paco-mate {
-          position: fixed; right: 18px; bottom: 0; z-index: 2;
-          width: 72px; height: 161px; cursor: default; user-select: none;
+        .paco-egg-sprite {
+          width: 72px; height: 161px; margin: 0 auto 14px;
           background: url(${process.env.PUBLIC_URL || ""}/paco-sprites.png) 0 0 / 216px 161px no-repeat;
-          animation: paco-toma-mate 14s infinite;
-          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.35));
+          animation: paco-toma-mate 8s infinite;
         }
         @keyframes paco-toma-mate {
-          0%, 60%      { background-position: 0 0; }
-          60.01%, 67%  { background-position: -72px 0; }
-          67.01%, 84%  { background-position: -144px 0; }
-          84.01%, 91%  { background-position: -72px 0; }
-          91.01%, 100% { background-position: 0 0; }
+          0%, 46%      { background-position: 0 0; }
+          46.01%, 56%  { background-position: -72px 0; }
+          56.01%, 82%  { background-position: -144px 0; }
+          82.01%, 92%  { background-position: -72px 0; }
+          92.01%, 100% { background-position: 0 0; }
         }
-        @media (max-width: 900px), (max-height: 560px) { .paco-mate { display: none; } }
-        @media (prefers-reduced-motion: reduce) { .paco-mate { animation: none; } }
+        @media (prefers-reduced-motion: reduce) { .paco-egg-sprite { animation: none; } }
       `}</style>
-      <div className="paco-mate" aria-hidden="true" onDoubleClick={() => setEgg(true)} />
-      {egg && (
-        <div onClick={() => setEgg(false)} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(8,8,24,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      {(
+        <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(8,8,24,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...cardBase, background: "rgba(24,25,42,0.97)", maxWidth: 440, width: "100%", padding: "26px 28px", color: C.ink, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-            <div style={{ fontSize: 19, fontWeight: 700, fontFamily: C.grotesk, marginBottom: 6 }}>🧉 ¡Encontraste a Paco!</div>
+            <div className="paco-egg-sprite" aria-hidden="true" />
+            <div style={{ fontSize: 19, fontWeight: 700, fontFamily: C.grotesk, marginBottom: 6, textAlign: "center" }}>🧉 ¡Encontraste a Paco!</div>
             <div style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.5, marginBottom: 18 }}>
               Llevátelo a tu escritorio: queda flotando en la pantalla, siempre visible, tomando mate.
               Doble clic sobre él te abre Flexit. Solo para Windows.
@@ -206,7 +201,7 @@ function PacoMate() {
               {copiado ? "✓ Copiado — pegalo en PowerShell y Enter" : cmd}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
-              <button onClick={() => setEgg(false)} style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${C.line}`, background: "transparent", color: C.ink2, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cerrar</button>
+              <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${C.line}`, background: "transparent", color: C.ink2, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cerrar</button>
             </div>
           </div>
         </div>
@@ -216,6 +211,7 @@ function PacoMate() {
 }
 
 export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout, comBadge = 0 }) {
+  const [eggPaco, setEggPaco] = useState(false); // easter egg: doble clic en el logo del header
   const hoy = todayStr();
   const ahora = useMemo(() => new Date(Date.now() - 3 * 3600 * 1000), []);
   const diaSemana = new Date(hoy + "T12:00:00").getDay();
@@ -355,14 +351,14 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           así no dibujan un rectángulo tintado dentro del padding de la app (eso se veía como un
           "borde" alrededor del header). El contenido va por encima. */}
       <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "radial-gradient(1100px 600px at 12% -4%, rgba(0,255,180,0.05), transparent 60%), radial-gradient(1000px 640px at 92% 106%, rgba(0,180,255,0.04), transparent 60%)" }} />
-      {!isMobile && <PacoMate />}
+      {eggPaco && <PacoEgg onClose={() => setEggPaco(false)} />}
       <div style={{ maxWidth: 820, margin: "0 auto", position: "relative", zIndex: 1, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: C.ink }}>
 
         {/* Header — logo + saludo a la izquierda, acciones a la derecha. Sin wrap: el saludo se
             trunca antes de chocar con los botones, y la meta es corta en mobile. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-          <div style={{ width: isMobile ? 40 : 44, height: isMobile ? 40 : 44, borderRadius: 13, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)" }}>
-            <img src={logo} alt="Flexit" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          <div onDoubleClick={() => setEggPaco(true)} style={{ width: isMobile ? 40 : 44, height: isMobile ? 40 : 44, borderRadius: 13, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)", userSelect: "none" }}>
+            <img src={logo} alt="Flexit" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontFamily: C.grotesk, fontSize: isMobile ? 17 : 21, fontWeight: 600, letterSpacing: "-0.4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
