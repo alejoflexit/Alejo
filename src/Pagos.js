@@ -521,8 +521,11 @@ function saveSplitOv(lunes, obj) {
   saveOverrideRemote(lunes, 'split', obj);
 }
 
-// ── persistencia remota de overrides en Supabase (respaldo durable, además del localStorage) ──
-// Antes los ajustes vivían solo en el navegador; ahora también en pagos_overrides para no perderlos entre máquinas.
+// ── persistencia remota de overrides en Supabase ──
+// Fuente de verdad: pagos_overrides_filas (una fila por semana+tipo+cadete). Un trigger de Postgres
+// escribe cada cambio en pagos_overrides_historial (quién/cuándo/valor anterior→nuevo) en la MISMA
+// transacción, así el guardado y su auditoría van juntos o no va ninguno.
+// La tabla vieja pagos_overrides (payload entero por semana) queda como espejo legacy de rollback.
 async function saveOverrideRemote(lunes, tipo, obj) {
   if (!lunes) return;
   try {
@@ -535,16 +538,46 @@ async function saveOverrideRemote(lunes, tipo, obj) {
     } else {
       await sb(`pagos_overrides?semana_lunes=eq.${lunes}&tipo=eq.${tipo}`, { method: 'DELETE' });
     }
-  } catch (e) { /* si falla el remoto, queda el localStorage como respaldo */ }
+  } catch (e) { /* espejo legacy: si falla no pasa nada, la fuente de verdad son las filas */ }
 }
+
+// Sube SOLO las claves que cambiaron (upsert por fila) y borra las que se quitaron.
+// Al ser por fila, dos sesiones editando cadetes distintos no se pisan entre sí.
+// Devuelve null si todo OK, o el Error para que el caller NO muestre el cambio como guardado.
+async function pushOverrideDelta(lunes, tipo, prevObj, nextObj) {
+  if (!lunes) return null;
+  const prev = prevObj || {}, next = nextObj || {};
+  try {
+    for (const k of Object.keys(next)) {
+      if (JSON.stringify(next[k]) !== JSON.stringify(prev[k])) {
+        await sb('pagos_overrides_filas?on_conflict=semana_lunes,tipo,clave', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ semana_lunes: lunes, tipo, clave: k, valor: next[k] }),
+        });
+      }
+    }
+    for (const k of Object.keys(prev)) {
+      if (!(k in next)) {
+        await sb(`pagos_overrides_filas?semana_lunes=eq.${lunes}&tipo=eq.${tipo}&clave=eq.${encodeURIComponent(k)}`, { method: 'DELETE' });
+      }
+    }
+    return null;
+  } catch (e) { return e; }
+}
+
 async function loadOverridesRemote(lunes) {
   if (!lunes) return null;
   try {
-    const rows = await sb(`pagos_overrides?select=tipo,payload&semana_lunes=eq.${lunes}`);
-    const out = { cantidad: null, colecta: null, split: null };
-    if (rows) for (const r of rows) out[r.tipo] = r.payload || {};
+    const rows = await sb(`pagos_overrides_filas?select=tipo,clave,valor&semana_lunes=eq.${lunes}&limit=2000`);
+    const out = { cantidad: {}, colecta: {}, split: {} };
+    if (rows) for (const r of rows) { if (out[r.tipo]) out[r.tipo][r.clave] = r.valor; }
     return out;
   } catch (e) { return null; } // remoto inalcanzable → el llamador conserva el localStorage
+}
+
+async function loadHistorialSemana(lunes) {
+  return sb(`pagos_overrides_historial?select=id,tipo,clave,valor_anterior,valor_nuevo,motivo,accion,usuario,created_at&semana_lunes=eq.${lunes}&order=created_at.desc&limit=300`);
 }
 
 // ───────────────────────── login ─────────────────────────
@@ -1335,6 +1368,11 @@ function PagosInner({ session }) {
   const [ajusteForm, setAjusteForm] = useState({ concepto: '', monto: '' });
   const [busyAccion, setBusyAccion] = useState(false);
   const [menuEdiciones, setMenuEdiciones] = useState(false); // Tarea 2: menú del chip de ediciones
+  const [saveWarn, setSaveWarn] = useState(''); // aviso visible cuando un ajuste NO llegó a Supabase
+  const [conflictoLocal, setConflictoLocal] = useState(null); // borradores del navegador que difieren de la nube
+  const [histOpen, setHistOpen] = useState(false); // modal de historial de ajustes
+  const [histRows, setHistRows] = useState(null); // eventos del historial (null = cargando)
+  const [histBusy, setHistBusy] = useState(false);
   const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
   const [copiadoKey, setCopiadoKey] = useState(null); // fila cuyo mensaje se acaba de copiar
 
@@ -1384,7 +1422,9 @@ function PagosInner({ session }) {
 
   const refreshSemana = useCallback(async (lunes) => {
     if (!lunes) return;
-    setLoadingSemana(true); setError(''); setOverrides(loadOverrides(lunes)); setColectaOv(loadColectaOv(lunes)); setSplitOv(loadSplitOv(lunes));
+    const localPrev = { cantidad: loadOverrides(lunes), colecta: loadColectaOv(lunes), split: loadSplitOv(lunes) };
+    setLoadingSemana(true); setError(''); setSaveWarn(''); setConflictoLocal(null);
+    setOverrides(localPrev.cantidad); setColectaOv(localPrev.colecta); setSplitOv(localPrev.split);
     try {
       const sabado = addDays(lunes, 5);
       const [ent, col, aj, ci, remoteOv, av] = await Promise.all([
@@ -1401,6 +1441,16 @@ function PagosInner({ session }) {
       // Overrides: si el remoto (Supabase) está disponible es la fuente de verdad y se espeja al navegador;
       // si no se pudo leer (remoteOv === null), se conserva lo que ya cargó el localStorage arriba.
       if (remoteOv) {
+        // Migración controlada: si este navegador tiene borradores que DIFIEREN de la nube, no se pisan
+        // en silencio — se avisa y Alejo decide (banner "Ajustes de este navegador distintos a la nube").
+        const difs = [];
+        for (const tipo of ['cantidad', 'colecta', 'split']) {
+          const loc = localPrev[tipo] || {}, rem = remoteOv[tipo] || {};
+          for (const k of Object.keys(loc)) {
+            if (JSON.stringify(loc[k]) !== JSON.stringify(rem[k])) difs.push({ tipo, clave: k, local: loc[k], nube: rem[k] });
+          }
+        }
+        if (difs.length) setConflictoLocal({ difs });
         const aplicar = (val, setter, keyFn) => {
           const v = val || {};
           setter(v);
@@ -1474,29 +1524,100 @@ function PagosInner({ session }) {
     filasPorMetodo.filter(f => filtroEstado === 'todos' ? true : estadoDeFila(f) === filtroEstado),
     [filasPorMetodo, filtroEstado, estadoDeFila]);
 
-  // Tarea 2: setter que persiste las ediciones de cantidad de la semana en localStorage
+  // Si un guardado a Supabase falla, NO se deja el cambio como "guardado": se avisa y se recarga
+  // la verdad de la nube. Si la nube está inaccesible (sin red), el borrador queda en el navegador
+  // y el aviso lo dice explícitamente.
+  const persistirDelta = useCallback((tipo, prev, next, setter) => {
+    pushOverrideDelta(semanaLunes, tipo, prev, next).then(async err => {
+      if (!err) { setSaveWarn(''); return; }
+      const remote = await loadOverridesRemote(semanaLunes);
+      if (remote) {
+        setSaveWarn('⚠️ El ajuste NO se guardó en Supabase (' + String(err.message || err).slice(0, 120) + '). La tabla volvió a los valores guardados en la nube.');
+        setter(remote[tipo] || {});
+      } else {
+        setSaveWarn('⚠️ Sin conexión con Supabase: el ajuste quedó SOLO en este navegador. Al recargar con conexión vas a poder subirlo.');
+      }
+    });
+  }, [semanaLunes]);
+
+  // Tarea 2: setters que persisten las ediciones de la semana — espejo en localStorage +
+  // delta por fila a pagos_overrides_filas (fuente de verdad, con historial por trigger).
   const setOverridesPersist = useCallback((updater) => {
     setOverrides(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveOverrides(semanaLunes, next);
+      persistirDelta('cantidad', prev, next, setOverrides);
       return next;
     });
-  }, [semanaLunes]);
+  }, [semanaLunes, persistirDelta]);
 
   const setColectaOvPersist = useCallback((updater) => {
     setColectaOv(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveColectaOv(semanaLunes, next);
+      persistirDelta('colecta', prev, next, setColectaOv);
       return next;
     });
-  }, [semanaLunes]);
+  }, [semanaLunes, persistirDelta]);
 
   const setSplitOvPersist = useCallback((updater) => {
     setSplitOv(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       saveSplitOv(semanaLunes, next);
+      persistirDelta('split', prev, next, setSplitOv);
       return next;
     });
+  }, [semanaLunes, persistirDelta]);
+
+  // ── conflicto local↔nube (migración controlada de borradores del navegador) ──
+  const descartarLocales = useCallback(() => setConflictoLocal(null), []); // la nube ya quedó aplicada
+
+  const subirLocales = useCallback(async () => {
+    if (!conflictoLocal) return;
+    const setters = { cantidad: [overrides, setOverridesPersist], colecta: [colectaOv, setColectaOvPersist], split: [splitOv, setSplitOvPersist] };
+    for (const tipo of ['cantidad', 'colecta', 'split']) {
+      const difs = conflictoLocal.difs.filter(d => d.tipo === tipo);
+      if (!difs.length) continue;
+      const [cur, setter] = setters[tipo];
+      const merged = { ...cur };
+      for (const d of difs) { if (d.local === undefined) delete merged[d.clave]; else merged[d.clave] = d.local; }
+      setter(merged); // persiste el delta (con historial) y espeja localStorage
+    }
+    setConflictoLocal(null);
+  }, [conflictoLocal, overrides, colectaOv, splitOv, setOverridesPersist, setColectaOvPersist, setSplitOvPersist]);
+
+  // ── historial de ajustes (pagos_overrides_historial) ──
+  const abrirHistorial = useCallback(async () => {
+    setHistOpen(true); setHistRows(null);
+    try { setHistRows(await loadHistorialSemana(semanaLunes) || []); }
+    catch (e) { setHistRows([]); setSaveWarn('No se pudo cargar el historial: ' + String(e.message || e).slice(0, 120)); }
+  }, [semanaLunes]);
+
+  // Revertir desde el historial = volver al valor ANTERIOR de ese evento. No borra historia:
+  // el trigger registra la reversión como un evento más (accion 'revertir').
+  const revertirEvento = useCallback(async (ev) => {
+    setHistBusy(true);
+    try {
+      if (ev.valor_anterior === null || ev.valor_anterior === undefined) {
+        // antes del evento no había override → revertir = quitar el override (vuelve el valor automático)
+        await sb(`pagos_overrides_filas?semana_lunes=eq.${semanaLunes}&tipo=eq.${ev.tipo}&clave=eq.${encodeURIComponent(ev.clave)}`, { method: 'DELETE' });
+      } else {
+        await sb('pagos_overrides_filas?on_conflict=semana_lunes,tipo,clave', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ semana_lunes: semanaLunes, tipo: ev.tipo, clave: ev.clave, valor: ev.valor_anterior, motivo: `revertir: vuelta al valor anterior al ${new Date(ev.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}` }),
+        });
+      }
+      // recargar la verdad de la nube y espejarla (estado + localStorage)
+      const remote = await loadOverridesRemote(semanaLunes);
+      if (remote) {
+        setOverrides(remote.cantidad); saveOverrides(semanaLunes, remote.cantidad);
+        setColectaOv(remote.colecta); saveColectaOv(semanaLunes, remote.colecta);
+        setSplitOv(remote.split); saveSplitOv(semanaLunes, remote.split);
+      }
+      setHistRows(await loadHistorialSemana(semanaLunes) || []);
+    } catch (e) { setSaveWarn('⚠️ No se pudo revertir: ' + String(e.message || e).slice(0, 120)); }
+    finally { setHistBusy(false); }
   }, [semanaLunes]);
 
   // ajusta la cantidad de envíos de una tarifa (0=Base,1/2/3) para un cadete en la semana.
@@ -1829,6 +1950,10 @@ function PagosInner({ session }) {
                 )}
               </span>
             )}
+            <button onClick={abrirHistorial} title="historial auditable de ajustes de la semana: quién, cuándo, valor anterior y nuevo"
+              style={{ fontSize: 11, fontWeight: 600, color: BRAND.muted, background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}>
+              &#128340; Historial
+            </button>
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               <button
@@ -1845,6 +1970,63 @@ function PagosInner({ session }) {
               </button>
             </div>
           </div>
+
+          {/* Aviso de guardado fallido: nunca mostrar como "guardado" algo que no llegó a Supabase */}
+          {saveWarn && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '9px 14px', borderRadius: 10, border: '1px solid rgba(226,75,74,0.45)', background: 'rgba(226,75,74,0.10)', fontSize: 12.5, color: '#FF9B9A' }}>
+              <span style={{ flex: 1 }}>{saveWarn}</span>
+              <button onClick={() => setSaveWarn('')} style={{ background: 'none', border: 'none', color: '#FF9B9A', cursor: 'pointer', fontSize: 14, padding: 0 }}>✕</button>
+            </div>
+          )}
+
+          {/* Conflicto entre borradores de este navegador y la nube: se decide, no se pisa en silencio */}
+          {conflictoLocal && (
+            <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,176,32,0.4)', background: 'rgba(255,176,32,0.08)', fontSize: 12.5 }}>
+              <div style={{ fontWeight: 700, color: BRAND.amber, marginBottom: 6 }}>
+                Este navegador tenía {conflictoLocal.difs.length} ajuste{conflictoLocal.difs.length > 1 ? 's' : ''} distinto{conflictoLocal.difs.length > 1 ? 's' : ''} a lo guardado en la nube
+              </div>
+              <div style={{ color: BRAND.muted, marginBottom: 8 }}>
+                {conflictoLocal.difs.slice(0, 6).map((d, i) => (
+                  <div key={i}>{d.clave} · {d.tipo}: local <b style={{ color: BRAND.white }}>{JSON.stringify(d.local)}</b> vs nube <b style={{ color: BRAND.white }}>{d.nube === undefined ? '(sin ajuste)' : JSON.stringify(d.nube)}</b></div>
+                ))}
+                {conflictoLocal.difs.length > 6 && <div>…y {conflictoLocal.difs.length - 6} más</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={descartarLocales} style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>Quedarme con la nube</button>
+                <button onClick={subirLocales} style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(255,176,32,0.5)', background: 'rgba(255,176,32,0.15)', color: BRAND.amber }}>Subir los de este navegador</button>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de historial de ajustes de la semana */}
+          {histOpen && (
+            <div onClick={() => setHistOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(6,6,26,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+              <div onClick={e => e.stopPropagation()} style={{ width: 760, maxWidth: '96vw', maxHeight: '82vh', overflowY: 'auto', background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: '18px 20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>&#128340; Historial de ajustes · {fmtSemanaLabel(semanaLunes)}</div>
+                  <button onClick={() => setHistOpen(false)} style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 16 }}>✕</button>
+                </div>
+                {histRows === null && <div style={{ color: BRAND.muted, fontSize: 13, padding: '12px 0' }}>Cargando…</div>}
+                {histRows !== null && !histRows.length && <div style={{ color: BRAND.muted, fontSize: 13, padding: '12px 0' }}>Sin ajustes registrados esta semana.</div>}
+                {(histRows || []).map(ev => {
+                  const nombre = (filasEfectivas.find(f => f.key === ev.clave) || {}).nombre || ev.clave;
+                  const fmtVal = (v) => v === null || v === undefined ? '(sin ajuste)' : (ev.tipo === 'colecta' ? money(Number(v)) : typeof v === 'object' ? JSON.stringify(v) : String(v));
+                  const accColor = ev.accion === 'eliminar' ? '#FF9B9A' : ev.accion === 'revertir' ? BRAND.blue : ev.accion === 'crear' ? BRAND.teal : BRAND.amber;
+                  return (
+                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: `1px solid ${BRAND.border}`, fontSize: 12.5 }}>
+                      <span style={{ flex: '0 0 118px', color: BRAND.muted }}>{new Date(ev.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style={{ flex: '0 0 74px', fontWeight: 700, color: accColor, textTransform: 'uppercase', fontSize: 10.5 }}>{ev.accion}</span>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{nombre} <span style={{ color: BRAND.muted, fontWeight: 400 }}>· {ev.tipo}</span></span>
+                      <span style={{ flex: '0 0 auto', color: BRAND.muted }}>{fmtVal(ev.valor_anterior)} &#8594; <b style={{ color: BRAND.white }}>{fmtVal(ev.valor_nuevo)}</b></span>
+                      <span style={{ flex: '0 0 150px', color: BRAND.muted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={(ev.usuario || '') + (ev.motivo ? ' · ' + ev.motivo : '')}>{ev.usuario}{ev.motivo ? ' · ' + ev.motivo : ''}</span>
+                      <button disabled={histBusy} onClick={() => revertirEvento(ev)} title="volver al valor anterior a este cambio (queda registrado en el historial)"
+                        style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 7, cursor: histBusy ? 'default' : 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white, opacity: histBusy ? 0.5 : 1 }}>↺ Revertir</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {cargando && (
             <div style={{ padding: '3rem', textAlign: 'center' }}>
