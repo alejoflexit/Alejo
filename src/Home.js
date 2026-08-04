@@ -215,7 +215,15 @@ function PacoEgg({ onClose }) {
 }
 
 export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout, comBadge = 0 }) {
-  const [eggPaco, setEggPaco] = useState(false); // easter egg: doble clic en el logo del header
+  const [eggPaco, setEggPaco] = useState(false); // easter egg: 5 clics seguidos en el logo del header
+  const eggClicks = useRef({ n: 0, t: 0 });
+  const clickLogoEgg = () => {
+    const ahora = Date.now();
+    if (ahora - eggClicks.current.t > 1500) eggClicks.current.n = 0; // se resetea si pasa 1,5s entre clics
+    eggClicks.current.t = ahora;
+    eggClicks.current.n += 1;
+    if (eggClicks.current.n >= 5) { eggClicks.current.n = 0; setEggPaco(true); }
+  };
   const hoy = todayStr();
   const ahora = useMemo(() => new Date(Date.now() - 3 * 3600 * 1000), []);
   const diaSemana = new Date(hoy + "T12:00:00").getDay();
@@ -377,7 +385,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         {/* Header — logo + saludo a la izquierda, acciones a la derecha. Sin wrap: el saludo se
             trunca antes de chocar con los botones, y la meta es corta en mobile. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-          <div onDoubleClick={() => setEggPaco(true)} style={{ width: isMobile ? 40 : 44, height: isMobile ? 40 : 44, borderRadius: 13, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)", userSelect: "none" }}>
+          <div onClick={clickLogoEgg} style={{ width: isMobile ? 40 : 44, height: isMobile ? 40 : 44, borderRadius: 13, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)", userSelect: "none" }}>
             <img src={logo} alt="Flexit" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
