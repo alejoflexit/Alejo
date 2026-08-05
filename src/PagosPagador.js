@@ -219,9 +219,16 @@ export default function PagosPagador({ tarifas }) {
     todos: filas.length,
     factura: filas.filter(f => f.factura).length,
     efectivo: filas.filter(f => !f.factura).length,
-    galicia: filas.filter(f => f.pagado && f.pagadoVia === 'galicia').length,
-    mercadopago: filas.filter(f => f.pagado && f.pagadoVia === 'mercadopago').length,
   }), [filas]);
+
+  // Cuántas filas se pagaron por cada medio. Va aparte de `counts` porque ahí 'efectivo' es el
+  // MÉTODO (cómo se le paga a ese cadete) y acá es el MEDIO (por dónde salió la plata): mismo
+  // nombre, dos preguntas distintas.
+  const pagadasPorMedio = useMemo(() => {
+    const m = {};
+    Object.keys(MEDIOS).forEach(k => { m[k] = filas.filter(f => f.pagado && f.pagadoVia === k).length; });
+    return m;
+  }, [filas]);
 
   const resumen = useMemo(() => {
     const pagados = filas.filter(f => f.pagado).length;
@@ -331,12 +338,12 @@ export default function PagosPagador({ tarifas }) {
             <div style={{ height: 10, borderRadius: 20, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
               <div style={{ width: `${resumen.pct}%`, height: '100%', borderRadius: 20, background: BRAND.teal, transition: 'width 0.3s' }} />
             </div>
-            {(resumen.porMedio.galicia > 0 || resumen.porMedio.mercadopago > 0) && (
+            {Object.keys(MEDIOS).some(k => resumen.porMedio[k] > 0) && (
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
                 <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', alignSelf: 'center' }}>Pagado por</span>
-                {Object.entries(MEDIOS).map(([k, m]) => (
+                {Object.entries(MEDIOS).filter(([k]) => resumen.porMedio[k] > 0).map(([k, m]) => (
                   <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, padding: '5px 11px', borderRadius: 10, background: BRAND.faint, border: `1px solid ${BRAND.border}` }}>
-                    <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block' }} />
+                    {m.logo ? <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block' }} /> : <span style={{ fontSize: 15 }}>💵</span>}
                     <span style={{ color: BRAND.muted }}>{m.nombre}</span>
                     <b style={{ color: m.color }}>{money(resumen.porMedio[k] || 0)}</b>
                   </span>
@@ -364,12 +371,12 @@ export default function PagosPagador({ tarifas }) {
                 <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)} style={pill(filtroMetodo === k, BRAND.blue)}>{l} <span style={{ opacity: 0.7 }}>({counts[k]})</span></button>
               ))}
             </div>
-            {filtro === 'pagados' && (counts.galicia > 0 || counts.mercadopago > 0) && (
+            {filtro === 'pagados' && Object.keys(MEDIOS).some(k => pagadasPorMedio[k] > 0) && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Medio</span>
-                {Object.entries(MEDIOS).map(([k, m]) => (
+                {Object.entries(MEDIOS).filter(([k]) => pagadasPorMedio[k] > 0).map(([k, m]) => (
                   <button key={k} onClick={() => setFiltroMedio(filtroMedio === k ? 'todos' : k)} style={{ ...pill(filtroMedio === k, m.color), display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                    <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block' }} /> {m.nombre} <span style={{ opacity: 0.7 }}>({counts[k]})</span>
+                    {m.logo ? <img src={m.logo} alt="" width="18" height="18" style={{ display: 'block' }} /> : <span style={{ fontSize: 15 }}>💵</span>} {m.nombre} <span style={{ opacity: 0.7 }}>({pagadasPorMedio[k]})</span>
                   </button>
                 ))}
               </div>
@@ -394,6 +401,9 @@ export default function PagosPagador({ tarifas }) {
             {filasFiltradas.map(f => {
               const sinFactura = faltaFactura(f); // transferencia confirmada que todavía no mandó factura
               const busy = busyId === f.key;
+              // Medio ya determinado: efectivo (no sale de ninguna cuenta) o parte de una
+              // división (el banco lo fijó la división). Solo la transferencia simple pregunta.
+              const viaUnica = f.parte != null ? (f.viaFija || 'efectivo') : (!f.factura ? 'efectivo' : null);
               return (
                 <div key={f.key} style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : sinFactura ? 'rgba(255,176,32,0.4)' : BRAND.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -452,17 +462,18 @@ export default function PagosPagador({ tarifas }) {
                           {armado === f.key ? '¿Seguro? tocá otra vez' : 'Mandó factura'}
                         </button>
                       </span>
-                    ) : pickId === f.key && f.parte != null ? (() => {
-                      /* Parte de un cadete dividido: el medio ya lo fijó la división (el banco
-                         elegido, o efectivo), así que no hay nada que elegir — un solo botón
-                         confirma ESTA parte y deja la otra donde estaba. */
-                      const via = f.viaFija || 'efectivo';
+                    ) : pickId === f.key && viaUnica ? (() => {
+                      /* Cuando el medio ya está determinado no hay banco que elegir: en efectivo
+                         porque no sale de ninguna cuenta, y en una parte dividida porque la
+                         división ya dijo por dónde sale. Queda un solo botón, que igual pide el
+                         segundo clic: "Ya pagué" arma, este confirma. */
+                      const via = viaUnica;
                       const m = MEDIOS[via];
                       return (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <button onClick={() => marcarPagado(f, via)} disabled={busy}
                             style={{ height: 36, padding: '0 14px', borderRadius: 10, fontSize: 12.5, fontWeight: 800, cursor: busy ? 'wait' : 'pointer', color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}`, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
-                            {m.logo ? <img src={m.logo} alt="" width="22" height="22" style={{ display: 'block' }} /> : '💵'} Sí, {m.nombre} {money(f.total)}
+                            {m.logo ? <img src={m.logo} alt="" width="22" height="22" style={{ display: 'block' }} /> : '💵'} Sí, {via === 'efectivo' ? 'pagué en efectivo' : m.nombre} {money(f.total)}
                           </button>
                           <button onClick={() => setPickId(null)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
                         </span>
@@ -498,7 +509,7 @@ export default function PagosPagador({ tarifas }) {
                           Alejo en el banco y acá solo queda registrada. Mismo criterio que
                           "Mandó factura": el rótulo nombra un hecho que ya pasó afuera, no una
                           acción que el sistema pueda ejecutar. */}
-                      <button onClick={() => setPickId(f.key)} title="registrar que ya le pagaste esta parte"
+                      <button onClick={() => setPickId(f.key)} title={viaUnica === 'efectivo' ? 'registrar que ya le diste la plata en mano' : 'registrar que ya le pagaste'}
                         style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: BRAND.teal, color: '#06231b', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                         ✓ Ya pagué
                       </button>
