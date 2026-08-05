@@ -349,11 +349,11 @@ async function rpcAplicarDem21(fecha, cadetes) {
   return res.json();
 }
 
-async function rpcCorregirDem21(fecha, cadetes, zonas) {
+async function rpcCorregirDem21(fecha, cadetes, zonas, ids) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/aplicar_correccion_dem21`, {
     method: "POST",
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ p_fecha: fecha, p_cadetes: cadetes, p_zonas: zonas }),
+    body: JSON.stringify({ p_fecha: fecha, p_cadetes: cadetes, p_zonas: zonas, p_ids: ids }),
   });
   if (!res.ok) throw new Error(`aplicar_correccion_dem21 ${res.status}: ${await res.text()}`);
   return res.json();
@@ -379,7 +379,7 @@ function filasDeExcel(buffer) {
 // contra el historial: sale directo del Excel (estado + hora), así que el backfill lo puede
 // reconstruir para atrás igual que el histograma.
 function histogramas(rows) {
-  const cadetes = {}, zonas = {}, dem21 = {}, solapCad = {}, solapZona = {};
+  const cadetes = {}, zonas = {}, dem21 = {}, solapCad = {}, solapZona = {}, solapIds = {};
   for (const row of rows) {
     const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
     const cadete = String(row["Cadete"] || "").trim() || "⚠️ Sin asignar";
@@ -398,6 +398,9 @@ function histogramas(rows) {
         solapCad[cadete] = (solapCad[cadete] || 0) + 1;
         const nz = normLoc(locR);
         solapZona[nz] = (solapZona[nz] || 0) + 1;
+        // los IDs, para sacarlos también de la LISTA de demorados: el contador y el popover
+        // tienen que decir lo mismo.
+        (solapIds[cadete] || (solapIds[cadete] = [])).push(String(row["ID (Interno)"] || "").trim());
       }
     }
     if (!["Entregado", "Entregado 2DA visita"].includes(estado)) continue;
@@ -406,7 +409,7 @@ function histogramas(rows) {
     const norm = normLoc(String(row["Localidad"] || "").trim());
     sumarHora(zonas[norm] || (zonas[norm] = {}), hEstado);
   }
-  return { cadetes, zonas, dem21, solapCad, solapZona };
+  return { cadetes, zonas, dem21, solapCad, solapZona, solapIds };
 }
 
 async function backfillHoras(desde, hasta) {
@@ -437,13 +440,13 @@ async function backfillHoras(desde, hasta) {
       }, excelUrlDe(fecha));
       if (!r.ok || r.status !== 200 || r.data.length < 1000) { console.log(`· ${fecha}: excel vacío o error (${r.status || r.error})`); vacios++; continue; }
       const rows = filasDeExcel(Buffer.from(r.data));
-      const { cadetes, zonas, dem21, solapCad, solapZona } = histogramas(rows);
+      const { cadetes, zonas, dem21, solapCad, solapZona, solapIds } = histogramas(rows);
       if (!Object.keys(cadetes).length) { console.log(`· ${fecha}: 0 entregas con hora`); vacios++; continue; }
       const res = await rpcAplicarHoras(fecha, cadetes, zonas);
       const resD = await rpcAplicarDem21(fecha, dem21).catch((e) => { console.error(`  ⚠️ dem21_detalle: ${e.message}`); return { semanas: 0 }; });
-      const resC = await rpcCorregirDem21(fecha, solapCad, solapZona).catch((e) => { console.error(`  ⚠️ correccion dem21: ${e.message}`); return { semanas: 0, zonas: 0 }; });
+      const resC = await rpcCorregirDem21(fecha, solapCad, solapZona, solapIds).catch((e) => { console.error(`  ⚠️ correccion dem21: ${e.message}`); return { semanas: 0, zonas: 0 }; });
       const nSolap = Object.values(solapCad).reduce((a, b) => a + b, 0);
-      console.log(`✓ ${fecha}: ${rows.length} filas → semanas ${res.semanas}, zonas ${res.zonas}, repro21 ${resD.semanas}, doble conteo corregido ${nSolap} en ${resC.semanas} filas`);
+      console.log(`✓ ${fecha}: ${rows.length} filas → semanas ${res.semanas}, zonas ${res.zonas}, repro21 ${resD.semanas}, doble conteo corregido ${nSolap} en ${resC.semanas} filas (${resC.detalles_limpiados || 0} listas limpiadas)`);
       ok++;
     } catch (e) {
       console.error(`✗ ${fecha}: ${e.message}`);
