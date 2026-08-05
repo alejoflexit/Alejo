@@ -241,6 +241,7 @@ async function guardarEnSupabase(datos, fecha, weekLabel) {
     horas: m.horas || {},
     demorados_detalle: m.demoradosDetalle || [],
     dem21_detalle: m.dem21Detalle || [],
+    dem21_solapado: 0, // calculado sin doble conteo: la corrección del histórico no debe tocarlo
     sin_datos_detalle: m.sinDatosDetalle || [],
   }));
   try {
