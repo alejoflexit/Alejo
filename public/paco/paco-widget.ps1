@@ -36,8 +36,36 @@ function Load-Frame([string]$name) {
   $bmp.Freeze()
   return $bmp
 }
-$script:frames = @( (Load-Frame 'paco-reposo.png'), (Load-Frame 'paco-levanta.png'), (Load-Frame 'paco-toma.png') )
-$script:img.Source = $script:frames[0]
+# Dos outfits: "soporte" (mate, el clásico) y "comercial" (chaleco + teléfono).
+# La elección se recuerda entre sesiones en %APPDATA%\paco-flexit-outfit.txt.
+$script:framesSoporte = @( (Load-Frame 'paco-reposo.png'), (Load-Frame 'paco-levanta.png'), (Load-Frame 'paco-toma.png') )
+$script:seqSoporte = (,0 * 28) + ,1 + (,2 * 6) + ,1
+$script:tieneComercial = Test-Path (Join-Path $script:dir 'com-mira.png')
+if ($script:tieneComercial) {
+  $script:framesComercial = @( (Load-Frame 'com-mira.png'), (Load-Frame 'com-tipea.png'), (Load-Frame 'com-habla.png') )
+  $script:seqComercial = (,0 * 24) + (,1 * 4) + (,0 * 4) + (,2 * 6) + (,0 * 2)
+}
+$script:outfitFile = Join-Path $env:APPDATA 'paco-flexit-outfit.txt'
+$script:outfit = 'soporte'
+if ($script:tieneComercial -and (Test-Path $script:outfitFile)) {
+  try { if ((Get-Content $script:outfitFile -Raw).Trim() -eq 'comercial') { $script:outfit = 'comercial' } } catch { }
+}
+function Set-Outfit([string]$o) {
+  if ($o -eq 'comercial' -and $script:tieneComercial) {
+    $script:frames = $script:framesComercial; $script:seq = $script:seqComercial
+  } else {
+    $o = 'soporte'; $script:frames = $script:framesSoporte; $script:seq = $script:seqSoporte
+  }
+  $script:outfit = $o
+  $script:i = 0
+  $script:img.Source = $script:frames[0]
+  try { $o | Set-Content $script:outfitFile } catch { }
+  if ($script:miSoporte) {
+    $script:miSoporte.IsChecked = ($o -eq 'soporte')
+    $script:miComercial.IsChecked = ($o -eq 'comercial')
+  }
+}
+Set-Outfit $script:outfit
 
 # Posición inicial: la última guardada, o abajo a la derecha
 $wa = [System.Windows.SystemParameters]::WorkArea
@@ -111,6 +139,19 @@ $miOpen = New-Object System.Windows.Controls.MenuItem
 $miOpen.Header = 'Abrir Flexit'
 $miOpen.Add_Click({ Open-Flexit })
 [void]$menu.Items.Add($miOpen)
+if ($script:tieneComercial) {
+  [void]$menu.Items.Add((New-Object System.Windows.Controls.Separator))
+  $script:miSoporte = New-Object System.Windows.Controls.MenuItem
+  $script:miSoporte.Header = 'Paco soporte'
+  $script:miSoporte.IsChecked = ($script:outfit -eq 'soporte')
+  $script:miSoporte.Add_Click({ Set-Outfit 'soporte' })
+  $script:miComercial = New-Object System.Windows.Controls.MenuItem
+  $script:miComercial.Header = 'Paco comercial'
+  $script:miComercial.IsChecked = ($script:outfit -eq 'comercial')
+  $script:miComercial.Add_Click({ Set-Outfit 'comercial' })
+  [void]$menu.Items.Add($script:miSoporte)
+  [void]$menu.Items.Add($script:miComercial)
+}
 [void]$menu.Items.Add((New-Object System.Windows.Controls.Separator))
 $secciones = [ordered]@{
   'Pizarra' = 'pizarra'; 'Colectas' = 'colectas'; 'Métricas' = 'metricas'
@@ -129,8 +170,7 @@ $miClose.Add_Click({ $script:window.Close() })
 [void]$menu.Items.Add($miClose)
 $script:window.ContextMenu = $menu
 
-# Animación (ticks de 500ms): reposo 14s → levanta → toma mate 3s → levanta → reposo
-$script:seq = (,0 * 28) + ,1 + (,2 * 6) + ,1
+# Animación (ticks de 500ms): la secuencia activa la define Set-Outfit
 $script:i = 0
 $script:timer = New-Object System.Windows.Threading.DispatcherTimer
 $script:timer.Interval = [TimeSpan]::FromMilliseconds(500)

@@ -6,7 +6,7 @@ $base = 'https://flota-logistica-iota.vercel.app/paco'
 $dir = Join-Path $env:LOCALAPPDATA 'PacoFlexit'
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
-foreach ($f in @('paco-widget.ps1','paco.vbs','paco-reposo.png','paco-levanta.png','paco-toma.png')) {
+foreach ($f in @('paco-widget.ps1','paco.vbs','paco-reposo.png','paco-levanta.png','paco-toma.png','com-mira.png','com-tipea.png','com-habla.png')) {
   Invoke-WebRequest -Uri "$base/$f" -OutFile (Join-Path $dir $f) -UseBasicParsing
 }
 
