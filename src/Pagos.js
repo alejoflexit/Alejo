@@ -44,6 +44,14 @@ function fmtDM(iso) {
   return m ? `${m[3]}/${m[2]}` : s;
 }
 
+// "4/8 17:25" — cuándo se marcó pagado (pagos_cierres.pagado_at)
+function fmtCuando(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return `${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 function norm(s) {
   return String(s || '')
     .toLowerCase()
@@ -2364,6 +2372,12 @@ function PagosInner({ session }) {
                                 ) : cierre.pagado ? (
                                   <span title="ya se pagó — no se puede reabrir" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.white, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                                     <span style={{ color: BRAND.teal }}>✓</span> Pagado
+                                    {/* Quién lo marcó y cuándo — rastro para auditar (evita el "¿quién le pagó a este?") */}
+                                    {(cierre.pagado_por || cierre.pagado_at) && (
+                                      <span style={{ fontWeight: 600, color: BRAND.muted }}>
+                                        {cierre.pagado_por ? ` ${cierre.pagado_por}` : ''}{cierre.pagado_at ? ` · ${fmtCuando(cierre.pagado_at)}` : ''}
+                                      </span>
+                                    )}
                                   </span>
                                 ) : (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

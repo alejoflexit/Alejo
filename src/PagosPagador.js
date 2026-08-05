@@ -55,6 +55,17 @@ function fmtSemanaLabel(lunes) {
   return `${f(d)} al ${f(sab)}`;
 }
 
+// "4/8 17:25" — fecha corta de cuándo se marcó pagado
+function fmtCuando(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return `${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// Quiénes suelen ejecutar los pagos. Cualquier otro nombre se escribe con "Otro…" y queda guardado.
+const QUIENES_PAGAN = ['Adrián', 'Alejo'];
+
 async function sb(path, options = {}) {
   const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
@@ -108,6 +119,17 @@ export default function PagosPagador({ tarifas }) {
   const [pickId, setPickId] = useState(null); // fila cuyo selector de medio (Galicia/MP) está abierto
   const [menuId, setMenuId] = useState(null); // fila con el menú "⋯" (acciones secundarias) abierto
   const [filtroMedio, setFiltroMedio] = useState('todos'); // en Pagados: todos | galicia | mercadopago
+  // Quién está ejecutando los pagos AHORA. Se guarda con cada "Ya pagué" (pagado_por + pagado_at)
+  // para que después se sepa quién marcó cada pago y cuándo — sin esto pasó que dos personas
+  // transfirieron al mismo cadete la misma semana sin poder reconstruir quién fue.
+  const [quienPaga, setQuienPaga] = useState(() => { try { return localStorage.getItem('fx_quien_paga') || ''; } catch { return ''; } });
+  const [otroNombre, setOtroNombre] = useState(false); // el input de "Otro…" está abierto
+
+  function elegirQuienPaga(v) {
+    const limpio = String(v || '').trim();
+    setQuienPaga(limpio);
+    try { localStorage.setItem('fx_quien_paga', limpio); } catch {}
+  }
 
   useEffect(() => {
     sb('pagos_cierres?select=semana_label&estado=eq.confirmado')
@@ -168,6 +190,8 @@ export default function PagosPagador({ tarifas }) {
             factura: !esEfectivo, // solo la parte que sale por transferencia depende de la factura
             pagado: !!p.pagado,
             pagadoVia: p.pagado ? p.via : null,
+            pagadoPor: p.pagado_por || null,
+            pagadoAt: p.pagado_at || null,
             sinDatos: !esEfectivo && !alias && !cbu,
           });
         });
@@ -183,6 +207,8 @@ export default function PagosPagador({ tarifas }) {
         factura: c.metodo === 'transferencia',
         pagado: !!c.pagado,
         pagadoVia: c.pagado_via || null,
+        pagadoPor: c.pagado_por || null,
+        pagadoAt: c.pagado_at || null,
         sinDatos: c.metodo === 'transferencia' && !alias && !cbu, // no hay forma de transferir
       });
     });
@@ -261,15 +287,22 @@ export default function PagosPagador({ tarifas }) {
   // porque la plata salió por dos vías distintas). Sin esto, confirmar el efectivo daba
   // por saldada también la transferencia, que es lo que pasaba antes.
   async function guardarParte(f, valor, via) {
+    if (valor && !quienPaga) { setError('Antes de marcar un pago, elegí quién está pagando (arriba a la derecha).'); return; }
     const c = cierres.find(x => x.id === f.id);
     const partes = (Array.isArray(c && c.pagos) ? c.pagos : []).filter(p => (+p.monto || 0) > 0);
     if (!partes[f.parte]) return;
+    const ahora = new Date().toISOString();
     const nuevas = partes.map((p, i) => i === f.parte
-      ? { ...p, via: via || p.via, pagado: valor, pagado_at: valor ? new Date().toISOString() : null }
+      ? { ...p, via: via || p.via, pagado: valor, pagado_at: valor ? ahora : null, pagado_por: valor ? quienPaga : null }
       : p);
     const todas = nuevas.every(p => p.pagado);
-    const body = { pagos: nuevas, pagado: todas, pagado_via: todas ? (nuevas.length === 1 ? nuevas[0].via : 'mixto') : null };
-    const antes = { pagos: c.pagos, pagado: !!c.pagado, pagado_via: c.pagado_via || null };
+    const body = {
+      pagos: nuevas, pagado: todas,
+      pagado_via: todas ? (nuevas.length === 1 ? nuevas[0].via : 'mixto') : null,
+      pagado_por: todas ? quienPaga : null,
+      pagado_at: todas ? ahora : null,
+    };
+    const antes = { pagos: c.pagos, pagado: !!c.pagado, pagado_via: c.pagado_via || null, pagado_por: c.pagado_por || null, pagado_at: c.pagado_at || null };
     setBusyId(f.key); setPickId(null);
     setCierres(prev => prev.map(x => x.id === f.id ? { ...x, ...body } : x));
     try {
@@ -282,13 +315,15 @@ export default function PagosPagador({ tarifas }) {
 
   // marcar pagado eligiendo el medio (galicia | mercadopago); queda guardado en pagos_cierres.pagado_via
   async function marcarPagado(f, via) {
+    if (!quienPaga) { setError('Antes de marcar un pago, elegí quién está pagando (arriba a la derecha).'); return; }
     if (f.parte != null) return guardarParte(f, true, via);
+    const cambio = { pagado: true, pagado_via: via, pagado_por: quienPaga, pagado_at: new Date().toISOString() };
     setBusyId(f.key); setPickId(null);
-    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: via } : c));
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, ...cambio } : c));
     try {
-      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: true, pagado_via: via }) });
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify(cambio) });
     } catch (e) {
-      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null } : c));
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null, pagado_por: null, pagado_at: null } : c));
       setError(e.message);
     } finally { setBusyId(null); }
   }
@@ -298,11 +333,13 @@ export default function PagosPagador({ tarifas }) {
   async function desmarcar(f) {
     if (f.parte != null) return guardarParte(f, false);
     setBusyId(f.key); setPickId(null);
-    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null } : c));
+    // pagado_por/pagado_at se limpian acá, pero el historial de la base guarda quién había
+    // marcado y quién desmarcó — deshacer no borra el rastro.
+    setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: false, pagado_via: null, pagado_por: null, pagado_at: null } : c));
     try {
-      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: false, pagado_via: null }) });
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ pagado: false, pagado_via: null, pagado_por: null, pagado_at: null }) });
     } catch (e) {
-      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: f.pagadoVia } : c));
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, pagado: true, pagado_via: f.pagadoVia, pagado_por: f.pagadoPor, pagado_at: f.pagadoAt } : c));
       setError(e.message);
     } finally { setBusyId(null); }
   }
@@ -320,6 +357,30 @@ export default function PagosPagador({ tarifas }) {
             {semanas.map(s => <option key={s} value={s}>{fmtSemanaLabel(s)}</option>)}
           </select>
         )}
+        {/* Quién está pagando: obligatorio antes de poder marcar "Ya pagué". Cada marca queda
+            guardada con este nombre y la hora, para poder auditar después quién pagó qué. */}
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: quienPaga ? 400 : 700, color: quienPaga ? BRAND.muted : BRAND.amber }}>
+            {quienPaga ? 'Paga:' : '⚠ ¿Quién paga?'}
+          </span>
+          {otroNombre ? (
+            <input autoFocus placeholder="tu nombre" defaultValue={QUIENES_PAGAN.includes(quienPaga) ? '' : quienPaga}
+              onKeyDown={e => { if (e.key === 'Enter') { elegirQuienPaga(e.target.value); setOtroNombre(false); } if (e.key === 'Escape') setOtroNombre(false); }}
+              onBlur={e => { if (e.target.value.trim()) elegirQuienPaga(e.target.value); setOtroNombre(false); }}
+              style={{ padding: '6px 10px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white, width: 120 }} />
+          ) : (
+            <select value={QUIENES_PAGAN.includes(quienPaga) || !quienPaga ? quienPaga : '__actual'}
+              onChange={e => { if (e.target.value === '__otro') setOtroNombre(true); else elegirQuienPaga(e.target.value); }}
+              style={{ padding: '6px 10px', fontSize: 13, fontWeight: 700, borderRadius: 8,
+                border: `1px solid ${quienPaga ? BRAND.border : BRAND.amber}`,
+                background: quienPaga ? BRAND.faint : 'rgba(255,176,32,0.14)', color: quienPaga ? BRAND.white : BRAND.amber }}>
+              <option value="" disabled>elegí tu nombre</option>
+              {QUIENES_PAGAN.map(n => <option key={n} value={n}>{n}</option>)}
+              {quienPaga && !QUIENES_PAGAN.includes(quienPaga) && <option value="__actual">{quienPaga}</option>}
+              <option value="__otro">Otro…</option>
+            </select>
+          )}
+        </span>
       </div>
 
       {error && <div style={{ background: 'rgba(226,75,74,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
@@ -436,6 +497,12 @@ export default function PagosPagador({ tarifas }) {
                           color: m ? m.color : BRAND.teal, background: m ? `${m.color}1f` : 'rgba(46,207,170,0.12)', border: `1px solid ${m ? m.color : BRAND.teal}66` }}>
                           {m && m.logo ? <img src={m.logo} alt="" width="20" height="20" style={{ display: 'block', borderRadius: 4 }} /> : m ? '💵' : '✓'}
                           {m ? m.nombre : 'Pagado'}
+                          {/* Quién marcó el pago y cuándo — el rastro que faltaba cuando hubo un doble pago */}
+                          {(f.pagadoPor || f.pagadoAt) && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: BRAND.muted, whiteSpace: 'nowrap' }}>
+                              {f.pagadoPor}{f.pagadoPor && f.pagadoAt ? ' · ' : ''}{fmtCuando(f.pagadoAt)}
+                            </span>
+                          )}
                           <button onClick={() => desmarcar(f)} disabled={busy} title="deshacer pago"
                             style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: busy ? 'wait' : 'pointer', fontSize: 14, marginLeft: 2, lineHeight: 1 }}>✕</button>
                         </span>
@@ -509,7 +576,7 @@ export default function PagosPagador({ tarifas }) {
                           Alejo en el banco y acá solo queda registrada. Mismo criterio que
                           "Mandó factura": el rótulo nombra un hecho que ya pasó afuera, no una
                           acción que el sistema pueda ejecutar. */}
-                      <button onClick={() => setPickId(f.key)} title={viaUnica === 'efectivo' ? 'registrar que ya le diste la plata en mano' : 'registrar que ya le pagaste'}
+                      <button onClick={() => { if (!quienPaga) { setError('Antes de marcar un pago, elegí quién está pagando (arriba a la derecha).'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; } setPickId(f.key); }} title={viaUnica === 'efectivo' ? 'registrar que ya le diste la plata en mano' : 'registrar que ya le pagaste'}
                         style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: BRAND.teal, color: '#06231b', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                         ✓ Ya pagué
                       </button>
