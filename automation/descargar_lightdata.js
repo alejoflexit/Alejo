@@ -158,6 +158,17 @@ async function esDemorReal(idInterno, codCliente, tokens, ldCookies, fechasOkISO
   } catch(e) { return true; }
 }
 
+// Repro 21hs: reprogramado o "Nadie" por ML después de las 21. Es su PROPIA categoría, no una
+// demora más: el envío no se entregó porque se reprogramó tarde, y eso ya se cuenta en dem21.
+// Antes caía en las dos (demorados y dem21 a la vez), así que el total mostraba el doble y el
+// SLA lo restaba dos veces.
+function esRepro21hs(estado, esML, fechaEstado) {
+  if (!esML) return false;
+  if (!["reprogramado por meli", "Nadie", "Nadie 2DA visita"].includes(estado)) return false;
+  const h = String(fechaEstado || "").split(" ")[1];
+  return !!h && parseInt(h.split(":")[0]) >= 21;
+}
+
 function calcularDia(rows, fecha, noEsDemora) {
   const map = {};
   const RESUELTOS = ["Entregado","Entregado 2DA visita","Cancelado"];
@@ -175,16 +186,16 @@ function calcularDia(rows, fecha, noEsDemora) {
     const loc = String(row["Localidad"] || "").trim();
     const tieneDatos = !!(dirBase || loc);
     const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
-    const esDemorado = seriaDemorado && tieneDatos;
-    const esSinDatos = seriaDemorado && !tieneDatos; // cliente desvinculado de LightData: sin datos de destino, no se cuenta como demora
     const fechaEstado = String(row["Fecha estado"] || "").trim();
+    const esRepro21 = esRepro21hs(estado, esML, fechaEstado);
+    const esDemorado = seriaDemorado && tieneDatos && !esRepro21;
+    const esSinDatos = seriaDemorado && !tieneDatos; // cliente desvinculado de LightData: sin datos de destino, no se cuenta como demora
     const esEntregado = ["Entregado","Entregado 2DA visita"].includes(estado);
     let esPost21 = false;
     if (esEntregado && fechaEstado) {
       const hora = fechaEstado.split(" ")[1];
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
-    const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
     if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null, horas:{}, demoradosDetalle:[], dem21Detalle:[], sinDatosDetalle:[] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
@@ -268,15 +279,15 @@ function calcularZonas(rows, fecha, noEsDemora, cpZona) {
     const locOrig = String(row["Localidad"] || "").trim();
     const tieneDatos = !!(dirBase || locOrig);
     const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
-    const esDemorado = seriaDemorado && tieneDatos;
     const fechaEstado = String(row["Fecha estado"] || "").trim();
+    const esRepro21 = esRepro21hs(estado, esML, fechaEstado);
+    const esDemorado = seriaDemorado && tieneDatos && !esRepro21;
     const esEntregado = ["Entregado", "Entregado 2DA visita"].includes(estado);
     let esPost21 = false;
     if (esEntregado && fechaEstado) {
       const hora = fechaEstado.split(" ")[1];
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
-    const esRepro21 = esML && (estado === "reprogramado por meli" || estado === "Nadie" || estado === "Nadie 2DA visita") && fechaEstado.split(" ")[1] && parseInt(fechaEstado.split(" ")[1].split(":")[0]) >= 21;
     const esNadie = estado.toLowerCase().includes("nadie");
     const esSameday = esEntregado && fechaEstadoADia(fechaEstado) === fecha;
 

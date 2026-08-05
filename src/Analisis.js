@@ -794,7 +794,10 @@ export default function Analisis({ semanas }) {
       let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, pend = 0;
       for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); pend += m.pendientes; }
       const ent = cant - pend;
-      map[dia.fecha] = { cant, dem: dm + d2, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null, pend };
+      // Se guardan los crudos (ml/dm/d2/ent/p21) además del SLA del día: el SLA del mes NO es
+      // el promedio de los SLA diarios — hay que sumar envíos y demoras y recién ahí dividir,
+      // si no un domingo de 30 envíos pesa lo mismo que un lunes de 900.
+      map[dia.fecha] = { cant, ml, dm, d2, ent, p21, dem: dm + d2, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null, pend };
       if (cant > max) max = cant;
     }));
     const meses = [...new Set(Object.keys(map).map((f) => f.slice(0, 7)))].sort();
@@ -1600,6 +1603,15 @@ export default function Analisis({ semanas }) {
             const cells = Array.from({ length: off }, () => null).concat(Array.from({ length: nd }, (_, i) => i + 1));
             let pico = null;
             Object.entries(calStats.map).forEach(([f, s]) => { if (f.slice(0, 7) === mk && (!pico || s.cant > pico.s.cant)) pico = { f, s }; });
+            // Totales del mes: se suman los envíos de ML y las demoras de todos los días y el SLA
+            // se calcula sobre eso — el mismo criterio que el SLA de un día, pero del mes entero.
+            const T = { dias: 0, cant: 0, ml: 0, dm: 0, d2: 0, ent: 0, p21: 0 };
+            Object.entries(calStats.map).forEach(([f, s]) => {
+              if (f.slice(0, 7) !== mk) return;
+              T.dias++; T.cant += s.cant; T.ml += s.ml || 0; T.dm += s.dm || 0; T.d2 += s.d2 || 0; T.ent += s.ent || 0; T.p21 += s.p21 || 0;
+            });
+            const slaMes = slaMeli(T.ml, T.dm, T.d2);
+            const p21Mes = T.ent > 0 ? T.p21 / T.ent * 100 : null;
             const navBtn = (dir, dis) => (
               <button disabled={dis} onClick={() => setCalMes(meses[idx + dir])} style={{ width: 26, height: 26, borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: dis ? C.dim : C.teal, cursor: dis ? "default" : "pointer", fontSize: 14, fontWeight: 700, lineHeight: 1 }}>{dir < 0 ? "‹" : "›"}</button>
             );
@@ -1610,6 +1622,18 @@ export default function Analisis({ semanas }) {
                   {navBtn(-1, idx === 0)}
                   <span style={{ fontSize: 12, fontWeight: 700, minWidth: 92, textAlign: "center", textTransform: "capitalize" }}>{MES_FULL[mo - 1]} {y}</span>
                   {navBtn(1, idx === meses.length - 1)}
+                </div>
+                {/* El SLA del mes entero, arriba de todo: el calendario muestra el día a día, pero
+                    la pregunta que se hace primero es cómo viene el mes. */}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", background: C.faint, border: `1px solid ${C.border}`, borderRadius: 9, padding: "8px 11px", margin: "8px 0" }}>
+                  <span style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>SLA del mes</span>
+                  <b style={{ fontSize: 21, color: slaColor(slaMes), lineHeight: 1 }}>{slaMes != null ? fmt1(slaMes) + "%" : "—"}</b>
+                  <span style={{ fontSize: 11.5, color: C.muted }}>
+                    {fmtInt(T.ml)} envíos ML · {fmtInt(T.dm + T.d2)} demoras
+                    {T.d2 > 0 ? <span style={{ color: C.dim }}> ({fmtInt(T.dm)} demorados + {fmtInt(T.d2)} repro 21hs)</span> : null}
+                    {p21Mes != null ? <> · {fmt1(p21Mes)}% post-21</> : null}
+                    {" · "}{T.dias} {T.dias === 1 ? "día" : "días"} con datos
+                  </span>
                 </div>
                 <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Más verde = más envíos · puntito = SLA flojo ese día (🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%). Tocá un día para el detalle.</div>
                 {pico && <div style={{ fontSize: 12, color: C.ink, marginBottom: 8 }}><span style={{ color: C.blue, fontWeight: 700 }}>⬆ pico:</span> <b style={{ textTransform: "capitalize" }}>{DIAS_SEM[new Date(pico.f + "T12:00:00").getDay()]} {fmtDDMM(pico.f)}</b> · {fmtInt(pico.s.cant)} envíos</div>}
