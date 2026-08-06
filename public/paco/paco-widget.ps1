@@ -43,7 +43,10 @@ $script:seqSoporte = (,0 * 28) + ,1 + (,2 * 6) + ,1
 $script:tieneComercial = Test-Path (Join-Path $script:dir 'com-mira.png')
 if ($script:tieneComercial) {
   $script:framesComercial = @( (Load-Frame 'com-mira.png'), (Load-Frame 'com-tipea.png'), (Load-Frame 'com-habla.png') )
-  $script:seqComercial = (,0 * 24) + (,1 * 4) + (,0 * 4) + (,2 * 6) + (,0 * 2)
+  # Por ahora QUIETO (solo el frame 0): los frames 2/3 fueron regenerados de cero por la IA y
+  # difieren en botas/cuello/costuras → la animación saltaba. Cuando Alejo traiga los frames
+  # editados sobre el frame 1, restaurar: (,0 * 24) + (,1 * 4) + (,0 * 4) + (,2 * 6) + (,0 * 2)
+  $script:seqComercial = ,0
 }
 $script:outfitFile = Join-Path $env:APPDATA 'paco-flexit-outfit.txt'
 $script:outfit = 'soporte'
