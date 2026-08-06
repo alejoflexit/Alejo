@@ -33,6 +33,9 @@ const MEDIOS_PAGO = {
   // fue por cada medio vive en pagos_cierres.pagos y se ve en la pantalla Pagar.
   efectivo:    { nombre: 'Efectivo',     color: '#2ECFAA', text: '#7FE3C9' },
   mixto:       { nombre: 'Dividido',     color: '#8B7BE8', text: '#B7ADF0' },
+  // Parte facturada de una división cuyo banco todavía no se eligió: Alejo solo define
+  // montos; Galicia o Mercado Pago lo decide Adrián en Pagar al pagarla (2026-08-06).
+  transferencia: { nombre: 'Transferencia', color: '#4C8DFF', text: '#9CBFFF' },
 };
 
 // ───────────────────────── helpers ─────────────────────────
@@ -1389,7 +1392,8 @@ function PagosInner({ session }) {
   const [copiadoKey, setCopiadoKey] = useState(null); // fila cuyo mensaje se acaba de copiar
   const [divKey, setDivKey] = useState(null);         // fila con el divisor de pago abierto
   const [divFactura, setDivFactura] = useState('');   // lo que factura: eso sale por transferencia
-  const [divVia, setDivVia] = useState('galicia');    // banco por el que sale la parte facturada
+  // El banco (Galicia/MP) ya NO se elige acá: Alejo solo divide montos y el banco lo
+  // decide Adrián en Pagar al pagar esa parte (pedido de Alejo, 2026-08-06).
 
   // mensaje para mandarle al cadete por WhatsApp y chequear diferencias
   function copiarMensaje(f) {
@@ -2322,7 +2326,6 @@ function PagosInner({ session }) {
                                     setDivKey(abrir ? f.key : null);
                                     const banco = (cierre?.pagos || []).find(p => p.via !== 'efectivo');
                                     setDivFactura(abrir && banco ? String(banco.monto) : '');
-                                    setDivVia(banco ? banco.via : 'galicia');
                                   }}
                                   title="dividir: una parte por transferencia y otra en efectivo"
                                   style={{ marginLeft: 2, fontSize: 12, fontWeight: 700, color: divKey === f.key ? BRAND.teal : BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>½</button>
@@ -2409,7 +2412,7 @@ function PagosInner({ session }) {
                             const fact = Math.min(Math.max(Math.round(+divFactura || 0), 0), total);
                             const resto = total - fact;
                             const excede = (+divFactura || 0) > total;
-                            const mp = MEDIOS_PAGO[divVia];
+                            const mp = MEDIOS_PAGO.transferencia;
                             const yaDividido = Array.isArray(cierre?.pagos) && cierre.pagos.length > 1;
                             return (
                               <tr>
@@ -2423,19 +2426,9 @@ function PagosInner({ session }) {
                                     </span>
                                     <button onClick={() => setDivFactura(String(Math.round(total / 2)))}
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 20, color: BRAND.muted, cursor: 'pointer', fontSize: 11, padding: '3px 10px' }}>la mitad</button>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                      <span style={{ fontSize: 11, color: BRAND.muted }}>se transfiere por</span>
-                                      {['galicia', 'mercadopago'].map(k => {
-                                        const mm = MEDIOS_PAGO[k], on = divVia === k;
-                                        return (
-                                          <button key={k} onClick={() => setDivVia(k)}
-                                            style={{ height: 26, padding: '0 10px', borderRadius: 8, cursor: 'pointer', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap',
-                                              border: `1px solid ${on ? mm.color : BRAND.border}`, background: on ? `${mm.color}22` : 'transparent', color: on ? mm.text : BRAND.muted }}>
-                                            {mm.nombre}
-                                          </button>
-                                        );
-                                      })}
-                                    </span>
+                                    {/* Acá NO se elige el banco: Alejo solo divide montos.
+                                        Galicia o Mercado Pago lo decide Adrián en Pagar al pagar esa parte. */}
+                                    <span style={{ fontSize: 11, color: BRAND.muted }}>y el resto en efectivo · el banco lo elige Adrián en Pagar</span>
                                     <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                                       {excede
                                         ? <span style={{ color: BRAND.red, fontSize: 12.5, fontWeight: 700 }}>No puede facturar más que el total ({money(total)}).</span>
@@ -2451,7 +2444,7 @@ function PagosInner({ session }) {
                                       <button onClick={() => { setDivKey(null); setDivFactura(''); }}
                                         style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
                                       <button disabled={busyAccion || excede || fact <= 0 || resto <= 0}
-                                        onClick={() => guardarDivision(f, cierre, [{ via: divVia, monto: fact }, { via: 'efectivo', monto: resto }])}
+                                        onClick={() => guardarDivision(f, cierre, [{ via: 'transferencia', monto: fact }, { via: 'efectivo', monto: resto }])}
                                         title="quedan dos pagos separados en la pantalla Pagar; no marca nada como pagado"
                                         style={{ padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0 || resto <= 0) ? 'not-allowed' : 'pointer',
                                           background: (excede || fact <= 0 || resto <= 0) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (excede || fact <= 0 || resto <= 0) ? BRAND.muted : '#04121a' }}>

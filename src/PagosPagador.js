@@ -244,7 +244,10 @@ export default function PagosPagador({ tarifas }) {
             ...base,
             key: `${c.id}#${i}`,
             parte: i, partes: partes.length,
-            viaFija: esEfectivo ? null : p.via, // la división ya eligió el banco: no se vuelve a preguntar
+            // Banco fijo SOLO si la división vieja lo traía elegido (galicia/mercadopago).
+            // Desde el 06/08 la división guarda via:'transferencia' → el banco lo elige
+            // Adrián acá, al pagar la parte (mismo picker que una transferencia simple).
+            viaFija: esEfectivo ? null : (p.via === 'galicia' || p.via === 'mercadopago' ? p.via : null),
             total: +p.monto,
             metodo: esEfectivo ? 'efectivo' : 'transferencia',
             factura: !esEfectivo, // solo la parte que sale por transferencia depende de la factura
@@ -594,9 +597,10 @@ export default function PagosPagador({ tarifas }) {
             {filasFiltradas.map(f => {
               const sinFactura = faltaFactura(f); // transferencia confirmada que todavía no mandó factura
               const busy = busyId === f.key;
-              // Medio ya determinado: efectivo (no sale de ninguna cuenta) o parte de una
-              // división (el banco lo fijó la división). Solo la transferencia simple pregunta.
-              const viaUnica = f.parte != null ? (f.viaFija || 'efectivo') : (!f.factura ? 'efectivo' : null);
+              // Medio ya determinado: efectivo (no sale de ninguna cuenta) o parte vieja con
+              // banco fijado. Una transferencia simple o una parte facturada nueva preguntan
+              // Galicia/MP acá — el banco es decisión de Adrián al pagar.
+              const viaUnica = !f.factura ? 'efectivo' : (f.parte != null ? f.viaFija : null);
               // La fila entera recibe el archivo de la factura por drag & drop (solo
               // transferencias sin pagar). El resaltado es solo borde+fondo: nada cambia
               // de alto, así no tiembla la lista.
