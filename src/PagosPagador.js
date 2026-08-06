@@ -122,7 +122,8 @@ export default function PagosPagador({ tarifas }) {
   // Quién está ejecutando los pagos AHORA. Se guarda con cada "Ya pagué" (pagado_por + pagado_at)
   // para que después se sepa quién marcó cada pago y cuándo — sin esto pasó que dos personas
   // transfirieron al mismo cadete la misma semana sin poder reconstruir quién fue.
-  const [quienPaga, setQuienPaga] = useState(() => { try { return localStorage.getItem('fx_quien_paga') || ''; } catch { return ''; } });
+  // Arranca en Adrián (siempre paga él, pedido de Alejo 05/08); se puede cambiar si un día paga otro.
+  const [quienPaga, setQuienPaga] = useState(() => { try { return localStorage.getItem('fx_quien_paga') || 'Adrián'; } catch { return 'Adrián'; } });
   const [otroNombre, setOtroNombre] = useState(false); // el input de "Otro…" está abierto
 
   function elegirQuienPaga(v) {
