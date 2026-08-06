@@ -382,6 +382,26 @@ export default function PagosPagador({ tarifas }) {
     } catch (e) { setError(e.message); }
   }
 
+  // "Volver a Semana": revierte la confirmación (estado → borrador). La fila sale de Pagar
+  // (que solo muestra confirmados) y en Semana vuelve a "Falta confirmar", donde Alejo puede
+  // editarla o dividirla y confirmarla de nuevo. Conserva factura/archivo. Bloqueado si hay
+  // plata ya marcada como pagada.
+  async function volverASemana(f) {
+    const c = cierres.find(x => x.id === f.id);
+    if (!c || c.pagado) return;
+    if ((Array.isArray(c.pagos) ? c.pagos : []).some(p => p.pagado)) {
+      setError('Este cadete tiene una parte ya pagada: deshacé ese pago antes de mandarlo de vuelta a Semana.');
+      setMenuId(null);
+      return;
+    }
+    setBusyId(f.key); setMenuId(null);
+    try {
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ estado: 'borrador' }) });
+      setCierres(prev => prev.filter(x => x.id !== f.id));
+    } catch (e) { setError(e.message); }
+    finally { setBusyId(null); }
+  }
+
   // marcar / desmarcar "mandó factura" acá en Pagar: habilita el pago de esa transferencia
   async function marcarFactura(f, valor) {
     setBusyId(f.key);
@@ -582,6 +602,29 @@ export default function PagosPagador({ tarifas }) {
               // de alto, así no tiembla la lista.
               const aceptaDrop = f.factura && !f.pagado;
               const enDrag = dragKey === f.key;
+              // Menú "⋯" de acciones secundarias — disponible en toda fila sin pagar:
+              // quitar la factura (si la tiene) y volver el cadete a Semana (des-confirmar).
+              const menuFila = (
+                <span style={{ position: 'relative' }}>
+                  <button onClick={() => setMenuId(menuId === f.key ? null : f.key)} title="más acciones"
+                    style={{ height: 36, width: 34, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>⋯</button>
+                  {menuId === f.key && (
+                    <>
+                      <div onClick={() => setMenuId(null)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+                      <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: 4, minWidth: 210, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
+                        {f.factura && f.facturaOk && (
+                          <button onClick={() => { marcarFactura(f, false); setMenuId(null); }} disabled={busy}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 8 }}>🗑 Quitar factura</button>
+                        )}
+                        {/* Vuelve a "Falta confirmar" en Semana para editar o dividir; sale de esta pantalla */}
+                        <button onClick={() => volverASemana(f)} disabled={busy}
+                          title="revierte la confirmación: sale de Pagar y en Semana vuelve a 'Falta confirmar' para editarlo o dividirlo"
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.azul, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 8 }}>↩ Volver a Semana</button>
+                      </div>
+                    </>
+                  )}
+                </span>
+              );
               return (
                 <div key={f.key}
                   onDragOver={aceptaDrop ? (e => { e.preventDefault(); if (!enDrag) setDragKey(f.key); }) : undefined}
@@ -670,6 +713,7 @@ export default function PagosPagador({ tarifas }) {
                             color: armado === f.key ? '#2b1a00' : BRAND.amber }}>
                           {armado === f.key ? '¿Seguro? tocá otra vez' : 'Mandó factura'}
                         </button>
+                        {menuFila}
                       </span>
                     ) : pickId === f.key && viaUnica ? (() => {
                       /* Cuando el medio ya está determinado no hay banco que elegir: en efectivo
@@ -699,21 +743,7 @@ export default function PagosPagador({ tarifas }) {
                       </span>
                     ) : (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {f.factura && f.facturaOk && (
-                        <span style={{ position: 'relative' }}>
-                          <button onClick={() => setMenuId(menuId === f.key ? null : f.key)} title="más acciones"
-                            style={{ height: 36, width: 34, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>⋯</button>
-                          {menuId === f.key && (
-                            <>
-                              <div onClick={() => setMenuId(null)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
-                              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: 4, minWidth: 190, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
-                                <button onClick={() => { marcarFactura(f, false); setMenuId(null); }} disabled={busy}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 8 }}>🗑 Quitar factura</button>
-                              </div>
-                            </>
-                          )}
-                        </span>
-                      )}
+                      {menuFila}
                       {/* "Ya pagué" y no "Pagar": la app NO transfiere — la transferencia la hace
                           Alejo en el banco y acá solo queda registrada. Mismo criterio que
                           "Mandó factura": el rótulo nombra un hecho que ya pasó afuera, no una
