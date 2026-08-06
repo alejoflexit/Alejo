@@ -55,6 +55,61 @@ function fmtSemanaLabel(lunes) {
   return `${f(d)} al ${f(sab)}`;
 }
 
+// pdf.js se carga a demanda (recién al soltar el primer PDF): ~350KB que no tienen
+// por qué frenar la pantalla. Mismo patrón que ExcelJS en Pagos.js.
+let pdfJsPromise = null;
+function cargarPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfJsPromise) return pdfJsPromise;
+  pdfJsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => {
+      if (!window.pdfjsLib) return reject(new Error('pdf.js no cargó'));
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => { pdfJsPromise = null; reject(new Error('No se pudo descargar pdf.js (¿sin internet?)')); };
+    document.head.appendChild(s);
+  });
+  return pdfJsPromise;
+}
+
+// Busca el número de comprobante en el texto de una factura AFIP y devuelve los
+// últimos 4 dígitos. Prueba primero los rótulos típicos ("Comp. Nro", "Número")
+// y después el formato punto de venta-comprobante (00003-00001234).
+function nroDesdeTexto(texto) {
+  const t = String(texto || '');
+  const pats = [
+    /Comp\.?\s*N[roº°.]*\s*[:.]?\s*(\d{4,13})/i,
+    /N[uú]mero\s*[:.]?\s*(?:\d{1,5}\s*-\s*)?(\d{4,13})/i,
+    /N[roº°]+\s*[:.]?\s*(?:\d{1,5}\s*-\s*)?(\d{4,13})/i,
+    /\b\d{1,5}\s*-\s*(\d{8})\b(?!\s*-)/, // 00003-00001234; el (?!-) evita confundir un CUIT (30-71234567-8)
+  ];
+  for (const re of pats) {
+    const m = t.match(re);
+    if (m) {
+      const dig = m[1].replace(/\D/g, '');
+      if (dig.length >= 4) return dig.slice(-4);
+    }
+  }
+  return null;
+}
+
+// Extrae los últimos 4 del número de factura de un PDF (primera página). Si el PDF
+// es una foto escaneada sin texto, devuelve null y el número se carga a mano.
+async function extraerNroFactura(file) {
+  try {
+    const pdfjs = await cargarPdfJs();
+    const data = await file.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data }).promise;
+    const page = await doc.getPage(1);
+    const tc = await page.getTextContent();
+    const texto = tc.items.map(i => i.str).join(' ');
+    return nroDesdeTexto(texto);
+  } catch { return null; }
+}
+
 // "4/8 17:25" — fecha corta de cuándo se marcó pagado
 function fmtCuando(iso) {
   if (!iso) return '';
@@ -125,6 +180,8 @@ export default function PagosPagador({ tarifas }) {
   // Arranca en Adrián (siempre paga él, pedido de Alejo 05/08); se puede cambiar si un día paga otro.
   const [quienPaga, setQuienPaga] = useState(() => { try { return localStorage.getItem('fx_quien_paga') || 'Adrián'; } catch { return 'Adrián'; } });
   const [otroNombre, setOtroNombre] = useState(false); // el input de "Otro…" está abierto
+  const [dragKey, setDragKey] = useState(null);   // fila resaltada porque hay una factura por soltar encima
+  const [nroDraft, setNroDraft] = useState({});   // borrador del input "últimos 4" por fila (cuando el PDF no se pudo leer)
 
   function elegirQuienPaga(v) {
     const limpio = String(v || '').trim();
@@ -175,6 +232,8 @@ export default function PagosPagador({ tarifas }) {
         nombre: c.cadete || t.nombre || '', // Tarea 4: nombre completo de LightData (no el apodo)
         totalCierre: c.total,
         facturaOk: !!c.factura_ok, // Tarea 3: la transferencia se traba hasta que Alejo marque "mandó factura"
+        facturaNro: c.factura_nro || null,   // últimos 4 del comprobante (referencia de Adrián)
+        facturaFile: c.factura_file || null, // path del archivo en el bucket 'facturas'
         alias, cuil: t.cuil || '', cbu,
       };
       const partes = (Array.isArray(c.pagos) ? c.pagos : []).filter(p => (+p.monto || 0) > 0);
@@ -270,6 +329,58 @@ export default function PagosPagador({ tarifas }) {
     });
     return { pagados, total: filas.length, faltan, faltaFacturaN: sinFactura.length, faltaFacturaMonto: sinFactura.reduce((s, f) => s + (f.total || 0), 0), pct, porMedio };
   }, [filas]);
+
+  // Soltar la factura (PDF o foto) sobre la fila del cadete: sube el archivo al bucket
+  // privado 'facturas', marca "Mandó factura" solo, y si es un PDF con texto le lee el
+  // número de comprobante y guarda los últimos 4 (la referencia que usa Adrián).
+  // Foto o PDF escaneado → el archivo queda igual y los 4 números se cargan a mano.
+  async function subirFactura(f, file) {
+    if (!file) return;
+    const tiposOk = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!tiposOk.includes(file.type)) { setError('Ese archivo no parece una factura: tiene que ser PDF o imagen (JPG/PNG).'); return; }
+    if (file.size > 15 * 1024 * 1024) { setError('El archivo es muy pesado (máx. 15 MB).'); return; }
+    setBusyId(f.key); setError('');
+    try {
+      const ext = file.type === 'application/pdf' ? 'pdf' : (file.type.split('/')[1] || 'bin');
+      const path = `${semanaSel}/${f.id}.${ext}`;
+      const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/facturas/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type, 'x-upsert': 'true' },
+        body: file,
+      });
+      if (!up.ok) throw new Error(`No se pudo guardar el archivo (${up.status}). ¿Estás logueado como admin?`);
+      const nro = file.type === 'application/pdf' ? await extraerNroFactura(file) : null;
+      const cambio = { factura_ok: true, factura_ok_at: new Date().toISOString(), factura_file: path, factura_nro: nro };
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify(cambio) });
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, ...cambio } : c));
+    } catch (e) { setError(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  // Guardar a mano los últimos 4 de la factura (cuando el archivo era foto o PDF sin texto)
+  async function guardarNroFactura(f, valor) {
+    const nro = String(valor || '').replace(/\D/g, '').slice(-4);
+    if (nro.length !== 4) { setError('Cargá los 4 últimos números de la factura.'); return; }
+    setBusyId(f.key);
+    try {
+      await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify({ factura_nro: nro }) });
+      setCierres(prev => prev.map(c => c.id === f.id ? { ...c, factura_nro: nro } : c));
+      setNroDraft(d => { const n = { ...d }; delete n[f.key]; return n; });
+    } catch (e) { setError(e.message); }
+    finally { setBusyId(null); }
+  }
+
+  // Abrir la factura guardada (link firmado de 1 hora — el bucket es privado)
+  async function verFactura(f) {
+    try {
+      const res = await authedFetch(`${SUPABASE_URL}/storage/v1/object/sign/facturas/${f.facturaFile}`, {
+        method: 'POST', body: JSON.stringify({ expiresIn: 3600 }),
+      });
+      if (!res.ok) throw new Error('No se pudo abrir la factura.');
+      const d = await res.json();
+      if (d && d.signedURL) window.open(`${SUPABASE_URL}/storage/v1${d.signedURL}`, '_blank');
+    } catch (e) { setError(e.message); }
+  }
 
   // marcar / desmarcar "mandó factura" acá en Pagar: habilita el pago de esa transferencia
   async function marcarFactura(f, valor) {
@@ -466,8 +577,20 @@ export default function PagosPagador({ tarifas }) {
               // Medio ya determinado: efectivo (no sale de ninguna cuenta) o parte de una
               // división (el banco lo fijó la división). Solo la transferencia simple pregunta.
               const viaUnica = f.parte != null ? (f.viaFija || 'efectivo') : (!f.factura ? 'efectivo' : null);
+              // La fila entera recibe el archivo de la factura por drag & drop (solo
+              // transferencias sin pagar). El resaltado es solo borde+fondo: nada cambia
+              // de alto, así no tiembla la lista.
+              const aceptaDrop = f.factura && !f.pagado;
+              const enDrag = dragKey === f.key;
               return (
-                <div key={f.key} style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11, borderColor: f.pagado ? 'rgba(46,207,170,0.3)' : sinFactura ? 'rgba(255,176,32,0.4)' : BRAND.border }}>
+                <div key={f.key}
+                  onDragOver={aceptaDrop ? (e => { e.preventDefault(); if (!enDrag) setDragKey(f.key); }) : undefined}
+                  onDragLeave={aceptaDrop ? (() => setDragKey(k => (k === f.key ? null : k))) : undefined}
+                  onDrop={aceptaDrop ? (e => { e.preventDefault(); setDragKey(null); subirFactura(f, e.dataTransfer.files && e.dataTransfer.files[0]); }) : undefined}
+                  title={aceptaDrop && !f.facturaOk ? 'arrastrá acá el PDF o la foto de la factura: se guarda y se marca sola' : undefined}
+                  style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11,
+                    background: enDrag ? 'rgba(46,207,170,0.10)' : BRAND.navyCard,
+                    borderColor: enDrag ? BRAND.teal : f.pagado ? 'rgba(46,207,170,0.3)' : sinFactura ? 'rgba(255,176,32,0.4)' : BRAND.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     {/* Método de pago (cómo se le paga) — badge neutro */}
                     <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 10.5, fontWeight: 600, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'rgba(255,255,255,0.06)', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
@@ -477,8 +600,26 @@ export default function PagosPagador({ tarifas }) {
                     {/* Cuando la factura ya está, el chip baja de tono: es info resuelta, no compite
                         con el verde del botón de pagar. Pendiente sigue en ámbar, que es lo que frena. */}
                     {f.factura && (f.facturaOk
-                      ? <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}><span style={{ color: BRAND.teal }}>✓</span> Factura recibida</span>
-                      : <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', border: '1px solid rgba(255,176,32,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
+                      ? (f.facturaFile
+                        // Con archivo adjunto el chip es un botón: abre la factura guardada.
+                        // Los últimos 4 del comprobante van a la vista — es la referencia de Adrián.
+                        ? <button onClick={() => verFactura(f)} title="ver la factura guardada"
+                            style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                            <span style={{ color: BRAND.teal }}>✓</span> 📄 Factura{f.facturaNro ? <b style={{ color: BRAND.white }}> …{f.facturaNro}</b> : ''}
+                          </button>
+                        : <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}><span style={{ color: BRAND.teal }}>✓</span> Factura recibida</span>)
+                      : <span title="arrastrá el PDF o la foto de la factura sobre esta fila" style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', border: '1px solid rgba(255,176,32,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
+                    )}
+                    {/* Archivo adjunto pero sin número (foto o PDF escaneado): los 4 últimos se cargan a mano */}
+                    {f.factura && f.facturaFile && !f.facturaNro && !f.pagado && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <input value={nroDraft[f.key] || ''} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setNroDraft(d => ({ ...d, [f.key]: v })); }}
+                          onKeyDown={e => { if (e.key === 'Enter') guardarNroFactura(f, nroDraft[f.key]); }}
+                          placeholder="últimos 4" inputMode="numeric"
+                          style={{ width: 74, padding: '3px 8px', fontSize: 11.5, borderRadius: 8, border: `1px solid ${BRAND.amber}`, background: 'rgba(255,176,32,0.10)', color: BRAND.white }} />
+                        <button onClick={() => guardarNroFactura(f, nroDraft[f.key])} disabled={busy}
+                          style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>OK</button>
+                      </span>
                     )}
                     <span style={{ fontWeight: 700, fontSize: 15, minWidth: 130, textDecoration: f.pagado ? 'line-through' : 'none' }}>
                       {f.nombre}
