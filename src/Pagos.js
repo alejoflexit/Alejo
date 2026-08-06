@@ -2124,34 +2124,47 @@ function PagosInner({ session }) {
 
           {!cargando && (
             <>
-              {/* Filtros: método y estado. El de estado es para pagar de a tandas — "falta
-                  confirmar" es la cola de trabajo real; con el contador al lado para saber
-                  cuántas quedan sin tener que contarlas. */}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Método</span>
-                {[['todos', 'Todos'], ['transferencia', 'Transferencia'], ['efectivo', 'Efectivo']].map(([k, l]) => (
-                  <button key={k} onClick={() => setFiltroMetodo(k)} style={btnPill(filtroMetodo === k)}>{l}</button>
-                ))}
-                <span style={{ width: 1, alignSelf: 'stretch', background: BRAND.border, margin: '0 4px' }} />
-                <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estado</span>
-                {(() => {
-                  // El conteo respeta el filtro de método: si estás mirando Transferencia,
-                  // "falta confirmar 12" son 12 de transferencia, no de toda la semana.
-                  const base = filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura);
-                  const nExcl = filasExcluidas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura).length;
-                  const cuenta = (k) => k === 'todos' ? base.length : k === 'excluido' ? nExcl : base.filter(f => estadoDeFila(f) === k).length;
-                  // "Excluidos" solo aparece si hay alguno: si nunca sacaste a nadie, no ensucia.
-                  const pills = [['todos', 'Todos'], ['confirmar', 'Falta confirmar'], ['confirmado', 'Confirmado'], ['pagado', 'Pagado']];
-                  if (nExcl > 0 || filtroEstado === 'excluido') pills.push(['excluido', '🚫 Excluidos']);
-                  return pills.map(([k, l]) => {
-                    const n = cuenta(k);
-                    return (
-                      <button key={k} onClick={() => setFiltroEstado(k)} style={{ ...btnPill(filtroEstado === k), opacity: n === 0 && k !== 'todos' ? 0.45 : 1 }}>
-                        {l} <span style={{ opacity: 0.7, fontWeight: 400 }}>{n}</span>
-                      </button>
-                    );
-                  });
-                })()}
+              {/* Filtros en DOS renglones (variante A2, 05/08 — antes eran 8 chips en una línea).
+                  Sin chips "Todos": tocar de nuevo el filtro activo lo apaga (= ver todo).
+                  "Falta confirmar" va en ámbar porque es la cola de trabajo de Alejo. */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Método</span>
+                  {[['transferencia', 'Transferencia'], ['efectivo', 'Efectivo']].map(([k, l]) => (
+                    <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)}
+                      title={filtroMetodo === k ? 'tocá de nuevo para ver todos los métodos' : ''}
+                      style={btnPill(filtroMetodo === k)}>{l}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
+                  {(() => {
+                    // El conteo respeta el filtro de método: si estás mirando Transferencia,
+                    // "falta confirmar 12" son 12 de transferencia, no de toda la semana.
+                    const base = filasOrdenadas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura);
+                    const nExcl = filasExcluidas.filter(f => filtroMetodo === 'todos' ? true : filtroMetodo === 'transferencia' ? f.factura : !f.factura).length;
+                    const cuenta = (k) => k === 'excluido' ? nExcl : base.filter(f => estadoDeFila(f) === k).length;
+                    // "Excluidos" solo aparece si hay alguno: si nunca sacaste a nadie, no ensucia.
+                    const pills = [['confirmar', 'Falta confirmar'], ['confirmado', 'Confirmado'], ['pagado', 'Pagado']];
+                    if (nExcl > 0 || filtroEstado === 'excluido') pills.push(['excluido', '🚫 Excluidos']);
+                    return pills.map(([k, l]) => {
+                      const n = cuenta(k);
+                      const active = filtroEstado === k;
+                      // "Falta confirmar" siempre en ámbar (activo = ámbar sólido); el resto, azul estándar.
+                      const st = k === 'confirmar'
+                        ? { padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 20, cursor: 'pointer', border: `1px solid ${BRAND.amber}`,
+                            background: active ? BRAND.amber : 'rgba(255,176,32,0.12)', color: active ? '#2b1a00' : BRAND.amber }
+                        : btnPill(active);
+                      return (
+                        <button key={k} onClick={() => setFiltroEstado(active ? 'todos' : k)}
+                          title={active ? 'tocá de nuevo para ver todos los estados' : ''}
+                          style={{ ...st, opacity: n === 0 && !active ? 0.45 : 1 }}>
+                          {k === 'confirmar' ? '⚠ ' : ''}{l} <span style={{ opacity: 0.7, fontWeight: 400 }}>{n}</span>
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
               </div>
               {/* KPIs ejecutivos — números en blanco, sin verde de fondo */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 12 }}>
