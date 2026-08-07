@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getSession, authedFetch } from "./auth";
 import { slaMeli } from "./slaShared";
+import ZonasMapa from "./ZonasMapa";
 
 // Zonas — saturación por TERRITORIO y por zona, EN VIVO (spec-zonas-en-vivo).
 // Fuente: bridge del VPS GET /zonas (Excel de ENVIOS con Fecha Flexit = hoy, cache 5 min).
@@ -243,7 +244,7 @@ function buscarZona(porZona, k) {
 }
 
 export default function Zonas() {
-  const [vista, setVista] = useState("recorrido"); // "recorrido" (carrito por zona) | "zona"
+  const [vista, setVista] = useState("recorrido"); // "recorrido" (carrito por zona) | "zona" | "mapa"
   const [recos, setRecos] = useState(null);        // barras por recorrido [{...recorrido, total, entregados}]
   const [zonasSinReco, setZonasSinReco] = useState([]); // zonas con volumen sin recorrido activo (el agujero)
   const [zonas, setZonas] = useState(null);       // [{zona, total, entregados, tope, pct, estado, cadetes}]
@@ -757,7 +758,7 @@ export default function Zonas() {
         )}
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
-            {[["recorrido", "Recorridos"], ["zona", "Por zona"]].map(([k, lbl]) => (
+            {[["recorrido", "Recorridos"], ["zona", "Por zona"], ["mapa", "Mapa"]].map(([k, lbl]) => (
               <button key={k} onClick={() => setVista(k)}
                 style={{ background: vista === k ? "rgba(46,207,170,0.15)" : "none", border: "none", color: vista === k ? C.ok : C.muted, padding: "7px 12px", fontSize: 13, fontWeight: vista === k ? 700 : 500, cursor: "pointer" }}>
                 {lbl}
@@ -893,7 +894,9 @@ export default function Zonas() {
 
       {zonas && (
         <>
-          {esReco && copiloto ? (
+          {vista === "mapa" ? (
+            <ZonasMapa zonas={zonasConSin} meta={meta} filtro={filtro} />
+          ) : esReco && copiloto ? (
             /* Vista Recorridos: las decisiones (ALTO/MEDIO) ya están arriba; acá el resto. */
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {recoSinDatos.map((it) => tarjetaReco(it))}

@@ -255,6 +255,8 @@ export default function ColectasMapa({
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());   // clienteId -> { marker, key }
   const capaRef = useRef(null);           // LayerGroup de pines
+  const limitesRef = useRef(null);        // barrios CABA + partidos AMBA, debajo de los pines
+  const verLimitesRef = useRef(true);
   const dibujoRef = useRef(null);         // polyline en vivo
   const trazosRef = useRef([]);           // lazos cerrados acumulados: [{ layer, ids }] — Ctrl+Z deshace el último
   const puntosRef = useRef([]);
@@ -286,6 +288,8 @@ export default function ColectasMapa({
   const [verCanceladas, setVerCanceladas] = useState(false); // mostrar también las "sin envíos" (rojo)
   const [buscandoDir, setBuscandoDir] = useState(null); // cliente_id con el buscador de dirección abierto
   const [buscaChofer, setBuscaChofer] = useState('');
+  const [verLimites, setVerLimites] = useState(true);
+  const [limitesError, setLimitesError] = useState('');
 
   // Cuántas colectas canceladas (sin envíos) hay hoy — para el contador del toggle, aunque estén ocultas
   const rojoCount = useMemo(
@@ -352,6 +356,25 @@ export default function ColectasMapa({
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
+    map.createPane('territorios');
+    map.getPane('territorios').style.zIndex = 330;
+    map.getPane('territorios').style.pointerEvents = 'none';
+    fetch('/zonas-base.geojson')
+      .then(r => { if (!r.ok) throw new Error(`capa ${r.status}`); return r.json(); })
+      .then(geo => {
+        if (mapRef.current !== map) return;
+        limitesRef.current = L.geoJSON(geo, {
+          pane: 'territorios', interactive: false,
+          style: f => ({
+            color: f.properties.capa === 'CABA' ? 'rgba(142,197,255,0.72)' : 'rgba(46,207,170,0.62)',
+            weight: f.properties.capa === 'CABA' ? 1.15 : 1.4,
+            fillColor: f.properties.capa === 'CABA' ? '#8EC5FF' : '#2ECFAA',
+            fillOpacity: 0.035,
+          }),
+        });
+        if (verLimitesRef.current) limitesRef.current.addTo(map);
+      })
+      .catch(e => setLimitesError(e.message || String(e)));
     capaRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     setListo(true);
@@ -359,6 +382,14 @@ export default function ColectasMapa({
     const markers = markersRef.current;
     return () => { clearTimeout(t); map.remove(); mapRef.current = null; markers.clear(); };
   }, []);
+
+  useEffect(() => {
+    verLimitesRef.current = verLimites;
+    const map = mapRef.current, layer = limitesRef.current;
+    if (!map || !layer) return;
+    if (verLimites) { if (!map.hasLayer(layer)) layer.addTo(map); }
+    else if (map.hasLayer(layer)) map.removeLayer(layer);
+  }, [verLimites]);
 
   // ── Geocodificación (Nominatim, 1 req/s, cache en la base) ──
   // OJO: la cola NO se puede cancelar cuando cambia la lista de pendientes. La primera versión
@@ -690,6 +721,10 @@ export default function ColectasMapa({
           title="Arrastrar los pines para corregir su posición">
           📌 Ajustar pines
         </button>
+        <button onClick={() => setVerLimites(v => !v)} style={btn(verLimites, '#2ECFAA')}
+          title="Mostrar u ocultar los barrios de CABA y partidos del AMBA">
+          🧭 Zonas
+        </button>
         {FILTROS_ESTADO.map(f => (
           <button key={f.est} onClick={() => setFiltroEst(v => (v === f.est ? null : f.est))}
             title={filtroEst === f.est ? 'Ver todos' : `Ver solo ${f.label.toLowerCase()}`}
@@ -707,6 +742,7 @@ export default function ColectasMapa({
           </button>
         )}
         <span style={{ fontSize: 12, color: BRAND.muted }}>{conPin.length} en el mapa</span>
+        {limitesError && <span style={{ fontSize: 11.5, color: '#E24B4A' }}>Límites no disponibles</span>}
         {progreso && (
           <span style={{ fontSize: 12, color: '#8EC5FF' }}>Ubicando clientes… {progreso.hechos}/{progreso.total}</span>
         )}
