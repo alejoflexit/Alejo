@@ -599,6 +599,7 @@ export default function Zonas() {
   const colorEstado = (e) => (e === "saturada" ? C.crit : e === "limite" ? C.warn : e === "sintope" ? C.faint : C.ok);
   const f = norm(filtro);
   const esReco = vista === "recorrido";
+  const esMapa = vista === "mapa";
   const zonasConSin = zonas ? [...zonas, ...sinTope.map((z) => ({ ...z, tope: null, pct: null, estado: "sintope", cadetes: [] }))] : [];
   const items = esReco ? [] : zonasConSin.filter((it) => !f || norm(it.zona).includes(f) || it.cadetes.some((c) => norm(c).includes(f)));
   const saturadas = esReco ? (copiloto ? copiloto.decisiones.filter((d) => d.riesgo.nivel === "alto").length : 0) : zonasConSin.filter((x) => x.estado === "saturada").length;
@@ -740,8 +741,8 @@ export default function Zonas() {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-        {meta && (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: esMapa ? 10 : 16 }}>
+        {!esMapa && meta && (
           <>
             {meta.modo === "foto" ? (
               <span style={{ fontSize: 13, color: C.muted }}>
@@ -756,7 +757,7 @@ export default function Zonas() {
             <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(239,159,39,0.12)", color: C.warn, fontWeight: 700 }}>🟠 {alLimite} al límite</span>
           </>
         )}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ marginLeft: esMapa ? 0 : "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
             {[["recorrido", "Recorridos"], ["zona", "Por zona"], ["mapa", "Mapa"]].map(([k, lbl]) => (
               <button key={k} onClick={() => setVista(k)}
@@ -766,7 +767,7 @@ export default function Zonas() {
             ))}
           </div>
           <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar zona o cadete…"
-            style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, padding: "7px 12px", fontSize: 13, width: 160 }} />
+            style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, padding: "7px 12px", fontSize: 13, width: esMapa ? 190 : 160, maxWidth: "48vw" }} />
           <button onClick={refrescar} disabled={cargando} title={meta && meta.modo === "foto" && !escapeVivo ? "Volver a leer la foto del corte" : "Actualizar ahora"}
             style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.muted, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
             {cargando ? "…" : "⟳"}
@@ -775,7 +776,7 @@ export default function Zonas() {
       </div>
 
       {/* Modo foto (spec-zonas-foto-1430): banner explicativo + escape a vivo */}
-      {meta && meta.modo === "foto" && (
+      {!esMapa && meta && meta.modo === "foto" && (
         <div style={{ background: "rgba(46,207,170,0.10)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#bfeee0", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ lineHeight: 1.5, flex: 1, minWidth: 220 }}>
             {meta.esDeHoy
@@ -785,7 +786,7 @@ export default function Zonas() {
           <button onClick={() => setEscapeVivo(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>ver dato en vivo igual</button>
         </div>
       )}
-      {meta && meta.modo === "vivo" && escapeVivo && (
+      {!esMapa && meta && meta.modo === "vivo" && escapeVivo && (
         <div style={{ background: "rgba(239,159,39,0.10)", border: "1px solid rgba(239,159,39,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ lineHeight: 1.5, flex: 1, minWidth: 220 }}>⚠️ <b>Dato en vivo después del corte.</b> Desde las 14:30 LightData suma ingresos de ecommerce que son del día siguiente — este número ya no representa lo que salió a reparto. Una sola consulta, sin refresco.</span>
           <button onClick={() => setEscapeVivo(false)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>volver a la foto</button>
@@ -793,14 +794,14 @@ export default function Zonas() {
       )}
 
       {/* === Zonas con volumen sin recorrido (spec-zonas-fijas) — el agujero, siempre visible arriba === */}
-      {zonasSinReco.length > 0 && (
+      {!esMapa && zonasSinReco.length > 0 && (
         <div style={{ background: "rgba(226,75,74,0.10)", border: "1px solid rgba(226,75,74,0.40)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14, lineHeight: 1.5 }}>
           ⚠️ <b>Volumen sin recorrido asignado</b> ({num(zonasSinReco.reduce((a, z) => a + z.total, 0))} envíos en {zonasSinReco.length} {zonasSinReco.length === 1 ? "zona" : "zonas"}): {zonasSinReco.map((z) => `${z.zona} (${num(z.total)})`).join(" · ")}. No le corresponde a ningún carrito — hay que crear el recorrido o sumarla a uno.
         </div>
       )}
 
       {/* === Centro de decisiones (spec-zonas-copiloto-fase1 / recableado a recorridos) — arriba de todo === */}
-      {copiloto && (
+      {!esMapa && copiloto && (
         <div style={{ background: C.card, border: `1px solid ${copiloto.decisiones.length ? "rgba(239,159,39,0.35)" : "rgba(46,207,170,0.30)"}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>
@@ -823,7 +824,7 @@ export default function Zonas() {
       )}
 
       {/* === Calibrador de topes: propuestas con evidencia (spec-calibrador-topes, C1) === */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 14 }}>
+      {!esMapa && <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 14 }}>
         <div onClick={() => setVerProp((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", cursor: "pointer" }}>
           <span style={{ color: C.ok, fontSize: 13 }}>{verProp ? "▾" : "▸"}</span>
           <span style={{ fontSize: 14, fontWeight: 700 }}>🎯 Propuestas de tope</span>
@@ -867,15 +868,15 @@ export default function Zonas() {
             <div style={{ fontSize: 10.5, color: C.faint, marginTop: 10, lineHeight: 1.5 }}>Ventana: últimas 3 semanas de <code>semanas</code>. SUBIR = días sostenidos por encima del tope con SLA ≥98% (tope propuesto = mín(p90, mediana+10, tope+15)). REVISAR nunca propone número. Fleteros, suplentes (backup) y usuarios internos quedan afuera. Cada cambio aplicado queda registrado en <code>topes_cambios</code>. Ojo: este es el <b>tope personal del cadete</b> (para su rendimiento) — no es el tope del recorrido/carrito, que se ajusta aparte.</div>
           </div>
         )}
-      </div>
+      </div>}
 
-      {meta && !meta.finoDisponible && (
+      {!esMapa && meta && !meta.finoDisponible && (
         <div style={{ background: "rgba(239,159,39,0.10)", border: "1px solid rgba(239,159,39,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14 }}>
           ⚠️ Números aproximados: los CPs que pertenecen a varias zonas (48 de 515, ~30% del volumen) se están repartiendo en partes iguales entre ellas. Con el re-deploy del bridge (mensaje-hermes-zonas.md) la atribución pasa a CP + localidad y queda exacta.
         </div>
       )}
 
-      {error && (
+      {error && (!esMapa || !zonasConSin.length) && (
         <div style={{ background: "rgba(226,75,74,0.10)", border: "1px solid rgba(226,75,74,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14 }}>
           No pude actualizar recién ({error}). {(recos && recos.length) || zonasConSin.length ? "Muestro el último dato bueno." : "Reintento solo en unos minutos."}
         </div>
@@ -944,7 +945,7 @@ export default function Zonas() {
           </div>
           )}
 
-          {(sinTope.length > 0 || labelsSinMatch.length > 0 || (meta && (meta.sinZona > 0 || meta.sinCp > 0 || meta.ambiguos > 0))) && (
+          {!esMapa && (sinTope.length > 0 || labelsSinMatch.length > 0 || (meta && (meta.sinZona > 0 || meta.sinCp > 0 || meta.ambiguos > 0))) && (
             <details style={{ marginTop: 18, color: C.muted }}>
               <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }}>
                 Datos sueltos ({num(sinTope.reduce((s, z) => s + z.total, 0) + (meta ? meta.sinZona + meta.sinCp + meta.ambiguos : 0))} envíos)
