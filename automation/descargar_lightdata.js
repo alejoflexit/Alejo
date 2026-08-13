@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
+const { historialExcluyeDemora } = require('./demoras');
 const fs = require('fs');
 const path = require('path');
 
@@ -109,19 +110,9 @@ async function esDemorReal(idInterno, codCliente, tokens, ldCookies, fechasOkISO
     const historial = await getLDHistorial(idInterno, ldCookies);
     
     if (historial.length > 0) {
-      // Codigos: 6=Nadie, 11=Repro meli, 12=Repro comprador
-      const ESTADOS_NO_DEMORA = new Set(["6", "11", "12"]);
-      const tuvoNoDemoraAntes21 = historial.some(h => {
-        if (!ESTADOS_NO_DEMORA.has(String(h.estado))) return false;
-        try {
-          const diaH = fechaEstadoADia(h.fecha);
-          if (fechasOkISO && diaH && !fechasOkISO.has(diaH)) return false;
-          const partes = String(h.fecha).split(" ");
-          if (partes.length < 2) return false;
-          const hora = parseInt(partes[1].split(":")[0]);
-          return hora < 21;
-        } catch(e) { return false; }
-      });
+      // Incluye 5=Entregado y 8=Cancelado: el historial manda si el Excel
+      // exportado quedo atrasado o hubo movimientos operativos posteriores.
+      const tuvoNoDemoraAntes21 = historialExcluyeDemora(historial, fechasOkISO);
       return !tuvoNoDemoraAntes21;
     }
 
@@ -144,9 +135,10 @@ async function esDemorReal(idInterno, codCliente, tokens, ldCookies, fechasOkISO
     
     const tuvoNadieAntes21 = data.data.estadosHistorial.some(h => {
       const estadoH = String(h.estado).toLowerCase();
-      if (!estadoH.includes("nadie") && !estadoH.includes("reprogramado")) return false;
+      if (!estadoH.includes("nadie") && !estadoH.includes("reprogramado") && !estadoH.includes("cancelado") && !estadoH.includes("entregado")) return false;
       const diaH = fechaEstadoADia(h.fecha);
       if (fechasOkISO && diaH && !fechasOkISO.has(diaH)) return false;
+      if (estadoH.includes("cancelado") || estadoH.includes("entregado")) return true;
       // Parsear la hora del string (AR local, sin tz) igual que el historial interno — evita depender de la zona horaria del runner.
       try {
         const partes = String(h.fecha).split(" ");
