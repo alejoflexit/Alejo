@@ -8,6 +8,16 @@ const C = { card:"#1A1A4A", teal:"#2ECFAA", white:"#fff", muted:"rgba(255,255,25
 const card = { background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"1.1rem" };
 const fmt = n => Number(n).toLocaleString("es-AR", { minimumFractionDigits:2, maximumFractionDigits:2 });
 const fechaEnvio = iso => new Date(iso).toLocaleString("es-AR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+const plural = (n, singular, pluralForma=`${singular}s`) => `${n} ${n===1?singular:pluralForma}`;
+
+async function copiarTexto(texto) {
+  try { await navigator.clipboard.writeText(texto); return; } catch {}
+  const area=document.createElement("textarea");
+  area.value=texto; area.style.position="fixed"; area.style.opacity="0";
+  document.body.appendChild(area); area.focus(); area.select();
+  const ok=document.execCommand("copy"); area.remove();
+  if(!ok) throw new Error("copy failed");
+}
 
 async function leerEnviados(label, session) {
   if (!label || !session) return [];
@@ -30,7 +40,7 @@ export default function Seguimiento({ semanas, semanaActiva, session }) {
   const [enviados, setEnviados] = useState([]), [abierto, setAbierto] = useState(null), [copiado, setCopiado] = useState(null), [busy, setBusy] = useState(null), [error, setError] = useState("");
   useEffect(() => { let ok=true; setEnviados([]); setError(""); leerEnviados(semanaActiva, session).then(x=>ok&&setEnviados(x)).catch(e=>ok&&setError(e.message)); return()=>{ok=false;}; }, [semanaActiva, session]);
   const enviadosMap = useMemo(() => new Map(enviados.map(e=>[e.cadete,e])), [enviados]);
-  const copiar = async f => { try { await navigator.clipboard.writeText(mensajeCadete(f)); setCopiado(f.cadete); setTimeout(()=>setCopiado(null),1800); } catch { setError("No se pudo copiar el mensaje."); } };
+  const copiar = async f => { try { await copiarTexto(mensajeCadete(f)); setCopiado(f.cadete); setTimeout(()=>setCopiado(null),1800); } catch { setError("No se pudo copiar el mensaje."); } };
   const toggle = async f => {
     if (!session) { setError("Iniciá sesión desde el encabezado para registrar mensajes enviados."); return; }
     setBusy(f.cadete); setError("");
@@ -51,9 +61,9 @@ export default function Seguimiento({ semanas, semanaActiva, session }) {
       return <div key={f.cadete} style={{...card,borderColor:enviado?"rgba(46,207,170,.38)":f.critico?"rgba(226,75,74,.34)":C.border}}>
         <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}><div style={{width:28,height:28,borderRadius:8,background:"rgba(255,255,255,.06)",color:C.muted,display:"grid",placeItems:"center",fontWeight:700}}>{i+1}</div><div style={{flex:"1 1 240px"}}>
           <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}><b style={{color:C.white,fontSize:15}}>{f.cadete}</b>{f.critico&&<small style={{color:C.red,fontWeight:800}}>CRÍTICO</small>}{f.reincidente&&<small style={{color:C.amber,fontWeight:800}}>REINCIDENTE</small>}{f.muestraChica&&<small style={{color:C.amber,fontWeight:800}}>MUESTRA CHICA</small>}{enviado&&<small style={{color:C.teal,fontWeight:800}}>✓ ENVIADO {fechaEnvio(enviado.enviado_at)}</small>}</div>
-          <div style={{display:"flex",gap:13,flexWrap:"wrap",color:C.muted,fontSize:12,marginTop:6}}><span>{f.enviosMl} ML</span><span>{f.demorados} demorados</span><span>{f.dem21} repro 21</span><span style={{color:f.delta!==null&&f.delta>=.1?C.teal:f.delta!==null&&f.delta<=-.1?C.red:C.muted}}>{trend}</span></div>
+          <div style={{display:"flex",gap:13,flexWrap:"wrap",color:C.muted,fontSize:12,marginTop:6}}><span>{f.enviosMl} ML</span><span>{plural(f.demorados,"demorado")}</span><span>{plural(f.dem21,"repro 21","repro 21")}</span><span style={{color:f.delta!==null&&f.delta>=.1?C.teal:f.delta!==null&&f.delta<=-.1?C.red:C.muted}}>{trend}</span></div>
         </div><div style={{textAlign:"right"}}><div style={{color,fontSize:24,fontWeight:850}}>{fmt(f.sla)}%</div><div style={{color:C.muted,fontSize:10}}>{f.slaAnterior===null?"sin dato anterior":`antes ${fmt(f.slaAnterior)}%`}</div></div></div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:14}}><button onClick={()=>copiar(f)} style={boton(C.teal)}>{copiado===f.cadete?"✓ Copiado":"Copiar mensaje"}</button><button onClick={()=>toggle(f)} disabled={busy===f.cadete} style={boton(enviado?C.teal:C.muted)}>{busy===f.cadete?"Guardando…":enviado?"Desmarcar enviado":"Marcar enviado"}</button><button onClick={()=>setAbierto(abierto===f.cadete?null:f.cadete)} style={boton(C.muted)}>{abierto===f.cadete?"Ocultar detalle":`Ver ${detalles.length} casos`}</button></div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:14}}><button onClick={()=>copiar(f)} style={boton(C.teal)}>{copiado===f.cadete?"✓ Copiado":"Copiar mensaje"}</button><button onClick={()=>toggle(f)} disabled={busy===f.cadete} style={boton(enviado?C.teal:C.muted)}>{busy===f.cadete?"Guardando…":enviado?"Desmarcar enviado":"Marcar enviado"}</button><button onClick={()=>setAbierto(abierto===f.cadete?null:f.cadete)} style={boton(C.muted)}>{abierto===f.cadete?"Ocultar detalle":`Ver ${plural(detalles.length,"caso")}`}</button></div>
         {abierto===f.cadete&&<div style={{marginTop:12,display:"grid",gap:8}}><div style={{background:"rgba(0,0,0,.2)",borderRadius:9,padding:"12px 14px",whiteSpace:"pre-wrap",color:"rgba(255,255,255,.82)",fontSize:12.5,lineHeight:1.55}}>{mensajeCadete(f)}</div>{detalles.map((d,j)=><div key={`${d.id}-${j}`} style={{padding:"8px 10px",borderRadius:8,background:"rgba(255,255,255,.035)",color:C.muted,fontSize:11.5}}><b style={{color:d.tipo==="Repro 21"?C.amber:C.red,marginRight:9}}>{d.tipo}</b> #{d.id} · <span style={{color:"rgba(255,255,255,.8)"}}>{d.dir||"Sin dirección"}</span></div>)}</div>}
       </div>;
     })}
