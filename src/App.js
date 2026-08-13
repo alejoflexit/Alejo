@@ -10,6 +10,7 @@ const Colectas = lazy(() => import("./Colectas"));
 const Tiquetera = lazy(() => import("./Tiquetera"));
 const Pagos = lazy(() => import("./Pagos"));
 const Analisis = lazy(() => import("./Analisis"));
+const Seguimiento = lazy(() => import("./Seguimiento"));
 const Zonas = lazy(() => import("./Zonas"));
 const Pizarra = lazy(() => import("./Pizarra"));
 
@@ -1263,7 +1264,7 @@ export default function App() {
           <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:"1.25rem" }}>
             {!isMobile && (
             <div style={{ display:"inline-flex", gap:4, padding:4, borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
-              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => {
+              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"],["seguimiento","ti-message-check","Seguimiento"]].map(([key,icon,label]) => {
                 const on = tab === key;
                 return (
                   <button key={key} onClick={()=>setTab(key)}
@@ -1289,7 +1290,7 @@ export default function App() {
           {/* Bottom nav — solo mobile */}
           {isMobile && (
             <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#0D0D2B", borderTop:`1px solid ${BRAND.border}`, display:"flex", alignItems:"stretch", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
-              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"]].map(([key,icon,label]) => (
+              {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"],["seguimiento","ti-message-check","Seguimiento"]].map(([key,icon,label]) => (
                 <button key={key} onClick={()=>setTab(key)} style={{ flex:1, padding:"10px 4px 8px", fontSize:10, fontWeight:600, cursor:"pointer", border:"none", background:"none", color:tab===key?"#2ECFAA":BRAND.muted, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderTop:`2px solid ${tab===key?"#2ECFAA":"transparent"}` }}>
                   <i className={`ti ${icon}`} style={{ fontSize:20 }} />
                   {label}
@@ -1514,6 +1515,12 @@ export default function App() {
           {tab==="analisis" && (
             <Suspense fallback={<VistaSkeleton />}>
               <Analisis semanas={semanas} />
+            </Suspense>
+          )}
+
+          {tab==="seguimiento" && (
+            <Suspense fallback={<VistaSkeleton />}>
+              <Seguimiento semanas={semanas} semanaActiva={semanaActiva} session={session} />
             </Suspense>
           )}
 
