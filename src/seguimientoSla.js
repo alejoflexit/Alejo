@@ -27,7 +27,7 @@ export function construirSeguimiento(semanas, semanaLabel) {
   const filas = agregarSemana(actual).filter(c => c.sla !== null && c.sla < 98).map(c => {
     const p = prev.get(c.cadete), slaAnterior = p && p.sla !== null ? p.sla : null;
     return { ...c, slaAnterior, delta:slaAnterior === null ? null : c.sla - slaAnterior, muestraChica:c.enviosMl < 30, reincidente:slaAnterior !== null && slaAnterior < 98, critico:c.sla < 95 };
-  }).sort((a,b) => Number(a.muestraChica)-Number(b.muestraChica) || Number(b.critico)-Number(a.critico) || Number(b.reincidente)-Number(a.reincidente) || (a.delta ?? 999)-(b.delta ?? 999) || a.sla-b.sla);
+  }).sort((a,b) => a.sla-b.sla || b.enviosMl-a.enviosMl || a.cadete.localeCompare(b.cadete, "es"));
   return { actual, anterior, filas };
 }
 
