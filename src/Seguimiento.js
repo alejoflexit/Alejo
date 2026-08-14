@@ -70,4 +70,7 @@ export default function Seguimiento({ semanas, semanaActiva, session }) {
   </div>;
 }
 
-function boton(color){return{border:`1px solid ${color}55`,background:`${color}15`,color,borderRadius:8,padding:"8px 13px",cursor:"pointer",fontWeight:700};}
+function boton(color){
+  const teal=color===C.teal;
+  return { border:`1px solid ${teal?"rgba(46,207,170,.42)":"rgba(255,255,255,.18)"}`, background:teal?"rgba(46,207,170,.08)":"rgba(255,255,255,.04)", color, borderRadius:8, padding:"8px 13px", cursor:"pointer", fontWeight:700 };
+}
