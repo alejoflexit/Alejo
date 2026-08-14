@@ -79,7 +79,7 @@ export default function Seguimiento({ semanas, semanaActiva, session }) {
   if (!reporte.actual) return <div style={{...card,textAlign:"center",color:C.muted}}>No hay datos para esta semana.</div>;
   const accionables=reporte.filas.filter(f=>!f.muestraChica).length, criticos=reporte.filas.filter(f=>f.critico&&!f.muestraChica).length, reincidentes=reporte.filas.filter(f=>f.reincidente&&!f.muestraChica).length;
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div><div style={{fontSize:20,fontWeight:800,color:C.white}}>Seguimiento semanal de cadetes</div><div style={{color:C.muted,fontSize:13,marginTop:4}}>SLA Meli de {semanaActiva}{reporte.anterior?` · comparado con ${reporte.anterior.label}`:" · sin semana anterior"}</div></div>
+    <div style={{padding:"1px 0 3px"}}><div style={{fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",fontSize:18,fontWeight:650,letterSpacing:"-.15px",lineHeight:1.25,color:C.white}}>Seguimiento semanal de cadetes</div><div style={{color:"rgba(255,255,255,.68)",fontSize:12.5,fontWeight:400,lineHeight:1.4,marginTop:5}}>SLA Meli de {semanaActiva}{reporte.anterior?` · comparado con ${reporte.anterior.label}`:" · sin semana anterior"}</div></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:10}}>
       {[["Para contactar",accionables,C.red],["Críticos",criticos,C.red],["Reincidentes",reincidentes,C.amber],["Mensajes enviados",enviados.length,C.teal]].map(([l,v,c])=><div key={l} style={card}><div style={{color:C.muted,fontSize:11,textTransform:"uppercase"}}>{l}</div><div style={{color:c,fontSize:24,fontWeight:700,letterSpacing:"-.3px",fontVariantNumeric:"tabular-nums",marginTop:5}}>{v}</div></div>)}
     </div>
