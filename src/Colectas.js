@@ -202,7 +202,7 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [hoverChofer, setHoverChofer] = useState(null); // resalta el grupo del cadete al pasar el mouse
   const [arribos, setArribos] = useState({}); // Arribos: cadete -> { id, llego_at }
   const [colectaLD, setColectaLD] = useState({ porChofer: {}, idPorChofer: {}, actualizado: null, ok: false }); // Fase 2 bridge: badge 📦 + idChofer para el detalle
-  const [gpsPos, setGpsPos] = useState({ porNombre: {}, actualizado: null, ok: false }); // GPS real por nombre normalizado
+  const [gpsPos, setGpsPos] = useState({ porNombre: {}, actualizado: null, ok: false, estado: 'cargando', total: 0, frescos: 0, error: null }); // GPS real por nombre normalizado
   const [detalleLD, setDetalleLD] = useState({}); // cache lazy del detalle de colecta por cadete: { [canonNombre]: {loading, ok, total, localidades, fecha} }
   const [detalleAbierto, setDetalleAbierto] = useState(null); // cadete cuyo panel de detalle está expandido
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
@@ -564,9 +564,15 @@ function ColectasInner({ soloArribos = false, irA }) {
   useEffect(() => {
     if (navView !== 'arribos') return;
     let vivo = true;
+    let ctrlActual = null;
+    const canonGps = buildCanonAlias(aliasCadetes);
     const traer = () => {
+      if (ctrlActual) ctrlActual.abort();
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 6000);
+      ctrlActual = ctrl;
+      // Una renovación de token puede levantar Chromium y tardar ~20s. El timeout anterior
+      // de 6s abortaba justo el camino de autorrecuperación y hacía parecer intermitente al GPS.
+      const timer = setTimeout(() => ctrl.abort(), 30000);
       fetch(BRIDGE_GEO_URL, { headers: { 'x-bridge-key': BRIDGE_KEY }, signal: ctrl.signal })
         .then(r => { if (!r.ok) throw new Error('geo ' + r.status); return r.json(); })
         .then(json => {
@@ -577,21 +583,27 @@ function ColectasInner({ soloArribos = false, irA }) {
           // temblaría eternamente como si estuviera llegando). Sin reporte reciente, no hay alerta.
           const MAX_ANTIGUEDAD_MS = 10 * 60 * 1000;
           const ahora = Date.now();
+          let frescos = 0;
           (json.cadetes || []).forEach(c => {
             if (c.nombre == null || c.distancia_m == null) return;
             const t = c.hora ? new Date(c.hora).getTime() : NaN;
             if (!isFinite(t) || ahora - t > MAX_ANTIGUEDAD_MS) return; // posición vieja: se ignora
-            porNombre[normNombre(c.nombre)] = { dist: Number(c.distancia_m), vel: Number(c.velocidad || 0) };
+            porNombre[canonGps(c.nombre)] = { dist: Number(c.distancia_m), vel: Number(c.velocidad || 0) };
+            frescos++;
           });
-          setGpsPos({ porNombre, actualizado: json.actualizado || new Date().toISOString(), ok: true });
+          const degradado = Boolean(json.nota) || json.estado?.fuente === 'error';
+          setGpsPos({ porNombre: degradado ? {} : porNombre, actualizado: json.actualizado || new Date().toISOString(), ok: !degradado, estado: degradado ? 'error' : frescos ? 'activo' : 'sin-posiciones', total: (json.cadetes || []).length, frescos, error: degradado ? (json.nota || 'GPS no disponible') : null });
         })
-        .catch(() => { if (vivo) setGpsPos(prev => ({ ...prev, ok: false })); })
+        .catch(e => { if (vivo) setGpsPos({ porNombre: {}, actualizado: new Date().toISOString(), ok: false, estado: 'error', total: 0, frescos: 0, error: e.name === 'AbortError' ? 'El GPS tardó demasiado en responder' : e.message }); })
         .finally(() => clearTimeout(timer));
     };
     traer();
     const iv = setInterval(traer, 45000);
-    return () => { vivo = false; clearInterval(iv); };
-  }, [navView]);
+    const alVolver = () => { if (document.visibilityState === 'visible') traer(); };
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('online', traer);
+    return () => { vivo = false; clearInterval(iv); if (ctrlActual) ctrlActual.abort(); document.removeEventListener('visibilitychange', alVolver); window.removeEventListener('online', traer); };
+  }, [navView, aliasCadetes]);
 
   // Arribos — tiempo real
   useEffect(() => {
@@ -1485,7 +1497,7 @@ function ColectasInner({ soloArribos = false, irA }) {
     // "está por llegar": GPS dentro del radio, o (fallback) ETA a ≤15 min — mismo criterio que la tarjeta.
     const estaPorLlegar = (cadete) => {
       if (arribos[cadete]?.llego_at) return false;
-      const gp = gpsPos.porNombre[normNombre(cadete)];
+      const gp = gpsPos.porNombre[canon(cadete)];
       if (gp && gp.dist <= GEO_ALERTA_M) return true;
       const eta = arribos[cadete]?.eta ? String(arribos[cadete].eta).slice(0,5) : '';
       if (!eta) return false;
@@ -1523,6 +1535,12 @@ function ColectasInner({ soloArribos = false, irA }) {
           {saveStatus === 'error' && (
             <div style={{ fontSize:12, marginTop:2, color:'#E24B4A' }}>✗ Error al guardar</div>
           )}
+          <div title={gpsPos.error || ''} style={{ fontSize:11, color: gpsPos.estado === 'activo' ? '#2ECFAA' : gpsPos.estado === 'error' ? '#E24B4A' : BRAND.muted }}>
+            {gpsPos.estado === 'activo' ? `● GPS activo · ${gpsPos.frescos} posiciones recientes`
+              : gpsPos.estado === 'error' ? '● GPS no disponible · se usa la ETA'
+              : gpsPos.estado === 'sin-posiciones' ? '○ GPS conectado · sin posiciones recientes'
+              : '○ Conectando GPS…'}
+          </div>
         </div>
 
         {total === 0 ? (
@@ -1563,7 +1581,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                 const hora = ar.llego_at ? new Date(ar.llego_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : null;
                 const eta = ar.eta ? String(ar.eta).slice(0,5) : '';
                 // GPS real (si el bridge lo trae): distancia del cadete al depósito
-                const gp = gpsPos.porNombre[normNombre(c.cadete)];
+                const gp = gpsPos.porNombre[canon(c.cadete)];
                 const cercaGps = !llego && gp && gp.dist <= GEO_ALERTA_M;
                 // Alerta por hora estimada (fallback si no hay GPS): faltan ≤15 min y no llegó
                 const cercaEta = (() => {
