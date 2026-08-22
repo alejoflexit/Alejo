@@ -1391,7 +1391,10 @@ function PagosInner({ session }) {
   const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
   const [copiadoKey, setCopiadoKey] = useState(null); // fila cuyo mensaje se acaba de copiar
   const [divKey, setDivKey] = useState(null);         // fila con el divisor de pago abierto
-  const [divFactura, setDivFactura] = useState('');   // lo que factura: eso sale por transferencia
+  const [divFactura, setDivFactura] = useState('');   // monto de la primera parte
+  const [divTipo, setDivTipo] = useState('mixto');    // mixto | dos_facturas
+  const [divAlias1, setDivAlias1] = useState('');
+  const [divAlias2, setDivAlias2] = useState('');
   // El banco (Galicia/MP) ya NO se elige acá: Alejo solo divide montos y el banco lo
   // decide Adrián en Pagar al pagar esa parte (pedido de Alejo, 2026-08-06).
 
@@ -1791,7 +1794,12 @@ function PagosInner({ session }) {
   // Si el chofer todavía no está confirmado, la fila se crea en borrador para tener dónde
   // guardarlo; confirmarlo después no pisa la división.
   async function guardarDivision(f, cierre, partes) {
-    const limpias = (partes || []).filter(p => (+p.monto || 0) > 0).map(p => ({ via: p.via, monto: Math.round(+p.monto) }));
+    const limpias = (partes || []).filter(p => (+p.monto || 0) > 0).map(p => {
+      const parte = { via: p.via, monto: Math.round(+p.monto) };
+      const alias = String(p.alias || '').trim();
+      if (alias) parte.alias = alias;
+      return parte;
+    });
     const valor = limpias.length > 1 ? limpias : null; // una sola parte no es una división
     setBusyAccion(true); setError('');
     try {
@@ -1803,7 +1811,7 @@ function PagosInner({ session }) {
           metodo: f.factura ? 'transferencia' : 'efectivo', estado: 'borrador', pagos: valor,
         }]) });
       }
-      setDivKey(null); setDivFactura('');
+      setDivKey(null); setDivFactura(''); setDivTipo('mixto'); setDivAlias1(''); setDivAlias2('');
       await refreshCierres(semanaLunes);
     } catch (e) { setError(e.message); }
     finally { setBusyAccion(false); }
@@ -2324,10 +2332,15 @@ function PagosInner({ session }) {
                                     e.stopPropagation();
                                     const abrir = divKey !== f.key;
                                     setDivKey(abrir ? f.key : null);
-                                    const banco = (cierre?.pagos || []).find(p => p.via !== 'efectivo');
-                                    setDivFactura(abrir && banco ? String(banco.monto) : '');
+                                    const partes = Array.isArray(cierre?.pagos) ? cierre.pagos : [];
+                                    const transferencias = partes.filter(p => p.via !== 'efectivo');
+                                    const sonDosFacturas = transferencias.length > 1 && partes.every(p => p.via !== 'efectivo');
+                                    setDivTipo(sonDosFacturas ? 'dos_facturas' : 'mixto');
+                                    setDivFactura(abrir && transferencias[0] ? String(transferencias[0].monto) : '');
+                                    setDivAlias1(abrir && transferencias[0] ? String(transferencias[0].alias || '') : '');
+                                    setDivAlias2(abrir && transferencias[1] ? String(transferencias[1].alias || '') : '');
                                   }}
-                                  title="dividir: una parte por transferencia y otra en efectivo"
+                                  title="dividir en factura + efectivo o en dos facturas"
                                   style={{ marginLeft: 2, fontSize: 12, fontWeight: 700, color: divKey === f.key ? BRAND.teal : BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>½</button>
                               )}
                               {/* La división ya guardada, a la vista: es parte del método de pago. */}
@@ -2339,7 +2352,7 @@ function PagosInner({ session }) {
                                       <span key={k} title={p.pagado ? 'ya pagada' : 'todavía sin pagar'}
                                         style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20, whiteSpace: 'nowrap',
                                           color: mp.text, background: BRAND.chipBg, border: `1px solid ${BRAND.border}`, opacity: p.pagado ? 0.55 : 1 }}>
-                                        {p.pagado ? '✓ ' : ''}{mp.nombre} {money(p.monto)}
+                                        {p.pagado ? '✓ ' : ''}{mp.nombre} {money(p.monto)}{p.alias ? ` · ${p.alias}` : ''}
                                       </span>
                                     );
                                   })}
@@ -2414,11 +2427,18 @@ function PagosInner({ session }) {
                             const excede = (+divFactura || 0) > total;
                             const mp = MEDIOS_PAGO.transferencia;
                             const yaDividido = Array.isArray(cierre?.pagos) && cierre.pagos.length > 1;
+                            const dosFacturas = divTipo === 'dos_facturas';
+                            const aliasesOk = !dosFacturas || (divAlias1.trim() && divAlias2.trim());
                             return (
                               <tr>
                                 <td colSpan={nCols} style={{ padding: '11px 16px', background: 'rgba(139,123,232,0.07)', borderLeft: `3px solid ${MEDIOS_PAGO.mixto.color}` }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{f.nombre} factura por</span>
+                                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{f.nombre}</span>
+                                    <span style={{ display: 'inline-flex', gap: 4, padding: 3, borderRadius: 9, background: 'rgba(0,0,0,0.22)', border: `1px solid ${BRAND.border}` }}>
+                                      <button onClick={() => setDivTipo('mixto')} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: divTipo === 'mixto' ? '#04121a' : BRAND.muted, background: divTipo === 'mixto' ? BRAND.teal : 'transparent' }}>Factura + efectivo</button>
+                                      <button onClick={() => setDivTipo('dos_facturas')} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: dosFacturas ? '#04121a' : BRAND.muted, background: dosFacturas ? BRAND.teal : 'transparent' }}>Dos facturas</button>
+                                    </span>
+                                    <span style={{ fontSize: 12, color: BRAND.muted }}>{dosFacturas ? 'Factura 1' : 'Factura'} por</span>
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.28)', border: `1px solid ${excede ? BRAND.red : BRAND.border}`, borderRadius: 9, padding: '4px 10px' }}>
                                       <span style={{ color: BRAND.muted, fontSize: 13 }}>$</span>
                                       <input autoFocus inputMode="numeric" value={divFactura} onChange={e => setDivFactura(e.target.value.replace(/[^0-9]/g, ''))}
@@ -2426,29 +2446,39 @@ function PagosInner({ session }) {
                                     </span>
                                     <button onClick={() => setDivFactura(String(Math.round(total / 2)))}
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 20, color: BRAND.muted, cursor: 'pointer', fontSize: 11, padding: '3px 10px' }}>la mitad</button>
-                                    {/* Acá NO se elige el banco: Alejo solo divide montos.
-                                        Galicia o Mercado Pago lo decide Adrián en Pagar al pagar esa parte. */}
-                                    <span style={{ fontSize: 11, color: BRAND.muted }}>y el resto en efectivo · el banco lo elige Adrián en Pagar</span>
+                                    {dosFacturas ? (
+                                      <>
+                                        <input value={divAlias1} onChange={e => setDivAlias1(e.target.value)} placeholder="Alias factura 1"
+                                          style={{ width: 150, padding: '6px 9px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 12, outline: 'none' }} />
+                                        <span style={{ fontSize: 11, color: BRAND.muted }}>Factura 2 {money(resto)}</span>
+                                        <input value={divAlias2} onChange={e => setDivAlias2(e.target.value)} placeholder="Alias factura 2"
+                                          style={{ width: 150, padding: '6px 9px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 12, outline: 'none' }} />
+                                      </>
+                                    ) : (
+                                      <span style={{ fontSize: 11, color: BRAND.muted }}>y el resto en efectivo · el banco lo elige Adrián en Pagar</span>
+                                    )}
                                     <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                                       {excede
                                         ? <span style={{ color: BRAND.red, fontSize: 12.5, fontWeight: 700 }}>No puede facturar más que el total ({money(total)}).</span>
                                         : <span style={{ fontSize: 12.5, fontWeight: 700 }}>
                                             <span style={{ color: mp.text }}>🏦 {mp.nombre} {money(fact)}</span>
                                             <span style={{ color: BRAND.muted, fontWeight: 400 }}> + </span>
-                                            <span style={{ color: MEDIOS_PAGO.efectivo.text }}>💵 Efectivo {money(resto)}</span>
+                                            <span style={{ color: dosFacturas ? mp.text : MEDIOS_PAGO.efectivo.text }}>{dosFacturas ? '🏦 Transferencia' : '💵 Efectivo'} {money(resto)}</span>
                                           </span>}
                                       {yaDividido && (
                                         <button onClick={() => guardarDivision(f, cierre, [])} disabled={busyAccion}
                                           style={{ background: 'none', border: 'none', color: BRAND.amber, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>quitar división</button>
                                       )}
-                                      <button onClick={() => { setDivKey(null); setDivFactura(''); }}
+                                      <button onClick={() => { setDivKey(null); setDivFactura(''); setDivTipo('mixto'); setDivAlias1(''); setDivAlias2(''); }}
                                         style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
-                                      <button disabled={busyAccion || excede || fact <= 0 || resto <= 0}
-                                        onClick={() => guardarDivision(f, cierre, [{ via: 'transferencia', monto: fact }, { via: 'efectivo', monto: resto }])}
+                                      <button disabled={busyAccion || excede || fact <= 0 || resto <= 0 || !aliasesOk}
+                                        onClick={() => guardarDivision(f, cierre, dosFacturas
+                                          ? [{ via: 'transferencia', monto: fact, alias: divAlias1 }, { via: 'transferencia', monto: resto, alias: divAlias2 }]
+                                          : [{ via: 'transferencia', monto: fact }, { via: 'efectivo', monto: resto }])}
                                         title="quedan dos pagos separados en la pantalla Pagar; no marca nada como pagado"
-                                        style={{ padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0 || resto <= 0) ? 'not-allowed' : 'pointer',
-                                          background: (excede || fact <= 0 || resto <= 0) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (excede || fact <= 0 || resto <= 0) ? BRAND.muted : '#04121a' }}>
-                                        Dividir en dos pagos
+                                        style={{ padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0 || resto <= 0 || !aliasesOk) ? 'not-allowed' : 'pointer',
+                                          background: (excede || fact <= 0 || resto <= 0 || !aliasesOk) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (excede || fact <= 0 || resto <= 0 || !aliasesOk) ? BRAND.muted : '#04121a' }}>
+                                        {dosFacturas ? 'Guardar dos facturas' : 'Dividir en dos pagos'}
                                       </button>
                                     </span>
                                   </div>

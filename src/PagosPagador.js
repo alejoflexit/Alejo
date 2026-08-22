@@ -249,13 +249,20 @@ export default function PagosPagador({ tarifas }) {
             // Adrián acá, al pagar la parte (mismo picker que una transferencia simple).
             viaFija: esEfectivo ? null : (p.via === 'galicia' || p.via === 'mercadopago' ? p.via : null),
             total: +p.monto,
+            // Una división en dos facturas puede traer un alias distinto por importe.
+            // Si no lo trae (divisiones viejas), conserva el alias fijo del cadete.
+            alias: String(p.alias || alias || ''),
+            // Un alias puntual puede ser de otro titular: no mostrar al lado el CUIL/CBU
+            // fijo del cadete porque podría hacer validar la transferencia contra otra cuenta.
+            cuil: p.alias ? '' : (t.cuil || ''),
+            cbu: p.alias ? '' : cbu,
             metodo: esEfectivo ? 'efectivo' : 'transferencia',
             factura: !esEfectivo, // solo la parte que sale por transferencia depende de la factura
             pagado: !!p.pagado,
             pagadoVia: p.pagado ? p.via : null,
             pagadoPor: p.pagado_por || null,
             pagadoAt: p.pagado_at || null,
-            sinDatos: !esEfectivo && !alias && !cbu,
+            sinDatos: !esEfectivo && !(p.alias || alias) && !cbu,
           });
         });
         return;
@@ -762,7 +769,7 @@ export default function PagosPagador({ tarifas }) {
 
                   {f.factura && (f.alias || f.cuil || f.cbu || f.sinDatos) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                      <CopyField label="Alias" valor={f.alias} campoKey={`alias-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
+                      <CopyField label="Alias" valor={f.alias} campoKey={`alias-${f.key}`} copiado={copiado} setCopiado={setCopiado} />
                       <CopyField label="CUIL" valor={f.cuil} campoKey={`cuil-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
                       <CopyField label="CBU" valor={f.cbu} display={maskCbu(f.cbu)} campoKey={`cbu-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
                       {f.sinDatos && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: BRAND.amber }}>⚠ falta alias o CBU para transferir</span>}
