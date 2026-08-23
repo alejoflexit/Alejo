@@ -16,7 +16,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const LD_USER = "beto";
 const LD_PASS = "123456";
-const DIAS_ATRAS = 6; // cuántos días hacia atrás traer (hoy incluido)
+const DIAS_ATRAS = 13; // 14 días calendario: 13 hacia atrás + hoy
 
 async function supabaseDeleteAll(table) {
   // borra todo (id no nulo) — la tabla es un caché rodante del agente
