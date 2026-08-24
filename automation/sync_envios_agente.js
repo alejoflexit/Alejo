@@ -11,36 +11,13 @@ const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
+const { refreshCacheSafely } = require('./safe-cache-refresh');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const LD_USER = "beto";
-const LD_PASS = "123456";
+const LD_USER = process.env.LIGHTDATA_USER;
+const LD_PASS = process.env.LIGHTDATA_PASSWORD;
 const DIAS_ATRAS = 13; // 14 días calendario: 13 hacia atrás + hoy
-
-async function supabaseDeleteAll(table) {
-  // borra todo (id no nulo) — la tabla es un caché rodante del agente
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id_interno=neq.__none__`, {
-    method: "DELETE",
-    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-  });
-  return res.ok;
-}
-
-async function supabaseInsert(table, rows) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-    method: "POST",
-    headers: {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": "return=minimal"
-    },
-    body: JSON.stringify(rows)
-  });
-  if (!res.ok) throw new Error(`Supabase insert error: ${await res.text()}`);
-  return true;
-}
 
 function fmtFecha(d) {
   const dd = String(d.getDate()).padStart(2, "0");
@@ -49,6 +26,9 @@ function fmtFecha(d) {
 }
 
 async function main() {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !LD_USER || !LD_PASS) {
+    throw new Error('Faltan SUPABASE_URL, SUPABASE_KEY, LIGHTDATA_USER o LIGHTDATA_PASSWORD');
+  }
   const hoy = new Date();
   const desde = new Date(hoy); desde.setDate(hoy.getDate() - DIAS_ATRAS);
   const fechaDesde = fmtFecha(desde);
@@ -142,15 +122,17 @@ async function main() {
     process.exit(1);
   }
 
-  // Reemplazo completo (caché rodante de últimos días)
-  await supabaseDeleteAll("envios_busqueda");
-  const BATCH = 500;
-  for (let i = 0; i < envios.length; i += BATCH) {
-    await supabaseInsert("envios_busqueda", envios.slice(i, i + BATCH));
-    console.log(`  insertados ${Math.min(i + BATCH, envios.length)}/${envios.length}`);
-  }
+  // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
+  // Si una inserción falla, la caché anterior sigue disponible y completa.
+  const refresh = await refreshCacheSafely({
+    baseUrl: SUPABASE_URL,
+    key: SUPABASE_KEY,
+    table: "envios_busqueda",
+    rows: envios,
+    onProgress: (done, total) => console.log(`  guardados ${done}/${total}`),
+  });
 
-  console.log(`✅ Sincronizados ${envios.length} envíos en envios_busqueda (${fechaDesde} → ${fechaHasta})`);
+  console.log(`✅ Sincronizados ${envios.length} envíos en envios_busqueda (${fechaDesde} → ${fechaHasta}); removidos=${refresh.removed}`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

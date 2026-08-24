@@ -30,5 +30,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
+          LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
         run: cd automation && node sync_envios_agente.js
         timeout-minutes: 10
