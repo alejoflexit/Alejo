@@ -111,6 +111,9 @@ async function main() {
       tracking: S(r["Número Tracking"]),
       url_tracking: S(r["URl Tracking"]),
       fecha_flexit: S(r["Fecha Flexit"]),
+      // LightData usa distintos rótulos según la versión del export.
+      // Se conserva el valor crudo en la caché; la API enmascara el DNI.
+      recibido_por: S(r["Recibido por"] || r["Recibido Por"] || r["Recibe"]),
     }))
     .filter(e => e.id_interno); // descartar filas sin ID
 
