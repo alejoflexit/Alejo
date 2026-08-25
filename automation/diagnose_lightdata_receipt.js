@@ -21,6 +21,18 @@ if (!user || !password) throw new Error('Faltan credenciales');
     await page.keyboard.press('Enter');
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
     console.log(`Post-login path: ${new URL(page.url()).pathname}`);
+    const rootStructure = await page.evaluate(() => ({
+      title: document.title,
+      frames: [...document.querySelectorAll('iframe')].map(frame => ({ id: frame.id, name: frame.name, src: frame.src ? new URL(frame.src).pathname : null })),
+      links: [...document.querySelectorAll('a')].filter(a => /env[ií]o/i.test(`${a.textContent} ${a.href}`)).slice(0, 30).map(a => ({
+        id: a.id,
+        text: (a.textContent || '').trim().slice(0, 80),
+        href: a.href ? `${new URL(a.href).pathname}${new URL(a.href).search}` : null,
+        onclick: a.getAttribute('onclick'),
+      })),
+    }));
+    console.log(`Root structure: ${JSON.stringify(rootStructure)}`);
+    console.log(`Frame paths: ${page.frames().map(frame => { try { return new URL(frame.url()).pathname; } catch { return frame.url(); } }).join(' | ')}`);
 
     await page.goto('https://flexit.lightdata.app/modules/envios/listado/', { waitUntil: 'networkidle2', timeout: 30000 });
     console.log(`Listado path: ${new URL(page.url()).pathname}`);
