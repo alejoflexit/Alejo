@@ -34,6 +34,24 @@ if (!user || !password) throw new Error('Faltan credenciales');
     console.log(`Root structure: ${JSON.stringify(rootStructure)}`);
     console.log(`Frame paths: ${page.frames().map(frame => { try { return new URL(frame.url()).pathname; } catch { return frame.url(); } }).join(' | ')}`);
 
+    await page.evaluate(() => window.FmenuShow('envios_listado', 8));
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    const listingStructure = await page.evaluate(() => ({
+      controls: [...document.querySelectorAll('input,button,select')].filter(el => {
+        const style = getComputedStyle(el);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }).slice(0, 160).map(el => ({
+        tag: el.tagName,
+        id: el.id,
+        name: el.getAttribute('name'),
+        type: el.getAttribute('type'),
+        text: (el.textContent || '').trim().slice(0, 60),
+        placeholder: el.getAttribute('placeholder'),
+      })),
+      receiptLabels: [...document.querySelectorAll('label,div,span')].filter(el => /recibido por/i.test(el.textContent || '')).slice(0, 10).map(el => ({ id: el.id, text: (el.textContent || '').trim().slice(0, 100) })),
+    }));
+    console.log(`Listing structure: ${JSON.stringify(listingStructure)}`);
+
     await page.goto('https://flexit.lightdata.app/modules/envios/listado/', { waitUntil: 'networkidle2', timeout: 30000 });
     console.log(`Listado path: ${new URL(page.url()).pathname}`);
     const structure = await page.evaluate(() => ({
