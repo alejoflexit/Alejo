@@ -59,6 +59,7 @@ if (!user || !password) throw new Error('Faltan credenciales');
         context: context.replace(/value=("[^"]*"|'[^']*')/gi, 'value="[redacted]"'),
         appEnviosKeys: Object.keys(window.appEnvios || {}).filter(key => /envio|alta|edit|ver|detalle|cargar/i.test(key)),
         openEditSource: String(window.appEnvios?.openEdit || '').slice(0, 6000),
+        getAjaxSource: String(window.getAjax || '').slice(0, 12000),
       };
     });
     console.log(`Receipt template: ${JSON.stringify(receiptTemplate)}`);
