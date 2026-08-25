@@ -110,6 +110,7 @@ async function main() {
       tracking: S(r["Número Tracking"]),
       url_tracking: S(r["URl Tracking"]),
       fecha_flexit: S(r["Fecha Flexit"]),
+      _origen: S(r["Origen"]),
     }))
     .filter(e => e.id_interno); // descartar filas sin ID
 
@@ -125,9 +126,12 @@ async function main() {
   // El Excel no incluye "Recibido por". Para particulares ya entregados se
   // consulta el mismo detalle interno que usa la pantalla de LightData.
   // La consulta es acotada y el DNI se enmascara antes de salir del navegador.
-  const particularesEntregados = envios.filter(envio =>
-    /^entregado/i.test(envio.estado) && !envio.id_venta_ml,
-  );
+  const particularesEntregados = envios.filter(envio => {
+    const origen = envio._origen.toLocaleLowerCase('es-AR');
+    return /^entregado/i.test(envio.estado)
+      && Boolean(origen)
+      && !/mercado\s*libre|\bflex\b/i.test(origen);
+  });
   console.log(`Consultando receptor de ${particularesEntregados.length} particulares entregados...`);
   let receiptRows = [];
   try {
@@ -169,11 +173,12 @@ async function main() {
 
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
+  const enviosParaCache = envios.map(({ _origen, ...envio }) => envio);
   const refresh = await refreshCacheSafely({
     baseUrl: SUPABASE_URL,
     key: SUPABASE_KEY,
     table: "envios_busqueda",
-    rows: envios,
+    rows: enviosParaCache,
     onProgress: (done, total) => console.log(`  guardados ${done}/${total}`),
   });
 
