@@ -87,6 +87,8 @@ async function main() {
   }
   if (headerRow === -1) { console.error("No se encontró header"); process.exit(1); }
   const headers = raw[headerRow].map(h => String(h || "").trim());
+  const receiptHeaders = headers.filter(h => /recib|receptor|documento|dni/i.test(h));
+  console.log(`Columnas de recepción detectadas: ${receiptHeaders.length ? receiptHeaders.join(" | ") : "ninguna"}`);
   const rows = raw.slice(headerRow + 1)
     .filter(r => r && r.some(c => c !== null && c !== undefined && c !== ""))
     .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ""; }); return o; });
