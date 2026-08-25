@@ -51,6 +51,16 @@ if (!user || !password) throw new Error('Faltan credenciales');
       receiptLabels: [...document.querySelectorAll('label,div,span')].filter(el => /recibido por/i.test(el.textContent || '')).slice(0, 10).map(el => ({ id: el.id, text: (el.textContent || '').trim().slice(0, 100) })),
     }));
     console.log(`Listing structure: ${JSON.stringify(listingStructure)}`);
+    const receiptTemplate = await page.evaluate(() => {
+      const html = document.getElementById('modalEnvio')?.innerHTML || '';
+      const index = html.toLowerCase().indexOf('recibido por');
+      const context = index >= 0 ? html.slice(Math.max(0, index - 500), index + 900) : '';
+      return {
+        context: context.replace(/value=("[^"]*"|'[^']*')/gi, 'value="[redacted]"'),
+        appEnviosKeys: Object.keys(window.appEnvios || {}).filter(key => /envio|alta|edit|ver|detalle|cargar/i.test(key)),
+      };
+    });
+    console.log(`Receipt template: ${JSON.stringify(receiptTemplate)}`);
 
     await page.goto('https://flexit.lightdata.app/modules/envios/listado/', { waitUntil: 'networkidle2', timeout: 30000 });
     console.log(`Listado path: ${new URL(page.url()).pathname}`);
