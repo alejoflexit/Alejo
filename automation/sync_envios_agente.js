@@ -110,7 +110,6 @@ async function main() {
       tracking: S(r["Número Tracking"]),
       url_tracking: S(r["URl Tracking"]),
       fecha_flexit: S(r["Fecha Flexit"]),
-      _origen: S(r["Origen"]),
     }))
     .filter(e => e.id_interno); // descartar filas sin ID
 
@@ -123,16 +122,13 @@ async function main() {
     process.exit(1);
   }
 
-  // El Excel no incluye "Recibido por". Para particulares ya entregados se
-  // consulta el mismo detalle interno que usa la pantalla de LightData.
-  // La consulta es acotada y el DNI se enmascara antes de salir del navegador.
-  const particularesEntregados = envios.filter(envio => {
-    const origen = envio._origen.toLocaleLowerCase('es-AR');
-    return /^entregado/i.test(envio.estado)
-      && Boolean(origen)
-      && !/mercado\s*libre|\bflex\b/i.test(origen);
-  });
-  console.log(`Consultando receptor de ${particularesEntregados.length} particulares entregados...`);
+  // El Excel no incluye "Recibido por". Se consulta el detalle interno solo
+  // para entregas confirmadas hoy; así cada envío queda enriquecido al cerrarse
+  // sin recorrer nuevamente los 14 días en cada ejecución.
+  const entregadosHoy = envios.filter(envio =>
+    /^entregado/i.test(envio.estado) && envio.fecha_estado.startsWith(fechaHasta),
+  );
+  console.log(`Consultando receptor de ${entregadosHoy.length} entregas de hoy...`);
   let receiptRows = [];
   try {
     receiptRows = await page.evaluate(async (ids) => {
@@ -165,7 +161,7 @@ async function main() {
       };
       await Promise.all(Array.from({ length: Math.min(6, ids.length) }, worker));
       return results;
-    }, particularesEntregados.map(envio => envio.id_interno));
+    }, entregadosHoy.map(envio => envio.id_interno));
   } finally {
     await browser.close();
   }
@@ -173,12 +169,11 @@ async function main() {
 
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
-  const enviosParaCache = envios.map(({ _origen, ...envio }) => envio);
   const refresh = await refreshCacheSafely({
     baseUrl: SUPABASE_URL,
     key: SUPABASE_KEY,
     table: "envios_busqueda",
-    rows: enviosParaCache,
+    rows: envios,
     onProgress: (done, total) => console.log(`  guardados ${done}/${total}`),
   });
 
