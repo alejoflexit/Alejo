@@ -11,7 +11,7 @@ const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const { refreshCacheSafely } = require('./safe-cache-refresh');
+const { refreshCacheSafely, upsertRows } = require('./safe-cache-refresh');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -66,9 +66,8 @@ async function main() {
       return { status: res.status, size: buffer.byteLength, data: Array.from(new Uint8Array(buffer)), ok: true };
     } catch (e) { return { ok: false, error: String(e) }; }
   }, excelUrl);
-  await browser.close();
-
   if (!response.ok || response.status !== 200 || response.size < 1000) {
+    await browser.close();
     console.error("Error descargando Excel:", response.error || `status=${response.status} size=${response.size}`);
     process.exit(1);
   }
@@ -87,8 +86,6 @@ async function main() {
   }
   if (headerRow === -1) { console.error("No se encontró header"); process.exit(1); }
   const headers = raw[headerRow].map(h => String(h || "").trim());
-  const receiptHeaders = headers.filter(h => /recib|receptor|documento|dni/i.test(h));
-  console.log(`Columnas de recepción detectadas: ${receiptHeaders.length ? receiptHeaders.join(" | ") : "ninguna"}`);
   const rows = raw.slice(headerRow + 1)
     .filter(r => r && r.some(c => c !== null && c !== undefined && c !== ""))
     .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ""; }); return o; });
@@ -113,9 +110,6 @@ async function main() {
       tracking: S(r["Número Tracking"]),
       url_tracking: S(r["URl Tracking"]),
       fecha_flexit: S(r["Fecha Flexit"]),
-      // LightData usa distintos rótulos según la versión del export.
-      // Se conserva el valor crudo en la caché; la API enmascara el DNI.
-      recibido_por: S(r["Recibido por"] || r["Recibido Por"] || r["Recibe"]),
     }))
     .filter(e => e.id_interno); // descartar filas sin ID
 
@@ -123,9 +117,55 @@ async function main() {
 
   // Guard: si no se descargó nada, NO vaciar la caché (dejaría al agente de WhatsApp sin poder responder "¿dónde está mi pedido?").
   if (envios.length === 0) {
+    await browser.close();
     console.error("⚠️ 0 envíos descargados — se cancela para no vaciar envios_busqueda");
     process.exit(1);
   }
+
+  // El Excel no incluye "Recibido por". Para particulares ya entregados se
+  // consulta el mismo detalle interno que usa la pantalla de LightData.
+  // La consulta es acotada y el DNI se enmascara antes de salir del navegador.
+  const particularesEntregados = envios.filter(envio =>
+    /^entregado/i.test(envio.estado) && !envio.id_venta_ml,
+  );
+  console.log(`Consultando receptor de ${particularesEntregados.length} particulares entregados...`);
+  let receiptRows = [];
+  try {
+    receiptRows = await page.evaluate(async (ids) => {
+      const results = [];
+      let next = 0;
+      const worker = async () => {
+        while (next < ids.length) {
+          const id = ids[next++];
+          try {
+            const body = new URLSearchParams({ operador: 'get', did: id });
+            const response = await fetch('/modules/envios/alta/controlador.php', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+              body: body.toString(),
+            });
+            if (!response.ok) continue;
+            const payload = await response.json();
+            const raw = String(payload?.header?.envio_alta_recibidopor || '').trim();
+            if (!raw) continue;
+            const documentMatch = raw.match(/\b(?:DNI|DOCUMENTO)\s*:?\s*([\d.\s-]{4,})\b/i);
+            const digits = documentMatch?.[1]?.replace(/\D/g, '') || '';
+            const name = raw.replace(/\b(?:DNI|DOCUMENTO)\s*:?\s*[\d.\s-]{4,}\b.*$/i, '').trim();
+            const masked = `${name}${digits.length >= 4 ? ` DNI:${digits.slice(-4)}` : ''}`.trim();
+            if (masked) results.push({ id_interno: id, recibido_por: masked });
+          } catch {
+            // Un detalle aislado no debe dejar sin actualizar toda la caché.
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(6, ids.length) }, worker));
+      return results;
+    }, particularesEntregados.map(envio => envio.id_interno));
+  } finally {
+    await browser.close();
+  }
+  console.log(`Receptores confirmados y enmascarados: ${receiptRows.length}`);
 
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
@@ -136,6 +176,15 @@ async function main() {
     rows: envios,
     onProgress: (done, total) => console.log(`  guardados ${done}/${total}`),
   });
+
+  if (receiptRows.length > 0) {
+    await upsertRows({
+      baseUrl: SUPABASE_URL,
+      key: SUPABASE_KEY,
+      table: "envios_busqueda",
+      rows: receiptRows,
+    });
+  }
 
   console.log(`✅ Sincronizados ${envios.length} envíos en envios_busqueda (${fechaDesde} → ${fechaHasta}); removidos=${refresh.removed}`);
 }

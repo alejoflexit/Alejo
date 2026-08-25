@@ -31,6 +31,19 @@ async function upsertBatch({ baseUrl, key, table, rows, fetchImpl }) {
   if (!response.ok) throw new Error(`Supabase upsert error: ${await response.text()}`);
 }
 
+async function upsertRows({ baseUrl, key, table, rows, fetchImpl = fetch, writeBatch = DEFAULT_WRITE_BATCH }) {
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+  for (let index = 0; index < rows.length; index += writeBatch) {
+    await upsertBatch({
+      baseUrl: normalizedBaseUrl,
+      key,
+      table,
+      rows: rows.slice(index, index + writeBatch),
+      fetchImpl,
+    });
+  }
+}
+
 async function deleteBatch({ baseUrl, key, table, ids, fetchImpl }) {
   const filter = encodeURIComponent(`in.(${ids.join(",")})`);
   const response = await fetchImpl(`${baseUrl}/rest/v1/${table}?id_interno=${filter}`, {
@@ -83,4 +96,4 @@ async function refreshCacheSafely({
   return { previous: existingIds.length, current: rows.length, removed: staleIds.length };
 }
 
-module.exports = { refreshCacheSafely };
+module.exports = { refreshCacheSafely, upsertRows };

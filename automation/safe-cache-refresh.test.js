@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { refreshCacheSafely } = require("./safe-cache-refresh");
+const { refreshCacheSafely, upsertRows } = require("./safe-cache-refresh");
 
 test("upserts every fresh row before deleting stale rows", async () => {
   const calls = [];
@@ -22,6 +22,25 @@ test("upserts every fresh row before deleting stale rows", async () => {
   assert.deepEqual(result, { previous: 2, current: 2, removed: 1 });
   assert.deepEqual(calls.map((call) => call.init.method ?? "GET"), ["GET", "POST", "POST", "DELETE"]);
   assert.match(calls.at(-1).url, /stale/);
+});
+
+test("upserts masked receipt fields without requiring the full shipment row", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url, init });
+    return new Response(null, { status: 201 });
+  };
+  await upsertRows({
+    baseUrl: "https://project.example",
+    key: "secret-test",
+    table: "envios_busqueda",
+    rows: [{ id_interno: "941916", recibido_por: "Facundo DNI:6000" }],
+    fetchImpl,
+  });
+  assert.deepEqual(JSON.parse(calls[0].init.body), [
+    { id_interno: "941916", recibido_por: "Facundo DNI:6000" },
+  ]);
+  assert.equal(calls[0].init.body.includes("38576000"), false);
 });
 
 test("never deletes the old cache when an upsert batch fails", async () => {
