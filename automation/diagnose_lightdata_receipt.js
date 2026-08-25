@@ -80,6 +80,28 @@ if (!user || !password) throw new Error('Faltan credenciales');
       name: receiptValue.replace(/\b(?:DNI|DOCUMENTO)\s*:?\s*[\d.\s-]{4,}.*$/i, '').trim() || undefined,
       documentLast4: receiptDigits.length >= 4 ? receiptDigits.slice(-4) : undefined,
     })}`);
+    const responseShape = await page.evaluate(async () => {
+      const body = new URLSearchParams({ operador: 'get', did: '941916' });
+      const response = await fetch('/modules/envios/alta/controlador.php', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+        body: body.toString(),
+      });
+      const payload = await response.json();
+      const matches = [];
+      const visit = (value, path = '') => {
+        if (!value || typeof value !== 'object' || matches.length >= 20) return;
+        for (const [key, child] of Object.entries(value)) {
+          const nextPath = path ? `${path}.${key}` : key;
+          if (/recib|dni|documento/i.test(key)) matches.push({ path: nextPath, type: typeof child, present: Boolean(String(child || '').trim()) });
+          if (child && typeof child === 'object') visit(child, nextPath);
+        }
+      };
+      visit(payload);
+      return { topLevelType: Array.isArray(payload) ? 'array' : typeof payload, matches };
+    });
+    console.log(`Detail response shape: ${JSON.stringify(responseShape)}`);
 
     await page.goto('https://flexit.lightdata.app/modules/envios/listado/', { waitUntil: 'networkidle2', timeout: 30000 });
     console.log(`Listado path: ${new URL(page.url()).pathname}`);
