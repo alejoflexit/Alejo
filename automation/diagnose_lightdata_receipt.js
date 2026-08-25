@@ -63,6 +63,23 @@ if (!user || !password) throw new Error('Faltan credenciales');
       };
     });
     console.log(`Receipt template: ${JSON.stringify(receiptTemplate)}`);
+    const detailRequests = [];
+    page.on('request', request => {
+      try {
+        const url = new URL(request.url());
+        if (/envio|controlador|ajax|alta/i.test(url.pathname)) detailRequests.push({ method: request.method(), path: url.pathname });
+      } catch {}
+    });
+    await page.evaluate(() => window.appEnvios.openEdit(86074));
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const receiptValue = await page.$eval('#envio_alta_recibidopor', input => input.value).catch(() => '');
+    const receiptDigits = receiptValue.replace(/\D/g, '');
+    console.log(`Detail requests: ${JSON.stringify(detailRequests)}`);
+    console.log(`Shipment 86074 receiver: ${JSON.stringify({
+      present: Boolean(receiptValue.trim()),
+      name: receiptValue.replace(/\b(?:DNI|DOCUMENTO)\s*:?\s*[\d.\s-]{4,}.*$/i, '').trim() || undefined,
+      documentLast4: receiptDigits.length >= 4 ? receiptDigits.slice(-4) : undefined,
+    })}`);
 
     await page.goto('https://flexit.lightdata.app/modules/envios/listado/', { waitUntil: 'networkidle2', timeout: 30000 });
     console.log(`Listado path: ${new URL(page.url()).pathname}`);
