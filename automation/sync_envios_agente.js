@@ -55,6 +55,27 @@ async function main() {
   await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
   console.log("Login LightData OK");
 
+  if (process.env.INSPECT_DETAIL_ID) {
+    const diagnostic = await page.evaluate(async (id) => {
+      const body = new URLSearchParams({ operador: 'get', did: id });
+      const response = await fetch('/modules/envios/alta/controlador.php', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+        body: body.toString(),
+      });
+      const payload = await response.json();
+      const arrayShapes = Object.entries(payload)
+        .filter(([, value]) => Array.isArray(value))
+        .map(([key, value]) => ({ key, length: value.length, itemKeys: Object.keys(value[0] || {}) }));
+      const headerOrigins = Object.fromEntries(Object.entries(payload.header || {})
+        .filter(([key]) => /origen/i.test(key)));
+      return { rootKeys: Object.keys(payload), headerKeys: Object.keys(payload.header || {}), headerOrigins, arrayShapes };
+    }, process.env.INSPECT_DETAIL_ID);
+    console.log(`Diagnostico de estructura LightData: ${JSON.stringify(diagnostic)}`);
+    await browser.close();
+    return;
+  }
+
   // Descargar Excel del RANGO (mismo endpoint, con fecha_desde != fecha_hasta)
   const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=50000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaDesde)}&fecha_hasta=${encodeURIComponent(fechaHasta)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
 
