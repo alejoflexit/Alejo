@@ -71,7 +71,15 @@ async function main() {
         .filter(([key]) => /origen/i.test(key)));
       const headerFlags = Object.fromEntries(['flex', 'turbo', 'didMetodoEnvio']
         .map(key => [key, payload.header?.[key]]));
-      return { rootKeys: Object.keys(payload), headerKeys: Object.keys(payload.header || {}), headerOrigins, headerFlags, arrayShapes };
+      const receiptValue = payload.header?.envio_alta_recibidopor;
+      const receiptShape = {
+        type: typeof receiptValue,
+        isArray: Array.isArray(receiptValue),
+        keys: receiptValue && typeof receiptValue === 'object' ? Object.keys(receiptValue) : [],
+        stringLength: typeof receiptValue === 'string' ? receiptValue.length : 0,
+        hasDniToken: typeof receiptValue === 'string' && /(?:DNI|DOCUMENTO)/i.test(receiptValue),
+      };
+      return { rootKeys: Object.keys(payload), headerKeys: Object.keys(payload.header || {}), headerOrigins, headerFlags, receiptShape, arrayShapes };
     }, process.env.INSPECT_DETAIL_ID);
     console.log(`Diagnostico de estructura LightData: ${JSON.stringify(diagnostic)}`);
     await browser.close();
