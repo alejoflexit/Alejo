@@ -55,6 +55,20 @@ async function upsertPrivateReceipts({ baseUrl, key, rows, fetchImpl = fetch }) 
   return Number(await response.json());
 }
 
+async function getMaskedReceiptIds({ baseUrl, key, fetchImpl = fetch, pageSize = DEFAULT_PAGE_SIZE }) {
+  const ids = [];
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+  for (let offset = 0; ; offset += pageSize) {
+    const response = await fetchImpl(`${normalizedBaseUrl}/rest/v1/envios_busqueda?select=id_interno&recibido_por=not.is.null&order=id_interno`, {
+      headers: headers(key, { Range: `${offset}-${offset + pageSize - 1}` }),
+    });
+    if (!response.ok) throw new Error(`Supabase masked receipt read error: ${response.status}`);
+    const rows = await response.json();
+    ids.push(...rows.map(row => String(row.id_interno)));
+    if (rows.length < pageSize) return ids;
+  }
+}
+
 async function deleteBatch({ baseUrl, key, table, ids, fetchImpl }) {
   const filter = encodeURIComponent(`in.(${ids.join(",")})`);
   const response = await fetchImpl(`${baseUrl}/rest/v1/${table}?id_interno=${filter}`, {
@@ -107,4 +121,4 @@ async function refreshCacheSafely({
   return { previous: existingIds.length, current: rows.length, removed: staleIds.length };
 }
 
-module.exports = { refreshCacheSafely, upsertRows, upsertPrivateReceipts };
+module.exports = { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMaskedReceiptIds };

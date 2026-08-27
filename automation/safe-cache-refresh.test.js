@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { refreshCacheSafely, upsertRows, upsertPrivateReceipts } = require("./safe-cache-refresh");
+const { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMaskedReceiptIds } = require("./safe-cache-refresh");
 
 test("upserts every fresh row before deleting stale rows", async () => {
   const calls = [];
@@ -84,6 +84,20 @@ test("sends complete receipt data only through the private service-role RPC", as
   assert.deepEqual(JSON.parse(calls[0].init.body), {
     p_rows: [{ id_interno: "941916", recibido_por: "Facundo DNI:38576000" }],
   });
+});
+
+test("reads only shipment ids that already have a confirmed masked receipt", async () => {
+  const calls = [];
+  const ids = await getMaskedReceiptIds({
+    baseUrl: "https://project.example",
+    key: "secret-test",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return Response.json([{ id_interno: "941916" }]);
+    },
+  });
+  assert.deepEqual(ids, ["941916"]);
+  assert.match(calls[0].url, /recibido_por=not\.is\.null/);
 });
 
 test("rejects an empty download without touching Supabase", async () => {

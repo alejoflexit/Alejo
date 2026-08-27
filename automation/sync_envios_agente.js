@@ -11,7 +11,7 @@ const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const { refreshCacheSafely, upsertRows, upsertPrivateReceipts } = require('./safe-cache-refresh');
+const { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMaskedReceiptIds } = require('./safe-cache-refresh');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -128,7 +128,10 @@ async function main() {
   const entregadosHoy = envios.filter(envio =>
     /^entregado/i.test(envio.estado) && envio.fecha_estado.startsWith(fechaHasta),
   );
-  console.log(`Consultando receptor de ${entregadosHoy.length} entregas de hoy...`);
+  const receiptIds = process.env.BACKFILL_RECEIPTS === 'true'
+    ? await getMaskedReceiptIds({ baseUrl: SUPABASE_URL, key: SUPABASE_KEY })
+    : entregadosHoy.map(envio => envio.id_interno);
+  console.log(`Consultando receptor de ${receiptIds.length} entregas${process.env.BACKFILL_RECEIPTS === 'true' ? ' historicas confirmadas' : ' de hoy'}...`);
   let receiptRows = [];
   try {
     receiptRows = await page.evaluate(async (ids) => {
@@ -165,7 +168,7 @@ async function main() {
       };
       await Promise.all(Array.from({ length: Math.min(6, ids.length) }, worker));
       return results;
-    }, entregadosHoy.map(envio => envio.id_interno));
+    }, receiptIds);
   } finally {
     await browser.close();
   }

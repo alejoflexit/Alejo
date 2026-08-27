@@ -12,6 +12,12 @@ on:
     - cron: '0 21 * * *'   # 6pm AR
     - cron: '0 23 * * *'   # 8pm AR
   workflow_dispatch:
+    inputs:
+      backfill_receipts:
+        description: 'Completar DNI de recepciones ya confirmadas'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   sync:
@@ -32,5 +38,6 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
           LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
+          BACKFILL_RECEIPTS: ${{ inputs.backfill_receipts || 'false' }}
         run: cd automation && node sync_envios_agente.js
         timeout-minutes: 10
