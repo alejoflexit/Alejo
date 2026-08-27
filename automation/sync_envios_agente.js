@@ -107,6 +107,7 @@ async function main() {
       cod_cliente: S(r["Cod.Cliente"]),
       razon_social: S(r["Razon Social"] || r["Nombre Fantasia"]),
       id_venta_ml: S(r["ID venta ML"]),
+      origen: S(r["Origen"]),
       tracking: S(r["Número Tracking"]),
       url_tracking: S(r["URl Tracking"]),
       fecha_flexit: S(r["Fecha Flexit"]),
