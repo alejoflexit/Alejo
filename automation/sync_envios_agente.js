@@ -193,10 +193,63 @@ async function main() {
       await Promise.all(Array.from({ length: Math.min(6, ids.length) }, worker));
       return results;
     }, receiptIds);
-  } finally {
+  } catch (error) {
     await browser.close();
+    throw error;
   }
   console.log(`Receptores confirmados: ${receiptRows.length}`);
+
+  // La ficha individual es la fuente de verdad para el indicador Flex y para
+  // el historial de asignaciones. En cada pasada se actualizan los envíos de
+  // hoy; el backfill manual completa todo el rango de 14 días por única vez.
+  const detailCandidates = process.env.BACKFILL_DETAILS === 'true'
+    ? envios
+    : envios.filter(envio => envio.fecha_flexit.startsWith(fechaHasta));
+  const detailRows = [];
+  const DETAIL_CHUNK = 400;
+  console.log(`Consultando ficha individual de ${detailCandidates.length} envíos...`);
+  for (let start = 0; start < detailCandidates.length; start += DETAIL_CHUNK) {
+    const chunk = detailCandidates.slice(start, start + DETAIL_CHUNK)
+      .map(envio => ({ id: envio.id_interno, fallbackOrigin: envio.origen }));
+    const chunkRows = await page.evaluate(async (items) => {
+      const results = [];
+      let next = 0;
+      const worker = async () => {
+        while (next < items.length) {
+          const item = items[next++];
+          try {
+            const body = new URLSearchParams({ operador: 'get', did: item.id });
+            const response = await fetch('/modules/envios/alta/controlador.php', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+              body: body.toString(),
+            });
+            if (!response.ok) continue;
+            const payload = await response.json();
+            results.push({
+              id_interno: item.id,
+              origen: String(payload?.header?.flex) === '1' ? 'Flex' : item.fallbackOrigin,
+              asignaciones: Array.isArray(payload?.asignaciones)
+                ? payload.asignaciones.map(entry => ({
+                    asignado_a: String(entry?.operador || '').trim(),
+                    fecha: String(entry?.fecha || '').trim(),
+                    quien_asigno: String(entry?.quien || '').trim(),
+                    desde: String(entry?.desde || '').trim(),
+                  })).filter(entry => entry.asignado_a || entry.fecha)
+                : [],
+            });
+          } catch {
+            // Una ficha aislada no debe cancelar la actualización completa.
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(10, items.length) }, worker));
+      return results;
+    }, chunk);
+    detailRows.push(...chunkRows);
+    console.log(`  fichas ${Math.min(start + DETAIL_CHUNK, detailCandidates.length)}/${detailCandidates.length}`);
+  }
+  await browser.close();
 
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
@@ -219,6 +272,15 @@ async function main() {
       baseUrl: SUPABASE_URL,
       key: SUPABASE_KEY,
       rows: receiptRows.map(receipt => receipt.privateRow),
+    });
+  }
+
+  if (detailRows.length > 0) {
+    await upsertRows({
+      baseUrl: SUPABASE_URL,
+      key: SUPABASE_KEY,
+      table: "envios_busqueda",
+      rows: detailRows,
     });
   }
 

@@ -23,6 +23,11 @@ on:
         required: false
         default: ''
         type: string
+      backfill_details:
+        description: 'Completar origen exacto e historial de asignaciones'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   sync:
@@ -45,5 +50,6 @@ jobs:
           LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
           BACKFILL_RECEIPTS: ${{ inputs.backfill_receipts || 'false' }}
           INSPECT_DETAIL_ID: ${{ inputs.inspect_detail_id || '' }}
+          BACKFILL_DETAILS: ${{ inputs.backfill_details || 'false' }}
         run: cd automation && node sync_envios_agente.js
         timeout-minutes: 10
