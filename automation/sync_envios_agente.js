@@ -155,10 +155,12 @@ async function main() {
   const receiptIds = process.env.BACKFILL_RECEIPTS === 'true'
     ? await getMissingReceiptIds({ baseUrl: SUPABASE_URL, key: SUPABASE_KEY })
     : entregadosHoy.map(envio => envio.id_interno);
-  console.log(`Consultando receptor de ${receiptIds.length} entregas${process.env.BACKFILL_RECEIPTS === 'true' ? ' historicas confirmadas' : ' de hoy'}...`);
-  let receiptRows = [];
+  console.log(`Consultando receptor de ${receiptIds.length} entregas${process.env.BACKFILL_RECEIPTS === 'true' ? ' historicas incompletas' : ' de hoy'}...`);
+  const receiptRows = [];
+  const RECEIPT_CHUNK = 500;
   try {
-    receiptRows = await page.evaluate(async (ids) => {
+    for (let start = 0; start < receiptIds.length; start += RECEIPT_CHUNK) {
+      const chunkRows = await page.evaluate(async (ids) => {
       const results = [];
       let next = 0;
       const worker = async () => {
@@ -192,7 +194,10 @@ async function main() {
       };
       await Promise.all(Array.from({ length: Math.min(6, ids.length) }, worker));
       return results;
-    }, receiptIds);
+      }, receiptIds.slice(start, start + RECEIPT_CHUNK));
+      receiptRows.push(...chunkRows);
+      console.log(`  receptores ${Math.min(start + RECEIPT_CHUNK, receiptIds.length)}/${receiptIds.length}`);
+    }
   } catch (error) {
     await browser.close();
     throw error;
