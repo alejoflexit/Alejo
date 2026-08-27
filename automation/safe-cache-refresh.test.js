@@ -97,7 +97,7 @@ test("reads only shipment ids that already have a confirmed masked receipt", asy
     },
   });
   assert.deepEqual(ids, ["941916"]);
-  assert.match(calls[0].url, /recibido_por=not\.is\.null/);
+  assert.match(calls[0].url, /recibido_por=neq\./);
 });
 
 test("rejects an empty download without touching Supabase", async () => {

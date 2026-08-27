@@ -59,7 +59,7 @@ async function getMaskedReceiptIds({ baseUrl, key, fetchImpl = fetch, pageSize =
   const ids = [];
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   for (let offset = 0; ; offset += pageSize) {
-    const response = await fetchImpl(`${normalizedBaseUrl}/rest/v1/envios_busqueda?select=id_interno&recibido_por=not.is.null&order=id_interno`, {
+    const response = await fetchImpl(`${normalizedBaseUrl}/rest/v1/envios_busqueda?select=id_interno&recibido_por=neq.&order=id_interno`, {
       headers: headers(key, { Range: `${offset}-${offset + pageSize - 1}` }),
     });
     if (!response.ok) throw new Error(`Supabase masked receipt read error: ${response.status}`);
