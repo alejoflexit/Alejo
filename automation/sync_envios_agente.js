@@ -69,7 +69,9 @@ async function main() {
         .map(([key, value]) => ({ key, length: value.length, itemKeys: Object.keys(value[0] || {}) }));
       const headerOrigins = Object.fromEntries(Object.entries(payload.header || {})
         .filter(([key]) => /origen/i.test(key)));
-      return { rootKeys: Object.keys(payload), headerKeys: Object.keys(payload.header || {}), headerOrigins, arrayShapes };
+      const headerFlags = Object.fromEntries(['flex', 'turbo', 'didMetodoEnvio']
+        .map(key => [key, payload.header?.[key]]));
+      return { rootKeys: Object.keys(payload), headerKeys: Object.keys(payload.header || {}), headerOrigins, headerFlags, arrayShapes };
     }, process.env.INSPECT_DETAIL_ID);
     console.log(`Diagnostico de estructura LightData: ${JSON.stringify(diagnostic)}`);
     await browser.close();
