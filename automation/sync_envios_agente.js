@@ -229,6 +229,7 @@ async function main() {
             results.push({
               id_interno: item.id,
               origen: String(payload?.header?.flex) === '1' ? 'Flex' : item.fallbackOrigin,
+              telefono: String(payload?.header?.destination_receiver_phone || '').trim(),
               asignaciones: Array.isArray(payload?.asignaciones)
                 ? payload.asignaciones.map(entry => ({
                     asignado_a: String(entry?.operador || '').trim(),
