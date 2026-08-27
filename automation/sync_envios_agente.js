@@ -11,7 +11,7 @@ const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMaskedReceiptIds } = require('./safe-cache-refresh');
+const { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMissingReceiptIds, hasPrivateReceipt } = require('./safe-cache-refresh');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -153,7 +153,7 @@ async function main() {
     /^entregado/i.test(envio.estado) && envio.fecha_estado.startsWith(fechaHasta),
   );
   const receiptIds = process.env.BACKFILL_RECEIPTS === 'true'
-    ? await getMaskedReceiptIds({ baseUrl: SUPABASE_URL, key: SUPABASE_KEY })
+    ? await getMissingReceiptIds({ baseUrl: SUPABASE_URL, key: SUPABASE_KEY })
     : entregadosHoy.map(envio => envio.id_interno);
   console.log(`Consultando receptor de ${receiptIds.length} entregas${process.env.BACKFILL_RECEIPTS === 'true' ? ' historicas confirmadas' : ' de hoy'}...`);
   let receiptRows = [];
@@ -274,6 +274,17 @@ async function main() {
       key: SUPABASE_KEY,
       rows: receiptRows.map(receipt => receipt.privateRow),
     });
+  }
+
+  const verifyReceiptId = String(process.env.VERIFY_RECEIPT_ID || '').trim();
+  if (verifyReceiptId) {
+    const verified = await hasPrivateReceipt({
+      baseUrl: SUPABASE_URL,
+      key: SUPABASE_KEY,
+      id: verifyReceiptId,
+    });
+    if (!verified) throw new Error(`No se pudo verificar la recepcion del envio ${verifyReceiptId}`);
+    console.log(`Recepcion verificada para el envio ${verifyReceiptId}`);
   }
 
   if (detailRows.length > 0) {

@@ -55,18 +55,33 @@ async function upsertPrivateReceipts({ baseUrl, key, rows, fetchImpl = fetch }) 
   return Number(await response.json());
 }
 
-async function getMaskedReceiptIds({ baseUrl, key, fetchImpl = fetch, pageSize = DEFAULT_PAGE_SIZE }) {
+async function getMissingReceiptIds({ baseUrl, key, fetchImpl = fetch, pageSize = DEFAULT_PAGE_SIZE }) {
   const ids = [];
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   for (let offset = 0; ; offset += pageSize) {
-    const response = await fetchImpl(`${normalizedBaseUrl}/rest/v1/envios_busqueda?select=id_interno&recibido_por=neq.&order=id_interno`, {
+    const response = await fetchImpl(`${normalizedBaseUrl}/rest/v1/envios_busqueda?select=id_interno,estado,recibido_por&order=id_interno`, {
       headers: headers(key, { Range: `${offset}-${offset + pageSize - 1}` }),
     });
-    if (!response.ok) throw new Error(`Supabase masked receipt read error: ${response.status}`);
+    if (!response.ok) throw new Error(`Supabase missing receipt read error: ${response.status}`);
     const rows = await response.json();
-    ids.push(...rows.map(row => String(row.id_interno)));
+    ids.push(...rows
+      .filter(row => /^entregado/i.test(String(row.estado || "")) && !String(row.recibido_por || "").trim())
+      .map(row => String(row.id_interno)));
     if (rows.length < pageSize) return ids;
   }
+}
+
+async function hasPrivateReceipt({ baseUrl, key, id, fetchImpl = fetch }) {
+  const response = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/rest/v1/rpc/get_envios_recepcion`, {
+    method: "POST",
+    headers: headers(key, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ p_ids: [String(id)] }),
+  });
+  if (!response.ok) throw new Error(`Supabase private receipt verification error: ${response.status}`);
+  const rows = await response.json();
+  return Array.isArray(rows) && rows.some(row =>
+    String(row.id_interno) === String(id) && String(row.recibido_por || "").trim(),
+  );
 }
 
 async function deleteBatch({ baseUrl, key, table, ids, fetchImpl }) {
@@ -121,4 +136,4 @@ async function refreshCacheSafely({
   return { previous: existingIds.length, current: rows.length, removed: staleIds.length };
 }
 
-module.exports = { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMaskedReceiptIds };
+module.exports = { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMissingReceiptIds, hasPrivateReceipt };

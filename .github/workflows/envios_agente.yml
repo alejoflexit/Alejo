@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      verify_receipt_id:
+        description: 'Verificar que un envio tenga recepcion privada sin mostrar datos personales'
+        required: false
+        default: ''
+        type: string
       inspect_detail_id:
         description: 'Diagnóstico seguro de claves de una ficha LightData'
         required: false
@@ -49,6 +54,7 @@ jobs:
           LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
           LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
           BACKFILL_RECEIPTS: ${{ inputs.backfill_receipts || 'false' }}
+          VERIFY_RECEIPT_ID: ${{ inputs.verify_receipt_id || '' }}
           INSPECT_DETAIL_ID: ${{ inputs.inspect_detail_id || '' }}
           BACKFILL_DETAILS: ${{ inputs.backfill_details || 'false' }}
         run: cd automation && node sync_envios_agente.js

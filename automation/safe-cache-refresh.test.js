@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMaskedReceiptIds } = require("./safe-cache-refresh");
+const { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMissingReceiptIds, hasPrivateReceipt } = require("./safe-cache-refresh");
 
 test("upserts every fresh row before deleting stale rows", async () => {
   const calls = [];
@@ -86,18 +86,38 @@ test("sends complete receipt data only through the private service-role RPC", as
   });
 });
 
-test("reads only shipment ids that already have a confirmed masked receipt", async () => {
+test("reads only delivered shipment ids that are still missing receipt data", async () => {
   const calls = [];
-  const ids = await getMaskedReceiptIds({
+  const ids = await getMissingReceiptIds({
     baseUrl: "https://project.example",
     key: "secret-test",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      return Response.json([{ id_interno: "941916" }]);
+      return Response.json([
+        { id_interno: "941916", estado: "Entregado", recibido_por: null },
+        { id_interno: "941917", estado: "Entregado", recibido_por: "Facundo DNI:6000" },
+        { id_interno: "941918", estado: "A planta", recibido_por: null },
+      ]);
     },
   });
   assert.deepEqual(ids, ["941916"]);
-  assert.match(calls[0].url, /recibido_por=neq\./);
+  assert.match(calls[0].url, /select=id_interno,estado,recibido_por/);
+});
+
+test("verifies a private receipt without exposing its contents", async () => {
+  const calls = [];
+  const found = await hasPrivateReceipt({
+    baseUrl: "https://project.example",
+    key: "secret-test",
+    id: "86245",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return Response.json([{ id_interno: "86245", recibido_por: "Persona DNI:12345678" }]);
+    },
+  });
+  assert.equal(found, true);
+  assert.match(calls[0].url, /rpc\/get_envios_recepcion$/);
+  assert.deepEqual(JSON.parse(calls[0].init.body), { p_ids: ["86245"] });
 });
 
 test("rejects an empty download without touching Supabase", async () => {
