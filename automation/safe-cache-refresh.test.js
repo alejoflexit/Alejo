@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { refreshCacheSafely, upsertRows } = require("./safe-cache-refresh");
+const { refreshCacheSafely, upsertRows, upsertPrivateReceipts } = require("./safe-cache-refresh");
 
 test("upserts every fresh row before deleting stale rows", async () => {
   const calls = [];
@@ -63,6 +63,27 @@ test("never deletes the old cache when an upsert batch fails", async () => {
     writeBatch: 1,
   }), /upsert error/);
   assert.equal(methods.includes("DELETE"), false);
+});
+
+test("sends complete receipt data only through the private service-role RPC", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url, init });
+    return Response.json(1);
+  };
+
+  const count = await upsertPrivateReceipts({
+    baseUrl: "https://project.example",
+    key: "secret-test",
+    rows: [{ id_interno: "941916", recibido_por: "Facundo DNI:38576000" }],
+    fetchImpl,
+  });
+
+  assert.equal(count, 1);
+  assert.match(calls[0].url, /rpc\/upsert_envios_recepcion$/);
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    p_rows: [{ id_interno: "941916", recibido_por: "Facundo DNI:38576000" }],
+  });
 });
 
 test("rejects an empty download without touching Supabase", async () => {

@@ -44,6 +44,17 @@ async function upsertRows({ baseUrl, key, table, rows, fetchImpl = fetch, writeB
   }
 }
 
+async function upsertPrivateReceipts({ baseUrl, key, rows, fetchImpl = fetch }) {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  const response = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/rest/v1/rpc/upsert_envios_recepcion`, {
+    method: "POST",
+    headers: headers(key, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ p_rows: rows }),
+  });
+  if (!response.ok) throw new Error(`Supabase private receipt error: ${response.status}`);
+  return Number(await response.json());
+}
+
 async function deleteBatch({ baseUrl, key, table, ids, fetchImpl }) {
   const filter = encodeURIComponent(`in.(${ids.join(",")})`);
   const response = await fetchImpl(`${baseUrl}/rest/v1/${table}?id_interno=${filter}`, {
@@ -96,4 +107,4 @@ async function refreshCacheSafely({
   return { previous: existingIds.length, current: rows.length, removed: staleIds.length };
 }
 
-module.exports = { refreshCacheSafely, upsertRows };
+module.exports = { refreshCacheSafely, upsertRows, upsertPrivateReceipts };

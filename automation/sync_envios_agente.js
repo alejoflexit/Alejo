@@ -11,7 +11,7 @@ const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const { refreshCacheSafely, upsertRows } = require('./safe-cache-refresh');
+const { refreshCacheSafely, upsertRows, upsertPrivateReceipts } = require('./safe-cache-refresh');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
@@ -153,7 +153,11 @@ async function main() {
             const digits = documentMatch?.[1]?.replace(/\D/g, '') || '';
             const name = raw.replace(/\b(?:DNI|DOCUMENTO)\s*:?\s*[\d.\s-]{4,}\b.*$/i, '').trim();
             const masked = `${name}${digits.length >= 4 ? ` DNI:${digits.slice(-4)}` : ''}`.trim();
-            if (masked) results.push({ id_interno: id, recibido_por: masked });
+            const complete = `${name}${digits ? ` DNI:${digits}` : ''}`.trim();
+            if (masked && complete) results.push({
+              publicRow: { id_interno: id, recibido_por: masked },
+              privateRow: { id_interno: id, recibido_por: complete },
+            });
           } catch {
             // Un detalle aislado no debe dejar sin actualizar toda la caché.
           }
@@ -165,7 +169,7 @@ async function main() {
   } finally {
     await browser.close();
   }
-  console.log(`Receptores confirmados y enmascarados: ${receiptRows.length}`);
+  console.log(`Receptores confirmados: ${receiptRows.length}`);
 
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
@@ -182,7 +186,12 @@ async function main() {
       baseUrl: SUPABASE_URL,
       key: SUPABASE_KEY,
       table: "envios_busqueda",
-      rows: receiptRows,
+      rows: receiptRows.map(receipt => receipt.publicRow),
+    });
+    await upsertPrivateReceipts({
+      baseUrl: SUPABASE_URL,
+      key: SUPABASE_KEY,
+      rows: receiptRows.map(receipt => receipt.privateRow),
     });
   }
 
