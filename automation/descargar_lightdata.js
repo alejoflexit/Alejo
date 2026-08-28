@@ -20,6 +20,10 @@ async function supabaseGet(table, params = "") {
       "Authorization": `Bearer ${SUPABASE_KEY}`
     }
   });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase get error (${table}): ${res.status} ${text}`);
+  }
   return res.json();
 }
 
@@ -31,7 +35,11 @@ async function supabaseDelete(table, params) {
       "Authorization": `Bearer ${SUPABASE_KEY}`
     }
   });
-  return res.ok;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase delete error (${table}): ${res.status} ${text}`);
+  }
+  return true;
 }
 
 async function supabaseInsert(table, rows) {
@@ -463,11 +471,19 @@ async function main() {
   // Anti-overwrite: si ya existen datos para esta fecha y es hora laboral AR (>=9hs),
   // probablemente hubo una carga manual previa — no pisar.
   // Esto también evita gastar minutos de Actions en Puppeteer innecesariamente.
-  const existentes = await supabaseGet("semanas", `fecha=eq.${fecha}&select=id&limit=1`).catch(() => []);
+  const existentes = await supabaseGet("semanas", `fecha=eq.${fecha}&select=cantidad,envios_ml&limit=1000`);
+  const zonasExistentes = await supabaseGet("semanas_zonas", `fecha=eq.${fecha}&select=cantidad,envios_ml&limit=5000`);
   const horaAR = (new Date().getUTCHours() - 3 + 24) % 24;
-  console.log(`Hora Argentina: ${horaAR}hs | Registros existentes para ${fecha}: ${existentes.length}`);
-  if (existentes.length > 0 && horaAR >= 9) {
-    console.log(`⚠️ Saltando: ya existen datos y son las ${horaAR}hs AR — posible carga manual previa`);
+  const sumarExistentes = (filas, campo) => filas.reduce((total, fila) => total + Number(fila[campo] || 0), 0);
+  const diaCompleto =
+    existentes.length > 0 &&
+    zonasExistentes.length > 0 &&
+    sumarExistentes(existentes, "cantidad") === sumarExistentes(zonasExistentes, "cantidad") &&
+    sumarExistentes(existentes, "envios_ml") === sumarExistentes(zonasExistentes, "envios_ml");
+  const esBackupGitHub = process.env.RUN_SOURCE === "schedule";
+  console.log(`Hora Argentina: ${horaAR}hs | Día completo y cuadrado: ${diaCompleto}`);
+  if (diaCompleto && (esBackupGitHub || horaAR >= 9)) {
+    console.log(`⚠️ Saltando: ${fecha} ya está completo en ambas tablas (${esBackupGitHub ? "backup GitHub" : "control posterior a las 09:00"})`);
     return;
   }
 
@@ -600,6 +616,7 @@ async function main() {
     sin_datos_detalle: m.sinDatosDetalle || [],
     dem21_solapado: 0, // ya calculado sin doble conteo: la corrección no debe tocarlo
   }));
+  let zonasEsperadas = [];
   try {
     await supabaseInsert("semanas", insertRows);
   } catch(e) {
@@ -619,6 +636,7 @@ async function main() {
       if (Array.isArray(zc)) for (const z of zc) { const d = String(z.cp || "").replace(/\D/g, ""); if (d && !cpZona.has(d)) cpZona.set(d, z.zona); }
     } catch (e) { console.error(`⚠️ zonas_cp no cargó (zona_cp quedará por nombre): ${e.message}`); }
     const zonas = calcularZonas(rows, fecha, noEsDemora, cpZona);
+    zonasEsperadas = zonas;
     // Guard anti día-en-blanco: solo borrar si hay zonas nuevas para insertar.
     if (zonas.length > 0) {
       await supabaseDelete("semanas_zonas", `fecha=eq.${fecha}`);
@@ -630,8 +648,25 @@ async function main() {
       console.log(`⚠️ ${fecha}: 0 zonas calculadas — no se toca semanas_zonas`);
     }
   } catch (e) {
-    console.error(`⚠️ semanas_zonas falló para ${fecha} (no crítico): ${e.message}`);
+    throw new Error(`semanas_zonas falló para ${fecha}: ${e.message}`);
   }
+
+  const semanasGuardadas = await supabaseGet("semanas", `fecha=eq.${fecha}&select=cantidad,envios_ml&limit=1000`);
+  const zonasGuardadas = await supabaseGet("semanas_zonas", `fecha=eq.${fecha}&select=cantidad,envios_ml&limit=5000`);
+  const sumar = (filas, campo) => filas.reduce((total, fila) => total + Number(fila[campo] || 0), 0);
+  const esperadoCantidad = sumar(datos, "cantidad");
+  const esperadoML = sumar(datos, "envios_ml");
+  if (
+    semanasGuardadas.length !== datos.length ||
+    zonasGuardadas.length !== zonasEsperadas.length ||
+    sumar(semanasGuardadas, "cantidad") !== esperadoCantidad ||
+    sumar(zonasGuardadas, "cantidad") !== esperadoCantidad ||
+    sumar(semanasGuardadas, "envios_ml") !== esperadoML ||
+    sumar(zonasGuardadas, "envios_ml") !== esperadoML
+  ) {
+    throw new Error(`Verificación final falló para ${fecha}: semanas=${semanasGuardadas.length}/${datos.length}, zonas=${zonasGuardadas.length}/${zonasEsperadas.length}`);
+  }
+  console.log(`✅ Verificación final ${fecha}: ambas tablas cuadran (${esperadoCantidad} envíos, ${esperadoML} ML)`);
 }
 
 // Modo backfill (workflow_dispatch con fechas) vs corrida diaria normal.
