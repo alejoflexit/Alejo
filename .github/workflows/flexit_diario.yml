@@ -2,9 +2,11 @@ name: Flexit Carga Diaria v2
 
 on:
   schedule:
-    - cron: '0 4 * * *'   # 1am AR — todos los días (incluye domingo→sábado)
-    - cron: '0 5 * * *'   # 2am AR — backup
-    - cron: '0 6 * * *'   # 3am AR — backup adicional
+    # GitHub documenta que el minuto 0 concentra carga y puede demorar o descartar jobs.
+    # Los tres intentos quedan fuera del inicio de hora y separados entre sí.
+    - cron: '17 4 * * *'  # 1:17am AR — intento principal
+    - cron: '37 5 * * *'  # 2:37am AR — backup
+    - cron: '53 6 * * *'  # 3:53am AR — backup adicional
   workflow_dispatch:
     # Dejando las dos fechas vacías corre la carga diaria de siempre.
     # Completándolas, corre SOLO el backfill del histograma por hora (columna `horas`):
