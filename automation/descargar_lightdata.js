@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
-const { historialExcluyeDemora } = require('./demoras');
+const { historialExcluyeDemora, historialExcluyeDem21 } = require('./demoras');
 const fs = require('fs');
 const path = require('path');
 
@@ -162,14 +162,15 @@ async function esDemorReal(idInterno, codCliente, tokens, ldCookies, fechasOkISO
 // demora más: el envío no se entregó porque se reprogramó tarde, y eso ya se cuenta en dem21.
 // Antes caía en las dos (demorados y dem21 a la vez), así que el total mostraba el doble y el
 // SLA lo restaba dos veces.
-function esRepro21hs(estado, esML, fechaEstado) {
+function esRepro21hs(estado, esML, fechaEstado, excluidoPorHistorial = false) {
   if (!esML) return false;
+  if (excluidoPorHistorial) return false;
   if (!["reprogramado por meli", "Nadie", "Nadie 2DA visita"].includes(estado)) return false;
   const h = String(fechaEstado || "").split(" ")[1];
   return !!h && parseInt(h.split(":")[0]) >= 21;
 }
 
-function calcularDia(rows, fecha, noEsDemora) {
+function calcularDia(rows, fecha, noEsDemora, noEsDem21 = new Set()) {
   const map = {};
   const RESUELTOS = ["Entregado","Entregado 2DA visita","Cancelado"];
   for (const row of rows) {
@@ -187,8 +188,8 @@ function calcularDia(rows, fecha, noEsDemora) {
     const tieneDatos = !!(dirBase || loc);
     const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
     const fechaEstado = String(row["Fecha estado"] || "").trim();
-    const esRepro21 = esRepro21hs(estado, esML, fechaEstado);
-    const esDemorado = seriaDemorado && tieneDatos && !esRepro21;
+    const esRepro21 = esRepro21hs(estado, esML, fechaEstado, noEsDem21.has(idInterno));
+    const esDemorado = seriaDemorado && tieneDatos && !esRepro21 && !noEsDem21.has(idInterno);
     const esSinDatos = seriaDemorado && !tieneDatos; // cliente desvinculado de LightData: sin datos de destino, no se cuenta como demora
     const esEntregado = ["Entregado","Entregado 2DA visita"].includes(estado);
     let esPost21 = false;
@@ -261,7 +262,7 @@ function fechaEstadoADia(fechaEstado) {
   return "";
 }
 
-function calcularZonas(rows, fecha, noEsDemora, cpZona) {
+function calcularZonas(rows, fecha, noEsDemora, cpZona, noEsDem21 = new Set()) {
   const map = {};
   const RESUELTOS = ["Entregado", "Entregado 2DA visita", "Cancelado"];
   // columna de CP (header "CP" o que contenga "postal") — para resolver la zona por CP (autoritativo)
@@ -280,8 +281,8 @@ function calcularZonas(rows, fecha, noEsDemora, cpZona) {
     const tieneDatos = !!(dirBase || locOrig);
     const seriaDemorado = esML && (esEnPlanta || esEnCamino || esReproML) && !noEsDemora.has(idInterno);
     const fechaEstado = String(row["Fecha estado"] || "").trim();
-    const esRepro21 = esRepro21hs(estado, esML, fechaEstado);
-    const esDemorado = seriaDemorado && tieneDatos && !esRepro21;
+    const esRepro21 = esRepro21hs(estado, esML, fechaEstado, noEsDem21.has(idInterno));
+    const esDemorado = seriaDemorado && tieneDatos && !esRepro21 && !noEsDem21.has(idInterno);
     const esEntregado = ["Entregado", "Entregado 2DA visita"].includes(estado);
     let esPost21 = false;
     if (esEntregado && fechaEstado) {
@@ -375,10 +376,9 @@ function filasDeExcel(buffer) {
 }
 
 // Mismo criterio de "entregado" y de localidad_norm que calcularDia/calcularZonas.
-// Devuelve además el detalle de repro 21hs, que no depende de la verificación de demoras
-// contra el historial: sale directo del Excel (estado + hora), así que el backfill lo puede
-// reconstruir para atrás igual que el histograma.
-function histogramas(rows) {
+// Devuelve además el detalle de repro 21hs. La hora candidata sale del Excel, pero el set
+// noEsDem21 ya excluye los casos cuyo historial muestra un intento válido antes de las 21.
+function histogramas(rows, noEsDem21 = new Set()) {
   const cadetes = {}, zonas = {}, dem21 = {}, solapCad = {}, solapZona = {}, solapIds = {};
   for (const row of rows) {
     const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
@@ -386,11 +386,12 @@ function histogramas(rows) {
     const fechaEstado = String(row["Fecha estado"] || "").trim();
     const hEstado = horaEntrega(fechaEstado);
     const esML = String(row["Origen"] || "").trim() === "ML";
-    if (esML && ["reprogramado por meli", "Nadie", "Nadie 2DA visita"].includes(estado) && hEstado != null && hEstado >= 21) {
+    const idInterno = String(row["ID (Interno)"] || "").trim();
+    if (esML && !noEsDem21.has(idInterno) && ["reprogramado por meli", "Nadie", "Nadie 2DA visita"].includes(estado) && hEstado != null && hEstado >= 21) {
       const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
       const locR = String(row["Localidad"] || "").trim();
       const dir = [dirBase, locR].filter(Boolean).join(", ");
-      (dem21[cadete] || (dem21[cadete] = [])).push({ id: String(row["ID (Interno)"] || "").trim(), dir, estado });
+      (dem21[cadete] || (dem21[cadete] = [])).push({ id: idInterno, dir, estado });
       // Solapamiento con `demorados` en los días viejos: SOLO el "reprogramado por meli"
       // entraba también como demora (los "Nadie" nunca estuvieron ahí), y solo si tenía
       // dirección o localidad. Ese es el número exacto que hay que descontar.
@@ -400,7 +401,7 @@ function histogramas(rows) {
         solapZona[nz] = (solapZona[nz] || 0) + 1;
         // los IDs, para sacarlos también de la LISTA de demorados: el contador y el popover
         // tienen que decir lo mismo.
-        (solapIds[cadete] || (solapIds[cadete] = [])).push(String(row["ID (Interno)"] || "").trim());
+        (solapIds[cadete] || (solapIds[cadete] = [])).push(idInterno);
       }
     }
     if (!["Entregado", "Entregado 2DA visita"].includes(estado)) continue;
@@ -410,6 +411,23 @@ function histogramas(rows) {
     sumarHora(zonas[norm] || (zonas[norm] = {}), hEstado);
   }
   return { cadetes, zonas, dem21, solapCad, solapZona, solapIds };
+}
+
+async function idsConIntentoAntes21(rows, fecha, ldCookies) {
+  const candidatos = rows.filter(row => {
+    const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
+    return String(row["Origen"] || "").trim() === "ML"
+      && ["reprogramado por meli", "Nadie", "Nadie 2DA visita"].includes(estado)
+      && horaEntrega(String(row["Fecha estado"] || "").trim()) >= 21
+      && String(row["ID (Interno)"] || "").trim();
+  });
+  const excluidos = new Set();
+  for (const row of candidatos) {
+    const id = String(row["ID (Interno)"]).trim();
+    const historial = await getLDHistorial(id, ldCookies);
+    if (historialExcluyeDem21(historial, fecha)) excluidos.add(id);
+  }
+  return excluidos;
 }
 
 async function backfillHoras(desde, hasta) {
@@ -430,6 +448,8 @@ async function backfillHoras(desde, hasta) {
   await page.keyboard.press("Enter");
   await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 });
   console.log("Login LightData OK");
+  const cookies = await page.cookies();
+  const ldCookies = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
   let ok = 0, vacios = 0, fallos = 0;
   for (const fecha of fechas) {
@@ -440,7 +460,8 @@ async function backfillHoras(desde, hasta) {
       }, excelUrlDe(fecha));
       if (!r.ok || r.status !== 200 || r.data.length < 1000) { console.log(`· ${fecha}: excel vacío o error (${r.status || r.error})`); vacios++; continue; }
       const rows = filasDeExcel(Buffer.from(r.data));
-      const { cadetes, zonas, dem21, solapCad, solapZona, solapIds } = histogramas(rows);
+      const noEsDem21 = await idsConIntentoAntes21(rows, fecha, ldCookies);
+      const { cadetes, zonas, dem21, solapCad, solapZona, solapIds } = histogramas(rows, noEsDem21);
       if (!Object.keys(cadetes).length) { console.log(`· ${fecha}: 0 entregas con hora`); vacios++; continue; }
       const res = await rpcAplicarHoras(fecha, cadetes, zonas);
       const resD = await rpcAplicarDem21(fecha, dem21).catch((e) => { console.error(`  ⚠️ dem21_detalle: ${e.message}`); return { semanas: 0 }; });
@@ -588,7 +609,10 @@ async function main() {
   }
   console.log(`No son demora real: ${noEsDemora.size}`);
 
-  const datos = calcularDia(rows, fecha, noEsDemora);
+  const noEsDem21 = await idsConIntentoAntes21(rows, fecha, ldCookies);
+  console.log(`Repro tardío con intento antes de las 21: ${noEsDem21.size}`);
+
+  const datos = calcularDia(rows, fecha, noEsDemora, noEsDem21);
 
   // Guard: si LightData no devolvió cadetes (sesión vencida, Excel vacío), NO borrar ni pisar el día ya cargado.
   if (!datos || datos.length === 0) {
@@ -635,7 +659,7 @@ async function main() {
       const zc = await supabaseGet("zonas_cp", "select=cp,zona&limit=10000");
       if (Array.isArray(zc)) for (const z of zc) { const d = String(z.cp || "").replace(/\D/g, ""); if (d && !cpZona.has(d)) cpZona.set(d, z.zona); }
     } catch (e) { console.error(`⚠️ zonas_cp no cargó (zona_cp quedará por nombre): ${e.message}`); }
-    const zonas = calcularZonas(rows, fecha, noEsDemora, cpZona);
+    const zonas = calcularZonas(rows, fecha, noEsDemora, cpZona, noEsDem21);
     zonasEsperadas = zonas;
     // Guard anti día-en-blanco: solo borrar si hay zonas nuevas para insertar.
     if (zonas.length > 0) {

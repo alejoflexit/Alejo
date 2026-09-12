@@ -24,4 +24,20 @@ function historialExcluyeDemora(historial, fechasOkISO) {
   });
 }
 
-module.exports = { fechaEstadoADia, historialExcluyeDemora };
+function historialExcluyeDem21(historial, fechaISO) {
+  // El estado final puede ser "reprogramado por meli" después de las 21 aunque
+  // el intento real haya ocurrido antes (por ejemplo Nadie 18:26 -> Repro 23:10).
+  // En ese caso no corresponde penalizar dem21: manda el primer intento válido
+  // del mismo día, no la hora en que Meli actualizó automáticamente el estado.
+  const ESTADOS_INTENTO = new Set(["6", "11", "12"]);
+  return historial.some(h => {
+    if (!ESTADOS_INTENTO.has(String(h.estado))) return false;
+    if (fechaEstadoADia(h.fecha) !== fechaISO) return false;
+    const partes = String(h.fecha || "").trim().split(" ");
+    if (partes.length < 2) return false;
+    const hora = parseInt(partes[1].split(":")[0], 10);
+    return Number.isInteger(hora) && hora < 21;
+  });
+}
+
+module.exports = { fechaEstadoADia, historialExcluyeDemora, historialExcluyeDem21 };
