@@ -44,12 +44,21 @@ test("Nadie antes de las 21 evita un falso repro 21 por actualización tardía d
   assert.equal(historialExcluyeDem21(historial, "2026-09-11"), true);
 });
 
-test("un intento después de las 21 sí conserva la penalización dem21", () => {
+test("un intento exactamente a las 21 sí conserva la penalización dem21", () => {
   const historial = [
-    { estado: "6", fecha: "11/09/2026 21:26" },
+    { estado: "6", fecha: "11/09/2026 21:00" },
     { estado: "11", fecha: "11/09/2026 23:10" },
   ];
   assert.equal(historialExcluyeDem21(historial, "2026-09-11"), false);
+});
+
+test("reprogramado por comprador antes de las 21 evita el falso dem21 posterior", () => {
+  const historial = [
+    { estado: "12", fecha: "11/09/2026 18:48" },
+    { estado: "6", fecha: "11/09/2026 18:48" },
+    { estado: "11", fecha: "11/09/2026 23:07" },
+  ];
+  assert.equal(historialExcluyeDem21(historial, "2026-09-11"), true);
 });
 
 test("un intento temprano de otro día no altera el dem21 del día procesado", () => {
