@@ -323,12 +323,9 @@ function calcularZonas(rows, fecha, noEsDemora, cpZona, noEsDem21 = new Set()) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BACKFILL del histograma por hora (columna `horas`).
-// Se dispara con BACKFILL_DESDE / BACKFILL_HASTA (YYYY-MM-DD) y NO toca ninguna otra
-// columna: baja el Excel de cada día, arma {hora: entregas} por cadete y por localidad,
-// y lo aplica con la función aplicar_horas (que solo escribe `horas`).
-// No verifica demoras contra el historial — el histograma no depende de eso, así que
-// se ahorra la parte cara del pipeline.
+// BACKFILL del histograma y dem21.
+// Se dispara con BACKFILL_DESDE / BACKFILL_HASTA (YYYY-MM-DD): reconstruye `horas`
+// y vuelve a auditar todos los candidatos dem21 contra el historial interno.
 // ─────────────────────────────────────────────────────────────────────────────
 async function rpcAplicarHoras(fecha, cadetes, zonas) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/aplicar_horas`, {
@@ -340,11 +337,11 @@ async function rpcAplicarHoras(fecha, cadetes, zonas) {
   return res.json();
 }
 
-async function rpcAplicarDem21(fecha, cadetes) {
+async function rpcAplicarDem21(fecha, cadetes, zonas) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/aplicar_dem21_detalle`, {
     method: "POST",
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ p_fecha: fecha, p_cadetes: cadetes }),
+    body: JSON.stringify({ p_fecha: fecha, p_cadetes: cadetes, p_zonas: zonas }),
   });
   if (!res.ok) throw new Error(`aplicar_dem21_detalle ${res.status}: ${await res.text()}`);
   return res.json();
@@ -379,7 +376,7 @@ function filasDeExcel(buffer) {
 // Devuelve además el detalle de repro 21hs. La hora candidata sale del Excel, pero el set
 // noEsDem21 ya excluye los casos cuyo historial muestra un intento válido antes de las 21.
 function histogramas(rows, noEsDem21 = new Set()) {
-  const cadetes = {}, zonas = {}, dem21 = {}, solapCad = {}, solapZona = {}, solapIds = {};
+  const cadetes = {}, zonas = {}, dem21 = {}, dem21Zonas = {}, solapCad = {}, solapZona = {}, solapIds = {};
   for (const row of rows) {
     const estado = String(row["Estado"] || "").trim().replace(/^nan$/i, "");
     const cadete = String(row["Cadete"] || "").trim() || "⚠️ Sin asignar";
@@ -390,14 +387,15 @@ function histogramas(rows, noEsDem21 = new Set()) {
     if (esML && !noEsDem21.has(idInterno) && ["reprogramado por meli", "Nadie", "Nadie 2DA visita"].includes(estado) && hEstado != null && hEstado >= 21) {
       const dirBase = String(row["Domicilio"] || row["Dirección"] || row["Domicilio destino"] || row["Dom. Destino"] || row["Destino"] || "").trim();
       const locR = String(row["Localidad"] || "").trim();
+      const nz = normLoc(locR);
       const dir = [dirBase, locR].filter(Boolean).join(", ");
       (dem21[cadete] || (dem21[cadete] = [])).push({ id: idInterno, dir, estado });
+      dem21Zonas[nz] = (dem21Zonas[nz] || 0) + 1;
       // Solapamiento con `demorados` en los días viejos: SOLO el "reprogramado por meli"
       // entraba también como demora (los "Nadie" nunca estuvieron ahí), y solo si tenía
       // dirección o localidad. Ese es el número exacto que hay que descontar.
       if (estado === "reprogramado por meli" && (dirBase || locR)) {
         solapCad[cadete] = (solapCad[cadete] || 0) + 1;
-        const nz = normLoc(locR);
         solapZona[nz] = (solapZona[nz] || 0) + 1;
         // los IDs, para sacarlos también de la LISTA de demorados: el contador y el popover
         // tienen que decir lo mismo.
@@ -410,7 +408,7 @@ function histogramas(rows, noEsDem21 = new Set()) {
     const norm = normLoc(String(row["Localidad"] || "").trim());
     sumarHora(zonas[norm] || (zonas[norm] = {}), hEstado);
   }
-  return { cadetes, zonas, dem21, solapCad, solapZona, solapIds };
+  return { cadetes, zonas, dem21, dem21Zonas, solapCad, solapZona, solapIds };
 }
 
 async function idsConIntentoAntes21(rows, fecha, ldCookies) {
@@ -461,10 +459,12 @@ async function backfillHoras(desde, hasta) {
       if (!r.ok || r.status !== 200 || r.data.length < 1000) { console.log(`· ${fecha}: excel vacío o error (${r.status || r.error})`); vacios++; continue; }
       const rows = filasDeExcel(Buffer.from(r.data));
       const noEsDem21 = await idsConIntentoAntes21(rows, fecha, ldCookies);
-      const { cadetes, zonas, dem21, solapCad, solapZona, solapIds } = histogramas(rows, noEsDem21);
+      const { cadetes, zonas, dem21, dem21Zonas, solapCad, solapZona, solapIds } = histogramas(rows, noEsDem21);
       if (!Object.keys(cadetes).length) { console.log(`· ${fecha}: 0 entregas con hora`); vacios++; continue; }
       const res = await rpcAplicarHoras(fecha, cadetes, zonas);
-      const resD = await rpcAplicarDem21(fecha, dem21).catch((e) => { console.error(`  ⚠️ dem21_detalle: ${e.message}`); return { semanas: 0 }; });
+      const totalRepro = Object.values(dem21).reduce((n, detalle) => n + detalle.length, 0);
+      console.log(`  Auditoría dem21: ${noEsDem21.size} falsos excluidos, ${totalRepro} reales`);
+      const resD = await rpcAplicarDem21(fecha, dem21, dem21Zonas).catch((e) => { console.error(`  ⚠️ dem21_detalle: ${e.message}`); throw e; });
       const resC = await rpcCorregirDem21(fecha, solapCad, solapZona, solapIds).catch((e) => { console.error(`  ⚠️ correccion dem21: ${e.message}`); return { semanas: 0, zonas: 0 }; });
       const nSolap = Object.values(solapCad).reduce((a, b) => a + b, 0);
       console.log(`✓ ${fecha}: ${rows.length} filas → semanas ${res.semanas}, zonas ${res.zonas}, repro21 ${resD.semanas}, doble conteo corregido ${nSolap} en ${resC.semanas} filas (${resC.detalles_limpiados || 0} listas limpiadas)`);
