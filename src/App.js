@@ -84,15 +84,25 @@ async function esDemorReal(idInterno, codCliente) {
 }
 
 const BRAND = {
-  navy:    "#0D0D2B",
-  navyMid: "#12123A",
-  navyCard:"#1A1A4A",
+  navy:    "#061225",
+  navyMid: "rgba(10, 29, 53, 0.92)",
+  navyCard:"rgba(13, 31, 55, 0.86)",
   teal:    "#2ECFAA",
   blue:    "#3A8FD4",
   white:   "#FFFFFF",
   muted:   "rgba(255,255,255,0.62)", // contraste AA sobre navy (antes 0.5)
-  faint:   "rgba(255,255,255,0.08)",
-  border:  "rgba(255,255,255,0.1)",
+  faint:   "rgba(138, 187, 226, 0.08)",
+  border:  "rgba(118, 174, 220, 0.18)",
+};
+
+const APP_BACKGROUND = {
+  backgroundColor: BRAND.navy,
+  backgroundImage: [
+    "radial-gradient(circle at 75% 0%, rgba(20, 125, 170, 0.16), transparent 38%)",
+    "radial-gradient(circle at 15% 45%, rgba(25, 90, 155, 0.08), transparent 42%)",
+    "linear-gradient(145deg, #061225 0%, #08182D 48%, #050E1D 100%)",
+  ].join(", "),
+  backgroundAttachment: "fixed",
 };
 
 // Skeleton de carga: feedback inmediato al cambiar de vista (evita la pantalla congelada)
@@ -1009,7 +1019,7 @@ export default function App() {
   const btn  = (active) => ({ padding:"5px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${active?"#2ECFAA":BRAND.border}`, background:active?"rgba(46,207,170,0.15)":BRAND.faint, color:active?"#2ECFAA":BRAND.muted });
 
   if (loadingDB && seccion !== "home") return (
-    <div style={{ background:BRAND.navy, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", color:BRAND.teal, fontSize:16, fontFamily:"sans-serif" }}>
+    <div style={{ ...APP_BACKGROUND, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", color:BRAND.teal, fontSize:16, fontFamily:"sans-serif" }}>
       <div style={{ textAlign:"center" }}>
         <div style={{ fontSize:40, marginBottom:12 }}>🚚</div>
         Cargando historial...
@@ -1018,7 +1028,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background:BRAND.navy, minHeight:"100vh", padding:"1.5rem", paddingBottom: isMobile ? "5rem" : "1.5rem", color:BRAND.white }}>
+    <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", ...APP_BACKGROUND, minHeight:"100vh", padding:"1.5rem", paddingBottom: isMobile ? "5rem" : "1.5rem", color:BRAND.white }}>
 
       {/* Modal: elegir fecha antes de procesar Excel */}
       {showDateModal && (
