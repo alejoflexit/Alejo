@@ -3,6 +3,8 @@ import Home from "./Home";
 import { getSession, login, logout, authedFetch } from "./auth";
 import { cargarComentarios, useComentariosRealtime, aplicarCambioNota } from "./colectasShared";
 import { slaMeli } from "./slaShared";
+import { esDemoradoFlexit } from "./demoraTotalShared";
+import DemoraTotalCell from "./DemoraTotalCell";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
@@ -196,7 +198,7 @@ async function supabaseFetch(path, options = {}) {
 async function cargarDesdeSupabase() {
   let rows;
   try {
-    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,horas,demorados_detalle,dem21_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
+    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,demorados_flexit,horas,demorados_detalle,dem21_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
   } catch(e) {
     // Columna demorados_detalle no existe aún — usar query sin ella
     rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta&order=fecha.asc&limit=50000");
@@ -208,6 +210,7 @@ async function cargarDesdeSupabase() {
     if (!map[r.label].dias[r.fecha]) map[r.label].dias[r.fecha] = [];
     map[r.label].dias[r.fecha].push({
       cadete: r.cadete, cantidad: r.cantidad, pendientes: r.pendientes,
+      demorados_flexit: r.demorados_flexit ?? null,
       demorados: r.demorados, envios_ml: r.envios_ml, post21: r.post21||0, dem21: r.dem21||0, envios_particular: r.envios_particular||0, inicio_ruta: r.inicio_ruta||null, fin_ruta: r.fin_ruta||null, horas: r.horas||null, fecha: r.fecha,
       demoradosDetalle: r.demorados_detalle || [],
       dem21Detalle: r.dem21_detalle || [],
@@ -239,6 +242,7 @@ async function guardarEnSupabase(datos, fecha, weekLabel) {
     label: weekLabel, fecha, cadete: m.cadete,
     cantidad: m.cantidad, pendientes: m.pendientes,
     demorados: m.demorados, envios_ml: m.envios_ml, post21: m.post21 || 0, dem21: m.dem21 || 0, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null,
+    demorados_flexit: m.demorados_flexit ?? null,
     horas: m.horas || {},
     demorados_detalle: m.demoradosDetalle || [],
     dem21_detalle: m.dem21Detalle || [],
@@ -340,7 +344,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
         if (h >= 21) esPost21 = true;
       }
     }
-    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, horas: {}, demoradosDetalle: [], dem21Detalle: [], sinDatosDetalle: [] };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, demorados_flexit: 0, inicio_ruta: null, fin_ruta: null, horas: {}, demoradosDetalle: [], dem21Detalle: [], sinDatosDetalle: [] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
@@ -354,6 +358,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
     }
     if (esML)        map[cadete].envios_ml++;
     if (!esML)       map[cadete].envios_particular++;
+    if (esDemoradoFlexit(origen, row["Estado"])) map[cadete].demorados_flexit++;
     if (esPost21)    map[cadete].post21++;
     if (esEntregado) sumarHora(map[cadete].horas, horaEntrega(fechaEstado));
     // Track inicio and fin de ruta from entregados
@@ -456,7 +461,9 @@ function acumularSemana(dias) {
   const map = {};
   for (const dia of dias) {
     for (const m of dia.datos) {
-      if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [], dem21Detalle: [], sinDatosDetalle: [] };
+      if (!map[m.cadete]) map[m.cadete] = { cadete: m.cadete, cantidad: 0, pendientes: 0, demorados: 0, envios_ml: 0, post21: 0, dem21: 0, envios_particular: 0, demorados_flexit: 0, inicio_ruta: null, fin_ruta: null, demoradosDetalle: [], dem21Detalle: [], sinDatosDetalle: [] };
+      map[m.cadete].demorados_flexit = map[m.cadete].demorados_flexit == null || m.demorados_flexit == null
+        ? null : map[m.cadete].demorados_flexit + m.demorados_flexit;
       map[m.cadete].cantidad  += m.cantidad;
       map[m.cadete].pendientes+= m.pendientes;
       map[m.cadete].demorados += m.demorados;
@@ -731,6 +738,7 @@ export default function App() {
   const [filtro, setFiltro]       = useState("todos");
   const [sortCol, setSortCol]     = useState("slaMeli");
   const [showRuteo, setShowRuteo] = useState(false);
+  const [showExtras, setShowExtras] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
   const historialRef = useRef();
   useEffect(() => {
@@ -1555,11 +1563,16 @@ export default function App() {
                   })}
                 </div>
 
+                <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
                 {diaActivo && (
                   <button onClick={()=>setShowRuteo(r=>!r)} style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showRuteo?"#2ECFAA":BRAND.border}`, background:showRuteo?"rgba(46,207,170,0.15)":BRAND.faint, color:showRuteo?"#2ECFAA":BRAND.muted, flexShrink:0 }}>
                     🗺️ {showRuteo ? "Ocultar ruteo" : "Ver ruteo"}
                   </button>
                 )}
+                <button type="button" aria-expanded={showExtras} onClick={()=>setShowExtras(v=>!v)} style={{ padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showExtras ? "#2ECFAA" : BRAND.border}`, background:showExtras ? "rgba(46,207,170,0.15)" : BRAND.faint, color:showExtras ? "#2ECFAA" : BRAND.muted }}>
+                  Extras {showExtras ? "▴" : "▾"}
+                </button>
+                </div>
               </div>
 
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
@@ -1571,6 +1584,7 @@ export default function App() {
                       {[["Cadete","cadete",null],["Total","cantidad",null],["Entregados","entregados",null],["Pendientes","pendientes",null],["Demorados ML","demorados","Envío sin visitar al final del día"],["Repro 21hs","dem21","Visita post 21hs, reprogramado por ML"],["Post 21hs","post21","Entregado después de las 21hs"],["% Entrega","pctEntrega",null],["SLA Meli","slaMeli",null]].map(([label,col,tip])=>(
                         <ThHeader key={col} label={label} col={col} tip={tip} sortCol={sortCol} sortDir={sortDir} toggleSort={toggleSort} />
                       ))}
+                      {showExtras && <th scope="col" style={{ padding:"10px 14px", fontSize:11, color:BRAND.muted, textAlign:"right", whiteSpace:"nowrap", borderBottom:`1px solid ${BRAND.border}` }}>DEMORA TOTAL ⓘ</th>}
 
                     </tr>
                   </thead>
@@ -1594,6 +1608,7 @@ export default function App() {
 
                           <td style={{ padding:"10px 14px", fontSize:13, color:BRAND.muted, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.pctEntrega.toFixed(1)}%</td>
                           <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:sem.color, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.slaMeli!==null?m.slaMeli.toFixed(1)+"%":"—"}</td>
+                          {showExtras && <td style={{ padding:"10px 14px", fontSize:13, color:BRAND.white, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}><DemoraTotalCell metricas={m} /></td>}
 
                         </tr>
                       );

@@ -1,3 +1,4 @@
+const { esDemoradoFlexit } = require("../src/demoraTotalShared");
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
@@ -197,7 +198,7 @@ function calcularDia(rows, fecha, noEsDemora, noEsDem21 = new Set()) {
       const hora = fechaEstado.split(" ")[1];
       if (hora && parseInt(hora.split(":")[0]) >= 21) esPost21 = true;
     }
-    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, inicio_ruta:null, fin_ruta:null, horas:{}, demoradosDetalle:[], dem21Detalle:[], sinDatosDetalle:[] };
+    if (!map[cadete]) map[cadete] = { cadete, cantidad:0, pendientes:0, demorados:0, envios_ml:0, post21:0, dem21:0, envios_particular:0, demorados_flexit:0, inicio_ruta:null, fin_ruta:null, horas:{}, demoradosDetalle:[], dem21Detalle:[], sinDatosDetalle:[] };
     map[cadete].cantidad++;
     if (esPendiente) map[cadete].pendientes++;
     if (esDemorado) {
@@ -211,6 +212,7 @@ function calcularDia(rows, fecha, noEsDemora, noEsDem21 = new Set()) {
     }
     if (esML)        map[cadete].envios_ml++;
     if (!esML)       map[cadete].envios_particular++;
+    if (esDemoradoFlexit(origen, row["Estado"])) map[cadete].demorados_flexit++;
     if (esPost21)    map[cadete].post21++;
     if (esRepro21) {
       map[cadete].dem21++;
@@ -633,6 +635,7 @@ async function main() {
     demorados: m.demorados, envios_ml: m.envios_ml,
     post21: m.post21||0, dem21: m.dem21||0,
     envios_particular: m.envios_particular||0,
+    demorados_flexit: m.demorados_flexit,
     inicio_ruta: m.inicio_ruta||null, fin_ruta: m.fin_ruta||null,
     horas: m.horas || {},
     demorados_detalle: m.demoradosDetalle || [],
