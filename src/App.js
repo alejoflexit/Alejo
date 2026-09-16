@@ -669,18 +669,23 @@ function ThHeader({ label, col, tip, sortCol, sortDir, toggleSort }) {
   );
 }
 
-function TooltipKpi({ label, val, color, icon, tooltip, tooltipDem }) {
+function TooltipKpi({ label, val, color, icon, tooltip, tooltipDem, tooltipInfo }) {
   const [show, setShow] = React.useState(false);
-  const hasTooltip = !!(tooltip || tooltipDem);
+  const hasTooltip = !!(tooltip || tooltipDem || tooltipInfo);
   return (
     <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:10, padding:"1rem", position:"relative" }}
+      tabIndex={tooltipInfo ? 0 : undefined}
+      onFocus={()=>tooltipInfo&&setShow(true)} onBlur={()=>tooltipInfo&&setShow(false)}
+      onClick={()=>tooltipInfo&&setShow(true)}
+      onKeyDown={e=>{if(tooltipInfo && e.key === "Escape") setShow(false);}}
       onMouseEnter={()=>hasTooltip&&setShow(true)}
       onMouseLeave={()=>setShow(false)}>
       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-        <div style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</div>
+        <div style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}{tooltipInfo && " ⓘ"}</div>
         <i className={`ti ${icon}`} style={{ fontSize:16, color, opacity:0.7 }} />
       </div>
       <div style={{ fontSize:26, fontWeight:700, color }}>{val}</div>
+      {show && tooltipInfo && <div role="tooltip" style={{ position:"absolute", top:"calc(100% + 8px)", left:0, width:280, maxWidth:"calc(100vw - 56px)", boxSizing:"border-box", background:BRAND.navy, color:BRAND.white, border:`1px solid ${BRAND.border}`, borderRadius:10, padding:14, zIndex:100, boxShadow:"0 8px 24px rgba(0,0,0,0.4)", fontSize:12, lineHeight:1.5 }}>{tooltipInfo}</div>}
       {show && tooltip && (
         <div style={{ position:"absolute", top:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:BRAND.navy, border:`1px solid rgba(46,207,170,0.4)`, borderRadius:10, padding:"12px", zIndex:100, minWidth:220, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, padding:"8px 10px", background:"rgba(255,230,0,0.08)", border:"1px solid rgba(255,230,0,0.2)", borderRadius:8 }}>
@@ -1220,7 +1225,7 @@ export default function App() {
                 <TooltipKpi label="Entregados" val={totalEntregados} color="#2ECFAA" icon="ti-circle-check" />
                 <TooltipKpi label="Pendientes" val={totalPendientes} color="#3A8FD4" icon="ti-clock" />
                 <TooltipKpi label="Demorados" val={totalDemorados} color="#E24B4A" icon="ti-alert-circle" tooltipDem={{demML: totalDemDia, dem21: totalDem21}} />
-                <TooltipKpi label="SLA Flexit" val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
+                <TooltipKpi label="SLA Flexit" tooltipInfo="Porcentaje de envíos resueltos sobre el total de Mercado Libre y particulares. Fórmula: (total − pendientes) ÷ total × 100. Entregados y cancelados cuentan como resueltos. No mide entregas a horario. Cuanto más alto, mejor." val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
                 <TooltipKpi label="Cadetes" val={acumulado.length} color={BRAND.muted} icon="ti-users" />
               </div>
             </>
@@ -1252,7 +1257,7 @@ export default function App() {
               })()}
               <TooltipKpi label="Pendientes" val={totalPendientes} color="#3A8FD4" icon="ti-clock" />
               <TooltipKpi label="Demorados" val={totalDemorados} color="#E24B4A" icon="ti-alert-circle" tooltipDem={{demML: totalDemDia, dem21: totalDem21}} />
-              <TooltipKpi label="SLA Flexit" val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
+              <TooltipKpi label="SLA Flexit" tooltipInfo="Porcentaje de envíos resueltos sobre el total de Mercado Libre y particulares. Fórmula: (total − pendientes) ÷ total × 100. Entregados y cancelados cuentan como resueltos. No mide entregas a horario. Cuanto más alto, mejor." val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
               <TooltipKpi label="Cadetes" val={acumulado.length} color={BRAND.muted} icon="ti-users" />
             </div>
           )}
