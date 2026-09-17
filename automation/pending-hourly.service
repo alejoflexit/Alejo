@@ -1,0 +1,16 @@
+[Unit]
+Description=Flexit historical pending sync
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/flexit-pending/automation
+EnvironmentFile=/etc/flexit-pending.env
+Environment=TZ=America/Argentina/Buenos_Aires
+ExecStart=/usr/bin/flock -n /run/flexit-pending.lock /usr/bin/node /opt/flexit-pending/automation/sync_pending_hourly.cjs
+TimeoutStartSec=50min
+Nice=10
+CPUQuota=50%
+MemoryMax=1G
+StandardOutput=journal
+StandardError=journal

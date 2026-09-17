@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh Flexit pending shipments hourly
+
+[Timer]
+OnCalendar=*-*-* *:17:00
+Persistent=true
+Unit=pending-hourly.service
+
+[Install]
+WantedBy=timers.target

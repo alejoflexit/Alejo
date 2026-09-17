@@ -34,9 +34,9 @@ on:
         default: false
         type: boolean
       historical_days:
-        description: 'Días calendario a conservar en la caché histórica (default 90)'
+        description: 'Días calendario a conservar en la caché histórica (default 14)'
         required: false
-        default: '90'
+        default: '14'
         type: string
 
 jobs:
@@ -54,6 +54,7 @@ jobs:
 
       - name: Ejecutar sync de envios para el agente
         env:
+          TZ: America/Argentina/Buenos_Aires
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
@@ -62,6 +63,6 @@ jobs:
           VERIFY_RECEIPT_ID: ${{ inputs.verify_receipt_id || '' }}
           INSPECT_DETAIL_ID: ${{ inputs.inspect_detail_id || '' }}
           BACKFILL_DETAILS: ${{ inputs.backfill_details || 'false' }}
-          HISTORICAL_DAYS: ${{ inputs.historical_days || '90' }}
+          HISTORICAL_DAYS: ${{ inputs.historical_days || '14' }}
         run: cd automation && node sync_envios_agente.js
         timeout-minutes: 30

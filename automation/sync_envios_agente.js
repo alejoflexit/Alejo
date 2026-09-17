@@ -11,13 +11,13 @@ const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
-const { refreshCacheSafely, upsertRows, upsertPrivateReceipts, getMissingReceiptIds, hasPrivateReceipt } = require('./safe-cache-refresh');
+const { upsertRows, upsertPrivateReceipts, getMissingReceiptIds, hasPrivateReceipt } = require('./safe-cache-refresh');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const LD_USER = process.env.LIGHTDATA_USER;
 const LD_PASS = process.env.LIGHTDATA_PASSWORD;
-const DIAS_ATRAS_DEFAULT = 89; // 90 días calendario: histórico suficiente para arrancar
+const DIAS_ATRAS_DEFAULT = 14; // 90 días calendario: histórico suficiente para arrancar
 
 function fmtFecha(d) {
   const dd = String(d.getDate()).padStart(2, "0");
@@ -32,8 +32,8 @@ async function main() {
   const diasAtras = Math.max(1, Number(process.env.HISTORICAL_DAYS || DIAS_ATRAS_DEFAULT) - 1);
   const hoy = new Date();
   const desde = new Date(hoy); desde.setDate(hoy.getDate() - diasAtras);
-  const fechaDesde = fmtFecha(desde);
-  const fechaHasta = fmtFecha(hoy);
+  const fechaDesde = process.env.SYNC_FROM || fmtFecha(desde);
+  const fechaHasta = process.env.SYNC_TO || fmtFecha(hoy);
   console.log(`Sincronizando envíos ${fechaDesde} → ${fechaHasta} para el agente...`);
 
   const downloadPath = '/tmp/lightdata-agente';
@@ -43,7 +43,7 @@ async function main() {
   const browser = await puppeteer.launch({
     args: chromium.args,
     defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath(),
+    executablePath: process.env.CHROMIUM_PATH || await chromium.executablePath(),
     headless: chromium.headless,
   });
   const page = await browser.newPage();
@@ -268,7 +268,7 @@ async function main() {
 
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
-  const refresh = await refreshCacheSafely({
+  await upsertRows({
     baseUrl: SUPABASE_URL,
     key: SUPABASE_KEY,
     table: "envios_busqueda",
@@ -310,7 +310,7 @@ async function main() {
     });
   }
 
-  console.log(`✅ Sincronizados ${envios.length} envíos en envios_busqueda (${fechaDesde} → ${fechaHasta}); removidos=${refresh.removed}`);
+  console.log(`✅ Sincronizados ${envios.length} envíos en envios_busqueda (${fechaDesde} → ${fechaHasta}); removidos=0 (historial conservado)`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
