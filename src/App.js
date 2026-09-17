@@ -10,6 +10,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
 const Colectas = lazy(() => import("./Colectas"));
 const Tiquetera = lazy(() => import("./Tiquetera"));
+const PendientesHistoricos = lazy(() => import("./PendientesHistoricos"));
 const Pagos = lazy(() => import("./Pagos"));
 const Analisis = lazy(() => import("./Analisis"));
 const Seguimiento = lazy(() => import("./Seguimiento"));
@@ -129,6 +130,7 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
     { id: "zonas", icon: "ti ti-alarm", label: "Zonas" },
     { id: "pizarra", icon: "ti ti-notes", label: "Pizarra" },
     { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
+    { id: "pendientes", icon: "ti ti-history", label: "Pendientes históricos" },
     ...(getSession()?.email === "admin@flexit.app" ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
   ];
   return (
@@ -812,7 +814,7 @@ export default function App() {
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
-    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", pagos: "Liquidaciones" };
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", pendientes: "Pendientes históricos", pagos: "Liquidaciones" };
     const base = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
     document.title = (comNuevos > 0 && seccion !== "pizarra") ? `(${comNuevos}) ${base}` : base;
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
@@ -1075,8 +1077,8 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pagos" ? "Liquidaciones" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "pagos" ? "Liquidaciones" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "pagos" ? "Liquidación semanal de cadetes" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
@@ -1110,6 +1112,8 @@ export default function App() {
       {seccion === "pizarra" && <Suspense fallback={<VistaSkeleton />}><Pizarra /></Suspense>}
 
       {seccion === "tiquetera" && <Suspense fallback={<VistaSkeleton />}><Tiquetera /></Suspense>}
+
+      {seccion === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
 
       {seccion === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
 
