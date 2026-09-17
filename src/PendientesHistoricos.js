@@ -3,7 +3,8 @@ import { authedFetch } from "./auth";
 
 const URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
-const resolved = /^(entregado|cancelado)/i;
+// En esta bandeja, Cancelado sigue abierto hasta confirmar la devolución física.
+const resolved = /^entregado/i;
 const dateOnly = value => String(value || "").split(/[ T]/)[0];
 const isoDate = value => {
   const s = dateOnly(value); const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
