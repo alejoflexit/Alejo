@@ -18,6 +18,7 @@ const ICONS = {
   tiquetera: (<><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" /><path d="M13 5v2" /><path d="M13 17v2" /><path d="M13 11v2" /></>),
   pizarra: (<><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5Z" /><path d="M15 3v6h6" /><path d="M8 13h6" /><path d="M8 17h4" /></>),
   pagos: (<><rect width="20" height="12" x="2" y="6" rx="2" /><circle cx="12" cy="12" r="2" /><path d="M6 12h.01M18 12h.01" /></>),
+  pendientes: (<><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v6h6" /><path d="M12 7v5l3 2" /></>),
   bell: (<><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></>),
   arrow: (<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>),
   check: (<><path d="M20 6 9 17l-5-5" /></>),
@@ -361,7 +362,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
 
   const dock = [
     { id: "metricas", label: "Métricas" }, { id: "colectas", label: "Colectas" }, { id: "arribos", label: "Arribos" },
-    { id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }, { id: "pagos", label: "Pagos" },
+    { id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }, { id: "pagos", label: "Pagos" }, { id: "pendientes", label: "Históricos" },
   ];
 
   const bg = {
@@ -518,7 +519,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         </>)}
 
         {/* DOCK */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(6,1fr)", gap: isMobile ? 10 : 12, marginTop: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(7,1fr)", gap: isMobile ? 10 : 12, marginTop: 24 }}>
           {dock.map((d) => (
             <button key={d.id} onClick={() => onNav(d.id)} style={{ ...cardBase, padding: "14px 6px", textAlign: "center", cursor: "pointer", color: C.ink2, transition: "transform .18s ease, border-color .18s ease" }}
               onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; e.currentTarget.style.color = C.ink; }}
