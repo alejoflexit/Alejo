@@ -17,7 +17,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const LD_USER = process.env.LIGHTDATA_USER;
 const LD_PASS = process.env.LIGHTDATA_PASSWORD;
-const DIAS_ATRAS = 13; // 14 días calendario: 13 hacia atrás + hoy
+const DIAS_ATRAS_DEFAULT = 89; // 90 días calendario: histórico suficiente para arrancar
 
 function fmtFecha(d) {
   const dd = String(d.getDate()).padStart(2, "0");
@@ -29,8 +29,9 @@ async function main() {
   if (!SUPABASE_URL || !SUPABASE_KEY || !LD_USER || !LD_PASS) {
     throw new Error('Faltan SUPABASE_URL, SUPABASE_KEY, LIGHTDATA_USER o LIGHTDATA_PASSWORD');
   }
+  const diasAtras = Math.max(1, Number(process.env.HISTORICAL_DAYS || DIAS_ATRAS_DEFAULT) - 1);
   const hoy = new Date();
-  const desde = new Date(hoy); desde.setDate(hoy.getDate() - DIAS_ATRAS);
+  const desde = new Date(hoy); desde.setDate(hoy.getDate() - diasAtras);
   const fechaDesde = fmtFecha(desde);
   const fechaHasta = fmtFecha(hoy);
   console.log(`Sincronizando envíos ${fechaDesde} → ${fechaHasta} para el agente...`);
