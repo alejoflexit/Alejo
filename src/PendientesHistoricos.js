@@ -46,7 +46,8 @@ export default function PendientesHistoricos() {
   const visible = useMemo(() => rows.filter(r => (!day || r.origin === day) && (service === "Todos" || r.service === service) && (state === "Todos" || String(r.estado || "Sin estado").trim() === state) && `${r.id_venta_ml} ${r.tracking} ${r.razon_social} ${r.cadete} ${r.direccion} ${r.localidad}`.toLowerCase().includes(query.toLowerCase())).sort((a,b) => String(a.origin).localeCompare(String(b.origin)) || Number(b.service === "Flex") - Number(a.service === "Flex")), [rows,day,service,state,query]);
   const count = type => rows.filter(r => (!day || r.origin === day) && (type === "Todos" || r.service === type)).length;
   const calendarDays = useMemo(() => {
-    const base = parseDate(day) || new Date(); const start = new Date(base); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    // El calendario es histórico: termina en hoy y nunca adelanta fechas futuras.
+    const base = parseDate(argentinaToday()) || new Date(); const start = new Date(base); start.setDate(start.getDate() - 6);
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); const key = d.toISOString().slice(0, 10); const rs = rows.filter(r => r.origin === key); return { key, d, rs }; });
   }, [rows, day]);
   return <div style={{ color:"#fff" }}>
