@@ -784,7 +784,7 @@ export default function App() {
   const [seccion, setSeccion] = useState(() => {
     // Deep-link por hash (#colectas, #metricas…): lo usan los atajos del widget de Paco
     const h = (window.location.hash || "").replace("#", "");
-    return ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "pagos", "home"].includes(h) ? h : "home";
+    return ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "pendientes", "pagos", "home"].includes(h) ? h : "home";
   });
   const [session, setSession] = useState(() => getSession());
   const fileRef = useRef();
