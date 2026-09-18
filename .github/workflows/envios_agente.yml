@@ -6,11 +6,7 @@ name: Sync Envios Agente WhatsApp
 
 on:
   schedule:
-    - cron: '0 12 * * *'   # 9am AR
-    - cron: '0 15 * * *'   # 12pm AR
-    - cron: '0 18 * * *'   # 3pm AR
-    - cron: '0 21 * * *'   # 6pm AR
-    - cron: '0 23 * * *'   # 8pm AR
+    - cron: '0 * * * *'    # cada hora; GitHub Actions usa UTC
   workflow_dispatch:
     inputs:
       backfill_receipts:
