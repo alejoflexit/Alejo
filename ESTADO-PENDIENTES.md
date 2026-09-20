@@ -104,6 +104,20 @@ El estilo banner se conservó porque lo sigue usando el cartel de error.
 
 Formato de hora: se le propuso a Alejo pasar de "01:59 p. m." a 24 horas y dijo que no. Queda es-AR sin hour12, igual que Colectas, Pagos, Tiquetera y Seguimiento. Solo Zonas.js fuerza 24 horas.
 
+## Rótulo de frescura: ahora muestra la última actualización de datos (commit 4c35b9c)
+
+Alejo pidió que el bloque de arriba a la derecha deje de decir "Última consulta de la pantalla" y pase a indicar cuándo se actualizaron los datos.
+
+El problema de fondo: envios_busqueda.actualizado_at tiene default now() y no tiene ningún trigger, así que solo se escribía al insertar la fila. Un domingo sin envíos nuevos quedaba clavado en el alta anterior y no servía como marca de sincronización. Se verificó que esa columna no la usaba nadie más; los usos de actualizado_at que aparecen en Zonas.js son de otra tabla.
+
+Se cambiaron los dos lados. automation/sync_envios_agente.js ahora calcula sincronizadoAt al inicio del guardado y lo estampa en toda la tanda principal. src/PendientesHistoricos.js pide actualizado_at en el select, calcula el máximo sobre todas las filas antes de descartar los entregados y lo muestra bajo el rótulo "Última actualización de datos", con "sin dato" como respaldo.
+
+Verificado en producción: muestra 19-sept 04:08 p. m., que es exactamente el máximo de actualizado_at en Supabase.
+
+OJO, todavía no es la hora real de sincronización. Hasta que el workflow corra con el código nuevo, el valor sigue siendo la última alta de un envío. Hoy dice 19/09 aunque el sync corrió el 20/09 a las 11:28, porque un domingo no entraron envíos nuevos. Recién después de la próxima corrida el número pasa a ser la hora de la corrida. El workflow acepta workflow_dispatch, así que se puede forzar para comprobarlo; no se disparó sin pedírselo a Alejo.
+
+Los tests existentes pasan: 12 de 12 con node --test tests/*.test.js. Nota de entorno: esos tests son de node:test, no de jest, y hay que pasarles el glob de archivos, no la carpeta.
+
 ## Hallazgos abiertos, requieren decisión de Alejo
 
 0. Los botones de semana del calendario (flecha izquierda, "Semana actual", flecha derecha) NO hacen nada: no tienen handler y se comprobó en producción que el calendario no se mueve. Son previos a este trabajo. Por la regla de rótulos de Alejo, o se cablean o se sacan.
