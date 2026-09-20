@@ -30,7 +30,7 @@ export default function PendingFilters({ title, count, service, setService, quer
     <div className="ph-controls">
       <label className="ph-search"><span aria-hidden="true">⌕</span><input aria-label="Buscar envíos" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar envío, cliente o dirección…" /></label>
       <select aria-label="Cadete asignado" value={courier} onChange={e => setCourier(e.target.value)}><option value="">Todos los cadetes</option>{couriers.map(value => <option key={value} value={value}>{value}</option>)}</select>
-      <div className="ph-menu-anchor"><button className="ph-state-trigger" aria-expanded={menu === "all"} onClick={() => setMenu(menu === "all" ? null : "all")}><span>Estados · {openActive ? "Abiertos" : returnActive ? "Devoluciones" : selectedStates.length ? `${selectedStates.length} seleccionados` : "Todos"}</span><span aria-hidden="true">⌄</span></button>{menu === "all" && options(states)}</div>
+      <div className="ph-menu-anchor"><button className="ph-state-trigger" aria-expanded={menu === "all"} onClick={() => setMenu(menu === "all" ? null : "all")}><span>Estados · {openActive ? "Abiertos" : returnActive ? "Devoluciones" : selectedStates.length ? `${selectedStates.length} seleccionado${selectedStates.length > 1 ? "s" : ""}` : "Todos"}</span><span aria-hidden="true">⌄</span></button>{menu === "all" && options(states)}</div>
     </div>
     <div className="ph-quick" role="group" aria-label="Filtros rápidos de estado">
       <button className="ph-state-pill" aria-pressed={openActive} title={OPEN_STATES.join(', ')} onClick={() => setSelectedStates([...OPEN_STATES])}><span className="ph-dot" />Abiertos</button>

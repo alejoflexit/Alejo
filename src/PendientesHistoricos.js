@@ -5,7 +5,7 @@ import { getSession, authedFetch } from "./auth";
 
 const URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
-// En esta bandeja, Cancelado sigue abierto hasta confirmar la devolución física.
+// Cancelado y Rechazado por el comprador NO son entregas abiertas: se gestionan como devolución a depósito (RETURN_STATES en pendingPriority.js). El grupo identifica casos a gestionar; no prueba que el paquete haya vuelto.
 const resolved = /^entregado/i;
 const dateOnly = value => String(value || "").split(/[ T]/)[0];
 const isoDate = value => {
