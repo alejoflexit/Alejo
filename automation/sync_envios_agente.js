@@ -266,13 +266,19 @@ async function main() {
   }
   await browser.close();
 
+  // actualizado_at tiene default now(), asi que solo se escribia al insertar la fila:
+  // un domingo sin envios nuevos quedaba con la fecha del ultimo alta y no servia
+  // para saber cuando se sincronizo. Ahora cada corrida la estampa en toda la tanda,
+  // y la pantalla muestra el maximo como "ultima actualizacion de datos".
+  const sincronizadoAt = new Date().toISOString();
+
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
   await upsertRows({
     baseUrl: SUPABASE_URL,
     key: SUPABASE_KEY,
     table: "envios_busqueda",
-    rows: envios,
+    rows: envios.map(envio => ({ ...envio, actualizado_at: sincronizadoAt })),
     onProgress: (done, total) => console.log(`  guardados ${done}/${total}`),
   });
 

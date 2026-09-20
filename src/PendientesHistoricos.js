@@ -35,7 +35,7 @@ export default function PendientesHistoricos() {
   const [day, setDay] = useState(argentinaYesterday);
   const [criticalOnly, setCriticalOnly] = useState(false);
   const [courier, setCourier] = useState("");
-  const [checkedAt, setCheckedAt] = useState(null);
+  const [dataAt, setDataAt] = useState(null);
   const loadingRef = useRef(false);
   const [service, setService] = useState("Todos"), [state, setState] = useState([...OPEN_STATES]), [query, setQuery] = useState(""), [selected, setSelected] = useState(null);
   const load = async () => {
@@ -46,13 +46,15 @@ export default function PendientesHistoricos() {
       if (!getSession()) throw new Error("Iniciá sesión desde Inicio para consultar los pendientes.");
       const data = [];
       for (let offset = 0; ; offset += 1000) {
-        const res = await authedFetch(URL + '/rest/v1/envios_busqueda?select=id_interno,id_venta_ml,tracking,estado,fecha_estado,fecha_flexit,cadete,razon_social,direccion,localidad,origen&order=id_interno&limit=1000&offset=' + offset, { headers:{ apikey:KEY } });
+        const res = await authedFetch(URL + '/rest/v1/envios_busqueda?select=id_interno,id_venta_ml,tracking,estado,fecha_estado,fecha_flexit,cadete,razon_social,direccion,localidad,origen,actualizado_at&order=id_interno&limit=1000&offset=' + offset, { headers:{ apikey:KEY } });
         if (!res.ok) throw new Error('No se pudieron cargar los pendientes (' + res.status + ')');
         const page = await res.json(); data.push(...page);
         if (page.length < 1000) break;
       }
       setRows(data.filter(r => !resolved.test(String(r.estado || '').trim())).map(r => ({ ...r, service:serviceOf(r), origin:isoDate(r.fecha_flexit) || isoDate(r.fecha_estado) })));
-      setCheckedAt(new Date());
+      let ultimo = 0;
+      for (const row of data) { const at = Date.parse(row.actualizado_at); if (Number.isFinite(at) && at > ultimo) ultimo = at; }
+      setDataAt(ultimo ? new Date(ultimo) : null);
     } catch(e) { setError(e.message); } finally { setLoading(false); loadingRef.current=false; }
   };
   useEffect(() => { load(); const timer=setInterval(() => { if (!document.hidden) load(); },60000); return () => clearInterval(timer); }, []);
@@ -65,7 +67,7 @@ export default function PendientesHistoricos() {
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); const key = d.toISOString().slice(0, 10); const rs = rows.filter(r => r.origin === key && isOpenShipment(r)); const flex = rs.filter(r => r.service === "Flex").length; return { key, d, rs, flex, part: rs.length - flex }; });
   }, [rows]);
   return <div style={{ color:"#fff" }}>
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:16 }}><div><h2 style={{ margin:0, fontSize:22 }}>Pendientes históricos</h2><div style={{ color:"rgba(255,255,255,.62)", fontSize:12, marginTop:5 }}>Cada envío pendiente, hasta su resolución.</div></div><div style={{ display:"flex", alignItems:"center", gap:12 }}><div style={{ textAlign:"right", color:"rgba(255,255,255,.55)", fontSize:11 }}>Última consulta de la pantalla<br/><b style={{ color:"#fff" }}>{(checkedAt || new Date()).toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</b></div><button onClick={load} disabled={loading} style={button}>{loading ? "Actualizando…" : "↻ Actualizar"}</button></div></div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:16 }}><div><h2 style={{ margin:0, fontSize:22 }}>Pendientes históricos</h2><div style={{ color:"rgba(255,255,255,.62)", fontSize:12, marginTop:5 }}>Cada envío pendiente, hasta su resolución.</div></div><div style={{ display:"flex", alignItems:"center", gap:12 }}><div style={{ textAlign:"right", color:"rgba(255,255,255,.55)", fontSize:11 }}>Última actualización de datos<br/><b style={{ color:"#fff" }}>{dataAt ? dataAt.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "sin dato"}</b></div><button onClick={load} disabled={loading} style={button}>{loading ? "Actualizando…" : "↻ Actualizar"}</button></div></div>
     <div style={urgentHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><div><b>Flex abiertos con más de 48 horas</b><small style={{display:"block",marginTop:5,color:"#bfc7d8"}}>Estos envíos necesitan seguimiento prioritario.</small></div></div><button onClick={() => { setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
     {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
     <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button style={button}>←</button><button style={button}>Semana actual</button><button style={button}>→</button></div></div><div style={daysGrid}>{calendarDays.map(({key,d,rs,flex,part}) => <div key={key} style={{ position:"relative" }}><button onClick={() => setDay(key)} style={{ ...dayCard, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button></div>)}</div></div>
