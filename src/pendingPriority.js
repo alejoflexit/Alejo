@@ -8,7 +8,16 @@ export function shipmentTime(value) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+export const normalizeState = value => String(value || 'Sin estado').trim().toLowerCase().replace(/\s+/g, ' ');
+export const OPEN_STATES = ['En camino al destinatario', 'En planta de procesamiento', 'Nadie', 'Nadie 2DA visita', 'No entregado', 'Reprogramado por Meli'];
+export const RETURN_STATES = ['Cancelado', 'Rechazado por el comprador'];
+export const isOpenShipment = row => OPEN_STATES.some(s => normalizeState(s) === normalizeState(row.estado));
+export const needsReturn = row => RETURN_STATES.some(s => normalizeState(s) === normalizeState(row.estado));
+export const matchesStates = (row, states) => !states.length || states.some(s => normalizeState(s) === normalizeState(row.estado));
+
 export function pendingPriority(row, now = Date.now()) {
+  if (needsReturn(row)) return { rank: -1, label: 'Gestionar devolución a depósito', color: '#9aacc5' };
+  if (!isOpenShipment(row)) return { rank: -1, label: 'Fuera de entregas abiertas', color: '#9aacc5' };
   const time = shipmentTime(row.fecha_flexit);
   if (time === null) return { rank: 0, label: 'Fecha sin confirmar', color: '#9aacc5' };
   const hours = Math.max(0, (now - time) / 3600000);
