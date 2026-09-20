@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import PendingFilters from "./PendingFilters";
-import { pendingPriority, OPEN_STATES, isOpenShipment, matchesStates } from "./pendingPriority";
+import { pendingPriority, OPEN_STATES, isOpenShipment, matchesSelection } from "./pendingPriority";
 import { getSession, authedFetch } from "./auth";
 
 const URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -53,7 +53,7 @@ export default function PendientesHistoricos() {
   useEffect(() => { load(); const timer=setInterval(() => { if (!document.hidden) load(); },60000); return () => clearInterval(timer); }, []);
   const states = useMemo(() => [...new Set(rows.map(r => String(r.estado || "Sin estado").trim()))].sort(), [rows]);
   const couriers = useMemo(() => [...new Set(rows.map(r => r.cadete || "Sin asignar"))].sort((a,b) => a.localeCompare(b)), [rows]);
-  const visible = useMemo(() => rows.filter(r => (!day || r.origin === day) && (!criticalOnly || pendingPriority(r).rank === 3) && (service === "Todos" || r.service === service) && (!courier || (r.cadete || "Sin asignar") === courier) && matchesStates(r, state) && `${r.id_venta_ml} ${r.tracking} ${r.razon_social} ${r.cadete} ${r.direccion} ${r.localidad}`.toLowerCase().includes(query.toLowerCase())).sort((a,b) => pendingPriority(b).rank - pendingPriority(a).rank || String(a.origin).localeCompare(String(b.origin)) || Number(b.service === "Flex") - Number(a.service === "Flex")), [rows,day,service,state,query,criticalOnly,courier]);
+  const visible = useMemo(() => rows.filter(r => (!day || r.origin === day) && (!criticalOnly || pendingPriority(r).rank === 3) && (service === "Todos" || r.service === service) && (!courier || (r.cadete || "Sin asignar") === courier) && matchesSelection(r, state) && `${r.id_venta_ml} ${r.tracking} ${r.razon_social} ${r.cadete} ${r.direccion} ${r.localidad}`.toLowerCase().includes(query.toLowerCase())).sort((a,b) => pendingPriority(b).rank - pendingPriority(a).rank || String(a.origin).localeCompare(String(b.origin)) || Number(b.service === "Flex") - Number(a.service === "Flex")), [rows,day,service,state,query,criticalOnly,courier]);
   const calendarDays = useMemo(() => {
     // El calendario es histórico: termina en hoy y nunca adelanta fechas futuras.
     const base = parseDate(argentinaToday()) || new Date(); const start = new Date(base); start.setDate(start.getDate() - 6);
