@@ -96,7 +96,13 @@ Qué cambió. El número grande de cada tarjeta pasó a ser el conteo Flex, en a
 
 Verificado en producción: las siete tarjetas muestran 0/5, 1/7, 1/13, 3/20, 26/35, 27/8 y domingo sin cobertura, idéntico a la consulta a Supabase. Revisado en escritorio y en 375x812.
 
-Advertencia de color pendiente de revisar con Alejo: el amarillo ya significa "Atención · +24 h" en el semáforo, y la píldora Flex de la tabla sigue en verde agua. El mismo concepto quedó con dos colores y el amarillo con dos significados. Se avisó al implementar; si molesta, se unifica cambiando FLEX_ACCENT en src/PendientesHistoricos.js.
+El choque de color quedó resuelto por otra vía. Alejo pidió borrar el cartel del semáforo (commit a7ec0e9), que era el que prometía "amarillo +24 h", así que la leyenda ya no contradice al calendario. El Flex sigue en amarillo #f2c94c y el semáforo sigue coloreando las etiquetas de la tabla, pero sin cartel que declare qué significa cada color.
+
+Efecto lateral a tener presente: ese cartel también llevaba la advertencia "La hora de consulta no indica cuándo se sincronizó LightData". Esa aclaración ya no está en pantalla. Queda solo el rótulo "Última consulta de la pantalla", que está redactado a propósito para no prometer sincronización. Si más adelante alguien confunde una cosa con la otra, hay que reponer la aclaración en otro lado.
+
+El estilo banner se conservó porque lo sigue usando el cartel de error.
+
+Formato de hora: se le propuso a Alejo pasar de "01:59 p. m." a 24 horas y dijo que no. Queda es-AR sin hour12, igual que Colectas, Pagos, Tiquetera y Seguimiento. Solo Zonas.js fuerza 24 horas.
 
 ## Hallazgos abiertos, requieren decisión de Alejo
 
