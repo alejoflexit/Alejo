@@ -86,7 +86,22 @@ NO se tocó "Repro gramar", el otro cadete ficticio, con 8 envíos y 2 abiertos:
 
 Pendiente de definir: si Pendientes debería arrancar filtrado en Flex en lugar de Todos. Alejo lo dejó para después.
 
+## Tarjeta de día: Flex como número principal (commits 5e47bca y abac7d8, verificado en producción el 20/09)
+
+Alejo pidió diferenciar Flex de particular en el calendario. Se le mostraron tres opciones visuales (quedaron en work/Alejo/propuestas/opciones-dia.html y .png, con datos reales) y eligió la opción B con el Flex en amarillo.
+
+El argumento: el lunes 14 tenía 5 pendientes y ninguno Flex, mientras el sábado 19 tenía 35 con 27 Flex. Las dos tarjetas se veían idénticas.
+
+Qué cambió. El número grande de cada tarjeta pasó a ser el conteo Flex, en amarillo #f2c94c, con los particulares en una línea abajo. El bloque se renombró a "Flex abiertos por día" para que el título diga lo que el número muestra. Se eliminó el tooltip de hover, que mostraba justo ese corte y en Safari iOS no se podía abrir; el dato ahora está siempre visible. El encabezado del bloque envuelve en pantallas angostas, porque el título más largo lo apretaba a tres líneas en 375px.
+
+Verificado en producción: las siete tarjetas muestran 0/5, 1/7, 1/13, 3/20, 26/35, 27/8 y domingo sin cobertura, idéntico a la consulta a Supabase. Revisado en escritorio y en 375x812.
+
+Advertencia de color pendiente de revisar con Alejo: el amarillo ya significa "Atención · +24 h" en el semáforo, y la píldora Flex de la tabla sigue en verde agua. El mismo concepto quedó con dos colores y el amarillo con dos significados. Se avisó al implementar; si molesta, se unifica cambiando FLEX_ACCENT en src/PendientesHistoricos.js.
+
 ## Hallazgos abiertos, requieren decisión de Alejo
+
+0. Los botones de semana del calendario (flecha izquierda, "Semana actual", flecha derecha) NO hacen nada: no tienen handler y se comprobó en producción que el calendario no se mueve. Son previos a este trabajo. Por la regla de rótulos de Alejo, o se cablean o se sacan.
+
 
 1. RESUELTO, ver la sección anterior. Texto original: Existe un cadete llamado "devuelto  deposito" (con doble espacio) con 20 envíos en estado abierto, de los cuales 13 caen dentro de los 32 Flex +48 h del hero. Es decir, cerca del 41 por ciento de la alerta de urgentes son envíos que ya volvieron al depósito, porque la devolución quedó anotada en el campo de cadete y no en el estado. Mientras siga así, el número del hero no sirve como cola de trabajo para soporte. Pendiente definir si se excluye ese cadete, si se normaliza el dato en origen o si se resuelve en LightData.
 2. "Devuelto al cliente" (23 envíos) no pertenece ni a Abiertos ni a Devoluciones: solo aparece eligiéndolo a mano en Más estados. Definir si se suma al grupo de devoluciones o queda aparte deliberadamente.
