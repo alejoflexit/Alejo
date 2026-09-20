@@ -44,6 +44,7 @@ Cada número de pantalla se contrastó contra una consulta directa a Supabase qu
 | Devoluciones con servicio Flex | 170 | 170 |
 | Estado individual Devuelto al cliente | 23 | 23 |
 
+- El hero es sensible a la hora: se midió 32 a las 13:15 y 40 a las 13:38 del mismo día, y la consulta a Supabase devolvió 40 en ese segundo momento. El umbral de 48 h corre contra el reloj, no contra un valor guardado; al revisar, comparar siempre pantalla y base en el mismo instante.
 - Prueba discriminante: el 18/09 el calendario muestra 62. Si los cancelados no se excluyeran mostraría 77. La exclusión está confirmada.
 - Revisar urgentes: 32 envíos, título "Pendientes de todo el historial", todas las filas Flex y con etiqueta "Crítico · Flex +48 h", cadete y búsqueda vacíos, chip "Flex +48 h · quitar filtro" visible.
 - Cambiar de Abiertos a Devoluciones estando en modo urgente: el chip desaparece, la etiqueta pasa a "Gestionar devolución a depósito" y el calendario sigue contando abiertos. Correcto.
