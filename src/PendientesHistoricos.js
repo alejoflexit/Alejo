@@ -24,7 +24,7 @@ const serviceOf = row => ["flex", "ml", "mercado libre"].includes(String(row.ori
 const dayCard = { width:"100%", minHeight:112, textAlign:"left", display:"flex", flexDirection:"column", gap:4, padding:12, border:"1px solid transparent", background:"rgba(255,255,255,.045)", color:"#fff", borderRadius:9, cursor:"pointer" };
 const dayActive = { background:"rgba(46,207,170,.14)", borderColor:"#2ECFAA" };
 const tooltip = { position:"absolute", top:"calc(100% + 7px)", left:0, zIndex:20, minWidth:150, padding:10, borderRadius:8, background:"#10223d", border:"1px solid rgba(255,255,255,.2)", boxShadow:"0 8px 24px #0008", fontSize:12, lineHeight:1.7 };
-const daysGrid = { display:"grid", gridTemplateColumns:"repeat(7,minmax(0,1fr))", gap:8, width:"100%" };
+const daysGrid = { display:"grid", gridTemplateColumns:"repeat(7,minmax(78px,1fr))", gap:8, width:"100%", overflowX:"auto", paddingBottom:4 };
 export default function PendientesHistoricos() {
   const [rows, setRows] = useState([]), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [day, setDay] = useState(argentinaYesterday);
