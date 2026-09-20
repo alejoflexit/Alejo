@@ -1,6 +1,6 @@
 # Estado de Pendientes históricos
 
-Actualizado: 20/09/2026, tarde. Implementador de este tramo: Claude. Pase a ChatGPT para revisión. Este archivo registra la última evidencia; no reemplaza comprobar el estado actual.
+Actualizado: 20/09/2026, tarde, segunda vuelta. Implementador de este tramo: Claude. Pase a ChatGPT para revisión. Este archivo registra la última evidencia; no reemplaza comprobar el estado actual.
 
 ## Objetivo y responsables
 
@@ -62,9 +62,33 @@ Conclusión: la separación Abiertos / Devoluciones está verificada en producci
 - Ambos archivos pasan el parseo. El build completo no se pudo correr en la carpeta montada por la limitación de borrado descrita arriba; la compilación real la hace Vercel.
 - Despliegue de 4acd2ee CONFIRMADO Y VERIFICADO en producción el 20/09. El chunk pasó de 430.d11ab6d4 a 430.0e9ea549. Comprobado en pantalla: con un estado elegido el selector dice "1 seleccionado", con tres dice "3 seleccionados", y al tildar Cancelado más Rechazado por el comprador la etiqueta pasa sola a "Devoluciones".
 
+## Cadete ficticio de devolución: RESUELTO el 20/09 (commit dbcbf27, verificado en producción)
+
+Alejo confirmó el criterio: Pendientes históricos sirve para detectar Flex antiguos que siguen vigentes y hay que entregar; lo cancelado y lo ya devuelto se gestiona aparte.
+
+LightData no tiene un estado para "volvió al depósito". La operación lo anota reasignando el envío al cadete ficticio "devuelto  deposito", con doble espacio. Esos envíos quedaban en un estado abierto, sumaban al calendario y entraban en la alerta Flex +48 h, donde no hay cadete real a quien llamar.
+
+Implementación en src/pendingPriority.js. Se agregó RETURN_COURIERS con normalización que tolera mayúsculas, acentos y espacios repetidos. isOpenShipment los excluye y needsReturn los incluye, así que caen en Devoluciones a depósito con etiqueta propia, "Ya volvió al depósito · según el cadete asignado", distinta de "Gestionar devolución a depósito". Abiertos y Devoluciones pasaron a ser grupos con significado a través de matchesSelection; la selección individual de Más estados sigue siendo literal por estado, así que quien elige un estado suelto ve todo lo que tiene ese estado.
+
+Efecto medido en producción, contrastado contra Supabase en el mismo instante:
+
+| Indicador | Antes | Después | Supabase |
+|---|---|---|---|
+| Hero Flex +48 h | 42 | 29 | 29 |
+| Abiertos, todo el historial | 178 | 158 | 158 |
+| Devoluciones | 176 | 205 | 205 |
+| Calendario 18/09 | 62 | 61 | 61 |
+| Calendario 17/09 | 27 | 23 | 23 |
+
+Revisar urgentes quedó en 29 envíos repartidos en 21 cadetes reales, todos etiquetados Crítico y ninguno del cadete ficticio. Dentro de Devoluciones, 149 aparecen como ya devueltos según el cadete y 56 como pendientes de gestionar, que es una separación útil que antes no existía.
+
+NO se tocó "Repro gramar", el otro cadete ficticio, con 8 envíos y 2 abiertos: significa reprogramar, no devolver, así que sigue contando como entrega vigente. Si Alejo decide que tampoco corresponde, se agrega a RETURN_COURIERS o se le da su propio tratamiento.
+
+Pendiente de definir: si Pendientes debería arrancar filtrado en Flex en lugar de Todos. Alejo lo dejó para después.
+
 ## Hallazgos abiertos, requieren decisión de Alejo
 
-1. PRIORITARIO. Existe un cadete llamado "devuelto  deposito" (con doble espacio) con 20 envíos en estado abierto, de los cuales 13 caen dentro de los 32 Flex +48 h del hero. Es decir, cerca del 41 por ciento de la alerta de urgentes son envíos que ya volvieron al depósito, porque la devolución quedó anotada en el campo de cadete y no en el estado. Mientras siga así, el número del hero no sirve como cola de trabajo para soporte. Pendiente definir si se excluye ese cadete, si se normaliza el dato en origen o si se resuelve en LightData.
+1. RESUELTO, ver la sección anterior. Texto original: Existe un cadete llamado "devuelto  deposito" (con doble espacio) con 20 envíos en estado abierto, de los cuales 13 caen dentro de los 32 Flex +48 h del hero. Es decir, cerca del 41 por ciento de la alerta de urgentes son envíos que ya volvieron al depósito, porque la devolución quedó anotada en el campo de cadete y no en el estado. Mientras siga así, el número del hero no sirve como cola de trabajo para soporte. Pendiente definir si se excluye ese cadete, si se normaliza el dato en origen o si se resuelve en LightData.
 2. "Devuelto al cliente" (23 envíos) no pertenece ni a Abiertos ni a Devoluciones: solo aparece eligiéndolo a mano en Más estados. Definir si se suma al grupo de devoluciones o queda aparte deliberadamente.
 3. El tooltip del calendario con el desglose Flex / Particulares por día se abre con hover, así que en iPhone es inalcanzable. Alejo usa iPhone como dispositivo de campo.
 4. Al llegar desde Revisar urgentes y pasar a Devoluciones queda activo el servicio Flex: se ven 170 en lugar de 176 sin ninguna señal visual de que hay un filtro puesto.
