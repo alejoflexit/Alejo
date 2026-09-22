@@ -128,7 +128,11 @@ Los tres colSpan del tbody pasaron de 5 a 6 por la columna nueva.
 
 Limitación encontrada y resuelta: en el navegador donde se probó, el permiso clipboard-write está denegado y execCommand también falla, así que el botón quedaba muerto en "No se pudo". Ahora, si el copiado falla, se abre el detalle con el mensaje en un campo de solo lectura, seleccionado por un ref callback, más onFocus y onClick, con una línea que explica que hay que copiarlo a mano. Verificado en producción: selecciona los 212 caracteres del mensaje.
 
-NO SE PUDO VERIFICAR que el copiado automático funcione, porque el navegador usado para probar tiene el permiso denegado por política, no por un problema del código. En un Chrome normal y en Safari de iPhone, sobre HTTPS y dentro del gesto del usuario, debería andar. Hay que confirmarlo en el teléfono de campo.
+BUG PROPIO CORREGIDO el 21/09 (commit 3ebebf1): el respaldo con execCommand estaba dentro del else de "existe navigator.clipboard". Si el navegador tenía la API pero la rechazaba, el respaldo nunca se intentaba y se abría el detalle. Alejo reportó exactamente eso: hacía clic y en vez de copiar se le abría un panel. Ahora un rechazo de writeText cae en el respaldo con textarea, y el detalle queda solo como último recurso cuando fallan los dos caminos.
+
+VERIFICADO en producción con un clic real: el copiado llega al portapapeles del sistema operativo y la pantalla no abre ningún panel. La API moderna sigue denegada en el navegador de prueba; lo que funciona ahí es el respaldo, que es justamente el camino que antes no se ejecutaba.
+
+Queda por confirmar el comportamiento en el iPhone de campo, que es donde más se va a usar.
 
 Idea que quedó afuera del alcance: si un cadete tiene varios pendientes, hoy hay que copiar uno por uno. Un mensaje único agrupado por cadete sería el paso siguiente natural.
 
