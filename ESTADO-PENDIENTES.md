@@ -122,7 +122,7 @@ Los tests existentes pasan: 12 de 12 con node --test tests/*.test.js. Nota de en
 
 Alejo pidió poder copiar un mensajito para mandarle al cadete cuando ve un pendiente viejo, con el tono "Hola Darío, tengo este envío pendiente desde el 20 de septiembre, quería saber qué pasó".
 
-El botón arma el texto con nombre de pila, fecha de origen, estado actual, número de envío, cliente y dirección. Está en la fila, en una sexta columna llamada Mensaje, con stopPropagation para que no abra el detalle, y también dentro del panel de detalle con vista previa. El rótulo dice "Copiar mensaje" y no "Avisar": la app copia al portapapeles, no manda nada.
+El botón arma el texto con nombre de pila, fecha de origen, estado actual, número de envío, cliente y dirección. En la fila es un cuadradito de 30 por 30 con el ícono de copiar, sin texto y sin encabezado de columna, porque Alejo lo pidió lo más discreto posible; al copiar pasa a tilde. El nombre vive en title y aria-label, así que el control sigue siendo identificable sin ver el ícono. Lleva stopPropagation para no abrir el detalle. Dentro del panel de detalle se conserva el botón con texto y la vista previa, que es donde vive la explicación cuando el portapapeles está bloqueado. Ningún rótulo dice "Avisar": la app copia, no manda nada.
 
 Los tres colSpan del tbody pasaron de 5 a 6 por la columna nueva.
 
