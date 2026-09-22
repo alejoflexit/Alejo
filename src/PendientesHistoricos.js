@@ -57,23 +57,36 @@ export default function PendientesHistoricos() {
   const [copiado, setCopiado] = useState("");
   const copiar = async row => {
     const texto = mensajeCadete(row);
-    try {
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(texto);
-      else {
-        // Safari viejo y contextos sin permiso de portapapeles.
+    // Copia con textarea + execCommand: sirve donde la API moderna esta bloqueada.
+    const conTextarea = () => {
+      try {
         const area = document.createElement("textarea");
-        area.value = texto; area.style.position = "fixed"; area.style.opacity = "0";
-        document.body.appendChild(area); area.select();
-        document.execCommand("copy"); document.body.removeChild(area);
-      }
+        area.value = texto;
+        area.setAttribute("readonly", "");
+        area.style.position = "fixed"; area.style.top = "0"; area.style.left = "0"; area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.focus(); area.select();
+        area.setSelectionRange(0, texto.length);
+        const hecho = document.execCommand("copy");
+        area.remove();
+        return hecho;
+      } catch { return false; }
+    };
+    let hecho = false;
+    // Antes, si writeText existia pero fallaba, se saltaba el respaldo y se abria
+    // el detalle. Ahora un rechazo cae en el respaldo y el usuario no sale de la tabla.
+    try {
+      if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(texto); hecho = true; }
+    } catch { hecho = false; }
+    if (!hecho) hecho = conTextarea();
+    if (hecho) {
       setCopiado(row.id_interno);
-      setTimeout(() => setCopiado(actual => actual === row.id_interno ? "" : actual), 2000);
-    } catch {
-      // Algunos navegadores niegan el permiso de portapapeles. En vez de dejar un boton
-      // muerto, abrimos el detalle con el texto seleccionado para copiarlo a mano.
-      setCopiado("error:" + row.id_interno);
-      setSelected(row);
+      setTimeout(() => setCopiado(actual => actual === row.id_interno ? "" : actual), 1800);
+      return;
     }
+    // Ultimo recurso, solo si los dos caminos fallan: el texto a mano en el detalle.
+    setCopiado("error:" + row.id_interno);
+    setSelected(row);
   };
   const loadingRef = useRef(false);
   const [service, setService] = useState("Todos"), [state, setState] = useState([...OPEN_STATES]), [query, setQuery] = useState(""), [selected, setSelected] = useState(null);
