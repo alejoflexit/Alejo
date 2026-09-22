@@ -35,7 +35,9 @@ const primerNombre = value => String(value || "").trim().split(/\s+/)[0] || "";
 function mensajeCadete(row) {
   const nombre = primerNombre(row.cadete);
   const envio = row.id_venta_ml || row.tracking || row.id_interno;
-  const destino = [row.direccion, row.localidad].filter(Boolean).join(", ");
+  // LightData trae direcciones con espacios repetidos ("Eva Peron  969").
+  const limpio = value => String(value || "").replace(/\s+/g, " ").trim();
+  const destino = [limpio(row.direccion), limpio(row.localidad)].filter(Boolean).join(", ");
   return [
     nombre ? `Hola ${nombre}, ¿cómo andás?` : "Hola, ¿cómo andás?",
     `Tengo este envío pendiente desde el ${labelDate(row.origin)} y sigue figurando como "${row.estado || "sin estado"}".`,

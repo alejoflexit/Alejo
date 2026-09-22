@@ -118,6 +118,20 @@ OJO, todavía no es la hora real de sincronización. Hasta que el workflow corra
 
 Los tests existentes pasan: 12 de 12 con node --test tests/*.test.js. Nota de entorno: esos tests son de node:test, no de jest, y hay que pasarles el glob de archivos, no la carpeta.
 
+## Mensaje para el cadete, copiable (commits 88ee041, 3f9cc5b, b6050f2 y el de limpieza de espacios)
+
+Alejo pidió poder copiar un mensajito para mandarle al cadete cuando ve un pendiente viejo, con el tono "Hola Darío, tengo este envío pendiente desde el 20 de septiembre, quería saber qué pasó".
+
+El botón arma el texto con nombre de pila, fecha de origen, estado actual, número de envío, cliente y dirección. Está en la fila, en una sexta columna llamada Mensaje, con stopPropagation para que no abra el detalle, y también dentro del panel de detalle con vista previa. El rótulo dice "Copiar mensaje" y no "Avisar": la app copia al portapapeles, no manda nada.
+
+Los tres colSpan del tbody pasaron de 5 a 6 por la columna nueva.
+
+Limitación encontrada y resuelta: en el navegador donde se probó, el permiso clipboard-write está denegado y execCommand también falla, así que el botón quedaba muerto en "No se pudo". Ahora, si el copiado falla, se abre el detalle con el mensaje en un campo de solo lectura, seleccionado por un ref callback, más onFocus y onClick, con una línea que explica que hay que copiarlo a mano. Verificado en producción: selecciona los 212 caracteres del mensaje.
+
+NO SE PUDO VERIFICAR que el copiado automático funcione, porque el navegador usado para probar tiene el permiso denegado por política, no por un problema del código. En un Chrome normal y en Safari de iPhone, sobre HTTPS y dentro del gesto del usuario, debería andar. Hay que confirmarlo en el teléfono de campo.
+
+Idea que quedó afuera del alcance: si un cadete tiene varios pendientes, hoy hay que copiar uno por uno. Un mensaje único agrupado por cadete sería el paso siguiente natural.
+
 ## Hallazgos abiertos, requieren decisión de Alejo
 
 0. Los botones de semana del calendario (flecha izquierda, "Semana actual", flecha derecha) NO hacen nada: no tienen handler y se comprobó en producción que el calendario no se mueve. Son previos a este trabajo. Por la regla de rótulos de Alejo, o se cablean o se sacan.
