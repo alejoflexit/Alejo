@@ -165,6 +165,22 @@ Estado de la verificación en producción, al 23/09:
 
 Nota de entorno: git en esta carpeta deja bloqueos huérfanos (.git/*.lock y objects/tmp_obj_*) porque el montaje no permite borrar. Hay que pedir permiso de borrado y limpiarlos antes de commitear. El permiso se vence dentro de la misma sesión y hay que volver a pedirlo.
 
+## Rediseño del chat: globo, ícono dibujado y etiquetas propias (23/09, commits b601c0c y 733f66c)
+
+Alejo rechazó el panel lateral y pidió un chat más minimalista con editar y borrar. Se le mostraron dos formas sin panel y eligió el globo anclado al ícono. Después pidió cambiar el emoji por un ícono de mensaje y poder crear etiquetas propias; eligió la opción A de ícono.
+
+Qué quedó. El chat es un globo de 330 píxeles anclado al ícono de la fila. Se posiciona con position fixed calculando el rect del botón, porque el contenedor de la tabla tiene overflow y recortaría un elemento absolute. Se da vuelta hacia arriba cuando no entra abajo, se angosta en pantallas chicas, y se cierra con clic afuera, Escape, scroll o resize. Cada mensaje es una línea con autor, texto y hora.
+
+Editar y borrar viven en un ⋯ por mensaje, siempre por tap y nunca por hover. Editar convierte la línea en campo en el lugar, con Enter para guardar y Escape para cancelar. El ⋯ aparece solo en los mensajes propios, comparando el autor con el nombre de la sesión. ESTO NO ES UN PERMISO: la política "equipo todo" deja que cualquier usuario autenticado edite o borre cualquier fila, así que es una convención de pantalla. Si el equipo comparte el login de Admin, en la práctica todos pueden tocar todo. Para que sea real hay que cambiar la política en Supabase, y primero hay que saber si entran con usuarios separados.
+
+El ícono pasó de emoji a un SVG dibujado, con el mismo grosor y el mismo currentColor que el de copiar. El emoji traía su propio color y rompía la fila.
+
+Etiquetas propias: un chip punteado "+ Otra" se vuelve campo y con Enter queda puesta. Son GLOBALES: no hay tabla de catálogo, se derivan de los valores ya guardados en envio_etiquetas, así que apenas alguien escribe una aparece en todos los envíos. Si ya existe con otra grafía se reusa la que estaba, para no partir la lista en "roto", "rotura" y "paquete roto". El texto se normaliza y se corta en 28 caracteres. Salir del campo cancela y solo Enter crea, porque con onBlur creando quedaban etiquetas por accidente al cerrar el globo. Las propias se pintan en gris neutro, distinto de las fijas. Antes una etiqueta fuera de la lista fija directamente no se dibujaba en la fila: eso también quedó corregido.
+
+Pendiente de decidir si la lista de etiquetas propias se ensucia: hoy no hay forma de borrarlas del catálogo, solo de sacarlas de un envío.
+
+SIN VERIFICAR EN PANTALLA, todo este bloque. Solo compila, con react-scripts build y sin errores propios. El panel del navegador de esta sesión rechaza todos los comandos, así que no se pudo mirar la página en ningún momento de este tramo. Lo único verificado por datos reales sigue siendo escribir una nota, del tramo anterior. Falta comprobar: que el ícono nuevo se vea bien, que el globo se ubique donde corresponde y no quede recortado, que se dé vuelta cuando no entra, que editar y borrar funcionen contra la base, que poner y sacar una etiqueta funcione, y que crear una propia la deje disponible en otro envío.
+
 ## Hallazgos abiertos, requieren decisión de Alejo
 
 0. Los botones de semana del calendario (flecha izquierda, "Semana actual", flecha derecha) NO hacen nada: no tienen handler y se comprobó en producción que el calendario no se mueve. Son previos a este trabajo. Por la regla de rótulos de Alejo, o se cablean o se sacan.
