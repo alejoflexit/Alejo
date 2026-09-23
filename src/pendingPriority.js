@@ -45,3 +45,14 @@ export function pendingPriority(row, now = Date.now()) {
   if (hours >= 24) return { rank: 1, label: 'Atención · +24 h', color: '#f1d39b' };
   return { rank: 0, label: 'Reciente · menos de 24 h', color: '#2ecfaa' };
 }
+
+// Etiquetas internas del equipo. Lista fija por decision de Alejo (23/09/2026):
+// nombrar el estado real del paquete, no una accion que la app no ejecuta.
+export const ETIQUETAS = [
+  { clave: 'extraviado',  texto: 'Extraviado',      color: '#ff9aa4', fondo: 'rgba(255,104,116,.18)', borde: 'rgba(255,104,116,.45)' },
+  { clave: 'reclamo',     texto: 'En reclamo',      color: '#f1d39b', fondo: 'rgba(239,170,39,.16)',  borde: 'rgba(239,170,39,.45)' },
+  { clave: 'reprogramar', texto: 'Reprogramar',     color: '#a9c4ff', fondo: 'rgba(122,167,255,.16)', borde: 'rgba(122,167,255,.45)' },
+  { clave: 'avisado',     texto: 'Cliente avisado', color: '#6de4c3', fondo: 'rgba(46,207,170,.16)',  borde: 'rgba(46,207,170,.45)' },
+  { clave: 'deposito',    texto: 'A dep\u00f3sito',     color: 'rgba(255,255,255,.78)', fondo: 'rgba(255,255,255,.1)', borde: 'rgba(255,255,255,.22)' },
+];
+export const etiquetaDe = clave => ETIQUETAS.find(e => e.clave === clave);

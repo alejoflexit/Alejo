@@ -136,6 +136,25 @@ Queda por confirmar el comportamiento en el iPhone de campo, que es donde más s
 
 Idea que quedó afuera del alcance: si un cadete tiene varios pendientes, hoy hay que copiar uno por uno. Un mensaje único agrupado por cadete sería el paso siguiente natural.
 
+## Chat interno por envío — código listo, SIN publicar (23/09/2026)
+
+Alejo pidió un chat interno del equipo dentro de Pendientes históricos, con un ícono de etiqueta por fila, contador de mensajes y etiquetas tipo burbuja.
+
+Decisiones que tomó sobre la maqueta (work/Alejo/propuestas no aplica: la maqueta se entregó por chat como mock-chat.html y sus PNG):
+
+1. El contador muestra el total de mensajes y NUNCA se apaga. No hay estado de leído ni seguimiento por usuario, así que no hace falta guardar quién leyó qué.
+2. Las etiquetas son una lista fija: Extraviado, En reclamo, Reprogramar, Cliente avisado, A depósito.
+3. NO se filtra la tabla por etiqueta.
+4. La burbuja de la etiqueta se ve en la fila, debajo del estado.
+
+Base de datos: APLICADA en producción el 23/09. Dos tablas nuevas, ambas con RLS y una sola política "equipo todo" para authenticated, igual que notas_operativas; ningún acceso anónimo. envio_notas guarda el hilo (envio_id, autor, texto, created_at) con índice por envio_id y fecha. envio_etiquetas guarda las etiquetas puestas, con clave primaria (envio_id, etiqueta) para que no se dupliquen. En las dos, envio_id es envios_busqueda.id_interno. La migración también quedó versionada en supabase/migrations/20260923150000_envio_notas_etiquetas.sql.
+
+Frontend: escrito y compilado, pero NO PUBLICADO. La lista de etiquetas con sus colores vive en src/pendingPriority.js, junto a la lógica de estados. En src/PendientesHistoricos.js se agregó el ícono con contador al lado del de copiar, las burbujas en la celda de estado, y dentro del panel de detalle el selector de etiquetas más el hilo con su campo para escribir. El chat se carga aparte de los envíos y se recarga solo al escribir, para no volver a pedir las 30 mil filas de envios_busqueda. Si la carga del chat falla, se traga el error a propósito: no puede romper la pantalla de pendientes. El autor sale del nombre de la sesión.
+
+POR QUÉ NO SE PUBLICÓ: la computadora de Alejo estaba desconectada del puente, y desde la nube el proxy de git no inyecta credencial para alejoflexit/Alejo ("not in this session's authorized repository set"), así que no hay push posible. El trabajo quedó en un parche entregado por chat.
+
+NADA DE ESTO ESTÁ VERIFICADO EN PRODUCCIÓN. Solo compila (react-scripts build, sin errores). Desde la nube tampoco hay salida a la app ni a Supabase por REST, así que no se pudo probar escribir una nota ni poner una etiqueta con datos reales. Al publicar hay que comprobar: que el contador sume, que la burbuja aparezca en la fila, que la etiqueta se saque, y que un usuario sin sesión no pueda escribir.
+
 ## Hallazgos abiertos, requieren decisión de Alejo
 
 0. Los botones de semana del calendario (flecha izquierda, "Semana actual", flecha derecha) NO hacen nada: no tienen handler y se comprobó en producción que el calendario no se mueve. Son previos a este trabajo. Por la regla de rótulos de Alejo, o se cablean o se sacan.

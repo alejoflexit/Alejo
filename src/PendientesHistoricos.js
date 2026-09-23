@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import PendingFilters from "./PendingFilters";
-import { pendingPriority, OPEN_STATES, isOpenShipment, matchesSelection } from "./pendingPriority";
+import { pendingPriority, OPEN_STATES, isOpenShipment, matchesSelection, ETIQUETAS, etiquetaDe } from "./pendingPriority";
 import { getSession, authedFetch } from "./auth";
 
 const URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -20,6 +20,8 @@ const parseDate = value => {
 const labelDate = value => { const d = parseDate(value); return d ? d.toLocaleDateString("es-AR", { day:"numeric", month:"long" }) : "Sin fecha"; };
 const argentinaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone:"America/Argentina/Buenos_Aires", year:"numeric", month:"2-digit", day:"2-digit" }).format(new Date());
 const argentinaYesterday = () => { const d = new Date(`${argentinaToday()}T12:00:00`); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+const autorActual = () => { const s = getSession(); return (s && (s.nombre || s.email)) || "Equipo"; };
+const horaCorta = value => { const d = new Date(value); return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }); };
 const serviceOf = row => ["flex", "ml", "mercado libre"].includes(String(row.origen || "").trim().toLowerCase()) ? "Flex" : "Particular";
 const dayCard = { width:"100%", minHeight:126, textAlign:"left", display:"flex", flexDirection:"column", gap:4, padding:12, border:"1px solid transparent", background:"rgba(255,255,255,.045)", color:"#fff", borderRadius:9, cursor:"pointer" };
 const dayActive = { background:"rgba(46,207,170,.14)", borderColor:"#2ECFAA" };
@@ -54,6 +56,10 @@ export default function PendientesHistoricos() {
   const [criticalOnly, setCriticalOnly] = useState(false);
   const [courier, setCourier] = useState("");
   const [dataAt, setDataAt] = useState(null);
+  const [notas, setNotas] = useState({});
+  const [etiquetas, setEtiquetas] = useState({});
+  const [borrador, setBorrador] = useState("");
+  const [guardando, setGuardando] = useState(false);
   const [copiado, setCopiado] = useState("");
   const copiar = async row => {
     const texto = mensajeCadete(row);
@@ -90,6 +96,55 @@ export default function PendientesHistoricos() {
   };
   const loadingRef = useRef(false);
   const [service, setService] = useState("Todos"), [state, setState] = useState([...OPEN_STATES]), [query, setQuery] = useState(""), [selected, setSelected] = useState(null);
+  // El chat y las etiquetas viven aparte de los envios: se recargan solos tras escribir,
+  // sin volver a pedir las 30k filas de envios_busqueda.
+  const cargarEquipo = async () => {
+    try {
+      const [resNotas, resTags] = await Promise.all([
+        authedFetch(URL + '/rest/v1/envio_notas?select=id,envio_id,autor,texto,created_at&order=created_at', { headers:{ apikey:KEY } }),
+        authedFetch(URL + '/rest/v1/envio_etiquetas?select=envio_id,etiqueta', { headers:{ apikey:KEY } }),
+      ]);
+      if (resNotas.ok) {
+        const lista = await resNotas.json();
+        const mapa = {};
+        for (const nota of lista) (mapa[nota.envio_id] = mapa[nota.envio_id] || []).push(nota);
+        setNotas(mapa);
+      }
+      if (resTags.ok) {
+        const lista = await resTags.json();
+        const mapa = {};
+        for (const fila of lista) (mapa[fila.envio_id] = mapa[fila.envio_id] || []).push(fila.etiqueta);
+        setEtiquetas(mapa);
+      }
+    } catch { /* el chat no puede romper la pantalla de pendientes */ }
+  };
+  const agregarNota = async row => {
+    const texto = borrador.trim();
+    if (!texto || guardando) return;
+    setGuardando(true);
+    try {
+      const res = await authedFetch(URL + '/rest/v1/envio_notas', { method:"POST",
+        headers:{ apikey:KEY, "Content-Type":"application/json", Prefer:"return=minimal" },
+        body: JSON.stringify({ envio_id: row.id_interno, autor: autorActual(), texto }) });
+      if (!res.ok) throw new Error("No se pudo guardar la nota (" + res.status + ")");
+      setBorrador("");
+      await cargarEquipo();
+    } catch (e) { setError(e.message); } finally { setGuardando(false); }
+  };
+  const alternarEtiqueta = async (row, clave) => {
+    const puestas = etiquetas[row.id_interno] || [];
+    const saca = puestas.includes(clave);
+    try {
+      const filtro = '?envio_id=eq.' + encodeURIComponent(row.id_interno) + '&etiqueta=eq.' + encodeURIComponent(clave);
+      const res = saca
+        ? await authedFetch(URL + '/rest/v1/envio_etiquetas' + filtro, { method:"DELETE", headers:{ apikey:KEY } })
+        : await authedFetch(URL + '/rest/v1/envio_etiquetas', { method:"POST",
+            headers:{ apikey:KEY, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" },
+            body: JSON.stringify({ envio_id: row.id_interno, etiqueta: clave, autor: autorActual() }) });
+      if (!res.ok) throw new Error("No se pudo cambiar la etiqueta (" + res.status + ")");
+      await cargarEquipo();
+    } catch (e) { setError(e.message); }
+  };
   const load = async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
@@ -107,6 +162,7 @@ export default function PendientesHistoricos() {
       let ultimo = 0;
       for (const row of data) { const at = Date.parse(row.actualizado_at); if (Number.isFinite(at) && at > ultimo) ultimo = at; }
       setDataAt(ultimo ? new Date(ultimo) : null);
+      await cargarEquipo();
     } catch(e) { setError(e.message); } finally { setLoading(false); loadingRef.current=false; }
   };
   useEffect(() => { load(); const timer=setInterval(() => { if (!document.hidden) load(); },60000); return () => clearInterval(timer); }, []);
@@ -124,13 +180,22 @@ export default function PendientesHistoricos() {
     {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
     <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button style={button}>←</button><button style={button}>Semana actual</button><button style={button}>→</button></div></div><div style={daysGrid}>{calendarDays.map(({key,d,rs,flex,part}) => <div key={key} style={{ position:"relative" }}><button onClick={() => setDay(key)} style={{ ...dayCard, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button></div>)}</div></div>
     <PendingFilters title={day ? 'Pendientes del ' + parseDate(day).toLocaleDateString("es-AR", {weekday:"long",day:"numeric",month:"long"}) : "Pendientes de todo el historial"} count={visible.length} service={service} setService={setService} query={query} setQuery={setQuery} courier={courier} setCourier={setCourier} couriers={couriers} states={states} selectedStates={state} setSelectedStates={value => {setState(value);setCriticalOnly(false);}} showHistory={() => {setDay("");setCriticalOnly(false);}} showYesterday={() => {setDay(argentinaYesterday());setCriticalOnly(false);}} criticalOnly={criticalOnly} clearCritical={() => setCriticalOnly(false)} />
-    <div style={{ ...card, borderTop:0, borderRadius:"0 0 10px 10px", overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}><thead><tr>{["Fecha de origen","Servicio / envío","Asignado a","Cliente / dirección","Estado",""].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{loading && rows.length === 0 ? <tr><td colSpan="6" style={empty}>Cargando pendientes…</td></tr> : rows.length===0 ? <tr><td colSpan="6" style={empty}><b>No hay datos históricos cargados.</b><br/><small>La consulta respondió correctamente, pero la caché de envíos está vacía. Hay que ejecutar la sincronización de LightData.</small></td></tr> : visible.length===0 ? <tr><td colSpan="6" style={empty}>No hay pendientes para estos filtros.</td></tr> : visible.map(r => <tr key={r.id_interno} onClick={()=>setSelected(r)} style={{ borderTop:"1px solid rgba(255,255,255,.08)", cursor:"pointer" }}><td style={td}><b>{labelDate(r.origin)}</b></td><td style={td}><span style={{ ...pill, ...(r.service==="Flex"?flexPill:{}) }}>{r.service}</span><small style={muted}>{r.id_venta_ml || r.tracking || r.id_interno}</small></td><td style={td}><b>{r.cadete || "Sin asignar"}</b><small style={muted}>Último movimiento: {labelDate(r.fecha_estado)}</small></td><td style={td}><b>{r.razon_social || "Cliente sin nombre"}</b><small style={muted}>{[r.direccion,r.localidad].filter(Boolean).join(" · ") || "Dirección no informada"}</small></td><td style={td}>{r.estado || "Sin estado"}<small style={{...muted,color:pendingPriority(r).color,fontWeight:700}}>● {pendingPriority(r).label}</small></td><td style={{ ...td, textAlign:"right" }}><button onClick={e => { e.stopPropagation(); copiar(r); }} title="Copiar mensaje para el cadete" aria-label="Copiar mensaje para el cadete" style={{ ...copyIcon, ...(copiado === r.id_interno ? copyButtonOk : {}) }}>{copiado === r.id_interno ? "✓" : "⧉"}</button></td></tr>)}</tbody></table></div>
-    {selected && <div role="dialog" onClick={()=>setSelected(null)} style={overlay}><div onClick={e=>e.stopPropagation()} style={drawer}><button onClick={()=>setSelected(null)} style={{ ...button, float:"right" }}>×</button><div style={muted}>DETALLE DEL ENVÍO</div><h2>{selected.id_venta_ml || selected.tracking || selected.id_interno}</h2><p><b>{selected.service}</b> · {selected.estado || "Sin estado"}</p><hr/><p><b>Fecha de origen</b><br/>{labelDate(selected.origin)}</p><p><b>Asignado a</b><br/>{selected.cadete || "Sin asignar"}</p><p><b>Cliente</b><br/>{selected.razon_social || "Sin nombre"}</p><p><b>Dirección</b><br/>{[selected.direccion,selected.localidad].filter(Boolean).join(" · ") || "No informada"}</p><hr/><div style={muted}>MENSAJE PARA EL CADETE</div>{copiado === "error:" + selected.id_interno
+    <div style={{ ...card, borderTop:0, borderRadius:"0 0 10px 10px", overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}><thead><tr>{["Fecha de origen","Servicio / envío","Asignado a","Cliente / dirección","Estado",""].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{loading && rows.length === 0 ? <tr><td colSpan="6" style={empty}>Cargando pendientes…</td></tr> : rows.length===0 ? <tr><td colSpan="6" style={empty}><b>No hay datos históricos cargados.</b><br/><small>La consulta respondió correctamente, pero la caché de envíos está vacía. Hay que ejecutar la sincronización de LightData.</small></td></tr> : visible.length===0 ? <tr><td colSpan="6" style={empty}>No hay pendientes para estos filtros.</td></tr> : visible.map(r => <tr key={r.id_interno} onClick={()=>setSelected(r)} style={{ borderTop:"1px solid rgba(255,255,255,.08)", cursor:"pointer" }}><td style={td}><b>{labelDate(r.origin)}</b></td><td style={td}><span style={{ ...pill, ...(r.service==="Flex"?flexPill:{}) }}>{r.service}</span><small style={muted}>{r.id_venta_ml || r.tracking || r.id_interno}</small></td><td style={td}><b>{r.cadete || "Sin asignar"}</b><small style={muted}>Último movimiento: {labelDate(r.fecha_estado)}</small></td><td style={td}><b>{r.razon_social || "Cliente sin nombre"}</b><small style={muted}>{[r.direccion,r.localidad].filter(Boolean).join(" · ") || "Dirección no informada"}</small></td><td style={td}>{r.estado || "Sin estado"}<small style={{...muted,color:pendingPriority(r).color,fontWeight:700}}>● {pendingPriority(r).label}</small>{(etiquetas[r.id_interno] || []).length > 0 && <div style={burbujas}>{(etiquetas[r.id_interno] || []).map(clave => { const e = etiquetaDe(clave); return e ? <span key={clave} style={{ ...burbuja, color:e.color, background:e.fondo, borderColor:e.borde }}>{e.texto}</span> : null; })}</div>}</td><td style={{ ...td, textAlign:"right" }}><button onClick={e => { e.stopPropagation(); copiar(r); }} title="Copiar mensaje para el cadete" aria-label="Copiar mensaje para el cadete" style={{ ...copyIcon, ...(copiado === r.id_interno ? copyButtonOk : {}) }}>{copiado === r.id_interno ? "✓" : "⧉"}</button><span style={{ position:"relative", display:"inline-flex", marginLeft:6 }}><button onClick={e => { e.stopPropagation(); setSelected(r); }} title="Chat interno del equipo" aria-label="Chat interno del equipo" style={{ ...copyIcon, ...((notas[r.id_interno] || []).length || (etiquetas[r.id_interno] || []).length ? copyButtonOk : {}) }}>🏷</button>{(notas[r.id_interno] || []).length > 0 && <span style={contador}>{(notas[r.id_interno] || []).length}</span>}</span></td></tr>)}</tbody></table></div>
+    {selected && <div role="dialog" onClick={()=>setSelected(null)} style={overlay}><div onClick={e=>e.stopPropagation()} style={drawer}><button onClick={()=>setSelected(null)} style={{ ...button, float:"right" }}>×</button><div style={muted}>DETALLE DEL ENVÍO</div><h2>{selected.id_venta_ml || selected.tracking || selected.id_interno}</h2><p><b>{selected.service}</b> · {selected.estado || "Sin estado"}</p><hr/><p><b>Fecha de origen</b><br/>{labelDate(selected.origin)}</p><p><b>Asignado a</b><br/>{selected.cadete || "Sin asignar"}</p><p><b>Cliente</b><br/>{selected.razon_social || "Sin nombre"}</p><p><b>Dirección</b><br/>{[selected.direccion,selected.localidad].filter(Boolean).join(" · ") || "No informada"}</p><hr/><div style={muted}>ETIQUETAS</div><div style={selector}>{ETIQUETAS.map(e => { const puesta = (etiquetas[selected.id_interno] || []).includes(e.clave); return <button key={e.clave} onClick={() => alternarEtiqueta(selected, e.clave)} style={{ ...opcionEtiqueta, ...(puesta ? { color:e.color, background:e.fondo, borderColor:e.borde } : {}) }}>{e.texto}</button>; })}</div><div style={muted}>CONVERSACIÓN DEL EQUIPO</div><div style={{ margin:"8px 0 12px", display:"flex", flexDirection:"column", gap:8 }}>{(notas[selected.id_interno] || []).length === 0 ? <div style={sinNotas}>Todavía no hay nada anotado sobre este envío.</div> : (notas[selected.id_interno] || []).map(nota => <div key={nota.id} style={mensaje}><span style={{ float:"right", fontSize:10, color:"rgba(255,255,255,.5)" }}>{horaCorta(nota.created_at)}</span><b style={{ fontSize:11, color:"#6de4c3" }}>{nota.autor}</b><div style={{ fontSize:12.5, lineHeight:1.5, marginTop:4, color:"#e6ecf5", whiteSpace:"pre-wrap" }}>{nota.texto}</div></div>)}</div><div style={{ display:"flex", gap:7, alignItems:"flex-end" }}><textarea value={borrador} onChange={e => setBorrador(e.target.value)} placeholder="Escribí algo para el equipo…" style={campoNota} /><button onClick={() => agregarNota(selected)} disabled={guardando || !borrador.trim()} style={{ ...botonNota, opacity: guardando || !borrador.trim() ? .5 : 1 }}>{guardando ? "Guardando…" : "Agregar"}</button></div><small style={{ ...muted, marginTop:10 }}>Es interno: no le llega al cadete ni al cliente.</small><hr/><div style={muted}>MENSAJE PARA EL CADETE</div>{copiado === "error:" + selected.id_interno
         ? <><textarea readOnly value={mensajeCadete(selected)} ref={el => { if (el) { try { el.focus({ preventScroll:true }); el.setSelectionRange(0, el.value.length); } catch {} } }} onFocus={e => e.target.select()} onClick={e => e.target.select()} style={mensajeCampo} /><small style={{ ...muted, marginBottom:10 }}>Este navegador no deja copiar solo. Tocá el texto para seleccionarlo y copialo a mano.</small></>
         : <pre style={mensajePreview}>{mensajeCadete(selected)}</pre>}<button onClick={() => copiar(selected)} style={{ ...copyButton, ...(copiado === selected.id_interno ? copyButtonOk : {}) }}>{copiado === selected.id_interno ? "Copiado ✓" : "Copiar mensaje"}</button></div></div>}
   </div>;
 }
 const button={border:"1px solid rgba(255,255,255,.16)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:8,padding:"8px 12px",cursor:"pointer"};const banner={padding:"10px 13px",border:"1px solid rgba(239,159,39,.35)",background:"rgba(239,159,39,.08)",borderRadius:8,color:"#f1d39b",fontSize:12,marginBottom:12};const calendar={display:"flex",alignItems:"end",justifyContent:"space-between",gap:12,flexWrap:"wrap",background:"rgba(13,31,55,.86)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:14};const card={background:"rgba(13,31,55,.86)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:14};const th={textAlign:"left",color:"rgba(255,255,255,.55)",fontSize:10,textTransform:"uppercase",padding:"9px 8px"};const td={padding:"12px 8px",verticalAlign:"top"};const muted={display:"block",color:"rgba(255,255,255,.55)",fontSize:11,marginTop:4};const pill={display:"inline-block",padding:"3px 7px",borderRadius:5,background:"rgba(255,255,255,.1)",fontSize:10,marginBottom:4};const flexPill={background:"rgba(46,207,170,.16)",color:"#6de4c3"};const empty={padding:30,textAlign:"center",color:"rgba(255,255,255,.6)"};const copyButton={border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:7,padding:"7px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",minWidth:118};
+const burbujas={display:"flex",gap:4,flexWrap:"wrap",marginTop:6};
+const burbuja={display:"inline-block",padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700,borderWidth:1,borderStyle:"solid"};
+const contador={position:"absolute",top:-6,right:-6,minWidth:17,height:17,padding:"0 4px",borderRadius:999,background:"#ff6874",color:"#1d1420",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #0d1f37",pointerEvents:"none"};
+const selector={display:"flex",gap:5,flexWrap:"wrap",margin:"8px 0 14px"};
+const opcionEtiqueta={padding:"4px 10px",borderRadius:999,fontSize:11,fontWeight:700,cursor:"pointer",background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.18)",color:"rgba(255,255,255,.75)"};
+const sinNotas={color:"rgba(255,255,255,.55)",fontSize:12,padding:16,textAlign:"center",border:"1px dashed rgba(255,255,255,.14)",borderRadius:9};
+const mensaje={background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.08)",borderRadius:9,padding:"9px 11px"};
+const campoNota={flex:1,minHeight:60,resize:"vertical",background:"rgba(255,255,255,.05)",color:"#fff",fontFamily:"inherit",fontSize:12.5,border:"1px solid rgba(255,255,255,.16)",borderRadius:8,padding:9,boxSizing:"border-box"};
+const botonNota={border:0,borderRadius:8,padding:"10px 14px",background:"#2ECFAA",color:"#06231c",fontWeight:800,cursor:"pointer",fontSize:12,whiteSpace:"nowrap"};
 const copyIcon={width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:7,fontSize:14,lineHeight:1,cursor:"pointer"};
 const copyButtonOk={borderColor:"#2ECFAA",background:"rgba(46,207,170,.16)",color:"#6de4c3"};
 const mensajeCampo={width:"100%",minHeight:132,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",fontSize:12,lineHeight:1.5,margin:"8px 0 6px",padding:12,borderRadius:8,background:"rgba(255,255,255,.05)",border:"1px solid rgba(46,207,170,.45)",color:"#fff"};
