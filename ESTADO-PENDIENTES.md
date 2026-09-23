@@ -151,9 +151,19 @@ Base de datos: APLICADA en producción el 23/09. Dos tablas nuevas, ambas con RL
 
 Frontend: escrito y compilado, pero NO PUBLICADO. La lista de etiquetas con sus colores vive en src/pendingPriority.js, junto a la lógica de estados. En src/PendientesHistoricos.js se agregó el ícono con contador al lado del de copiar, las burbujas en la celda de estado, y dentro del panel de detalle el selector de etiquetas más el hilo con su campo para escribir. El chat se carga aparte de los envíos y se recarga solo al escribir, para no volver a pedir las 30 mil filas de envios_busqueda. Si la carga del chat falla, se traga el error a propósito: no puede romper la pantalla de pendientes. El autor sale del nombre de la sesión.
 
-POR QUÉ NO SE PUBLICÓ: la computadora de Alejo estaba desconectada del puente, y desde la nube el proxy de git no inyecta credencial para alejoflexit/Alejo ("not in this session's authorized repository set"), así que no hay push posible. El trabajo quedó en un parche entregado por chat.
+PUBLICADO el 23/09: commits 4f97698 (chat y etiquetas) y e557cf9 (el panel partido en dos caras). El parche se aplicó con git am sobre la máquina de Alejo cuando volvió a conectarse.
 
-NADA DE ESTO ESTÁ VERIFICADO EN PRODUCCIÓN. Solo compila (react-scripts build, sin errores). Desde la nube tampoco hay salida a la app ni a Supabase por REST, así que no se pudo probar escribir una nota ni poner una etiqueta con datos reales. Al publicar hay que comprobar: que el contador sume, que la burbuja aparezca en la fila, que la etiqueta se saque, y que un usuario sin sesión no pueda escribir.
+El panel tiene dos caras y no repiten nada, a pedido de Alejo: tocar la fila abre los datos del envío y el mensaje al cadete; tocar el ícono de etiqueta abre solo etiquetas y conversación. El respaldo del copiado abre la cara de detalle, que es donde vive el texto. Se le mostró la maqueta de las dos caras antes de implementar y la aprobó.
+
+Estado de la verificación en producción, al 23/09:
+
+- VERIFICADO que escribir una nota funciona de punta a punta. Alejo escribió "este" desde la app y quedó en envio_notas (envio_id 994618, autor Admin, 23/09 17:37 hora Argentina). Confirma que la sesión, el permiso de authenticated y el POST del frontend funcionan.
+- VERIFICADO que los permisos son correctos: las dos tablas tienen RLS y CERO políticas para anon, así que sin sesión no se lee ni se escribe. anon conserva el GRANT de tabla que Supabase pone por defecto, pero sin política RLS no puede hacer nada.
+- VERIFICADO que compila: react-scripts build sin errores, solo las advertencias preexistentes.
+- SIN VERIFICAR: poner y sacar una etiqueta. envio_etiquetas sigue en cero filas, así que ese camino no se ejecutó nunca todavía. Es el que más riesgo tiene, porque usa POST con Prefer merge-duplicates y DELETE con filtro por dos columnas, distinto del POST simple de las notas.
+- SIN VERIFICAR en pantalla: que el contador salga en la fila, que la burbuja aparezca debajo del estado, y que las dos caras del panel se abran donde corresponde. El panel del navegador de esta sesión rechazó todos los comandos, así que no se pudo mirar la página; la evidencia de arriba es por base de datos y por captura de Alejo.
+
+Nota de entorno: git en esta carpeta deja bloqueos huérfanos (.git/*.lock y objects/tmp_obj_*) porque el montaje no permite borrar. Hay que pedir permiso de borrado y limpiarlos antes de commitear. El permiso se vence dentro de la misma sesión y hay que volver a pedirlo.
 
 ## Hallazgos abiertos, requieren decisión de Alejo
 
