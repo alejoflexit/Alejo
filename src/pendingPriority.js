@@ -56,3 +56,11 @@ export const ETIQUETAS = [
   { clave: 'deposito',    texto: 'A dep\u00f3sito',     color: 'rgba(255,255,255,.78)', fondo: 'rgba(255,255,255,.1)', borde: 'rgba(255,255,255,.22)' },
 ];
 export const etiquetaDe = clave => ETIQUETAS.find(e => e.clave === clave);
+// Las etiquetas que el equipo escribe a mano no estan en la lista fija: se guardan
+// con su propio texto y se muestran en gris neutro, para distinguirlas de las fijas.
+export const estiloEtiqueta = clave => etiquetaDe(clave) || {
+  clave, texto: clave,
+  color: 'rgba(255,255,255,.82)', fondo: 'rgba(255,255,255,.1)', borde: 'rgba(255,255,255,.28)',
+};
+export const esEtiquetaFija = clave => Boolean(etiquetaDe(clave));
+export const normalizarEtiqueta = texto => String(texto || '').replace(/\s+/g, ' ').trim().slice(0, 28);

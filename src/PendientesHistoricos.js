@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import PendingFilters from "./PendingFilters";
-import { pendingPriority, OPEN_STATES, isOpenShipment, matchesSelection, ETIQUETAS, etiquetaDe } from "./pendingPriority";
+import { pendingPriority, OPEN_STATES, isOpenShipment, matchesSelection, ETIQUETAS, estiloEtiqueta, normalizarEtiqueta } from "./pendingPriority";
 import { getSession, authedFetch } from "./auth";
 
 const URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -20,6 +20,13 @@ const parseDate = value => {
 const labelDate = value => { const d = parseDate(value); return d ? d.toLocaleDateString("es-AR", { day:"numeric", month:"long" }) : "Sin fecha"; };
 const argentinaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone:"America/Argentina/Buenos_Aires", year:"numeric", month:"2-digit", day:"2-digit" }).format(new Date());
 const argentinaYesterday = () => { const d = new Date(`${argentinaToday()}T12:00:00`); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+// Icono de mensaje elegido por Alejo (opcion A): burbuja pelada, del mismo grosor
+// y color que el de copiar, para que los dos se lean como un par.
+const IconoMensaje = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true" focusable="false" style={{ display:"block" }}>
+    <path d="M2 4.2A1.7 1.7 0 0 1 3.7 2.5h8.6A1.7 1.7 0 0 1 14 4.2v5.1a1.7 1.7 0 0 1-1.7 1.7H6.6L3.4 13.4V11H3.7A1.7 1.7 0 0 1 2 9.3z" />
+  </svg>
+);
 const autorActual = () => { const s = getSession(); return (s && (s.nombre || s.email)) || "Equipo"; };
 const horaCorta = value => { const d = new Date(value); return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }); };
 const serviceOf = row => ["flex", "ml", "mercado libre"].includes(String(row.origen || "").trim().toLowerCase()) ? "Flex" : "Particular";
@@ -66,14 +73,15 @@ export default function PendientesHistoricos() {
   const [chat, setChat] = useState(null);
   const [menuNota, setMenuNota] = useState(null);
   const [editando, setEditando] = useState(null);
-  const cerrarChat = () => { setChat(null); setMenuNota(null); setEditando(null); setBorrador(""); };
+  const [nuevaEtiqueta, setNuevaEtiqueta] = useState(null);
+  const cerrarChat = () => { setChat(null); setMenuNota(null); setEditando(null); setNuevaEtiqueta(null); setBorrador(""); };
   const abrirChat = (row, boton) => {
     const caja = boton.getBoundingClientRect();
     const ancho = Math.min(330, window.innerWidth - 16);
     const izq = Math.max(8, Math.min(caja.right - ancho, window.innerWidth - ancho - 8));
     const abajo = window.innerHeight - caja.bottom;
     setChat({ row, ancho, izq, arriba: abajo < 300, y: abajo < 300 ? window.innerHeight - caja.top + 8 : caja.bottom + 8 });
-    setMenuNota(null); setEditando(null); setBorrador("");
+    setMenuNota(null); setEditando(null); setNuevaEtiqueta(null); setBorrador("");
   };
   const [copiado, setCopiado] = useState("");
   const copiar = async row => {
@@ -167,6 +175,16 @@ export default function PendientesHistoricos() {
       await cargarEquipo();
     } catch (e) { setError(e.message); }
   };
+  const crearEtiqueta = async row => {
+    const texto = normalizarEtiqueta(nuevaEtiqueta);
+    if (!texto) { setNuevaEtiqueta(null); return; }
+    const yaEsta = catalogo.find(c => c.toLowerCase() === texto.toLowerCase());
+    setNuevaEtiqueta(null);
+    // Si ya existe con otra grafia, se usa la que estaba, para no partir la lista.
+    const puestas = etiquetas[row.id_interno] || [];
+    const clave = yaEsta || texto;
+    if (!puestas.includes(clave)) await alternarEtiqueta(row, clave);
+  };
   const alternarEtiqueta = async (row, clave) => {
     const puestas = etiquetas[row.id_interno] || [];
     const saca = puestas.includes(clave);
@@ -214,6 +232,18 @@ export default function PendientesHistoricos() {
   }, [chat]);
   useEffect(() => { load(); const timer=setInterval(() => { if (!document.hidden) load(); },60000); return () => clearInterval(timer); }, []);
   const states = useMemo(() => [...new Set(rows.map(r => String(r.estado || "Sin estado").trim()))].sort(), [rows]);
+  // Las etiquetas propias son globales: una vez que alguien la escribe, aparece en
+  // todos los envios. Se derivan de lo ya guardado, sin tabla de catalogo aparte.
+  const catalogo = useMemo(() => {
+    const fijas = ETIQUETAS.map(e => e.clave);
+    const propias = [];
+    for (const lista of Object.values(etiquetas)) for (const clave of lista) {
+      if (fijas.includes(clave)) continue;
+      if (!propias.some(p => p.toLowerCase() === clave.toLowerCase())) propias.push(clave);
+    }
+    propias.sort((a, b) => a.localeCompare(b));
+    return [...fijas, ...propias];
+  }, [etiquetas]);
   const couriers = useMemo(() => [...new Set(rows.map(r => r.cadete || "Sin asignar"))].sort((a,b) => a.localeCompare(b)), [rows]);
   const visible = useMemo(() => rows.filter(r => (!day || r.origin === day) && (!criticalOnly || pendingPriority(r).rank === 3) && (service === "Todos" || r.service === service) && (!courier || (r.cadete || "Sin asignar") === courier) && matchesSelection(r, state) && `${r.id_venta_ml} ${r.tracking} ${r.razon_social} ${r.cadete} ${r.direccion} ${r.localidad}`.toLowerCase().includes(query.toLowerCase())).sort((a,b) => pendingPriority(b).rank - pendingPriority(a).rank || String(a.origin).localeCompare(String(b.origin)) || Number(b.service === "Flex") - Number(a.service === "Flex")), [rows,day,service,state,query,criticalOnly,courier]);
   const calendarDays = useMemo(() => {
@@ -227,10 +257,15 @@ export default function PendientesHistoricos() {
     {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
     <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button style={button}>←</button><button style={button}>Semana actual</button><button style={button}>→</button></div></div><div style={daysGrid}>{calendarDays.map(({key,d,rs,flex,part}) => <div key={key} style={{ position:"relative" }}><button onClick={() => setDay(key)} style={{ ...dayCard, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button></div>)}</div></div>
     <PendingFilters title={day ? 'Pendientes del ' + parseDate(day).toLocaleDateString("es-AR", {weekday:"long",day:"numeric",month:"long"}) : "Pendientes de todo el historial"} count={visible.length} service={service} setService={setService} query={query} setQuery={setQuery} courier={courier} setCourier={setCourier} couriers={couriers} states={states} selectedStates={state} setSelectedStates={value => {setState(value);setCriticalOnly(false);}} showHistory={() => {setDay("");setCriticalOnly(false);}} showYesterday={() => {setDay(argentinaYesterday());setCriticalOnly(false);}} criticalOnly={criticalOnly} clearCritical={() => setCriticalOnly(false)} />
-    <div style={{ ...card, borderTop:0, borderRadius:"0 0 10px 10px", overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}><thead><tr>{["Fecha de origen","Servicio / envío","Asignado a","Cliente / dirección","Estado",""].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{loading && rows.length === 0 ? <tr><td colSpan="6" style={empty}>Cargando pendientes…</td></tr> : rows.length===0 ? <tr><td colSpan="6" style={empty}><b>No hay datos históricos cargados.</b><br/><small>La consulta respondió correctamente, pero la caché de envíos está vacía. Hay que ejecutar la sincronización de LightData.</small></td></tr> : visible.length===0 ? <tr><td colSpan="6" style={empty}>No hay pendientes para estos filtros.</td></tr> : visible.map(r => <tr key={r.id_interno} onClick={()=>abrirPanel(r)} style={{ borderTop:"1px solid rgba(255,255,255,.08)", cursor:"pointer" }}><td style={td}><b>{labelDate(r.origin)}</b></td><td style={td}><span style={{ ...pill, ...(r.service==="Flex"?flexPill:{}) }}>{r.service}</span><small style={muted}>{r.id_venta_ml || r.tracking || r.id_interno}</small></td><td style={td}><b>{r.cadete || "Sin asignar"}</b><small style={muted}>Último movimiento: {labelDate(r.fecha_estado)}</small></td><td style={td}><b>{r.razon_social || "Cliente sin nombre"}</b><small style={muted}>{[r.direccion,r.localidad].filter(Boolean).join(" · ") || "Dirección no informada"}</small></td><td style={td}>{r.estado || "Sin estado"}<small style={{...muted,color:pendingPriority(r).color,fontWeight:700}}>● {pendingPriority(r).label}</small>{(etiquetas[r.id_interno] || []).length > 0 && <div style={burbujas}>{(etiquetas[r.id_interno] || []).map(clave => { const e = etiquetaDe(clave); return e ? <span key={clave} style={{ ...burbuja, color:e.color, background:e.fondo, borderColor:e.borde }}>{e.texto}</span> : null; })}</div>}</td><td style={{ ...td, textAlign:"right" }}><button onClick={e => { e.stopPropagation(); copiar(r); }} title="Copiar mensaje para el cadete" aria-label="Copiar mensaje para el cadete" style={{ ...copyIcon, ...(copiado === r.id_interno ? copyButtonOk : {}) }}>{copiado === r.id_interno ? "✓" : "⧉"}</button><span style={{ position:"relative", display:"inline-flex", marginLeft:6 }}><button data-chat onClick={e => { e.stopPropagation(); chat && chat.row.id_interno === r.id_interno ? cerrarChat() : abrirChat(r, e.currentTarget); }} title="Chat interno del equipo" aria-label="Chat interno del equipo" style={{ ...copyIcon, ...((notas[r.id_interno] || []).length || (etiquetas[r.id_interno] || []).length ? copyButtonOk : {}) }}>🏷</button>{(notas[r.id_interno] || []).length > 0 && <span style={contador}>{(notas[r.id_interno] || []).length}</span>}</span></td></tr>)}</tbody></table></div>
+    <div style={{ ...card, borderTop:0, borderRadius:"0 0 10px 10px", overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}><thead><tr>{["Fecha de origen","Servicio / envío","Asignado a","Cliente / dirección","Estado",""].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{loading && rows.length === 0 ? <tr><td colSpan="6" style={empty}>Cargando pendientes…</td></tr> : rows.length===0 ? <tr><td colSpan="6" style={empty}><b>No hay datos históricos cargados.</b><br/><small>La consulta respondió correctamente, pero la caché de envíos está vacía. Hay que ejecutar la sincronización de LightData.</small></td></tr> : visible.length===0 ? <tr><td colSpan="6" style={empty}>No hay pendientes para estos filtros.</td></tr> : visible.map(r => <tr key={r.id_interno} onClick={()=>abrirPanel(r)} style={{ borderTop:"1px solid rgba(255,255,255,.08)", cursor:"pointer" }}><td style={td}><b>{labelDate(r.origin)}</b></td><td style={td}><span style={{ ...pill, ...(r.service==="Flex"?flexPill:{}) }}>{r.service}</span><small style={muted}>{r.id_venta_ml || r.tracking || r.id_interno}</small></td><td style={td}><b>{r.cadete || "Sin asignar"}</b><small style={muted}>Último movimiento: {labelDate(r.fecha_estado)}</small></td><td style={td}><b>{r.razon_social || "Cliente sin nombre"}</b><small style={muted}>{[r.direccion,r.localidad].filter(Boolean).join(" · ") || "Dirección no informada"}</small></td><td style={td}>{r.estado || "Sin estado"}<small style={{...muted,color:pendingPriority(r).color,fontWeight:700}}>● {pendingPriority(r).label}</small>{(etiquetas[r.id_interno] || []).length > 0 && <div style={burbujas}>{(etiquetas[r.id_interno] || []).map(clave => { const e = estiloEtiqueta(clave); return <span key={clave} style={{ ...burbuja, color:e.color, background:e.fondo, borderColor:e.borde }}>{e.texto}</span>; })}</div>}</td><td style={{ ...td, textAlign:"right" }}><button onClick={e => { e.stopPropagation(); copiar(r); }} title="Copiar mensaje para el cadete" aria-label="Copiar mensaje para el cadete" style={{ ...copyIcon, ...(copiado === r.id_interno ? copyButtonOk : {}) }}>{copiado === r.id_interno ? "✓" : "⧉"}</button><span style={{ position:"relative", display:"inline-flex", marginLeft:6 }}><button data-chat onClick={e => { e.stopPropagation(); chat && chat.row.id_interno === r.id_interno ? cerrarChat() : abrirChat(r, e.currentTarget); }} title="Chat interno del equipo" aria-label="Chat interno del equipo" style={{ ...copyIcon, ...((notas[r.id_interno] || []).length || (etiquetas[r.id_interno] || []).length ? copyButtonOk : {}) }}><IconoMensaje /></button>{(notas[r.id_interno] || []).length > 0 && <span style={contador}>{(notas[r.id_interno] || []).length}</span>}</span></td></tr>)}</tbody></table></div>
     {chat && <div data-chat style={{ ...globo, width:chat.ancho, left:chat.izq, ...(chat.arriba ? { bottom:chat.y } : { top:chat.y }) }}>
       <div style={globoCabeza}>{chat.row.cadete || "Sin asignar"} · {chat.row.id_venta_ml || chat.row.tracking || chat.row.id_interno}</div>
-      <div style={globoTags}>{ETIQUETAS.map(e => { const puesta = (etiquetas[chat.row.id_interno] || []).includes(e.clave); return <button key={e.clave} onClick={() => alternarEtiqueta(chat.row, e.clave)} style={{ ...globoTag, ...(puesta ? { color:e.color, background:e.fondo, borderColor:e.borde } : {}) }}>{e.texto}</button>; })}</div>
+      <div style={globoTags}>
+        {catalogo.map(clave => { const e = estiloEtiqueta(clave); const puesta = (etiquetas[chat.row.id_interno] || []).includes(clave); return <button key={clave} onClick={() => alternarEtiqueta(chat.row, clave)} style={{ ...globoTag, ...(puesta ? { color:e.color, background:e.fondo, borderColor:e.borde } : {}) }}>{e.texto}</button>; })}
+        {nuevaEtiqueta === null
+          ? <button onClick={() => setNuevaEtiqueta("")} title="Crear una etiqueta propia" style={globoTagNueva}>+ Otra</button>
+          : <input value={nuevaEtiqueta} autoFocus maxLength={28} onChange={e => setNuevaEtiqueta(e.target.value)} onKeyDown={e => { if (e.key === "Enter") crearEtiqueta(chat.row); if (e.key === "Escape") setNuevaEtiqueta(null); }} onBlur={() => setNuevaEtiqueta(null)} placeholder="Nombre…" style={globoTagInput} />}
+      </div>
       <div style={globoHilo}>
         {(notas[chat.row.id_interno] || []).length === 0 && <div style={globoVacio}>Sin mensajes todavía.</div>}
         {(notas[chat.row.id_interno] || []).map(nota => editando?.id === nota.id
@@ -267,6 +302,8 @@ const globo={position:"fixed",zIndex:1100,background:"#11233c",border:"1px solid
 const globoCabeza={fontSize:10,color:"rgba(255,255,255,.52)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8};
 const globoTags={display:"flex",gap:5,flexWrap:"wrap"};
 const globoTag={fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:999,cursor:"pointer",background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.14)",color:"rgba(255,255,255,.58)"};
+const globoTagNueva={fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:999,cursor:"pointer",background:"transparent",border:"1px dashed rgba(46,207,170,.5)",color:"#6de4c3"};
+const globoTagInput={fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:999,width:104,background:"rgba(255,255,255,.08)",border:"1px solid rgba(46,207,170,.6)",color:"#fff",fontFamily:"inherit"};
 const globoHilo={margin:"10px 0",borderTop:"1px solid rgba(255,255,255,.08)",borderBottom:"1px solid rgba(255,255,255,.08)",padding:"6px 0",maxHeight:230,overflowY:"auto"};
 const globoVacio={fontSize:11.5,color:"rgba(255,255,255,.45)",padding:"8px 2px"};
 const globoLinea={display:"flex",gap:8,alignItems:"flex-start",padding:"5px 0"};
