@@ -121,6 +121,9 @@ async function main() {
   const rows = raw.slice(headerRow + 1)
     .filter(r => r && r.some(c => c !== null && c !== undefined && c !== ""))
     .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ""; }); return o; });
+  // Diagnostico 24/09: los particulares muestran la fecha de carga de la venta y no
+  // la de entrada a planta. Listamos las columnas para ver si el Excel trae la de planta.
+  console.log(`Columnas del Excel (${headers.length}): ${JSON.stringify(headers)}`);
   console.log(`Filas parseadas: ${rows.length}`);
 
   // Mapear solo los campos que el agente necesita para buscar y responder
