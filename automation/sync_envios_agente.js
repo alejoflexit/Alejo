@@ -155,6 +155,10 @@ async function main() {
       tracking: S(r["Número Tracking"]),
       url_tracking: S(r["URl Tracking"]),
       fecha_flexit: S(r["Fecha Flexit"]),
+      // "Fecha a planta" es cuando el paquete entro al deposito, la fecha operativa
+      // real. "Fecha Flexit" en particulares es la carga de la venta en la tienda del
+      // cliente y puede ser de varios dias antes.
+      fecha_a_planta: S(r["Fecha a planta"]),
     }))
     .filter(e => e.id_interno); // descartar filas sin ID
 
