@@ -124,6 +124,15 @@ async function main() {
   // Diagnostico 24/09: los particulares muestran la fecha de carga de la venta y no
   // la de entrada a planta. Listamos las columnas para ver si el Excel trae la de planta.
   console.log(`Columnas del Excel (${headers.length}): ${JSON.stringify(headers)}`);
+  // Los logs de Actions no se pueden leer desde esta sesion, asi que las columnas
+  // tambien quedan en agente_debug para poder consultarlas por SQL.
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/agente_debug`, { method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+                 "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ tipo: "columnas_excel", motivo: "diagnostico fecha a planta",
+                             mensaje: `${headers.length} columnas`, detalle: headers }) });
+  } catch (e) { console.log("No se pudo registrar las columnas:", e.message); }
   console.log(`Filas parseadas: ${rows.length}`);
 
   // Mapear solo los campos que el agente necesita para buscar y responder
