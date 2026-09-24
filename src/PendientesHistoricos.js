@@ -207,12 +207,12 @@ export default function PendientesHistoricos() {
       if (!getSession()) throw new Error("Iniciá sesión desde Inicio para consultar los pendientes.");
       const data = [];
       for (let offset = 0; ; offset += 1000) {
-        const res = await authedFetch(URL + '/rest/v1/envios_busqueda?select=id_interno,id_venta_ml,tracking,estado,fecha_estado,fecha_flexit,cadete,razon_social,direccion,localidad,origen,actualizado_at&order=id_interno&limit=1000&offset=' + offset, { headers:{ apikey:KEY } });
+        const res = await authedFetch(URL + '/rest/v1/envios_busqueda?select=id_interno,id_venta_ml,tracking,estado,fecha_estado,fecha_flexit,cadete,razon_social,direccion,localidad,origen,fecha_a_planta,actualizado_at&order=id_interno&limit=1000&offset=' + offset, { headers:{ apikey:KEY } });
         if (!res.ok) throw new Error('No se pudieron cargar los pendientes (' + res.status + ')');
         const page = await res.json(); data.push(...page);
         if (page.length < 1000) break;
       }
-      setRows(data.filter(r => !resolved.test(String(r.estado || '').trim())).map(r => ({ ...r, service:serviceOf(r), origin:isoDate(r.fecha_flexit) || isoDate(r.fecha_estado) })));
+      setRows(data.filter(r => !resolved.test(String(r.estado || '').trim())).map(r => ({ ...r, service:serviceOf(r), origin:isoDate(r.fecha_a_planta) || isoDate(r.fecha_flexit) || isoDate(r.fecha_estado) })));
       let ultimo = 0;
       for (const row of data) { const at = Date.parse(row.actualizado_at); if (Number.isFinite(at) && at > ultimo) ultimo = at; }
       setDataAt(ultimo ? new Date(ultimo) : null);

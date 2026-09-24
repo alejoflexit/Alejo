@@ -37,7 +37,9 @@ export function pendingPriority(row, now = Date.now()) {
   if (returnedByCourier(row)) return { rank: -1, label: 'Ya volvió al depósito · según el cadete asignado', color: '#9aacc5' };
   if (needsReturn(row)) return { rank: -1, label: 'Gestionar devolución a depósito', color: '#9aacc5' };
   if (!isOpenShipment(row)) return { rank: -1, label: 'Fuera de entregas abiertas', color: '#9aacc5' };
-  const time = shipmentTime(row.fecha_flexit);
+  // El reloj corre desde que el paquete entro al deposito, no desde que el cliente
+  // cargo la venta: en particulares fecha_flexit puede ser de varios dias antes.
+  const time = shipmentTime(row.fecha_a_planta || row.fecha_flexit);
   if (time === null) return { rank: 0, label: 'Fecha sin confirmar', color: '#9aacc5' };
   const hours = Math.max(0, (now - time) / 3600000);
   if (row.service === 'Flex' && hours >= 48) return { rank: 3, label: 'Crítico · Flex +48 h', color: '#ff8f9a' };
