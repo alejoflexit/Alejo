@@ -70,6 +70,22 @@ const FLEX_ACCENT = "#f2c94c";
 const dayFlexCount = { fontSize:28, lineHeight:1.05, marginTop:8, color:FLEX_ACCENT };
 const dayFlexZero = { color:"rgba(255,255,255,.45)" };
 const dayPart = { display:"block", marginTop:3, fontSize:11, color:"rgba(255,255,255,.62)" };
+const tarjetaAtras = { width:172, flexShrink:0, textAlign:"left", display:"flex", flexDirection:"column", gap:2, padding:12, borderRadius:9, cursor:"pointer", color:"#fff", border:"1px dashed rgba(242,201,76,.5)", background:"rgba(242,201,76,.07)" };
+const tarjetaAtrasAbierta = { borderStyle:"solid", borderColor:FLEX_ACCENT, background:"rgba(242,201,76,.13)" };
+const atrasTitulo = { fontSize:10.5, fontWeight:700, letterSpacing:.5, textTransform:"uppercase", color:FLEX_ACCENT };
+const atrasNumero = { fontSize:26, lineHeight:1.05, marginTop:4 };
+const mesPanel = { width:"100%", marginTop:12, paddingTop:12, borderTop:"1px solid rgba(255,255,255,.1)" };
+const mesCabecera = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:10 };
+const mesGrid = { display:"grid", gridTemplateColumns:"repeat(7,minmax(0,1fr))", gap:5, maxWidth:640 };
+const mesDow = { fontSize:9.5, fontWeight:700, letterSpacing:.6, textTransform:"uppercase", textAlign:"center", color:"rgba(255,255,255,.52)", paddingBottom:2 };
+const mesDia = { minHeight:58, textAlign:"left", padding:"5px 6px", borderRadius:8, cursor:"pointer", color:"#fff", border:"1px solid rgba(255,255,255,.08)", background:"rgba(255,255,255,.035)", display:"flex", flexDirection:"column", gap:1 };
+const mesDiaVacio = { opacity:.32 };
+const mesDiaFuturo = { opacity:.18, cursor:"default" };
+const mesDiaElegido = { borderColor:"#2ECFAA", background:"rgba(46,207,170,.13)" };
+const mesDiaNumero = { fontSize:11, color:"rgba(255,255,255,.62)" };
+const mesDiaFlex = { fontSize:17, lineHeight:1.1, fontWeight:700, color:FLEX_ACCENT, marginTop:2 };
+const mesDiaFlexCero = { color:"rgba(255,255,255,.4)", fontWeight:400, fontSize:14 };
+const mesDiaPart = { fontSize:10, color:"rgba(255,255,255,.52)" };
 const daysGrid = { display:"grid", gridTemplateColumns:"repeat(7,minmax(78px,1fr))", gap:8, width:"100%", overflowX:"auto", paddingBottom:4 };
 // El boton copia al portapapeles: NO manda el mensaje. El rotulo lo dice asi.
 const primerNombre = value => String(value || "").trim().split(/\s+/)[0] || "";
@@ -92,6 +108,12 @@ function mensajeCadete(row) {
 export default function PendientesHistoricos() {
   const [rows, setRows] = useState([]), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [day, setDay] = useState(argentinaYesterday);
+  // 0 = la semana que termina hoy; -1 la anterior. Las flechas de la tira no
+  // hacian nada y prometian algo que el sistema no ejecutaba.
+  const [semana, setSemana] = useState(0);
+  // Mes abierto en el calendario grande (null = cerrado). La tira solo llega a
+  // siete dias y mas de la mitad de los pendientes son anteriores.
+  const [mesAbierto, setMesAbierto] = useState(null);
   const [criticalOnly, setCriticalOnly] = useState(false);
   const [courier, setCourier] = useState("");
   const [dataAt, setDataAt] = useState(null);
@@ -346,14 +368,77 @@ export default function PendientesHistoricos() {
   const visible = useMemo(() => rows.filter(r => (!day || r.origin === day) && (!criticalOnly || pendingPriority(r).rank === 3) && (service === "Todos" || r.service === service) && (!courier || (r.cadete || "Sin asignar") === courier) && matchesSelection(r, state) && `${r.id_venta_ml} ${r.tracking} ${r.razon_social} ${r.cadete} ${r.direccion} ${r.localidad}`.toLowerCase().includes(query.toLowerCase())).sort((a,b) => pendingPriority(b).rank - pendingPriority(a).rank || String(a.origin).localeCompare(String(b.origin)) || Number(b.service === "Flex") - Number(a.service === "Flex")), [rows,day,service,state,query,criticalOnly,courier]);
   const calendarDays = useMemo(() => {
     // El calendario es histórico: termina en hoy y nunca adelanta fechas futuras.
-    const base = parseDate(argentinaToday()) || new Date(); const start = new Date(base); start.setDate(start.getDate() - 6);
+    const base = parseDate(argentinaToday()) || new Date(); const start = new Date(base); start.setDate(start.getDate() - 6 + semana * 7);
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); const key = d.toISOString().slice(0, 10); const rs = rows.filter(r => r.origin === key && isOpenShipment(r)); const flex = rs.filter(r => r.service === "Flex").length; return { key, d, rs, flex, part: rs.length - flex }; });
+  }, [rows, semana]);
+
+  // Todo lo abierto anterior a la semana que termina hoy. Es la puerta al resto
+  // del historial: hoy la tira lo esconde entero.
+  const anteriores = useMemo(() => {
+    const base = parseDate(argentinaToday()) || new Date();
+    const corte = new Date(base); corte.setDate(corte.getDate() - 6);
+    const clave = corte.toISOString().slice(0, 10);
+    const rs = rows.filter(r => isOpenShipment(r) && r.origin && r.origin < clave);
+    const flex = rs.filter(r => r.service === "Flex").length;
+    const viejo = rs.reduce((min, r) => (!min || r.origin < min ? r.origin : min), "");
+    return { total: rs.length, flex, part: rs.length - flex, viejo };
   }, [rows]);
+
+  const mesDe = clave => clave.slice(0, 7);
+  const moverMes = paso => { const [a, m] = mesAbierto.split("-").map(Number); const d = new Date(a, m - 1 + paso, 1); setMesAbierto(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
+  const diasDelMes = useMemo(() => {
+    if (!mesAbierto) return null;
+    const [anio, mes] = mesAbierto.split("-").map(Number);
+    const primero = new Date(anio, mes - 1, 1);
+    const largo = new Date(anio, mes, 0).getDate();
+    const hoy = argentinaToday();
+    const celdas = Array.from({ length: primero.getDay() }, () => null);
+    for (let n = 1; n <= largo; n++) {
+      const key = `${anio}-${String(mes).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
+      const rs = rows.filter(r => r.origin === key && isOpenShipment(r));
+      const flex = rs.filter(r => r.service === "Flex").length;
+      celdas.push({ key, n, total: rs.length, flex, part: rs.length - flex, esHoy: key === hoy, futuro: key > hoy });
+    }
+    return {
+      celdas,
+      flex: celdas.reduce((t, c) => t + (c ? c.flex : 0), 0),
+      part: celdas.reduce((t, c) => t + (c ? c.part : 0), 0),
+      titulo: primero.toLocaleDateString("es-AR", { month: "long", year: "numeric" }),
+    };
+  }, [rows, mesAbierto]);
   return <div style={{ color:"#fff" }}>
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:16 }}><div><h2 style={{ margin:0, fontSize:22 }}>Pendientes históricos</h2><div style={{ color:"rgba(255,255,255,.62)", fontSize:12, marginTop:5 }}>Cada envío pendiente, hasta su resolución.</div></div><div style={{ display:"flex", alignItems:"center", gap:12 }}><div style={{ textAlign:"right", color:"rgba(255,255,255,.55)", fontSize:11 }}>Última actualización de datos<br/><b style={{ color:"#fff" }}>{dataAt ? dataAt.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "sin dato"}</b>{sinc ? <div style={{ marginTop:4, color:"rgba(255,255,255,.72)", fontSize:11, maxWidth:260 }}>{sinc}</div> : null}</div><button onClick={refrescar} disabled={loading || !!sinc} style={button}>{sinc ? "Actualizando…" : "↻ Actualizar"}</button></div></div>
     <div style={urgentHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><div><b>Flex abiertos con más de 48 horas</b><small style={{display:"block",marginTop:5,color:"#bfc7d8"}}>Estos envíos necesitan seguimiento prioritario.</small></div></div><button onClick={() => { setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
     {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
-    <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button style={button}>←</button><button style={button}>Semana actual</button><button style={button}>→</button></div></div><div style={daysGrid}>{calendarDays.map(({key,d,rs,flex,part}) => <div key={key} style={{ position:"relative" }}><button onClick={() => setDay(key)} style={{ ...dayCard, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button></div>)}</div></div>
+    <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button onClick={() => setSemana(v => v - 1)} title="Semana anterior" style={button}>←</button><button onClick={() => setSemana(0)} disabled={semana === 0} style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>Semana actual</button><button onClick={() => setSemana(v => Math.min(0, v + 1))} disabled={semana === 0} title="Semana siguiente" style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>→</button></div></div><div style={{ display:"flex", gap:8, width:"100%", alignItems:"stretch" }}><div style={{ ...daysGrid, flex:1, minWidth:0 }}>{calendarDays.map(({key,d,rs,flex,part}) => <div key={key} style={{ position:"relative" }}><button onClick={() => setDay(key)} style={{ ...dayCard, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button></div>)}</div>
+      {anteriores.total > 0 && <button onClick={() => setMesAbierto(mesAbierto ? null : mesDe(anteriores.viejo || argentinaToday()))} style={{ ...tarjetaAtras, ...(mesAbierto ? tarjetaAtrasAbierta : {}) }}>
+        <small style={atrasTitulo}>Antes de esta semana</small>
+        <strong style={atrasNumero}>{anteriores.total}</strong>
+        <small style={dayPart}>{anteriores.flex} Flex · {anteriores.part} {anteriores.part === 1 ? "particular" : "particulares"}</small>
+        {anteriores.viejo && <small style={dayPart}>El más viejo, del {labelDate(anteriores.viejo)}</small>}
+        <small style={{ ...dayPart, color:FLEX_ACCENT, marginTop:6 }}>{mesAbierto ? "Cerrar calendario ▲" : "Ver por mes ▼"}</small>
+      </button>}</div>
+      {diasDelMes && <div style={mesPanel}>
+        <div style={mesCabecera}>
+          <div><b style={{ fontSize:14, textTransform:"capitalize" }}>{diasDelMes.titulo}</b><small style={muted}>{diasDelMes.flex} Flex · {diasDelMes.part} particulares · {diasDelMes.flex + diasDelMes.part} pendientes</small></div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={() => moverMes(-1)} title="Mes anterior" style={button}>←</button>
+            <button onClick={() => setMesAbierto(mesDe(argentinaToday()))} style={button}>Este mes</button>
+            <button onClick={() => moverMes(1)} title="Mes siguiente" style={button}>→</button>
+          </div>
+        </div>
+        <div style={mesGrid}>
+          {["Do","Lu","Ma","Mi","Ju","Vi","Sa"].map(n => <div key={n} style={mesDow}>{n}</div>)}
+          {diasDelMes.celdas.map((c, i) => c === null
+            ? <div key={"v" + i} />
+            : <button key={c.key} onClick={() => { setDay(c.key); setCriticalOnly(false); }} disabled={c.futuro}
+                style={{ ...mesDia, ...(c.total ? {} : mesDiaVacio), ...(c.futuro ? mesDiaFuturo : {}), ...(day === c.key ? mesDiaElegido : {}) }}>
+                <small style={{ ...mesDiaNumero, ...(c.esHoy ? { color:"#6de4c3", fontWeight:700 } : {}) }}>{c.n}{c.esHoy ? " · hoy" : ""}</small>
+                <strong style={{ ...mesDiaFlex, ...(c.flex ? {} : mesDiaFlexCero) }}>{c.total ? c.flex : "0"}</strong>
+                {c.part > 0 && <small style={mesDiaPart}>+{c.part} part.</small>}
+              </button>)}
+        </div>
+      </div>}</div>
     <PendingFilters title={day ? 'Pendientes del ' + parseDate(day).toLocaleDateString("es-AR", {weekday:"long",day:"numeric",month:"long"}) : "Pendientes de todo el historial"} count={visible.length} service={service} setService={setService} query={query} setQuery={setQuery} courier={courier} setCourier={setCourier} couriers={couriers} states={states} selectedStates={state} setSelectedStates={value => {setState(value);setCriticalOnly(false);}} showHistory={() => {setDay("");setCriticalOnly(false);}} showYesterday={() => {setDay(argentinaYesterday());setCriticalOnly(false);}} criticalOnly={criticalOnly} clearCritical={() => setCriticalOnly(false)} />
     <div style={{ ...card, borderTop:0, borderRadius:"0 0 10px 10px", overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}><thead><tr>{["Fecha de origen","Servicio / envío","Asignado a","Cliente / dirección","Equipo","Estado",""].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead><tbody>{loading && rows.length === 0 ? <tr><td colSpan="7" style={empty}>Cargando pendientes…</td></tr> : rows.length===0 ? <tr><td colSpan="7" style={empty}><b>No hay datos históricos cargados.</b><br/><small>La consulta respondió correctamente, pero la caché de envíos está vacía. Hay que ejecutar la sincronización de LightData.</small></td></tr> : visible.length===0 ? <tr><td colSpan="7" style={empty}>No hay pendientes para estos filtros.</td></tr> : visible.map(r => <tr key={r.id_interno} onClick={()=>abrirPanel(r)} style={{ borderTop:"1px solid rgba(255,255,255,.08)", cursor:"pointer" }}><td style={td}><b>{labelDate(r.origin)}</b></td><td style={td}><span style={{ ...pill, ...(r.service==="Flex"?flexPill:{}) }}>{r.service}</span><small style={muted}>{r.id_venta_ml || r.tracking || r.id_interno}</small></td><td style={td}><b>{r.cadete || "Sin asignar"}</b><small style={muted}>Último movimiento: {labelDate(r.fecha_estado)}</small></td><td style={td}><b>{r.razon_social || "Cliente sin nombre"}</b><small style={muted}>{[r.direccion,r.localidad].filter(Boolean).join(" · ") || "Dirección no informada"}</small></td><td style={{ ...td, maxWidth:230 }}>{(etiquetas[r.id_interno] || []).length > 0 && <div style={{ ...burbujas, marginTop:0 }}>{(etiquetas[r.id_interno] || []).map(clave => { const e = estiloEtiqueta(clave); return <span key={clave} style={{ ...burbuja, color:e.color, background:e.fondo, borderColor:e.borde }}>{e.texto}</span>; })}</div>}{ultimoMensaje(notas[r.id_interno])
         ? <div title={resumenChat(notas[r.id_interno], etiquetas[r.id_interno])} style={{ ...ultimoTexto, marginTop:(etiquetas[r.id_interno] || []).length ? 6 : 0 }}><span style={ultimoAutor}>{ultimoMensaje(notas[r.id_interno]).autor}</span>{(() => { const c = cuandoMensaje(ultimoMensaje(notas[r.id_interno]).created_at); return c ? <span style={{ ...ultimoCuando, ...(c.viejo ? { color:FLEX_ACCENT } : {}) }}> · {c.texto}</span> : null; })()} — {recortar(ultimoMensaje(notas[r.id_interno]).texto)}</div>
