@@ -6,7 +6,10 @@ name: Sync Envios Agente WhatsApp
 
 on:
   schedule:
-    - cron: '0 * * * *'    # cada hora; GitHub Actions usa UTC
+    # Horarios en UTC; Buenos Aires es UTC-3. De 01 a 07 de la manana no corre:
+    # nadie mira la pantalla y no hay movimiento que sincronizar.
+    - cron: '0,30 10-14 * * *'      # 07:00 a 11:30 ART, cada media hora
+    - cron: '0 15-23,0-3 * * *'     # 12:00 a 00:00 ART, cada hora
   workflow_dispatch:
     inputs:
       backfill_receipts:
