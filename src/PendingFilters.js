@@ -4,7 +4,7 @@ import { OPEN_STATES, RETURN_STATES, normalizeState } from "./pendingPriority";
 
 const shortLabel = value => ({ "En camino al destinatario": "En camino", "En planta de procesamiento": "En planta", "Nadie 2DA visita": "Nadie · 2ª visita" }[value] || value);
 
-export default function PendingFilters({ title, count, service, setService, query, setQuery, courier, setCourier, couriers, states, selectedStates, setSelectedStates, showHistory, showYesterday, criticalOnly, clearCritical }) {
+export default function PendingFilters({ title, count, service, setService, query, setQuery, courier, setCourier, couriers, sinAsignar, states, selectedStates, setSelectedStates, showHistory, showYesterday, criticalOnly, clearCritical }) {
   const [menu, setMenu] = useState(null);
   const root = useRef(null);
   useEffect(() => {
@@ -32,9 +32,10 @@ export default function PendingFilters({ title, count, service, setService, quer
       <select aria-label="Cadete asignado" value={courier} onChange={e => setCourier(e.target.value)}><option value="">Todos los cadetes</option>{couriers.map(value => <option key={value} value={value}>{value}</option>)}</select>
       <div className="ph-menu-anchor"><button className="ph-state-trigger" aria-expanded={menu === "all"} onClick={() => setMenu(menu === "all" ? null : "all")}><span>Estados · {openActive ? "Abiertos" : returnActive ? "Devoluciones" : selectedStates.length ? `${selectedStates.length} seleccionado${selectedStates.length > 1 ? "s" : ""}` : "Todos"}</span><span aria-hidden="true">⌄</span></button>{menu === "all" && options(states)}</div>
     </div>
-    <div className="ph-quick" role="group" aria-label="Filtros rápidos de estado">
+    <div className="ph-quick" role="group" aria-label="Filtros rápidos">
       <button className="ph-state-pill" aria-pressed={openActive} title={OPEN_STATES.join(', ')} onClick={() => setSelectedStates([...OPEN_STATES])}><span className="ph-dot" />Abiertos</button>
       <button className="ph-state-pill" aria-pressed={returnActive} onClick={() => setSelectedStates([...RETURN_STATES])}><span className="ph-dot" />Devoluciones a depósito</button>
+      {sinAsignar > 0 && <button className="ph-state-pill" aria-pressed={courier === "Sin asignar"} title="Envíos abiertos que todavía no tienen cadete" onClick={() => setCourier(courier === "Sin asignar" ? "" : "Sin asignar")}><span className="ph-dot" />Sin asignar · {sinAsignar}</button>}
       <div className="ph-menu-anchor"><button className="ph-state-pill" aria-expanded={menu === "more"} onClick={() => setMenu(menu === "more" ? null : "more")}>＋ Más estados</button>{menu === "more" && options(states)}</div>
     </div>
     {criticalOnly && <button className="ph-urgent-filter" onClick={clearCritical}>Flex +48 h · quitar filtro ×</button>}
