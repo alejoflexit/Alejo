@@ -1,0 +1,29 @@
+name: VPS
+
+# Canal de Claude hacia el VPS. La clave SSH esta forzada a claude-exec.sh en el
+# servidor, asi que este workflow no puede hacer mas que los comandos de esa lista.
+on:
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: 'Comando permitido en el VPS'
+        required: true
+        default: 'servicios'
+        type: choice
+        options: [salud, servicios, cron-list, journal-bridge, deploy-bridge]
+
+jobs:
+  ejecutar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preparar la clave
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_vps
+          chmod 600 ~/.ssh/id_vps
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Correr en el VPS
+        run: |
+          ssh -i ~/.ssh/id_vps -o BatchMode=yes -o ConnectTimeout=20 \
+              "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "${{ inputs.accion }}"
