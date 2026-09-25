@@ -9,8 +9,6 @@
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
 const XLSX = require('xlsx');
-const fs = require('fs');
-const path = require('path');
 const { upsertRows, upsertPrivateReceipts, getMissingReceiptIds, hasPrivateReceipt } = require('./safe-cache-refresh');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -35,9 +33,6 @@ async function main() {
   const fechaDesde = process.env.SYNC_FROM || fmtFecha(desde);
   const fechaHasta = process.env.SYNC_TO || fmtFecha(hoy);
   console.log(`Sincronizando envíos ${fechaDesde} → ${fechaHasta} para el agente...`);
-
-  const downloadPath = '/tmp/lightdata-agente';
-  fs.mkdirSync(downloadPath, { recursive: true });
 
   // Login en LightData (mismo mecanismo que la carga nocturna)
   const browser = await puppeteer.launch({
@@ -87,100 +82,84 @@ async function main() {
     return;
   }
 
-  // Diagnostico temporal: leer los codigos del filtro de estado de la UI de listado,
-  // para poder pedirle a LightData solo los abiertos en vez de las 54k filas enteras.
-  if (process.env.DUMP_ESTADOS === "true") {
-    // Mapear codigo de estado -> nombre, bajando cada uno y leyendo la columna Estado.
-    // El vault documenta 0,1,2,6,11,12 pero faltan "Nadie 2DA visita" y "No entregado",
-    // que tambien son estados abiertos y sin ellos la descarga filtrada queda incompleta.
-    const urlEstado = (estado) => `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php`
-      + `?cantxpagina=50000&pagina=1&nombre=&cp=&estado=${estado}&excel=1&appersand=false&nombrecliente=`
-      + `&fecha_desde=${encodeURIComponent(fechaDesde)}&fecha_hasta=${encodeURIComponent(fechaHasta)}`
-      + `&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2`
-      + `&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
-    const mapa = [];
-    for (let codigo = 21; codigo <= 45; codigo++) {
-      const r = await page.evaluate(async (url) => {
-        try { const res = await fetch(url, { credentials: "include" });
-          const b = await res.arrayBuffer();
-          return { status: res.status, datos: Array.from(new Uint8Array(b)) }; }
-        catch (e) { return { error: String(e) }; }
-      }, urlEstado(codigo));
-      if (!r.datos) { mapa.push({ codigo, error: r.error || r.status }); continue; }
+  // ---- Descarga ----
+  // La descarga completa (estado=-1, todos los dias) pesa ~21 MB y tarda minutos:
+  // sirve para backfills, no para correr cada media hora. El modo liviano la
+  // reemplaza por dos pedidos chicos que juntos no dejan hueco:
+  //   A) los seis estados abiertos, con ventana ancha de fecha a planta -> todos
+  //      los pendientes, incluso los de hace un mes (los hay).
+  //   B) todo lo que se movio en los ultimos dias (tipo_fecha=15, ultimo
+  //      movimiento) -> entregas y cancelaciones que ya salieron del conjunto
+  //      abierto y hay que actualizar igual.
+  // Codigos verificados el 24/09/2026 bajando uno por uno y leyendo la columna
+  // Estado: 1 en planta, 2 en camino, 6 nadie, 10 nadie 2da visita,
+  // 13 no entregado, 31 reprogramado por meli.
+  const ESTADOS_ABIERTOS = process.env.SYNC_ESTADOS || "1,2,6,10,13,31";
+  const sincCompleta = process.env.SYNC_COMPLETO === "true";
+  const diasMovimiento = Math.max(1, Number(process.env.SYNC_MOV_DIAS || 3));
+  const diasAbiertos = Math.max(1, Number(process.env.SYNC_ABIERTOS_DIAS || 90));
+
+  const urlListado = ({ estado, tipoFecha, desde, hasta }) =>
+    `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php`
+    + `?cantxpagina=50000&pagina=1&nombre=&cp=&estado=${estado}&excel=1&appersand=false&nombrecliente=`
+    + `&fecha_desde=${encodeURIComponent(desde)}&fecha_hasta=${encodeURIComponent(hasta)}`
+    + `&tipo_fecha=${tipoFecha}&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2`
+    + `&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
+
+  const bajarExcel = async (etiqueta, params) => {
+    const r = await page.evaluate(async (url) => {
       try {
-        const libro = XLSX.read(Buffer.from(r.datos), { type: "buffer" });
-        const hoja = libro.Sheets[libro.SheetNames[0]];
-        const filas = XLSX.utils.sheet_to_json(hoja, { header: 1 });
-        let cabecera = -1;
-        for (let i = 0; i < Math.min(10, filas.length); i++)
-          if ((filas[i] || []).some(c => String(c || "").trim() === "Estado")) { cabecera = i; break; }
-        if (cabecera === -1) { mapa.push({ codigo, filas: 0 }); continue; }
-        const col = filas[cabecera].findIndex(c => String(c || "").trim() === "Estado");
-        const nombres = new Set();
-        for (const f of filas.slice(cabecera + 1)) {
-          const v = String((f || [])[col] || "").trim();
-          if (v) nombres.add(v);
-          if (nombres.size > 4) break;
-        }
-        mapa.push({ codigo, filas: filas.length - cabecera - 1, estados: [...nombres] });
-      } catch (e) { mapa.push({ codigo, error: String(e).slice(0, 80) }); }
+        const res = await fetch(url, { credentials: "include" });
+        const buffer = await res.arrayBuffer();
+        return { ok: true, status: res.status, size: buffer.byteLength, data: Array.from(new Uint8Array(buffer)) };
+      } catch (e) { return { ok: false, error: String(e) }; }
+    }, urlListado(params));
+    if (!r.ok || r.status !== 200 || r.size < 1000) {
+      throw new Error(`Descarga "${etiqueta}": ${r.error || `status=${r.status} size=${r.size}`}`);
     }
-    console.log("Mapa de estados:", JSON.stringify(mapa));
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/agente_debug`, { method: "POST",
-        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-                   "Content-Type": "application/json", Prefer: "return=minimal" },
-        body: JSON.stringify({ tipo: "mapa_estados", motivo: "codigos para el sync liviano",
-                               mensaje: `${mapa.length} codigos`, detalle: mapa }) });
-    } catch (e) { console.log("No se pudo registrar:", e.message); }
+    console.log(`Excel ${etiqueta}: ${(r.size / 1024).toFixed(0)} KB`);
+    return Buffer.from(r.data);
+  };
+
+  const filasDeExcel = (buffer) => {
+    const wb = XLSX.read(buffer, { type: "buffer" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const crudo = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    let headerRow = -1;
+    for (let i = 0; i < Math.min(10, crudo.length); i++) {
+      if (crudo[i] && crudo[i].some(c => String(c || "").includes("Cadete"))) { headerRow = i; break; }
+    }
+    if (headerRow === -1) throw new Error("No se encontro el header del Excel");
+    const headers = crudo[headerRow].map(h => String(h || "").trim());
+    return crudo.slice(headerRow + 1)
+      .filter(f => f && f.some(c => c !== null && c !== undefined && c !== ""))
+      .map(f => { const o = {}; headers.forEach((h, i) => { o[h] = f[i] ?? ""; }); return o; });
+  };
+
+  let rows;
+  if (sincCompleta) {
+    console.log("Modo completo: un solo pedido con todos los estados.");
+    rows = filasDeExcel(await bajarExcel("completo",
+      { estado: -1, tipoFecha: 6, desde: fechaDesde, hasta: fechaHasta }));
+  } else {
+    const desdeAbiertos = new Date(hoy); desdeAbiertos.setDate(hoy.getDate() - (diasAbiertos - 1));
+    const desdeMovimiento = new Date(hoy); desdeMovimiento.setDate(hoy.getDate() - (diasMovimiento - 1));
+    const abiertos = filasDeExcel(await bajarExcel("abiertos", {
+      estado: ESTADOS_ABIERTOS, tipoFecha: 6,
+      desde: process.env.SYNC_FROM || fmtFecha(desdeAbiertos), hasta: fechaHasta,
+    }));
+    const movidos = filasDeExcel(await bajarExcel("movimiento", {
+      estado: -1, tipoFecha: 15, desde: fmtFecha(desdeMovimiento), hasta: fechaHasta,
+    }));
+    // El pedido de movimiento es el mas fresco: si un envio aparece en los dos,
+    // manda ese (puede haberse entregado despues de salir del listado de abiertos).
+    const porId = new Map();
+    for (const f of abiertos) porId.set(String(f["ID (Interno)"] ?? "").trim(), f);
+    for (const f of movidos) porId.set(String(f["ID (Interno)"] ?? "").trim(), f);
+    porId.delete("");
+    rows = [...porId.values()];
+    console.log(`Abiertos ${abiertos.length} + movidos ${movidos.length} = ${rows.length} unicos`);
   }
-
-  // Descargar Excel del RANGO (mismo endpoint, con fecha_desde != fecha_hasta)
-  const excelUrl = `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php?cantxpagina=50000&pagina=1&nombre=&cp=&estado=-1&excel=1&appersand=false&nombrecliente=&fecha_desde=${encodeURIComponent(fechaDesde)}&fecha_hasta=${encodeURIComponent(fechaHasta)}&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
-
-  console.log("Descargando Excel del rango...");
-  const response = await page.evaluate(async (url) => {
-    try {
-      const res = await fetch(url, { credentials: 'include' });
-      const buffer = await res.arrayBuffer();
-      return { status: res.status, size: buffer.byteLength, data: Array.from(new Uint8Array(buffer)), ok: true };
-    } catch (e) { return { ok: false, error: String(e) }; }
-  }, excelUrl);
-  if (!response.ok || response.status !== 200 || response.size < 1000) {
-    await browser.close();
-    console.error("Error descargando Excel:", response.error || `status=${response.status} size=${response.size}`);
-    process.exit(1);
-  }
-  console.log(`Excel: ${response.size} bytes`);
-
-  const excelPath = path.join(downloadPath, 'envios.xls');
-  fs.writeFileSync(excelPath, Buffer.from(response.data));
-
-  // Parsear
-  const wb = XLSX.readFile(excelPath);
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const raw = XLSX.utils.sheet_to_json(ws, { header: 1 });
-  let headerRow = -1;
-  for (let i = 0; i < Math.min(10, raw.length); i++) {
-    if (raw[i] && raw[i].some(c => String(c || "").includes("Cadete"))) { headerRow = i; break; }
-  }
-  if (headerRow === -1) { console.error("No se encontró header"); process.exit(1); }
-  const headers = raw[headerRow].map(h => String(h || "").trim());
-  const rows = raw.slice(headerRow + 1)
-    .filter(r => r && r.some(c => c !== null && c !== undefined && c !== ""))
-    .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ""; }); return o; });
-  // Diagnostico 24/09: los particulares muestran la fecha de carga de la venta y no
-  // la de entrada a planta. Listamos las columnas para ver si el Excel trae la de planta.
-  console.log(`Columnas del Excel (${headers.length}): ${JSON.stringify(headers)}`);
-  // Los logs de Actions no se pueden leer desde esta sesion, asi que las columnas
-  // tambien quedan en agente_debug para poder consultarlas por SQL.
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/agente_debug`, { method: "POST",
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
-                 "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ tipo: "columnas_excel", motivo: "diagnostico fecha a planta",
-                             mensaje: `${headers.length} columnas`, detalle: headers }) });
-  } catch (e) { console.log("No se pudo registrar las columnas:", e.message); }
   console.log(`Filas parseadas: ${rows.length}`);
 
   // Mapear solo los campos que el agente necesita para buscar y responder
