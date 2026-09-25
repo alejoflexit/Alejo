@@ -99,7 +99,7 @@ async function main() {
       + `&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2`
       + `&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
     const mapa = [];
-    for (let codigo = 0; codigo <= 20; codigo++) {
+    for (let codigo = 21; codigo <= 45; codigo++) {
       const r = await page.evaluate(async (url) => {
         try { const res = await fetch(url, { credentials: "include" });
           const b = await res.arrayBuffer();
