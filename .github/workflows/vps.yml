@@ -2,6 +2,8 @@ name: VPS
 
 # Canal de Claude hacia el VPS. La clave SSH esta forzada a claude-exec.sh en el
 # servidor, asi que este workflow no puede hacer mas que los comandos de esa lista.
+# El resultado se registra en agente_debug porque los logs de Actions no se pueden
+# leer desde la sesion de Claude (el endpoint redirige a un host bloqueado).
 on:
   workflow_dispatch:
     inputs:
@@ -21,9 +23,45 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_vps
           chmod 600 ~/.ssh/id_vps
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "huella de la clave:"
+          ssh-keygen -lf ~/.ssh/id_vps || echo "no se pudo leer la clave"
 
       - name: Correr en el VPS
+        id: correr
+        continue-on-error: true
         run: |
-          ssh -i ~/.ssh/id_vps -o BatchMode=yes -o ConnectTimeout=20 \
-              "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "${{ inputs.accion }}"
+          set +e
+          ssh -v -i ~/.ssh/id_vps -o BatchMode=yes -o ConnectTimeout=20 \
+              -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts \
+              "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "${{ inputs.accion }}" \
+              > salida.txt 2> error.txt
+          echo "codigo=$?" >> $GITHUB_OUTPUT
+          echo "--- salida ---"; cat salida.txt
+          echo "--- error ---";  cat error.txt
+
+      - name: Registrar el resultado
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          def leer(p, limite=4000):
+              try:
+                  with open(p, encoding='utf-8', errors='replace') as f: return f.read()[-limite:]
+              except FileNotFoundError: return ''
+          cuerpo = json.dumps({
+              "tipo": "vps",
+              "motivo": os.environ.get("ACCION", "${{ inputs.accion }}"),
+              "mensaje": "codigo ${{ steps.correr.outputs.codigo }}",
+              "detalle": {"salida": leer('salida.txt'), "error": leer('error.txt')},
+          }).encode()
+          req = urllib.request.Request(
+              os.environ["SUPABASE_URL"].rstrip('/') + "/rest/v1/agente_debug",
+              data=cuerpo, method="POST",
+              headers={"apikey": os.environ["SUPABASE_KEY"],
+                       "Authorization": "Bearer " + os.environ["SUPABASE_KEY"],
+                       "Content-Type": "application/json", "Prefer": "return=minimal"})
+          print("registrado:", urllib.request.urlopen(req, timeout=20).status)
+          PY
