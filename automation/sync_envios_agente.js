@@ -90,30 +90,48 @@ async function main() {
   // Diagnostico temporal: leer los codigos del filtro de estado de la UI de listado,
   // para poder pedirle a LightData solo los abiertos en vez de las 54k filas enteras.
   if (process.env.DUMP_ESTADOS === "true") {
-    // Probar si el export acepta filtrar por estado. Codigos del vault:
-    // 0 Retirado, 1 En planta, 2 En camino, 6 Nadie, 11 Repro Meli, 12 Repro comprador.
-    const base = (estado) => `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php`
+    // Mapear codigo de estado -> nombre, bajando cada uno y leyendo la columna Estado.
+    // El vault documenta 0,1,2,6,11,12 pero faltan "Nadie 2DA visita" y "No entregado",
+    // que tambien son estados abiertos y sin ellos la descarga filtrada queda incompleta.
+    const urlEstado = (estado) => `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php`
       + `?cantxpagina=50000&pagina=1&nombre=&cp=&estado=${estado}&excel=1&appersand=false&nombrecliente=`
       + `&fecha_desde=${encodeURIComponent(fechaDesde)}&fecha_hasta=${encodeURIComponent(fechaHasta)}`
       + `&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2`
       + `&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
-    const variantes = ["-1", "1", "2", "6", "11", "12", "1,2", "1,2,6,11,12", "1&estado=2"];
-    const medidas = [];
-    for (const v of variantes) {
+    const mapa = [];
+    for (let codigo = 0; codigo <= 20; codigo++) {
       const r = await page.evaluate(async (url) => {
         try { const res = await fetch(url, { credentials: "include" });
-          const b = await res.arrayBuffer(); return { status: res.status, bytes: b.byteLength }; }
+          const b = await res.arrayBuffer();
+          return { status: res.status, datos: Array.from(new Uint8Array(b)) }; }
         catch (e) { return { error: String(e) }; }
-      }, base(v));
-      medidas.push({ estado: v, ...r });
-      console.log(`estado=${v} ->`, JSON.stringify(r));
+      }, urlEstado(codigo));
+      if (!r.datos) { mapa.push({ codigo, error: r.error || r.status }); continue; }
+      try {
+        const libro = XLSX.read(Buffer.from(r.datos), { type: "buffer" });
+        const hoja = libro.Sheets[libro.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+        let cabecera = -1;
+        for (let i = 0; i < Math.min(10, filas.length); i++)
+          if ((filas[i] || []).some(c => String(c || "").trim() === "Estado")) { cabecera = i; break; }
+        if (cabecera === -1) { mapa.push({ codigo, filas: 0 }); continue; }
+        const col = filas[cabecera].findIndex(c => String(c || "").trim() === "Estado");
+        const nombres = new Set();
+        for (const f of filas.slice(cabecera + 1)) {
+          const v = String((f || [])[col] || "").trim();
+          if (v) nombres.add(v);
+          if (nombres.size > 4) break;
+        }
+        mapa.push({ codigo, filas: filas.length - cabecera - 1, estados: [...nombres] });
+      } catch (e) { mapa.push({ codigo, error: String(e).slice(0, 80) }); }
     }
+    console.log("Mapa de estados:", JSON.stringify(mapa));
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/agente_debug`, { method: "POST",
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
                    "Content-Type": "application/json", Prefer: "return=minimal" },
-        body: JSON.stringify({ tipo: "filtro_estado", motivo: "aliviar el sync",
-                               mensaje: `${medidas.length} variantes`, detalle: medidas }) });
+        body: JSON.stringify({ tipo: "mapa_estados", motivo: "codigos para el sync liviano",
+                               mensaje: `${mapa.length} codigos`, detalle: mapa }) });
     } catch (e) { console.log("No se pudo registrar:", e.message); }
   }
 
