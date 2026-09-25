@@ -81,7 +81,9 @@ export default function PendientesHistoricos() {
   const sincRef = useRef(false);
   const [notas, setNotas] = useState({});
   const [etiquetas, setEtiquetas] = useState({});
-  const [borrador, setBorrador] = useState("");
+  // Un borrador por envio: cerrar el globo (a proposito o de rebote) no puede
+  // tirar lo que la persona venia escribiendo.
+  const [borradores, setBorradores] = useState({});
   const [guardando, setGuardando] = useState(false);
   const abrirPanel = row => setSelected(row);
   // El chat va en un globo anclado al icono. Se posiciona fijo respecto de la ventana
@@ -90,14 +92,14 @@ export default function PendientesHistoricos() {
   const [menuNota, setMenuNota] = useState(null);
   const [editando, setEditando] = useState(null);
   const [nuevaEtiqueta, setNuevaEtiqueta] = useState(null);
-  const cerrarChat = () => { setChat(null); setMenuNota(null); setEditando(null); setNuevaEtiqueta(null); setBorrador(""); };
+  const cerrarChat = () => { setChat(null); setMenuNota(null); setEditando(null); setNuevaEtiqueta(null); };
   const abrirChat = (row, boton) => {
     const caja = boton.getBoundingClientRect();
     const ancho = Math.min(330, window.innerWidth - 16);
     const izq = Math.max(8, Math.min(caja.right - ancho, window.innerWidth - ancho - 8));
     const abajo = window.innerHeight - caja.bottom;
     setChat({ row, ancho, izq, arriba: abajo < 300, y: abajo < 300 ? window.innerHeight - caja.top + 8 : caja.bottom + 8 });
-    setMenuNota(null); setEditando(null); setNuevaEtiqueta(null); setBorrador("");
+    setMenuNota(null); setEditando(null); setNuevaEtiqueta(null);
   };
   const [copiado, setCopiado] = useState("");
   const copiar = async row => {
@@ -158,7 +160,7 @@ export default function PendientesHistoricos() {
     } catch { /* el chat no puede romper la pantalla de pendientes */ }
   };
   const agregarNota = async row => {
-    const texto = borrador.trim();
+    const texto = (borradores[row.id_interno] || "").trim();
     if (!texto || guardando) return;
     setGuardando(true);
     try {
@@ -166,7 +168,7 @@ export default function PendientesHistoricos() {
         headers:{ apikey:KEY, "Content-Type":"application/json", Prefer:"return=minimal" },
         body: JSON.stringify({ envio_id: row.id_interno, autor: autorActual(), texto }) });
       if (!res.ok) throw new Error("No se pudo guardar la nota (" + res.status + ")");
-      setBorrador("");
+      setBorradores(previos => ({ ...previos, [row.id_interno]: "" }));
       await cargarEquipo();
     } catch (e) { setError(e.message); } finally { setGuardando(false); }
   };
@@ -281,10 +283,14 @@ export default function PendientesHistoricos() {
     const escape = e => { if (e.key === "Escape") cerrarChat(); };
     document.addEventListener("pointerdown", fuera);
     document.addEventListener("keydown", escape);
-    window.addEventListener("scroll", cerrarChat, true);
+    // Con capture, este handler ve TAMBIEN el scroll de cualquier elemento, y un
+    // input al que se le acaba el ancho scrollea su contenido: escribir largo
+    // cerraba el globo solo. Solo cierra el scroll de afuera del globo.
+    const scrolleo = e => { if (!e.target?.closest?.("[data-chat]")) cerrarChat(); };
+    window.addEventListener("scroll", scrolleo, true);
     window.addEventListener("resize", cerrarChat);
     return () => { document.removeEventListener("pointerdown", fuera); document.removeEventListener("keydown", escape);
-      window.removeEventListener("scroll", cerrarChat, true); window.removeEventListener("resize", cerrarChat); };
+      window.removeEventListener("scroll", scrolleo, true); window.removeEventListener("resize", cerrarChat); };
   }, [chat]);
   useEffect(() => { load(); const timer=setInterval(() => { if (!document.hidden) load(); },60000); return () => clearInterval(timer); }, []);
   const states = useMemo(() => [...new Set(rows.map(r => String(r.estado || "Sin estado").trim()))].sort(), [rows]);
@@ -344,8 +350,8 @@ export default function PendientesHistoricos() {
             </div>)}
       </div>
       <div style={globoPie}>
-        <input value={borrador} onChange={e => setBorrador(e.target.value)} onKeyDown={e => { if (e.key === "Enter") agregarNota(chat.row); }} placeholder="Escribí algo…" style={globoInput} />
-        <button onClick={() => agregarNota(chat.row)} disabled={guardando || !borrador.trim()} title="Enviar" aria-label="Enviar" style={{ ...globoEnviar, opacity: guardando || !borrador.trim() ? .45 : 1 }}>↑</button>
+        <input value={borradores[chat.row.id_interno] || ""} onChange={e => { const v = e.target.value; setBorradores(previos => ({ ...previos, [chat.row.id_interno]: v })); }} onKeyDown={e => { if (e.key === "Enter") agregarNota(chat.row); }} placeholder="Escribí algo…" style={globoInput} />
+        <button onClick={() => agregarNota(chat.row)} disabled={guardando || !(borradores[chat.row.id_interno] || "").trim()} title="Enviar" aria-label="Enviar" style={{ ...globoEnviar, opacity: guardando || !(borradores[chat.row.id_interno] || "").trim() ? .45 : 1 }}>↑</button>
       </div>
     </div>}
     {selected && <div role="dialog" onClick={()=>setSelected(null)} style={overlay}><div onClick={e=>e.stopPropagation()} style={drawer}><button onClick={()=>setSelected(null)} style={{ ...button, float:"right" }}>×</button><div style={muted}>DETALLE DEL ENVÍO</div><h2>{selected.id_venta_ml || selected.tracking || selected.id_interno}</h2><p><b>{selected.service}</b> · {selected.estado || "Sin estado"}</p><hr/><p><b>Fecha de origen</b><br/>{labelDate(selected.origin)}</p><p><b>Asignado a</b><br/>{selected.cadete || "Sin asignar"}</p><p><b>Cliente</b><br/>{selected.razon_social || "Sin nombre"}</p><p><b>Dirección</b><br/>{[selected.direccion,selected.localidad].filter(Boolean).join(" · ") || "No informada"}</p><hr/><div style={muted}>MENSAJE PARA EL CADETE</div>{copiado === "error:" + selected.id_interno
