@@ -34,8 +34,8 @@ on:
         required: false
         default: '14'
         type: string
-      dump_estados:
-        description: 'Diagnóstico: listar los códigos del filtro de estado de LightData'
+      sync_completo:
+        description: 'Descarga completa (todos los estados, pesada). Solo para backfills.'
         required: false
         default: false
         type: boolean
@@ -65,6 +65,6 @@ jobs:
           INSPECT_DETAIL_ID: ${{ inputs.inspect_detail_id || '' }}
           BACKFILL_DETAILS: ${{ inputs.backfill_details || 'false' }}
           HISTORICAL_DAYS: ${{ inputs.historical_days || '14' }}
-          DUMP_ESTADOS: ${{ inputs.dump_estados }}
+          SYNC_COMPLETO: ${{ inputs.sync_completo || 'false' }}
         run: cd automation && node sync_envios_agente.js
         timeout-minutes: 30
