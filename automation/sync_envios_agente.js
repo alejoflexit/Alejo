@@ -90,34 +90,31 @@ async function main() {
   // Diagnostico temporal: leer los codigos del filtro de estado de la UI de listado,
   // para poder pedirle a LightData solo los abiertos en vez de las 54k filas enteras.
   if (process.env.DUMP_ESTADOS === "true") {
-    const hallazgo = await page.evaluate(async () => {
-      const salida = { urls: [], selects: [] };
-      for (const url of ["/modules/envios/listado/", "/modules/envios/listado/index.php", "/modules/envios/listado/listado.php"]) {
-        try {
-          const res = await fetch(url, { credentials: "include" });
-          const html = await res.text();
-          salida.urls.push({ url, status: res.status, largo: html.length });
-          if (res.status !== 200) continue;
-          const doc = new DOMParser().parseFromString(html, "text/html");
-          for (const sel of doc.querySelectorAll("select")) {
-            const nombre = sel.getAttribute("name") || sel.id || "";
-            if (!/estado/i.test(nombre)) continue;
-            salida.selects.push({ url, nombre, multiple: sel.multiple,
-              opciones: [...sel.options].map(o => ({ v: o.value, t: o.textContent.trim() })) });
-          }
-          if (salida.selects.length) break;
-        } catch (e) { salida.urls.push({ url, error: String(e) }); }
-      }
-      return salida;
-    });
-    console.log("Filtro de estado:", JSON.stringify(hallazgo));
+    // Probar si el export acepta filtrar por estado. Codigos del vault:
+    // 0 Retirado, 1 En planta, 2 En camino, 6 Nadie, 11 Repro Meli, 12 Repro comprador.
+    const base = (estado) => `https://flexit.lightdata.app/modules/envios/listado/procesar_listado.php`
+      + `?cantxpagina=50000&pagina=1&nombre=&cp=&estado=${estado}&excel=1&appersand=false&nombrecliente=`
+      + `&fecha_desde=${encodeURIComponent(fechaDesde)}&fecha_hasta=${encodeURIComponent(fechaHasta)}`
+      + `&tipo_fecha=6&cadete=&tracking_number=&origen=&zonasdeentrega=&asignado=2&logisticaInversa=2`
+      + `&idml=&domicilio=0&turbo=&fotos=2&cobranzas=2&obs=2&cantidadColumnas=1`;
+    const variantes = ["-1", "1", "2", "6", "11", "12", "1,2", "1,2,6,11,12", "1&estado=2"];
+    const medidas = [];
+    for (const v of variantes) {
+      const r = await page.evaluate(async (url) => {
+        try { const res = await fetch(url, { credentials: "include" });
+          const b = await res.arrayBuffer(); return { status: res.status, bytes: b.byteLength }; }
+        catch (e) { return { error: String(e) }; }
+      }, base(v));
+      medidas.push({ estado: v, ...r });
+      console.log(`estado=${v} ->`, JSON.stringify(r));
+    }
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/agente_debug`, { method: "POST",
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
                    "Content-Type": "application/json", Prefer: "return=minimal" },
         body: JSON.stringify({ tipo: "filtro_estado", motivo: "aliviar el sync",
-                               mensaje: `${hallazgo.selects.length} selects`, detalle: hallazgo }) });
-    } catch (e) { console.log("No se pudo registrar el filtro:", e.message); }
+                               mensaje: `${medidas.length} variantes`, detalle: medidas }) });
+    } catch (e) { console.log("No se pudo registrar:", e.message); }
   }
 
   // Descargar Excel del RANGO (mismo endpoint, con fecha_desde != fecha_hasta)
