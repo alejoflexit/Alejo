@@ -195,15 +195,49 @@ SIN VERIFICAR EN PANTALLA, todo este bloque. Solo compila, con react-scripts bui
 
 Ninguno de estos seis se tocó: quedan fuera del alcance acordado para este tramo.
 
-## Sincronización, sigue pendiente y se trabaja aparte
+## Sincronización: reescrita el 24/09, verificada en producción
 
-- .github/workflows/envios_agente.yml programa cada hora, pero las ejecuciones verificadas el 20/09 estuvieron separadas por 4 a 5 horas.
-- automation/sync_envios_agente.js actualiza 14 días y conserva registros antiguos. Conservar no equivale a refrescar pendientes anteriores a 14 días.
-- Última ejecución comprobada: 35516513752, terminó el 20/09 a las 11:28 Argentina; 23.269 envíos del 07/09 al 20/09.
-- La pantalla consulta Supabase cada minuto; no ejecuta sincronización de LightData. Entregado desaparece cuando el nuevo estado llega al cache.
-- Alternativa VPS preparada, no instalada; acceso SSH no resuelto. No prometer frecuencia horaria garantizada.
+**Qué cambió.** La descarga era un solo pedido a LightData con `estado=-1` y 14 días:
+21,5 MB y varios minutos, demasiado pesada para correr seguido. Ahora son dos pedidos
+chicos que juntos cubren lo mismo (commit 7b39740):
+
+- **Abiertos**: `estado=1,2,6,10,13,31` con `tipo_fecha=6` (fecha a planta) y ventana
+  de 90 días. Trae todos los pendientes, incluidos los de hace más de un mes — hay 54
+  pendientes abiertos con más de 7 días, así que una ventana corta perdía datos.
+- **Movimiento**: `estado=-1` con `tipo_fecha=15` (último movimiento) y 3 días. Trae
+  las entregas y cancelaciones que ya salieron del conjunto abierto.
+
+Si un envío aparece en los dos, manda el de movimiento, que es el más fresco.
+`SYNC_COMPLETO=true` vuelve a la descarga entera, para backfills.
+
+**Códigos de estado verificados el 24/09** bajando cada uno y leyendo la columna Estado.
+El wiki documentaba la numeración del *historial* como si fuera la del filtro de listado,
+y no coinciden (reprogramado por Meli es 31, no 11). Abiertos: 1 en planta, 2 en camino,
+6 nadie, 10 nadie 2da visita, 13 no entregado, 31 reprogramado por meli. Cerrados:
+8 cancelado, 9 entregado 2da visita, 14 devuelto al cliente, 15 rechazado por el comprador.
+
+**Verificación en producción (run 36082294453, 25/09 01:30 UTC).** Terminó en poco más
+de dos minutos. Refrescó 6.513 filas y sumó 634 envíos viejos que la ventana de 14 días
+no alcanzaba. El desglose por estado muestra los dos pedidos: 381 abiertos por el primero
+y 5.713 entregados más cancelados por el segundo. Los seis estados abiertos que baja son
+exactamente los que `OPEN_STATES` considera abiertos en la pantalla, así que no queda hueco.
+
+**Horario (commit e62401d).** Nada entre la 1 y las 7 de la mañana. De 7:00 a 11:30 cada
+media hora, de 12:00 a 00:00 cada hora. Sigue corriendo en GitHub Actions y no en el VPS:
+la corrida necesita Chromium y puppeteer, y en Actions eso no le cuesta nada al VPS.
+
+**Canal al VPS, abierto y verificado el 24/09** (por si hace falta para otra cosa):
+`.github/workflows/vps.yml` + `vps/claude-exec.sh`, una clave SSH restringida por
+forced command a una lista fija de comandos (`salud`, `servicios`, `cron-list`,
+`journal-bridge`, `deploy-bridge`). Comprobado: lightdata-bridge y hermes-inbox activos,
+carga 0.10, 84 días de uptime. Agregar un comando nuevo a la lista se hace a mano en el
+VPS, a propósito.
+
+**Lo que queda.** Un botón en la pantalla para forzar la sincronización sin esperar al
+horario. Y corregir la tabla de códigos de estado del vault (`FLEXIT/wiki/sistemas/lightdata.md`),
+que hoy dice lo que no es.
 
 ## Próxima acción
 
 1. ChatGPT revisa este tramo contra el alcance y define con Alejo qué hacer con el hallazgo 1, que es el que más afecta el uso real de la pantalla.
-2. La confiabilidad horaria de la sincronización y la actualización de pendientes anteriores a 14 días se abordan en una tarea separada.
+2. Falta verificar en producción, con la pantalla abierta: etiquetas (agregar y sacar), editar y borrar mensajes, el contador y las burbujas en la fila, el ícono nuevo, dónde cae el globo y el hover que muestra la conversación. Lo único verificado punta a punta es escribir una nota.
