@@ -93,6 +93,21 @@ export default function PendientesHistoricos() {
   const [editando, setEditando] = useState(null);
   const [nuevaEtiqueta, setNuevaEtiqueta] = useState(null);
   const cerrarChat = () => { setChat(null); setMenuNota(null); setEditando(null); setNuevaEtiqueta(null); };
+  // El menu de ⋯ vivia dentro del hilo, que tiene overflow para scrollear los
+  // mensajes: quedaba recortado a una tirita y no se leia ni Editar ni Borrar.
+  // Ahora se ancla a la ventana, igual que el globo con la tabla.
+  const abrirMenuNota = (nota, boton) => {
+    if (menuNota?.id === nota.id) { setMenuNota(null); return; }
+    const caja = boton.getBoundingClientRect();
+    const abajo = window.innerHeight - caja.bottom;
+    setMenuNota({
+      id: nota.id, texto: nota.texto,
+      derecha: Math.max(8, window.innerWidth - caja.right),
+      arriba: abajo < 90,
+      y: caja.bottom + 4,
+      abajo: window.innerHeight - caja.top + 4,
+    });
+  };
   const abrirChat = (row, boton) => {
     const caja = boton.getBoundingClientRect();
     const ancho = Math.min(330, window.innerWidth - 16);
@@ -286,7 +301,10 @@ export default function PendientesHistoricos() {
     // Con capture, este handler ve TAMBIEN el scroll de cualquier elemento, y un
     // input al que se le acaba el ancho scrollea su contenido: escribir largo
     // cerraba el globo solo. Solo cierra el scroll de afuera del globo.
-    const scrolleo = e => { if (!e.target?.closest?.("[data-chat]")) cerrarChat(); };
+    const scrolleo = e => {
+      if (!e.target?.closest?.("[data-chat]")) { cerrarChat(); return; }
+      setMenuNota(null); // el menu esta anclado a la ventana y no acompana al hilo
+    };
     window.addEventListener("scroll", scrolleo, true);
     window.addEventListener("resize", cerrarChat);
     return () => { document.removeEventListener("pointerdown", fuera); document.removeEventListener("keydown", escape);
@@ -340,19 +358,17 @@ export default function PendientesHistoricos() {
               <span style={globoAutor}>{nota.autor}</span>
               <span style={globoTexto}>{nota.texto}</span>
               <span style={globoHora}>{horaCorta(nota.created_at).split(",").pop().trim()}</span>
-              {esMio(nota) && <span style={{ position:"relative", flexShrink:0 }}>
-                <button onClick={() => setMenuNota(menuNota === nota.id ? null : nota.id)} title="Editar o borrar" aria-label="Editar o borrar" style={globoPuntos}>⋯</button>
-                {menuNota === nota.id && <div style={globoMenu}>
-                  <button onClick={() => { setEditando({ id:nota.id, texto:nota.texto }); setMenuNota(null); }} style={globoMenuItem}>Editar</button>
-                  <button onClick={() => borrarNota(nota.id)} style={{ ...globoMenuItem, color:"#ff9aa4" }}>Borrar</button>
-                </div>}
-              </span>}
+              {esMio(nota) && <button onClick={e => abrirMenuNota(nota, e.currentTarget)} title="Editar o borrar" aria-label="Editar o borrar" style={globoPuntos}>⋯</button>}
             </div>)}
       </div>
       <div style={globoPie}>
         <input value={borradores[chat.row.id_interno] || ""} onChange={e => { const v = e.target.value; setBorradores(previos => ({ ...previos, [chat.row.id_interno]: v })); }} onKeyDown={e => { if (e.key === "Enter") agregarNota(chat.row); }} placeholder="Escribí algo…" style={globoInput} />
         <button onClick={() => agregarNota(chat.row)} disabled={guardando || !(borradores[chat.row.id_interno] || "").trim()} title="Enviar" aria-label="Enviar" style={{ ...globoEnviar, opacity: guardando || !(borradores[chat.row.id_interno] || "").trim() ? .45 : 1 }}>↑</button>
       </div>
+      {menuNota && <div style={{ ...globoMenu, right:menuNota.derecha, ...(menuNota.arriba ? { bottom:menuNota.abajo } : { top:menuNota.y }) }}>
+        <button onClick={() => { setEditando({ id:menuNota.id, texto:menuNota.texto }); setMenuNota(null); }} style={globoMenuItem}>Editar</button>
+        <button onClick={() => borrarNota(menuNota.id)} style={{ ...globoMenuItem, color:"#ff9aa4" }}>Borrar</button>
+      </div>}
     </div>}
     {selected && <div role="dialog" onClick={()=>setSelected(null)} style={overlay}><div onClick={e=>e.stopPropagation()} style={drawer}><button onClick={()=>setSelected(null)} style={{ ...button, float:"right" }}>×</button><div style={muted}>DETALLE DEL ENVÍO</div><h2>{selected.id_venta_ml || selected.tracking || selected.id_interno}</h2><p><b>{selected.service}</b> · {selected.estado || "Sin estado"}</p><hr/><p><b>Fecha de origen</b><br/>{labelDate(selected.origin)}</p><p><b>Asignado a</b><br/>{selected.cadete || "Sin asignar"}</p><p><b>Cliente</b><br/>{selected.razon_social || "Sin nombre"}</p><p><b>Dirección</b><br/>{[selected.direccion,selected.localidad].filter(Boolean).join(" · ") || "No informada"}</p><hr/><div style={muted}>MENSAJE PARA EL CADETE</div>{copiado === "error:" + selected.id_interno
         ? <><textarea readOnly value={mensajeCadete(selected)} ref={el => { if (el) { try { el.focus({ preventScroll:true }); el.setSelectionRange(0, el.value.length); } catch {} } }} onFocus={e => e.target.select()} onClick={e => e.target.select()} style={mensajeCampo} /><small style={{ ...muted, marginBottom:10 }}>Este navegador no deja copiar solo. Tocá el texto para seleccionarlo y copialo a mano.</small></>
@@ -373,7 +389,7 @@ const globoAutor={fontSize:11,fontWeight:700,color:"#6de4c3",flexShrink:0,minWid
 const globoTexto={fontSize:12.5,lineHeight:1.45,color:"#e9eef6",flex:1,wordBreak:"break-word",whiteSpace:"pre-wrap"};
 const globoHora={fontSize:10,color:"rgba(255,255,255,.4)",flexShrink:0};
 const globoPuntos={width:20,height:20,borderRadius:5,border:"1px solid rgba(255,255,255,.14)",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.6)",fontSize:12,lineHeight:1,cursor:"pointer",padding:0};
-const globoMenu={position:"absolute",right:0,top:24,zIndex:9,background:"#12253f",border:"1px solid rgba(255,255,255,.18)",borderRadius:8,padding:4,minWidth:104,boxShadow:"0 10px 26px #0009",display:"flex",flexDirection:"column"};
+const globoMenu={position:"fixed",zIndex:1200,background:"#12253f",border:"1px solid rgba(255,255,255,.18)",borderRadius:8,padding:4,minWidth:104,boxShadow:"0 10px 26px #0009",display:"flex",flexDirection:"column"};
 const globoMenuItem={textAlign:"left",padding:"6px 9px",borderRadius:5,fontSize:11.5,border:0,background:"none",color:"#fff",cursor:"pointer"};
 const globoEdit={flex:1,background:"rgba(255,255,255,.07)",border:"1px solid rgba(46,207,170,.5)",borderRadius:7,padding:"6px 9px",fontSize:12.5,color:"#fff",fontFamily:"inherit",minWidth:0};
 const globoAccion={border:0,background:"none",color:"#6de4c3",fontSize:11,fontWeight:700,cursor:"pointer",padding:"0 2px",flexShrink:0};
