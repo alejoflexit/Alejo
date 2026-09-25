@@ -77,6 +77,8 @@ export default function PendientesHistoricos() {
   const [criticalOnly, setCriticalOnly] = useState(false);
   const [courier, setCourier] = useState("");
   const [dataAt, setDataAt] = useState(null);
+  const [sinc, setSinc] = useState(null);
+  const sincRef = useRef(false);
   const [notas, setNotas] = useState({});
   const [etiquetas, setEtiquetas] = useState({});
   const [borrador, setBorrador] = useState("");
@@ -231,7 +233,47 @@ export default function PendientesHistoricos() {
       for (const row of data) { const at = Date.parse(row.actualizado_at); if (Number.isFinite(at) && at > ultimo) ultimo = at; }
       setDataAt(ultimo ? new Date(ultimo) : null);
       await cargarEquipo();
-    } catch(e) { setError(e.message); } finally { setLoading(false); loadingRef.current=false; }
+      return ultimo;
+    } catch(e) { setError(e.message); return 0; } finally { setLoading(false); loadingRef.current=false; }
+  };
+
+  // El boton releia Supabase, que es lo que ya hace solo cada minuto: no traia
+  // nada nuevo. Ahora pide la corrida real contra LightData (funcion
+  // refrescar-envios, que dispara el workflow) y espera a que lleguen los datos.
+  const refrescar = async () => {
+    if (sincRef.current || loadingRef.current) return;
+    sincRef.current = true;
+    const previo = dataAt ? dataAt.getTime() : 0;
+    setSinc("Pidiendo datos nuevos a LightData…");
+    try {
+      let respuesta = {};
+      try {
+        const res = await authedFetch(URL + "/functions/v1/refrescar-envios", { method: "POST", headers: { apikey: KEY } });
+        respuesta = await res.json().catch(() => ({}));
+      } catch { respuesta = { ok: false, motivo: "red" }; }
+
+      if (!respuesta.ok) {
+        await load();
+        setSinc(respuesta.motivo === "reciente"
+          ? `Los datos ya son de hace ${respuesta.minutos} min. Se recargó la pantalla, no se pidió una corrida nueva.`
+          : "No se pudo pedir una corrida nueva. Se recargó lo que ya había en la base.");
+        setTimeout(() => setSinc(null), 8000);
+        return;
+      }
+
+      setSinc("Bajando de LightData. Tarda un par de minutos.");
+      for (let intento = 0; intento < 15; intento++) {
+        await new Promise(fin => setTimeout(fin, 20000));
+        const ahora = await load();
+        if (ahora && ahora > previo) {
+          setSinc("Datos actualizados.");
+          setTimeout(() => setSinc(null), 5000);
+          return;
+        }
+      }
+      setSinc("La corrida se pidió pero todavía no llegó. Probá de nuevo en un minuto.");
+      setTimeout(() => setSinc(null), 10000);
+    } finally { sincRef.current = false; }
   };
   useEffect(() => {
     if (!chat) return undefined;
@@ -266,7 +308,7 @@ export default function PendientesHistoricos() {
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); const key = d.toISOString().slice(0, 10); const rs = rows.filter(r => r.origin === key && isOpenShipment(r)); const flex = rs.filter(r => r.service === "Flex").length; return { key, d, rs, flex, part: rs.length - flex }; });
   }, [rows]);
   return <div style={{ color:"#fff" }}>
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:16 }}><div><h2 style={{ margin:0, fontSize:22 }}>Pendientes históricos</h2><div style={{ color:"rgba(255,255,255,.62)", fontSize:12, marginTop:5 }}>Cada envío pendiente, hasta su resolución.</div></div><div style={{ display:"flex", alignItems:"center", gap:12 }}><div style={{ textAlign:"right", color:"rgba(255,255,255,.55)", fontSize:11 }}>Última actualización de datos<br/><b style={{ color:"#fff" }}>{dataAt ? dataAt.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "sin dato"}</b></div><button onClick={load} disabled={loading} style={button}>{loading ? "Actualizando…" : "↻ Actualizar"}</button></div></div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:16 }}><div><h2 style={{ margin:0, fontSize:22 }}>Pendientes históricos</h2><div style={{ color:"rgba(255,255,255,.62)", fontSize:12, marginTop:5 }}>Cada envío pendiente, hasta su resolución.</div></div><div style={{ display:"flex", alignItems:"center", gap:12 }}><div style={{ textAlign:"right", color:"rgba(255,255,255,.55)", fontSize:11 }}>Última actualización de datos<br/><b style={{ color:"#fff" }}>{dataAt ? dataAt.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "sin dato"}</b>{sinc ? <div style={{ marginTop:4, color:"rgba(255,255,255,.72)", fontSize:11, maxWidth:260 }}>{sinc}</div> : null}</div><button onClick={refrescar} disabled={loading || !!sinc} style={button}>{sinc ? "Actualizando…" : "↻ Actualizar"}</button></div></div>
     <div style={urgentHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><div><b>Flex abiertos con más de 48 horas</b><small style={{display:"block",marginTop:5,color:"#bfc7d8"}}>Estos envíos necesitan seguimiento prioritario.</small></div></div><button onClick={() => { setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
     {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
     <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button style={button}>←</button><button style={button}>Semana actual</button><button style={button}>→</button></div></div><div style={daysGrid}>{calendarDays.map(({key,d,rs,flex,part}) => <div key={key} style={{ position:"relative" }}><button onClick={() => setDay(key)} style={{ ...dayCard, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button></div>)}</div></div>
