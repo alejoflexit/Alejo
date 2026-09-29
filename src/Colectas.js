@@ -387,11 +387,27 @@ function ColectasInner({ soloArribos = false, irA }) {
             zona_barrio: r.zona_barrio ?? null,
           };
         });
-        // Carry-forward: pre-cargar choferes del último día anterior para clientes sin registro hoy
+        // Carry-forward: pre-cargar choferes del último día anterior para clientes sin registro hoy.
+        // El sábado es su propio mundo: un sábado solo hereda de sábados anteriores y un día de semana
+        // solo de días de semana. Así asignar a alguien un sábado no cambia quién lo hace el lunes (ni al revés).
         try {
-          const prev = await sbFetch(`colectas_registros?select=cliente_id,choferes,fecha&fecha=lt.${fecha}&order=fecha.desc&limit=3000`);
+          const esSab = (f) => new Date(f + 'T12:00:00').getDay() === 6;
+          const hoyEsSab = esSab(fecha);
+          // Sábado: pedir solo los últimos 8 sábados (la API corta en ~1000 filas y con días de semana
+          // mezclados no llegaría a ver el sábado anterior). Día de semana: lo de siempre.
+          let filtroFecha = `fecha=lt.${fecha}`;
+          if (hoyEsSab) {
+            const sabs = [];
+            const d = new Date(fecha + 'T12:00:00');
+            for (let i = 0; i < 8; i++) { d.setDate(d.getDate() - 7); sabs.push(d.toISOString().slice(0, 10)); }
+            filtroFecha = `fecha=in.(${sabs.join(',')})`;
+          }
+          const prev = await sbFetch(`colectas_registros?select=cliente_id,choferes,fecha&${filtroFecha}&order=fecha.desc&limit=3000`);
           const latest = {};
-          prev.forEach(r => { if (!latest[r.cliente_id] && r.choferes?.length) latest[r.cliente_id] = r.choferes; });
+          prev.forEach(r => {
+            if (esSab(r.fecha) !== hoyEsSab) return;
+            if (!latest[r.cliente_id] && r.choferes?.length) latest[r.cliente_id] = r.choferes;
+          });
           Object.entries(latest).forEach(([cid, chs]) => {
             if (!map[cid]) map[cid] = { id: null, choferes: chs, estado: null, confirmado_por: [] };
           });
