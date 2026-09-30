@@ -207,6 +207,8 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [detalleAbierto, setDetalleAbierto] = useState(null); // cadete cuyo panel de detalle está expandido
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
+  const [zonasArribosAbierto, setZonasArribosAbierto] = useState(false); // desglose por zona plegable (arranca cerrado)
+  const [zonaArribos, setZonaArribos] = useState(null); // zona elegida en el desglose: filtra la lista
   const [etaEdit, setEtaEdit] = useState(null); // cadete cuya hora estimada se está editando
   const [esMovil, setEsMovil] = useState(typeof window !== 'undefined' && window.innerWidth < 700);
   useEffect(() => {
@@ -1479,14 +1481,22 @@ function ColectasInner({ soloArribos = false, irA }) {
     if (loading) return <div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>Cargando...</div>;
     // Cadetes con al menos una colecta CONFIRMADA hoy
     const map = {};
-    Object.values(registros).forEach(r => {
+    const seccionPorCliente = {};
+    clientes.forEach(c => { seccionPorCliente[c.id] = c.seccion; });
+    Object.entries(registros).forEach(([cid, r]) => {
       (r.choferes || []).forEach(ch => {
         if (!ch || ch === 'A coordinar') return;
         const confirmedForCh = r.estado === 'verde' || (r.confirmado_por || []).includes(ch);
         if (!confirmedForCh) return;
-        if (!map[ch]) map[ch] = { cadete: ch, confirmadas: 0 };
+        if (!map[ch]) map[ch] = { cadete: ch, confirmadas: 0, secs: {} };
         map[ch].confirmadas++;
+        const sec = seccionPorCliente[cid];
+        if (sec) map[ch].secs[sec] = (map[ch].secs[sec] || 0) + 1;
       });
+    });
+    // Zona del cadete = la sección donde tiene más colectas confirmadas ese día (sale sola, no se carga nada)
+    Object.values(map).forEach(c => {
+      c.zona = Object.entries(c.secs).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     });
     let lista = Object.values(map);
     const total = lista.length;
@@ -1533,7 +1543,21 @@ function ColectasInner({ soloArribos = false, irA }) {
       return a.cadete.localeCompare(b.cadete, 'es');
     });
     const q = normNombre(busquedaArribos);
-    const listaFiltrada = q ? lista.filter(c => normNombre(c.cadete).includes(q)) : lista;
+    const ZONAS_ARR = [
+      { id: 'CABA', label: 'CABA', color: '#6CB4F5' },
+      { id: 'SUR', label: 'Sur', color: '#F2A65A' },
+      { id: 'NOROESTE', label: 'Noroeste', color: '#C4A3F7' },
+      { id: 'SABADOS', label: 'Sábados', color: '#FBBF24' },
+    ];
+    const zonasArr = ZONAS_ARR.map(z => {
+      const deZona = lista.filter(c => c.zona === z.id);
+      const ok = deZona.filter(c => arribos[c.cadete]?.llego_at).length;
+      return { ...z, total: deZona.length, ok, pct: deZona.length ? Math.round(ok / deZona.length * 100) : 0 };
+    }).filter(z => z.total > 0);
+    const zonaActiva = zonasArribosAbierto && zonasArr.some(z => z.id === zonaArribos) ? zonaArribos : null;
+    const listaFiltrada = lista
+      .filter(c => !zonaActiva || c.zona === zonaActiva)
+      .filter(c => !q || normNombre(c.cadete).includes(q));
     const d = new Date(fecha + 'T12:00:00');
     const fechaFmt = d.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
     const faltan = lista.filter(c => !arribos[c.cadete]?.llego_at);
@@ -1583,11 +1607,39 @@ function ColectasInner({ soloArribos = false, irA }) {
               {faltan.length === 0 && (
                 <div style={{ fontSize:12, color:'#2ECFAA', marginTop:10, fontWeight:600 }}>✓ Llegaron todos 🎉</div>
               )}
+              {zonasArr.length > 1 && (
+                <>
+                  <button onClick={() => { if (zonasArribosAbierto) setZonaArribos(null); setZonasArribosAbierto(!zonasArribosAbierto); }}
+                    aria-expanded={zonasArribosAbierto}
+                    style={{ marginTop:10, padding:'6px 0', background:'transparent', border:'none', color:'#2ECFAA', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
+                    <span style={{ display:'inline-block', transform: zonasArribosAbierto ? 'rotate(180deg)' : 'none', fontSize:11 }}>▼</span>
+                    {zonasArribosAbierto ? (zonaActiva ? 'Por zona · tocá la zona de nuevo para ver todas' : 'Ocultar zonas') : 'Ver por zona'}
+                  </button>
+                  {zonasArribosAbierto && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                      {zonasArr.map(z => {
+                        const on = zonaActiva === z.id;
+                        return (
+                          <button key={z.id} onClick={() => setZonaArribos(on ? null : z.id)} aria-pressed={on}
+                            style={{ display:'flex', alignItems:'center', gap:10, minHeight:40, padding:'0 8px', borderRadius:8, cursor:'pointer', fontFamily:'inherit',
+                              background: on ? 'rgba(255,255,255,0.06)' : 'transparent', border:`1px solid ${on ? z.color : 'transparent'}` }}>
+                            <span style={{ width:72, textAlign:'left', fontSize:13, fontWeight:600, color:z.color }}>{z.label}</span>
+                            <span style={{ flex:1, height:6, borderRadius:3, background:'rgba(255,255,255,0.08)', overflow:'hidden', display:'block' }}>
+                              <span style={{ display:'block', height:'100%', width:`${z.pct}%`, borderRadius:3, background:z.color }} />
+                            </span>
+                            <span style={{ width:48, textAlign:'right', fontSize:13, color:BRAND.white }}>{z.ok}/{z.total}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {listaFiltrada.length === 0 && (
               <div style={{ color:BRAND.muted, padding:'2rem', textAlign:'center', fontSize:13 }}>
-                Ningún cadete coincide con "{busquedaArribos}".
+                {q ? <>Ningún cadete coincide con "{busquedaArribos}".</> : 'No hay cadetes en esta zona.'}
               </div>
             )}
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
