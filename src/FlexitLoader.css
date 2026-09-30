@@ -1,0 +1,42 @@
+/* Animación de carga "La entrega" (opción E, camioneta turquesa = opción J).
+   Elegida por Alejo el 29/09 sobre la referencia work/propuestas/flexit-loader/flexit-en-camino.html:
+   colores de flexit.ar (violeta #0F0241, turquesa #02C4B8, menta #97E4C7) sobre el fondo oscuro de la app.
+   Loop de 3,6 s: la camioneta entra, deja una caja en la casa, aparece el tilde y se va.
+   Sin fuentes externas: usa Poppins solo si ya está instalada, si no la letra del sistema. */
+.fx-loader{--fx-bg:#0D1F37;--fx-ink:#FFFFFF;--fx-muted:#A9B8C9;--fx-accent:#02C4B8;
+  height:370px;box-sizing:border-box;width:100%;max-width:100%;padding:24px;border-radius:20px;
+  background:var(--fx-bg);border:1px solid rgba(118,174,220,.18);color:var(--fx-ink);
+  font:14px/1.5 Poppins,system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;position:relative;text-align:center}
+.fx-loader .fx-brand{display:flex;align-items:center;gap:6px;font-size:34px;font-weight:700;letter-spacing:-1.4px;line-height:1.2}
+.fx-loader .fx-label{font-size:15px;font-weight:600;margin:20px 0 4px}
+.fx-loader .fx-sub{color:var(--fx-muted);font-size:12px}
+.fx-loader .fx-eyebrow{position:absolute;top:20px;left:24px;color:var(--fx-muted);font-size:11px;letter-spacing:1.5px;text-transform:uppercase}
+
+.fx-loader .fx-scene{flex-shrink:0;width:280px;height:120px;position:relative;overflow:hidden;margin-top:18px}
+.fx-loader .fx-roof{position:absolute;left:200px;top:30px;width:56px;height:22px;background:rgba(255,255,255,.16);clip-path:polygon(50% 0,100% 100%,0 100%)}
+.fx-loader .fx-house{position:absolute;left:206px;top:52px;width:44px;height:38px;background:rgba(255,255,255,.08);border-radius:0 0 2px 2px}
+.fx-loader .fx-door{position:absolute;left:221px;top:66px;width:14px;height:24px;border-radius:3px 3px 0 0;background:rgba(255,255,255,.14);animation:fx-door 3.6s infinite}
+.fx-loader .fx-road{position:absolute;left:0;top:91px;width:100%;height:2px;background:rgba(255,255,255,.14)}
+.fx-loader .fx-van{position:absolute;left:48px;top:30px;overflow:visible;animation:fx-drive 3.6s infinite}
+.fx-loader .fx-wheel{transform-box:fill-box;transform-origin:center;animation:fx-wspin 3.6s infinite}
+.fx-loader .fx-box{position:absolute;left:62px;top:50px;width:16px;height:16px;border-radius:3px;background:#C98E4E;opacity:0;animation:fx-hop 3.6s infinite}
+.fx-loader .fx-box:before{content:'';position:absolute;left:6px;top:0;width:4px;height:16px;background:#E9C48F}
+.fx-loader .fx-ok{position:absolute;left:244px;top:24px;width:22px;height:22px;border-radius:50%;background:var(--fx-accent);display:flex;align-items:center;justify-content:center;opacity:0;animation:fx-ok 3.6s infinite}
+
+@keyframes fx-drive{0%{transform:translateX(-200px);animation-timing-function:cubic-bezier(.2,.7,.3,1)}30%{transform:translateX(0)}33%{transform:translateX(0) rotate(-.6deg)}36%{transform:translateX(0) rotate(0)}62%{transform:translateX(0);animation-timing-function:cubic-bezier(.6,0,.9,.4)}100%{transform:translateX(290px)}}
+@keyframes fx-wspin{0%{transform:rotate(0);animation-timing-function:cubic-bezier(.2,.7,.3,1)}30%{transform:rotate(540deg)}62%{transform:rotate(540deg);animation-timing-function:cubic-bezier(.6,0,.9,.4)}100%{transform:rotate(1300deg)}}
+@keyframes fx-hop{0%,31%{opacity:0;transform:translate(0,0) scale(.5)}34%{opacity:1;transform:translate(0,0) scale(1)}43%{transform:translate(78px,-36px) rotate(90deg)}52%{opacity:1;transform:translate(154px,14px) rotate(180deg)}58%,100%{opacity:0;transform:translate(154px,14px) scale(.6)}}
+@keyframes fx-ok{0%,52%{opacity:0;transform:scale(.3)}58%{opacity:1;transform:scale(1.15)}63%{transform:scale(1)}88%{opacity:1;transform:scale(1)}96%,100%{opacity:0;transform:scale(1)}}
+@keyframes fx-door{0%,50%,70%,100%{background:rgba(255,255,255,.14)}56%,62%{background:#02C4B8}}
+
+/* Movimiento reducido: todo quieto (la camioneta queda frente a la casa, sin caja ni tilde) */
+@media (prefers-reduced-motion:reduce){.fx-loader *{animation:none!important}}
+/* Pantallas angostas: la escena se achica visualmente para no cortarse */
+@media (max-width:380px){.fx-loader{padding:18px;height:340px}.fx-loader .fx-brand{font-size:30px}.fx-loader .fx-scene{transform:scale(.82);transform-origin:center top;margin-bottom:-22px}}
+
+/* Indicador discreto para actualizaciones con datos ya visibles */
+.fx-refresh{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.72);font-size:11px}
+.fx-refresh:before{content:'';width:6px;height:6px;border-radius:50%;background:#02C4B8;animation:fx-pulse 1.2s ease-in-out infinite}
+@keyframes fx-pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.fx-refresh:before{animation:none}}
