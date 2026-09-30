@@ -118,6 +118,26 @@ function fmtCuando(iso) {
   return `${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+// Día (en hora de Buenos Aires) en que se marcó pagado: "2026-09-30". Agrupa la vista Pagados.
+function diaPago(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+// Título del grupo: "Hoy · 30/9", "Ayer · 29/9", "Domingo 28/9".
+function tituloDiaPago(dia) {
+  if (!dia) return 'Sin fecha de pago';
+  const hoy = diaPago(new Date().toISOString());
+  const ayer = diaPago(new Date(Date.now() - 864e5).toISOString());
+  const [y, m, d] = dia.split('-').map(Number);
+  const corto = `${d}/${m}`;
+  if (dia === hoy) return `Hoy · ${corto}`;
+  if (dia === ayer) return `Ayer · ${corto}`;
+  const nombre = new Date(y, m - 1, d).toLocaleDateString('es-AR', { weekday: 'long' });
+  return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${corto}`;
+}
+
 // Quiénes suelen ejecutar los pagos. Cualquier otro nombre se escribe con "Otro…" y queda guardado.
 const QUIENES_PAGAN = ['Adrián', 'Alejo'];
 
@@ -304,8 +324,22 @@ export default function PagosPagador({ tarifas }) {
     if (filtroMetodo === 'factura') r = r.filter(f => f.factura);
     else if (filtroMetodo === 'efectivo') r = r.filter(f => !f.factura);
     if (filtro === 'pagados' && filtroMedio !== 'todos') r = r.filter(f => f.pagadoVia === filtroMedio);
+    // Pagados: lo último que se pagó arriba (los viejos sin fecha quedan al final).
+    if (filtro === 'pagados') r = [...r].sort((a, b) => (b.pagadoAt || '').localeCompare(a.pagadoAt || ''));
     return r;
   }, [filas, filtro, filtroMetodo, filtroMedio]);
+
+  // Pagados agrupado por día de pago: cantidad y total de cada tanda, para el encabezado del grupo.
+  const gruposPago = useMemo(() => {
+    const g = {};
+    if (filtro !== 'pagados') return g;
+    filasFiltradas.forEach(f => {
+      const k = diaPago(f.pagadoAt);
+      g[k] = g[k] || { n: 0, total: 0 };
+      g[k].n += 1; g[k].total += f.total || 0;
+    });
+    return g;
+  }, [filtro, filasFiltradas]);
 
   const counts = useMemo(() => ({
     listos: filas.filter(listoParaPagar).length,
@@ -601,7 +635,15 @@ export default function PagosPagador({ tarifas }) {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {filasFiltradas.map(f => {
+            {filasFiltradas.map((f, i) => {
+              // En Pagados, encabezado de día antes de la primera fila de cada día.
+              const dia = filtro === 'pagados' ? diaPago(f.pagadoAt) : null;
+              const encabezadoDia = filtro === 'pagados' && (i === 0 || diaPago(filasFiltradas[i - 1].pagadoAt) !== dia) && (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: i === 0 ? 0 : 10, fontSize: 13 }}>
+                  <span style={{ fontWeight: 700 }}>{tituloDiaPago(dia)}</span>
+                  <span style={{ color: BRAND.muted }}>— {gruposPago[dia].n} {gruposPago[dia].n === 1 ? 'pago' : 'pagos'} · {money(gruposPago[dia].total)}</span>
+                </div>
+              );
               const sinFactura = faltaFactura(f); // transferencia confirmada que todavía no mandó factura
               const busy = busyId === f.key;
               // Medio ya determinado: efectivo (no sale de ninguna cuenta) o parte vieja con
@@ -637,7 +679,9 @@ export default function PagosPagador({ tarifas }) {
                 </span>
               );
               return (
-                <div key={f.key}
+                <React.Fragment key={f.key}>
+                {encabezadoDia}
+                <div
                   onDragOver={aceptaDrop ? (e => { e.preventDefault(); if (!enDrag) setDragKey(f.key); }) : undefined}
                   onDragLeave={aceptaDrop ? (() => setDragKey(k => (k === f.key ? null : k))) : undefined}
                   onDrop={aceptaDrop ? (e => { e.preventDefault(); setDragKey(null); subirFactura(f, e.dataTransfer.files && e.dataTransfer.files[0]); }) : undefined}
@@ -776,6 +820,7 @@ export default function PagosPagador({ tarifas }) {
                     </div>
                   )}
                 </div>
+                </React.Fragment>
               );
             })}
           </div>
