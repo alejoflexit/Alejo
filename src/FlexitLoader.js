@@ -1,7 +1,7 @@
 import React from "react";
 import "./FlexitLoader.css";
 
-// Animación de carga "La entrega": camioneta Flexit turquesa que deja una caja en una casa.
+// Animación de carga "La entrega": camioneta Flexit turquesa que deja una caja en un edificio.
 // Elegida por Alejo el 29/09 (opción E con camioneta J) a partir de la referencia
 // work/propuestas/flexit-loader/flexit-en-camino.html, con los colores de flexit.ar.
 // Arriba va el logo oficial de Flexit (letras en blanco por el fondo oscuro); es decorativo
@@ -71,6 +71,34 @@ function Van() {
   );
 }
 
+// Destino de la entrega: edificio de departamentos (opción L, elegida por Alejo el 30/09).
+// Una ventana se prende al frenar la camioneta y la puerta se ilumina al llegar la caja.
+function Building() {
+  return (
+    <svg className="fx-building" width="84" height="90" viewBox="0 0 84 90" fill="none">
+      <rect x="8" y="4" width="68" height="86" fill="#1E3A60" />
+      <rect x="56" y="4" width="20" height="86" fill="#17304F" opacity=".6" />
+      <rect x="5" y="2" width="74" height="5" rx="1" fill="#0F0241" />
+      <rect x="16" y="12" width="11" height="9" rx="1.5" fill="#FFE7A3" />
+      <rect x="34" y="12" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect x="52" y="12" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect x="16" y="26" width="11" height="9" rx="1.5" fill="#FFE7A3" />
+      <rect className="fx-blink" x="34" y="26" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect x="52" y="26" width="11" height="9" rx="1.5" fill="#FFE7A3" />
+      <rect x="16" y="40" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect x="34" y="40" width="11" height="9" rx="1.5" fill="#FFE7A3" />
+      <rect x="52" y="40" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect x="16" y="54" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect x="34" y="54" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect x="52" y="54" width="11" height="9" rx="1.5" fill="#0B2340" />
+      <rect className="fx-door" x="34" y="70" width="16" height="20" rx="1.5" fill="#2C4E78" />
+      <path d="M42 70V90" stroke="#1E3A60" strokeWidth="1.2" />
+      <rect x="60" y="72" width="10" height="7" rx="1.5" fill="#0F0241" />
+      <rect x="62" y="74" width="6" height="1.5" fill="#02C4B8" />
+    </svg>
+  );
+}
+
 export default function FlexitLoader({
   label = "Cargando…",
   sub = "Un momento, estamos consultando los datos.",
@@ -84,9 +112,7 @@ export default function FlexitLoader({
         <FlexitLogo height={40} wordInk="#FFFFFF" />
       </div>
       <div className="fx-scene" aria-hidden="true">
-        <div className="fx-roof" />
-        <div className="fx-house" />
-        <div className="fx-door" />
+        <Building />
         <div className="fx-road" />
         <div className="fx-box" />
         <Van />
