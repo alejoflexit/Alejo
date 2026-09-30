@@ -8,7 +8,7 @@
   background:var(--fx-bg);border:1px solid rgba(118,174,220,.18);color:var(--fx-ink);
   font:14px/1.5 Poppins,system-ui,sans-serif;
   display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;position:relative;text-align:center}
-.fx-loader .fx-brand{display:flex;align-items:center;gap:6px;font-size:34px;font-weight:700;letter-spacing:-1.4px;line-height:1.2}
+.fx-loader .fx-brand{display:flex;align-items:center;justify-content:center;line-height:0}
 .fx-loader .fx-label{font-size:15px;font-weight:600;margin:20px 0 4px}
 .fx-loader .fx-sub{color:var(--fx-muted);font-size:12px}
 .fx-loader .fx-eyebrow{position:absolute;top:20px;left:24px;color:var(--fx-muted);font-size:11px;letter-spacing:1.5px;text-transform:uppercase}
@@ -33,7 +33,7 @@
 /* Movimiento reducido: todo quieto (la camioneta queda frente a la casa, sin caja ni tilde) */
 @media (prefers-reduced-motion:reduce){.fx-loader *{animation:none!important}}
 /* Pantallas angostas: la escena se achica visualmente para no cortarse */
-@media (max-width:380px){.fx-loader{padding:18px;height:340px}.fx-loader .fx-brand{font-size:30px}.fx-loader .fx-scene{transform:scale(.82);transform-origin:center top;margin-bottom:-22px}}
+@media (max-width:380px){.fx-loader{padding:18px;height:340px}.fx-loader .fx-brand svg{height:34px;width:auto}.fx-loader .fx-scene{transform:scale(.82);transform-origin:center top;margin-bottom:-22px}}
 
 /* Indicador discreto para actualizaciones con datos ya visibles */
 .fx-refresh{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.72);font-size:11px}
