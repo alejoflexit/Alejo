@@ -186,7 +186,7 @@ export default function PagosPagador({ tarifas }) {
   const [loadingSemanas, setLoadingSemanas] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filtro, setFiltro] = useState('listos');          // listos | pendientes | pagados | falta_factura | todos
+  const [filtro, setFiltro] = useState('listos');          // falta_factura | listos | pagados | todos
   const [armado, setArmado] = useState(null);
   const [filtroMetodo, setFiltroMetodo] = useState('todos'); // todos | factura | efectivo
   const [copiado, setCopiado] = useState(null);
@@ -592,15 +592,19 @@ export default function PagosPagador({ tarifas }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
-              {/* "Listos para pagar" primero y en verde: es la cola del que transfiere y la única
-                  que lleva a la acción de plata. El resto (revisar pendientes, marcar facturas,
-                  auditar pagados) son tareas de Alejo y quedan en azul, detrás. */}
-              <button onClick={() => setFiltro(filtro === 'listos' ? 'todos' : 'listos')} style={{ ...pill(filtro === 'listos', BRAND.teal), fontWeight: 700 }}>
-                💸 Listos para pagar {counts.listos > 0 && <span style={{ opacity: 0.7 }}>({counts.listos})</span>}
-              </button>
-              {[['pendientes', 'Pendientes'], ['pagados', 'Pagados'], ['falta_factura', 'Falta factura']].map(([k, l]) => (
-                <button key={k} onClick={() => setFiltro(filtro === k ? 'todos' : k)} style={pill(filtro === k, BRAND.blue)}>{l} {counts[k] > 0 && <span style={{ opacity: 0.7 }}>({counts[k]})</span>}</button>
+              {/* Estado como recorrido: Falta factura → Listos para pagar → Pagados. Cada cadete
+                  está en un solo paso, así los tres suman "Todos". "Pendientes" se sacó: era
+                  Falta factura + Listos y contaba dos veces a los mismos. */}
+              {[['falta_factura', 'Falta factura', BRAND.amber], ['listos', '💸 Listos para pagar', BRAND.teal], ['pagados', '✓ Pagados', BRAND.blue]].map(([k, l, color], i) => (
+                <React.Fragment key={k}>
+                  {i > 0 && <span style={{ color: BRAND.muted, fontSize: 14 }}>›</span>}
+                  <button onClick={() => setFiltro(k)} style={{ ...pill(filtro === k, color), ...(k === 'falta_factura' && counts[k] > 0 && filtro !== k ? { borderColor: `${BRAND.amber}88`, color: BRAND.amber } : {}), ...(k === 'listos' ? { fontWeight: 700 } : {}) }}>
+                    {l} <span style={{ opacity: 0.7 }}>({counts[k]})</span>
+                  </button>
+                </React.Fragment>
               ))}
+              <span style={{ width: 10 }} />
+              <button onClick={() => setFiltro('todos')} style={pill(filtro === 'todos', BRAND.blue)}>Todos <span style={{ opacity: 0.7 }}>({filas.length})</span></button>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Método</span>
