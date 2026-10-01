@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"; // build: 20 nav + lazy
 import Home from "./Home";
 import { getSession, login, logout, authedFetch } from "./auth";
+import { puedeVer, esAdmin, usePermisos } from "./permisos";
 import { cargarComentarios, useComentariosRealtime, aplicarCambioNota } from "./colectasShared";
 import { slaMeli } from "./slaShared";
 import { esDemoradoFlexit } from "./demoraTotalShared";
@@ -16,6 +17,7 @@ const Analisis = lazy(() => import("./Analisis"));
 const Seguimiento = lazy(() => import("./Seguimiento"));
 const Zonas = lazy(() => import("./Zonas"));
 const Pizarra = lazy(() => import("./Pizarra"));
+const Usuarios = lazy(() => import("./Usuarios"));
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -131,8 +133,8 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
     { id: "pizarra", icon: "ti ti-notes", label: "Pizarra" },
     { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
     { id: "pendientes", icon: "ti ti-history", label: "Pendientes históricos" },
-    ...(getSession()?.email === "admin@flexit.app" ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
-  ];
+    ...(getSession() && esAdmin() ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
+  ].filter(it => puedeVer(it.id));
   return (
     <>
       <div onClick={() => go("home")} title="Ir al inicio" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "2rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(255,255,255,0.08)", cursor: "pointer" }}>
@@ -154,11 +156,19 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
             </button>
           );
         })}
-        <a href="/choferes.html"
+        {puedeVer("choferes") && <a href="/choferes.html"
           style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
           <i className="ti ti-user-plus" style={{ fontSize: 18 }} />
           Alta de Choferes
-        </a>
+        </a>}
+        {getSession() && esAdmin() && (<>
+          <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "18px 0 6px", paddingLeft: 10 }}>Administración</div>
+          <button onClick={() => go("usuarios")}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${seccion === "usuarios" ? "rgba(46,207,170,0.3)" : "rgba(255,255,255,0.08)"}`, background: seccion === "usuarios" ? "rgba(46,207,170,0.1)" : "rgba(255,255,255,0.04)", color: seccion === "usuarios" ? "#2ECFAA" : "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
+            <i className="ti ti-shield-lock" style={{ fontSize: 18 }} />
+            Usuarios y permisos
+          </button>
+        </>)}
       </div>
       {onClose && (
         <button onClick={onClose}
@@ -784,9 +794,11 @@ export default function App() {
   const [seccion, setSeccion] = useState(() => {
     // Deep-link por hash (#colectas, #metricas…): lo usan los atajos del widget de Paco
     const h = (window.location.hash || "").replace("#", "");
-    return ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "pendientes", "pagos", "home"].includes(h) ? h : "home";
+    return ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "pendientes", "pagos", "usuarios", "home"].includes(h) ? h : "home";
   });
   const [session, setSession] = useState(() => getSession());
+  usePermisos(session ? session.email : ""); // re-renderiza cuando llegan los permisos del usuario
+  const vista = puedeVer(seccion) ? seccion : "sin-acceso";
   const fileRef = useRef();
 
   // ── Comentarios nuevos de la pizarra → badge en la pestaña y en el acceso "Pizarra" ──
@@ -814,7 +826,7 @@ export default function App() {
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
-    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", pendientes: "Pendientes históricos", pagos: "Liquidaciones" };
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", pendientes: "Pendientes históricos", pagos: "Liquidaciones", usuarios: "Usuarios" };
     const base = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
     document.title = (comNuevos > 0 && seccion !== "pizarra") ? `(${comNuevos}) ${base}` : base;
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
@@ -1077,13 +1089,13 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "pagos" ? "Liquidaciones" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "pagos" ? "Liquidación semanal de cadetes" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-          {!isMobile && seccion === "metricas" && (<>
+          {!isMobile && vista === "metricas" && (<>
           <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){setPendingFile(f);setShowDateModal(true);}}} onDragOver={e=>e.preventDefault()} onClick={()=>xlsxReady&&!loading&&setShowDateModal(true)}
             style={{ border:"1px solid #2ECFAA", borderRadius:8, padding:"6px 16px", cursor:xlsxReady&&!loading?"pointer":"wait", fontSize:12, color:"#2ECFAA", background:"rgba(46,207,170,0.08)", whiteSpace:"nowrap" }}>
             <i className="ti ti-upload" style={{ fontSize:14, marginRight:6 }} />
@@ -1103,21 +1115,32 @@ export default function App() {
         onLogin={async (em, pw) => { const s = await login(em, pw); setSession(s); return s; }}
         onLogout={() => { logout(); setSession(null); }} />}
 
-      {seccion === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas irA={setSeccion} /></Suspense>}
+      {vista === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas irA={setSeccion} /></Suspense>}
 
-      {seccion === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>}
+      {vista === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>}
 
-      {seccion === "zonas" && <Suspense fallback={<VistaSkeleton />}><Zonas /></Suspense>}
+      {vista === "zonas" && <Suspense fallback={<VistaSkeleton />}><Zonas /></Suspense>}
 
-      {seccion === "pizarra" && <Suspense fallback={<VistaSkeleton />}><Pizarra /></Suspense>}
+      {vista === "pizarra" && <Suspense fallback={<VistaSkeleton />}><Pizarra /></Suspense>}
 
-      {seccion === "tiquetera" && <Suspense fallback={<VistaSkeleton />}><Tiquetera /></Suspense>}
+      {vista === "tiquetera" && <Suspense fallback={<VistaSkeleton />}><Tiquetera /></Suspense>}
 
-      {seccion === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
+      {vista === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
 
-      {seccion === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
+      {vista === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
 
-      {seccion === "metricas" && (<>
+      {vista === "usuarios" && <Suspense fallback={<VistaSkeleton />}><Usuarios /></Suspense>}
+
+      {vista === "sin-acceso" && (
+        <div style={{ maxWidth: 440, margin: "3rem auto", textAlign: "center", padding: "2rem 1.5rem", borderRadius: 16, background: "rgba(27,28,46,0.72)", border: "1px solid rgba(255,255,255,0.07)" }}>
+          <i className="ti ti-lock" style={{ fontSize: 30, color: "rgba(255,255,255,0.45)" }} />
+          <div style={{ fontSize: 17, fontWeight: 600, margin: "10px 0 6px" }}>No tenés acceso a esta sección</div>
+          <div style={{ fontSize: 13, color: BRAND.muted, marginBottom: 18 }}>Si la necesitás, pedile al administrador que te la habilite.</div>
+          <button onClick={() => setSeccion("home")} style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#2ECFAA", color: "#04150f", fontWeight: 700, cursor: "pointer" }}>Volver al inicio</button>
+        </div>
+      )}
+
+      {vista === "metricas" && (<>
       {error && <div style={{ background:"rgba(226,75,74,0.15)", color:"#E24B4A", border:"1px solid rgba(226,75,74,0.3)", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:"1rem" }}>{error}</div>}
 
 

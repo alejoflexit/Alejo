@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { puedeVer } from "./permisos";
 import { slaMeli } from "./slaShared";
 import {
   sbFetch, todayStr, minutosAR,
@@ -363,7 +364,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   const dock = [
     { id: "metricas", label: "Métricas" }, { id: "colectas", label: "Colectas" }, { id: "arribos", label: "Arribos" },
     { id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }, { id: "pagos", label: "Pagos" }, { id: "pendientes", label: "Históricos" },
-  ];
+  ].filter((d) => puedeVer(d.id));
 
   const bg = {
     minHeight: "78vh", padding: isMobile ? "6px 2px 30px" : "8px 4px 40px",
@@ -519,7 +520,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         </>)}
 
         {/* DOCK */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : "repeat(7,1fr)", gap: isMobile ? 10 : 12, marginTop: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : `repeat(${Math.max(dock.length, 1)},1fr)`, gap: isMobile ? 10 : 12, marginTop: 24 }}>
           {dock.map((d) => (
             <button key={d.id} onClick={() => onNav(d.id)} style={{ ...cardBase, padding: "14px 6px", textAlign: "center", cursor: "pointer", color: C.ink2, transition: "transform .18s ease, border-color .18s ease" }}
               onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; e.currentTarget.style.color = C.ink; }}
