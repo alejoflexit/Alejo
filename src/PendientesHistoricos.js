@@ -19,6 +19,11 @@ const parseDate = value => {
   const d = new Date(`${iso}T12:00:00`); return Number.isNaN(d.getTime()) ? null : d;
 };
 const labelDate = value => { const d = parseDate(value); return d ? d.toLocaleDateString("es-AR", { day:"numeric", month:"long" }) : "Sin fecha"; };
+// Dias enteros entre una fecha (o timestamp) y hoy en Argentina, por fecha calendario.
+const diasDesde = value => { const d = String(value || "").slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null; return Math.round((Date.parse(argentinaToday()) - Date.parse(d)) / 864e5); };
+const haceDias = n => n === null ? "" : n <= 0 ? "hoy" : n === 1 ? "ayer" : `hace ${n} días`;
+// Sin movimiento desde hace 2 dias o mas: es el que esta trabado.
+const QUIETO_DIAS = 2;
 const argentinaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone:"America/Argentina/Buenos_Aires", year:"numeric", month:"2-digit", day:"2-digit" }).format(new Date());
 const argentinaYesterday = () => { const d = new Date(`${argentinaToday()}T12:00:00`); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
 // Icono de mensaje elegido por Alejo (opcion A): burbuja pelada, del mismo grosor
@@ -67,16 +72,19 @@ const dayCard = { width:"100%", minHeight:126, textAlign:"left", display:"flex",
 const dayActive = { background:"rgba(46,207,170,.14)", borderColor:"#2ECFAA" };
 // Flex en amarillo, elegido por Alejo el 20/09. Ojo: el amarillo tambien marca
 // "Atencion +24 h" en el semaforo y el Flex de la tabla sigue en verde agua.
-const FLEX_ACCENT = "#f2c94c";
+const FLEX_ACCENT = "#6de4c3";
+// Color con significado: rojo = hay Flex de mas de 48 h ese dia; naranja (chips) = sin asignar.
+// El numero del dia va en blanco cuando no hay nada critico.
+const CRITICO = "#ff8a93";
 // Sin cadete: vacio o solo espacios. Un solo criterio para el chip, las tarjetas,
 // el bloque de arriba y el filtro, asi los numeros coinciden entre si.
 const sinCadete = r => !String(r.cadete || "").trim();
-const dayFlexCount = { fontSize:28, lineHeight:1.05, marginTop:8, color:FLEX_ACCENT };
+const dayFlexCount = { fontSize:28, lineHeight:1.05, marginTop:8, color:"#fff" };
 const dayFlexZero = { color:"rgba(255,255,255,.45)" };
 const dayPart = { display:"block", marginTop:3, fontSize:11, color:"rgba(255,255,255,.62)" };
-const tarjetaAtras = { width:172, flexShrink:0, textAlign:"left", display:"flex", flexDirection:"column", gap:2, padding:12, borderRadius:9, cursor:"pointer", color:"#fff", border:"1px dashed rgba(242,201,76,.5)", background:"rgba(242,201,76,.07)" };
-const tarjetaAtrasAbierta = { borderStyle:"solid", borderColor:FLEX_ACCENT, background:"rgba(242,201,76,.13)" };
-const atrasTitulo = { fontSize:10.5, fontWeight:700, letterSpacing:.5, textTransform:"uppercase", color:FLEX_ACCENT };
+const tarjetaAtras = { width:172, flexShrink:0, textAlign:"left", display:"flex", flexDirection:"column", gap:2, padding:12, borderRadius:9, cursor:"pointer", color:"#fff", border:"1px dashed rgba(255,255,255,.22)", background:"rgba(255,255,255,.04)" };
+const tarjetaAtrasAbierta = { borderStyle:"solid", borderColor:"#2ECFAA", background:"rgba(46,207,170,.1)" };
+const atrasTitulo = { fontSize:10.5, fontWeight:700, letterSpacing:.5, textTransform:"uppercase", color:"rgba(255,255,255,.62)" };
 const atrasNumero = { fontSize:26, lineHeight:1.05, marginTop:4 };
 const mesPanel = { width:"100%", marginTop:12, paddingTop:12, borderTop:"1px solid rgba(255,255,255,.1)" };
 const mesCabecera = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:10 };
@@ -87,7 +95,7 @@ const mesDiaVacio = { opacity:.32 };
 const mesDiaFuturo = { opacity:.18, cursor:"default" };
 const mesDiaElegido = { borderColor:"#2ECFAA", background:"rgba(46,207,170,.13)" };
 const mesDiaNumero = { fontSize:11, color:"rgba(255,255,255,.62)" };
-const mesDiaFlex = { fontSize:17, lineHeight:1.1, fontWeight:700, color:FLEX_ACCENT, marginTop:2 };
+const mesDiaFlex = { fontSize:17, lineHeight:1.1, fontWeight:700, color:"#fff", marginTop:2 };
 const mesDiaFlexCero = { color:"rgba(255,255,255,.4)", fontWeight:400, fontSize:14 };
 const mesDiaPart = { fontSize:10, color:"rgba(255,255,255,.52)" };
 const daysGrid = { display:"grid", gridTemplateColumns:"repeat(7,minmax(78px,1fr))", gap:8, width:"100%", overflowX:"auto", paddingBottom:4 };
@@ -109,6 +117,23 @@ function mensajeCadete(row) {
     "¿Me contás qué pasó?",
   ].join("\n");
 }
+function mensajeReclamo(cadete, envios) {
+  const nombre = primerNombre(cadete);
+  const limpio = value => String(value || "").replace(/\s+/g, " ").trim();
+  const lineas = [...envios].sort((a, b) => String(a.origin).localeCompare(String(b.origin))).map(r => {
+    const quieto = diasDesde(r.fecha_estado);
+    const destino = [limpio(r.razon_social), limpio(r.direccion), limpio(r.localidad)].filter(Boolean).join(", ");
+    return `· ${labelDate(r.origin)} — ${r.id_venta_ml || r.tracking || r.id_interno}${destino ? " — " + destino : ""} — ${r.estado || "sin estado"}${quieto !== null && quieto >= QUIETO_DIAS ? ` (sin movimiento ${haceDias(quieto)})` : ""}`;
+  });
+  return [
+    nombre ? `Hola ${nombre}, ¿cómo andás?` : "Hola, ¿cómo andás?",
+    envios.length === 1 ? "Tengo este envío tuyo pendiente:" : `Tengo estos ${envios.length} envíos tuyos pendientes:`,
+    "",
+    ...lineas,
+    "",
+    envios.length === 1 ? "¿Me contás qué pasó?" : "¿Me contás qué pasó con cada uno?",
+  ].join("\n");
+}
 export default function PendientesHistoricos() {
   const [rows, setRows] = useState([]), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [day, setDay] = useState(argentinaYesterday);
@@ -123,6 +148,8 @@ export default function PendientesHistoricos() {
   // Orden por fecha de origen al tocar el encabezado: null = prioridad (por defecto),
   // "asc" = mas viejos primero, "desc" = mas nuevos primero.
   const [orden, setOrden] = useState(null);
+  // Panel "Por cadete": cerrado por defecto; muestra 5 y despliega el resto.
+  const [verCadetes, setVerCadetes] = useState(false), [cadetesTodos, setCadetesTodos] = useState(false);
   const [dataAt, setDataAt] = useState(null);
   const [sinc, setSinc] = useState(null);
   const sincRef = useRef(false);
@@ -164,8 +191,7 @@ export default function PendientesHistoricos() {
     setMenuNota(null); setEditando(null); setNuevaEtiqueta(null);
   };
   const [copiado, setCopiado] = useState("");
-  const copiar = async row => {
-    const texto = mensajeCadete(row);
+  const copiarTexto = async texto => {
     // Copia con textarea + execCommand: sirve donde la API moderna esta bloqueada.
     const conTextarea = () => {
       try {
@@ -188,6 +214,20 @@ export default function PendientesHistoricos() {
       if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(texto); hecho = true; }
     } catch { hecho = false; }
     if (!hecho) hecho = conTextarea();
+    return hecho;
+  };
+  // Reclamo por cadete: si el portapapeles falla, el texto queda a la vista para copiar a mano.
+  const [reclamoManual, setReclamoManual] = useState(null);
+  const copiarReclamo = async (cadete, envios) => {
+    const texto = mensajeReclamo(cadete, envios);
+    if (await copiarTexto(texto)) {
+      setReclamoManual(null);
+      setCopiado("cad:" + cadete);
+      setTimeout(() => setCopiado(actual => actual === "cad:" + cadete ? "" : actual), 1800);
+    } else setReclamoManual({ cadete, texto });
+  };
+  const copiar = async row => {
+    const hecho = await copiarTexto(mensajeCadete(row));
     if (hecho) {
       setCopiado(row.id_interno);
       setTimeout(() => setCopiado(actual => actual === row.id_interno ? "" : actual), 1800);
@@ -382,7 +422,7 @@ export default function PendientesHistoricos() {
   const calendarDays = useMemo(() => {
     // El calendario es histórico: termina en hoy y nunca adelanta fechas futuras.
     const base = parseDate(argentinaToday()) || new Date(); const start = new Date(base); start.setDate(start.getDate() - 6 + semana * 7);
-    return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); const key = d.toISOString().slice(0, 10); const rs = rows.filter(r => r.origin === key && isOpenShipment(r)); const flex = rs.filter(r => r.service === "Flex").length; return { key, d, rs, flex, part: rs.length - flex, sa: rs.filter(sinCadete).length }; });
+    return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); const key = d.toISOString().slice(0, 10); const rs = rows.filter(r => r.origin === key && isOpenShipment(r)); const flex = rs.filter(r => r.service === "Flex").length; return { key, d, rs, flex, part: rs.length - flex, sa: rs.filter(sinCadete).length, crit: rs.some(r => pendingPriority(r).rank === 3) }; });
   }, [rows, semana]);
 
   // Todo lo abierto anterior a la semana que termina hoy. Es la puerta al resto
@@ -394,7 +434,7 @@ export default function PendientesHistoricos() {
     const rs = rows.filter(r => isOpenShipment(r) && r.origin && r.origin < clave);
     const flex = rs.filter(r => r.service === "Flex").length;
     const viejo = rs.reduce((min, r) => (!min || r.origin < min ? r.origin : min), "");
-    return { total: rs.length, flex, part: rs.length - flex, viejo, sa: rs.filter(sinCadete).length };
+    return { total: rs.length, flex, part: rs.length - flex, viejo, sa: rs.filter(sinCadete).length, crit: rs.some(r => pendingPriority(r).rank === 3) };
   }, [rows]);
 
   // Abiertos sin cadete de todo el historial: alimenta el bloque de arriba y el chip.
@@ -403,6 +443,23 @@ export default function PendientesHistoricos() {
     const viejo = rs.reduce((min, r) => (r.origin && (!min || r.origin < min) ? r.origin : min), "");
     return { total: rs.length, viejo };
   }, [rows]);
+  // Ranking de cadetes con abiertos: primero los que mas Flex +48 h tienen, despues por cantidad.
+  const porCadete = useMemo(() => {
+    const grupos = new Map();
+    for (const r of rows) {
+      if (!isOpenShipment(r) || sinCadete(r)) continue;
+      const nombre = String(r.cadete).trim();
+      if (!grupos.has(nombre)) grupos.set(nombre, []);
+      grupos.get(nombre).push(r);
+    }
+    return [...grupos].map(([cadete, envios]) => ({
+      cadete, envios, total: envios.length,
+      flex48: envios.filter(r => pendingPriority(r).rank === 3).length,
+      viejo: envios.reduce((min, r) => (r.origin && (!min || r.origin < min) ? r.origin : min), ""),
+      quietos: envios.filter(r => { const n = diasDesde(r.fecha_estado); return n !== null && n >= QUIETO_DIAS; }).length,
+    })).sort((a, b) => b.flex48 - a.flex48 || b.total - a.total || a.cadete.localeCompare(b.cadete));
+  }, [rows]);
+  const verCadete = nombre => { setDay(""); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier(nombre); setQuery(""); };
   const verSinAsignar = dia => { setDay(dia); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier("Sin asignar"); setQuery(""); };
 
   const mesDe = clave => clave.slice(0, 7);
@@ -418,7 +475,7 @@ export default function PendientesHistoricos() {
       const key = `${anio}-${String(mes).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
       const rs = rows.filter(r => r.origin === key && isOpenShipment(r));
       const flex = rs.filter(r => r.service === "Flex").length;
-      celdas.push({ key, n, total: rs.length, flex, part: rs.length - flex, esHoy: key === hoy, futuro: key > hoy });
+      celdas.push({ key, n, total: rs.length, flex, part: rs.length - flex, crit: rs.some(r => pendingPriority(r).rank === 3), esHoy: key === hoy, futuro: key > hoy });
     }
     return {
       celdas,
@@ -434,12 +491,26 @@ export default function PendientesHistoricos() {
     : <>
     <div style={heroes}>
     <div style={{ ...urgentHero, margin:0 }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><div><b>Flex abiertos con más de 48 horas</b><small style={{display:"block",marginTop:5,color:"#bfc7d8"}}>Estos envíos necesitan seguimiento prioritario.</small></div></div><button onClick={() => { setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
-    {sinAsignar.total > 0 && <div style={unassignedHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1, color:"#ffb057" }}>{sinAsignar.total}</strong><div><b>Abiertos sin asignar</b><small style={{display:"block",marginTop:5,color:"#bfc7d8"}}>Nadie los tiene en la calle.{sinAsignar.viejo ? " El más viejo, del " + labelDate(sinAsignar.viejo) + "." : ""}</small></div></div><button onClick={() => verSinAsignar("")} style={unassignedButton}>Ver sin asignar →</button></div>}</div>
+    {sinAsignar.total > 0 && <div style={unassignedHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{sinAsignar.total}</strong><div><b>Abiertos sin asignar</b><small style={{display:"block",marginTop:5,color:"#bfc7d8"}}>Nadie los tiene en la calle.{sinAsignar.viejo ? " El más viejo, del " + labelDate(sinAsignar.viejo) + "." : ""}</small></div></div><button onClick={() => verSinAsignar("")} style={unassignedButton}>Ver sin asignar →</button></div>}
+    {porCadete.length > 0 && <button onClick={() => setVerCadetes(v => !v)} aria-expanded={verCadetes} style={{ ...cadetesHero, ...(verCadetes ? cadetesHeroAbierto : {}) }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{porCadete.length}</strong><div style={{ textAlign:"left" }}><b>Pendientes por cadete</b><small style={{display:"block",marginTop:5,color:"#bfc7d8"}}>{porCadete.slice(0, 2).map(c => primerNombre(c.cadete) + " " + c.total).join(" · ")}</small></div></div><span style={cadetesBoton}>{verCadetes ? "Cerrar ▲" : "Ver ▼"}</span></button>}</div>
+    {verCadetes && <div style={rankingCaja}>
+      <div style={{ ...rankingFila, ...rankingCabeza }}><span>Cadete</span><span>Abiertos</span><span>Flex +48 h</span><span>El más viejo</span><span>Sin movimiento</span><span /></div>
+      {(cadetesTodos ? porCadete : porCadete.slice(0, 5)).map(c => <div key={c.cadete} style={rankingFila}>
+        <button onClick={() => verCadete(c.cadete)} title={"Ver los pendientes de " + c.cadete} style={rankingNombre}>{c.cadete}</button>
+        <b>{c.total}</b>
+        <span>{c.flex48 ? <span style={rankingChipRojo}>{c.flex48}</span> : <span style={muted}>—</span>}</span>
+        <span>{haceDias(diasDesde(c.viejo)) || "—"}</span>
+        <span>{c.quietos ? <span style={{ color:CRITICO }}>{c.quietos} {c.quietos === 1 ? "envío" : "envíos"}</span> : <span style={muted}>todos se movieron</span>}</span>
+        <button onClick={() => copiarReclamo(c.cadete, c.envios)} style={{ ...copyButton, ...(copiado === "cad:" + c.cadete ? copyButtonOk : {}), margin:0, padding:"6px 10px", fontSize:11, whiteSpace:"nowrap" }}>{copiado === "cad:" + c.cadete ? "✓ Copiado" : "Copiar reclamo"}</button>
+      </div>)}
+      {reclamoManual && <div style={{ padding:"10px 12px", borderTop:"1px solid rgba(255,255,255,.08)" }}><small style={muted}>No se pudo copiar solo. Seleccioná el texto y copialo a mano:</small><textarea readOnly value={reclamoManual.texto} onFocus={e => e.target.select()} ref={el => { if (el) { try { el.focus({ preventScroll:true }); el.select(); } catch {} } }} style={mensajeCampo} /></div>}
+      {porCadete.length > 5 && <button onClick={() => setCadetesTodos(v => !v)} style={rankingMas}>{cadetesTodos ? "Mostrar solo los 5 primeros ▲" : `Ver los ${porCadete.length} cadetes ▼`}</button>}
+    </div>}
     {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
-    <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button onClick={() => setSemana(v => v - 1)} title="Semana anterior" style={button}>←</button><button onClick={() => setSemana(0)} disabled={semana === 0} style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>Semana actual</button><button onClick={() => setSemana(v => Math.min(0, v + 1))} disabled={semana === 0} title="Semana siguiente" style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>→</button></div></div><div style={{ display:"flex", gap:8, width:"100%", alignItems:"stretch" }}><div style={{ ...daysGrid, flex:1, minWidth:0 }}>{calendarDays.map(({key,d,rs,flex,part,sa}) => <div key={key} style={{ position:"relative" }}><button onClick={() => { setDay(key); setMesAbierto(null); }} style={{ ...dayCard, height:"100%", paddingBottom:38, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button>{sa > 0 && <button onClick={() => verSinAsignar(key)} title={"Ver los " + sa + " sin asignar de este día"} style={{ ...chipSinAsignar, position:"absolute", left:12, bottom:10 }}><IconoSinAsignar />{sa} sin asignar</button>}</div>)}</div>
+    <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button onClick={() => setSemana(v => v - 1)} title="Semana anterior" style={button}>←</button><button onClick={() => setSemana(0)} disabled={semana === 0} style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>Semana actual</button><button onClick={() => setSemana(v => Math.min(0, v + 1))} disabled={semana === 0} title="Semana siguiente" style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>→</button></div></div><div style={{ display:"flex", gap:8, width:"100%", alignItems:"stretch" }}><div style={{ ...daysGrid, flex:1, minWidth:0 }}>{calendarDays.map(({key,d,rs,flex,part,sa,crit}) => <div key={key} style={{ position:"relative" }}><button onClick={() => { setDay(key); setMesAbierto(null); }} style={{ ...dayCard, height:"100%", paddingBottom:38, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(crit ? { color:CRITICO } : {}), ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button>{sa > 0 && <button onClick={() => verSinAsignar(key)} title={"Ver los " + sa + " sin asignar de este día"} style={{ ...chipSinAsignar, position:"absolute", left:12, bottom:10 }}><IconoSinAsignar />{sa} sin asignar</button>}</div>)}</div>
       {anteriores.total > 0 && <button onClick={() => setMesAbierto(mesAbierto ? null : mesDe(argentinaToday()))} style={{ ...tarjetaAtras, ...(mesAbierto ? tarjetaAtrasAbierta : {}) }}>
         <small style={atrasTitulo}>Antes de esta semana</small>
-        <strong style={atrasNumero}>{anteriores.total}</strong>
+        <strong style={{ ...atrasNumero, ...(anteriores.crit ? { color:CRITICO } : {}) }}>{anteriores.total}</strong>
         <small style={dayPart}>{anteriores.flex} Flex · {anteriores.part} {anteriores.part === 1 ? "particular" : "particulares"}</small>
         {anteriores.viejo && <small style={dayPart}>El más viejo, del {labelDate(anteriores.viejo)}</small>}
         {anteriores.sa > 0 && <span style={{ ...chipSinAsignar, marginTop:6, alignSelf:"flex-start", cursor:"inherit" }}><IconoSinAsignar />{anteriores.sa} sin asignar</span>}
@@ -461,13 +532,13 @@ export default function PendientesHistoricos() {
             : <button key={c.key} onClick={() => { setDay(c.key); setCriticalOnly(false); }} disabled={c.futuro}
                 style={{ ...mesDia, ...(c.total ? {} : mesDiaVacio), ...(c.futuro ? mesDiaFuturo : {}), ...(day === c.key ? mesDiaElegido : {}) }}>
                 <small style={{ ...mesDiaNumero, ...(c.esHoy ? { color:"#6de4c3", fontWeight:700 } : {}) }}>{c.n}{c.esHoy ? " · hoy" : ""}</small>
-                <strong style={{ ...mesDiaFlex, ...(c.flex ? {} : mesDiaFlexCero) }}>{c.total ? c.flex : "0"}</strong>
+                <strong style={{ ...mesDiaFlex, ...(c.crit ? { color:CRITICO } : {}), ...(c.flex ? {} : mesDiaFlexCero) }}>{c.total ? c.flex : "0"}</strong>
                 {c.part > 0 && <small style={mesDiaPart}>+{c.part} part.</small>}
               </button>)}
         </div>
       </div>}</div>
     <PendingFilters title={day ? 'Pendientes del ' + parseDate(day).toLocaleDateString("es-AR", {weekday:"long",day:"numeric",month:"long"}) : "Pendientes de todo el historial"} count={visible.length} service={service} setService={setService} query={query} setQuery={setQuery} courier={courier} setCourier={setCourier} couriers={couriers} sinAsignar={sinAsignar.total} states={states} selectedStates={state} setSelectedStates={value => {setState(value);setCriticalOnly(false);}} showHistory={() => {setDay("");setCriticalOnly(false);}} showYesterday={() => {setDay(argentinaYesterday());setCriticalOnly(false);}} criticalOnly={criticalOnly} clearCritical={() => setCriticalOnly(false)} />
-    <div aria-busy={loading} style={{ ...card, borderTop:0, borderRadius:"0 0 10px 10px", overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}><thead><tr>{["Fecha de origen","Servicio / envío","Asignado a","Cliente / dirección","Equipo","Estado",""].map(h=><th key={h} style={th} aria-sort={h === "Fecha de origen" && orden ? (orden === "asc" ? "ascending" : "descending") : undefined}>{h === "Fecha de origen" ? <button onClick={() => setOrden(orden === "asc" ? "desc" : "asc")} title={orden === "asc" ? "Ordenar: más nuevos primero" : "Ordenar: más viejos primero"} style={{ ...thBoton, ...(orden ? { color:"#fff" } : {}) }}>{h} {orden === "asc" ? "↑" : orden === "desc" ? "↓" : "↕"}</button> : h}</th>)}</tr></thead><tbody>{loading && rows.length === 0 ? <tr><td colSpan="7" style={empty}>Cargando pendientes…</td></tr> : rows.length===0 ? <tr><td colSpan="7" style={empty}><b>No hay datos históricos cargados.</b><br/><small>La consulta respondió correctamente, pero la caché de envíos está vacía. Hay que ejecutar la sincronización de LightData.</small></td></tr> : visible.length===0 ? <tr><td colSpan="7" style={empty}>No hay pendientes para estos filtros.</td></tr> : visible.map(r => <tr key={r.id_interno} onClick={()=>abrirPanel(r)} style={{ borderTop:"1px solid rgba(255,255,255,.08)", cursor:"pointer" }}><td style={td}><b>{labelDate(r.origin)}</b></td><td style={td}><span style={{ ...pill, ...(r.service==="Flex"?flexPill:{}) }}>{r.service}</span><small style={muted}>{r.id_venta_ml || r.tracking || r.id_interno}</small></td><td style={td}>{sinCadete(r) ? <span style={chipSinAsignar}><IconoSinAsignar />Sin asignar</span> : <b>{r.cadete}</b>}<small style={muted}>Último movimiento: {labelDate(r.fecha_estado)}</small></td><td style={td}><b>{r.razon_social || "Cliente sin nombre"}</b><small style={muted}>{[r.direccion,r.localidad].filter(Boolean).join(" · ") || "Dirección no informada"}</small></td><td style={{ ...td, maxWidth:230 }}>{(etiquetas[r.id_interno] || []).length > 0 && <div style={{ ...burbujas, marginTop:0 }}>{(etiquetas[r.id_interno] || []).map(clave => { const e = estiloEtiqueta(clave); return <span key={clave} style={{ ...burbuja, color:e.color, background:e.fondo, borderColor:e.borde }}>{e.texto}</span>; })}</div>}{ultimoMensaje(notas[r.id_interno])
+    <div aria-busy={loading} style={{ ...card, borderTop:0, borderRadius:"0 0 10px 10px", overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}><thead><tr>{["Fecha de origen","Servicio / envío","Asignado a","Cliente / dirección","Equipo","Estado",""].map(h=><th key={h} style={th} aria-sort={h === "Fecha de origen" && orden ? (orden === "asc" ? "ascending" : "descending") : undefined}>{h === "Fecha de origen" ? <button onClick={() => setOrden(orden === "asc" ? "desc" : "asc")} title={orden === "asc" ? "Ordenar: más nuevos primero" : "Ordenar: más viejos primero"} style={{ ...thBoton, ...(orden ? { color:"#fff" } : {}) }}>{h} {orden === "asc" ? "↑" : orden === "desc" ? "↓" : "↕"}</button> : h}</th>)}</tr></thead><tbody>{loading && rows.length === 0 ? <tr><td colSpan="7" style={empty}>Cargando pendientes…</td></tr> : rows.length===0 ? <tr><td colSpan="7" style={empty}><b>No hay datos históricos cargados.</b><br/><small>La consulta respondió correctamente, pero la caché de envíos está vacía. Hay que ejecutar la sincronización de LightData.</small></td></tr> : visible.length===0 ? <tr><td colSpan="7" style={empty}>No hay pendientes para estos filtros.</td></tr> : visible.map(r => <tr key={r.id_interno} onClick={()=>abrirPanel(r)} style={{ borderTop:"1px solid rgba(255,255,255,.08)", cursor:"pointer" }}><td style={td}><b>{haceDias(diasDesde(r.origin)) || labelDate(r.origin)}</b><small style={muted}>{labelDate(r.origin)}</small></td><td style={td}><span style={{ ...pill, ...(r.service==="Flex"?flexPill:{}) }}>{r.service}</span><small style={muted}>{r.id_venta_ml || r.tracking || r.id_interno}</small></td><td style={td}>{sinCadete(r) ? <span style={chipSinAsignar}><IconoSinAsignar />Sin asignar</span> : <b>{r.cadete}</b>}{(() => { const n = diasDesde(r.fecha_estado); return n !== null && n >= QUIETO_DIAS ? <small style={{ ...muted, color:CRITICO }}>Sin movimiento {haceDias(n)}</small> : <small style={muted}>Último movimiento: {haceDias(n) || labelDate(r.fecha_estado)}</small>; })()}</td><td style={td}><b>{r.razon_social || "Cliente sin nombre"}</b><small style={muted}>{[r.direccion,r.localidad].filter(Boolean).join(" · ") || "Dirección no informada"}</small></td><td style={{ ...td, maxWidth:230 }}>{(etiquetas[r.id_interno] || []).length > 0 && <div style={{ ...burbujas, marginTop:0 }}>{(etiquetas[r.id_interno] || []).map(clave => { const e = estiloEtiqueta(clave); return <span key={clave} style={{ ...burbuja, color:e.color, background:e.fondo, borderColor:e.borde }}>{e.texto}</span>; })}</div>}{ultimoMensaje(notas[r.id_interno])
         ? <div title={resumenChat(notas[r.id_interno], etiquetas[r.id_interno])} style={{ ...ultimoTexto, marginTop:(etiquetas[r.id_interno] || []).length ? 6 : 0 }}><span style={ultimoAutor}>{ultimoMensaje(notas[r.id_interno]).autor}</span>{(() => { const c = cuandoMensaje(ultimoMensaje(notas[r.id_interno]).created_at); return c ? <span style={{ ...ultimoCuando, ...(c.viejo ? { color:FLEX_ACCENT } : {}) }}> · {c.texto}</span> : null; })()} — {recortar(ultimoMensaje(notas[r.id_interno]).texto)}</div>
         : (etiquetas[r.id_interno] || []).length ? null : <span style={sinMensaje}>—</span>}</td><td style={td}>{r.estado || "Sin estado"}<small style={{...muted,color:pendingPriority(r).color,fontWeight:700}}>● {pendingPriority(r).label}</small></td><td style={{ ...td, textAlign:"right" }}><button onClick={e => { e.stopPropagation(); copiar(r); }} title="Copiar mensaje para el cadete" aria-label="Copiar mensaje para el cadete" style={{ ...copyIcon, ...(copiado === r.id_interno ? copyButtonOk : {}) }}>{copiado === r.id_interno ? "✓" : "⧉"}</button><span style={{ position:"relative", display:"inline-flex", marginLeft:6 }}><button data-chat onClick={e => { e.stopPropagation(); chat && chat.row.id_interno === r.id_interno ? cerrarChat() : abrirChat(r, e.currentTarget); }} title={resumenChat(notas[r.id_interno], etiquetas[r.id_interno])} aria-label="Chat interno del equipo" style={{ ...copyIcon, ...((notas[r.id_interno] || []).length || (etiquetas[r.id_interno] || []).length ? copyButtonOk : {}) }}><IconoMensaje /></button>{(notas[r.id_interno] || []).length > 0 && <span style={contador}>{(notas[r.id_interno] || []).length}</span>}</span></td></tr>)}</tbody></table></div>
     {chat && <div data-chat style={{ ...globo, width:chat.ancho, left:chat.izq, ...(chat.arriba ? { bottom:chat.y } : { top:chat.y }) }}>
@@ -551,10 +622,19 @@ const overlay={position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:1000
 
 const urgentHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",margin:"0 0 14px",border:"1px solid rgba(255,102,112,.4)",borderLeft:"6px solid #ff6874",borderRadius:9,background:"rgba(90,30,45,.35)"};
 const urgentButton={border:0,borderRadius:7,padding:"10px 16px",background:"#ff6874",color:"#1d1420",fontWeight:800,cursor:"pointer"};
-const heroes={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:10,margin:"0 0 14px"};
-const unassignedHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,176,87,.4)",borderLeft:"6px solid #ffb057",borderRadius:9,background:"rgba(90,55,20,.3)"};
-const unassignedButton={border:"1px solid rgba(255,176,87,.6)",borderRadius:7,padding:"10px 16px",background:"transparent",color:"#ffb057",fontWeight:800,cursor:"pointer"};
-const chipSinAsignar={display:"inline-flex",alignItems:"center",gap:5,padding:"3px 8px",borderRadius:999,border:"1px solid rgba(255,104,116,.45)",background:"rgba(255,104,116,.14)",color:"#ff8a93",fontSize:11,fontWeight:700,lineHeight:1.2,whiteSpace:"nowrap",cursor:"pointer"};
+const heroes={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:10,margin:"0 0 14px"};
+const cadetesHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,255,255,.12)",borderLeft:"6px solid #8a94a6",borderRadius:9,background:"rgba(255,255,255,.04)",color:"#fff",font:"inherit",cursor:"pointer",textAlign:"left"};
+const cadetesHeroAbierto={borderColor:"rgba(255,255,255,.28)",background:"rgba(255,255,255,.07)"};
+const cadetesBoton={border:"1px solid rgba(255,255,255,.22)",borderRadius:7,padding:"10px 16px",color:"#dfe5ee",fontWeight:800,fontSize:13};
+const rankingCaja={margin:"-4px 0 14px",border:"1px solid rgba(255,255,255,.1)",borderRadius:9,background:"rgba(255,255,255,.03)",overflowX:"auto"};
+const rankingFila={display:"grid",gridTemplateColumns:"minmax(150px,1.6fr) 70px 80px minmax(90px,1fr) minmax(130px,1.2fr) 130px",gap:10,alignItems:"center",padding:"9px 14px",borderTop:"1px solid rgba(255,255,255,.06)",fontSize:12,minWidth:640};
+const rankingCabeza={borderTop:0,color:"rgba(255,255,255,.55)",fontSize:10,textTransform:"uppercase"};
+const rankingNombre={background:"none",border:0,padding:0,color:"#fff",font:"inherit",fontWeight:700,textAlign:"left",cursor:"pointer",textDecoration:"underline",textDecorationColor:"rgba(255,255,255,.25)",textUnderlineOffset:3};
+const rankingChipRojo={display:"inline-block",padding:"2px 9px",borderRadius:999,background:"rgba(255,104,116,.16)",color:"#ff8a93",fontWeight:700};
+const rankingMas={display:"block",width:"100%",padding:"9px 14px",background:"none",border:0,borderTop:"1px solid rgba(255,255,255,.06)",color:"#6de4c3",font:"inherit",fontSize:12,cursor:"pointer",textAlign:"left"};
+const unassignedHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,140,90,.35)",borderLeft:"6px solid #ff8c5a",borderRadius:9,background:"rgba(90,40,25,.28)"};
+const unassignedButton={border:"1px solid rgba(255,140,90,.6)",borderRadius:7,padding:"10px 16px",background:"transparent",color:"#ffab85",fontWeight:800,cursor:"pointer"};
+const chipSinAsignar={display:"inline-flex",alignItems:"center",gap:5,padding:"3px 8px",borderRadius:999,border:"1px solid rgba(255,140,90,.45)",background:"rgba(255,140,90,.14)",color:"#ffab85",fontSize:11,fontWeight:700,lineHeight:1.2,whiteSpace:"nowrap",cursor:"pointer"};
 function IconoSinAsignar() {
   return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4"/><path d="M19 22v.01"/><path d="M19 19a2.003 2.003 0 0 0 .914-3.782a1.98 1.98 0 0 0-2.414.483"/></svg>;
 }
