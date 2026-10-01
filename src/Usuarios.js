@@ -142,7 +142,7 @@ function Detalle({ u, onCerrar, onCambio }) {
             <div style={{ fontFamily: C.grotesk, fontSize: 18, fontWeight: 600 }}>{nombreDe(u)}</div>
             <div style={{ fontSize: 12.5, color: C.ink3, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
           </div>
-          <button type="button" onClick={onCerrar} aria-label="Cerrar" style={{ ...btn(), padding: "6px 10px" }}><i className="ti ti-x" /></button>
+          <button type="button" onClick={onCerrar} style={btn()}>Cerrar <i className="ti ti-x" /></button>
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24, fontSize: 12 }}>
@@ -166,10 +166,13 @@ function Detalle({ u, onCerrar, onCambio }) {
         )}
 
         <section style={{ marginBottom: 26 }}>
-          <label style={labelSt}>Nueva contraseña</label>
+          <label style={labelSt}>Contraseña</label>
+          <div style={{ fontSize: 12.5, color: C.ink3, lineHeight: 1.5, marginBottom: 10 }}>
+            La actual no se puede ver: el sistema la guarda cifrada y ni el admin la conoce. Si la olvidó, poné una nueva (o tocá <b style={{ color: C.ink2 }}>Generar</b>) y pasásela.
+          </div>
           <div style={{ display: "flex", gap: 8 }}>
             <input style={{ ...input, fontFamily: "ui-monospace, Menlo, monospace" }} value={pw} onChange={(e) => { setPw(e.target.value); setPwOk(null); }} placeholder="Mínimo 8 caracteres" autoComplete="new-password" />
-            <button type="button" style={btn()} onClick={() => { setPw(generarPassword()); setPwOk(null); }} title="Generar una al azar"><i className="ti ti-dice-5" /></button>
+            <button type="button" style={btn()} onClick={() => { setPw(generarPassword()); setPwOk(null); }} title="Inventa una contraseña al azar"><i className="ti ti-refresh" /> Generar</button>
           </div>
           <button type="button" style={{ ...btn(pw.length >= 8 ? "primario" : "ghost"), marginTop: 10, opacity: pw.length >= 8 ? 1 : 0.5 }} disabled={pw.length < 8 || busy === "pw"} onClick={cambiarPw}>
             <i className="ti ti-key" /> {busy === "pw" ? "Cambiando…" : "Cambiar contraseña"}
@@ -243,7 +246,7 @@ function NuevoUsuario({ onCerrar, onCreado }) {
               <label style={labelSt}>Contraseña</label>
               <div style={{ display: "flex", gap: 8 }}>
                 <input style={{ ...input, fontFamily: "ui-monospace, Menlo, monospace" }} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" />
-                <button type="button" style={btn()} onClick={() => setPw(generarPassword())} title="Generar otra"><i className="ti ti-dice-5" /></button>
+                <button type="button" style={btn()} onClick={() => setPw(generarPassword())} title="Inventa otra contraseña al azar"><i className="ti ti-refresh" /> Otra</button>
               </div>
             </div>
             <div>
