@@ -58,6 +58,15 @@ function Van({ x = 0, y = 0, scale = 1 }) {
       <rect x="6" y="36" width="115" height="3" fill={VAN.stripe} />
       <path d="M13 7.5H86" stroke="rgba(255,255,255,.28)" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M88 12H93Q95.5 12 97.5 14.5L108 27.5H88Z" fill="#0F0241" />
+      {/* Chofer en la cabina y su brazo, que asoma por la ventanilla para revolear la caja */}
+      <circle cx="94.5" cy="21.5" r="3.6" fill="#E8B48A" />
+      <path d="M90.6 20.2Q91 16.6 94.6 16.4Q98.2 16.6 98.6 20.2Z" fill="#02C4B8" />
+      <rect x="97.6" y="19.2" width="3.4" height="1.2" rx=".6" fill="#02C4B8" />
+      <g className="fx-arm">
+        <path d="M99 23L114 12" stroke="#0F0241" strokeWidth="4.2" strokeLinecap="round" />
+        <path d="M111.6 13.8L113.8 12.2" stroke="#02C4B8" strokeWidth="4.4" strokeLinecap="round" />
+        <circle cx="116" cy="10.6" r="2.9" fill="#E8B48A" />
+      </g>
       <path d="M90 14.5L94 14.5" stroke="rgba(255,255,255,.35)" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M84 9V47" stroke="rgba(15,2,65,.22)" strokeWidth="1" />
       <rect x="100" y="31" width="5" height="1.6" rx=".8" fill="rgba(15,2,65,.35)" />
