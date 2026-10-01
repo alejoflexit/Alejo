@@ -443,7 +443,7 @@ export default function PendientesHistoricos() {
     const viejo = rs.reduce((min, r) => (r.origin && (!min || r.origin < min) ? r.origin : min), "");
     return { total: rs.length, viejo };
   }, [rows]);
-  // Ranking de cadetes con abiertos: primero los que mas Flex +48 h tienen, despues por cantidad.
+  // Ranking de cadetes: de mas abiertos a menos; a igual cantidad, mas Flex +48 h primero.
   const porCadete = useMemo(() => {
     const grupos = new Map();
     for (const r of rows) {
@@ -457,7 +457,7 @@ export default function PendientesHistoricos() {
       flex48: envios.filter(r => pendingPriority(r).rank === 3).length,
       viejo: envios.reduce((min, r) => (r.origin && (!min || r.origin < min) ? r.origin : min), ""),
       quietos: envios.filter(r => { const n = diasDesde(r.fecha_estado); return n !== null && n >= QUIETO_DIAS; }).length,
-    })).sort((a, b) => b.flex48 - a.flex48 || b.total - a.total || a.cadete.localeCompare(b.cadete));
+    })).sort((a, b) => b.total - a.total || b.flex48 - a.flex48 || a.cadete.localeCompare(b.cadete));
   }, [rows]);
   const verCadete = nombre => { setDay(""); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier(nombre); setQuery(""); };
   const verSinAsignar = dia => { setDay(dia); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier("Sin asignar"); setQuery(""); };
