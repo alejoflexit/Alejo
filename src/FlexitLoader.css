@@ -1,40 +1,49 @@
-/* Animación de carga "La entrega" (opción E, camioneta turquesa = opción J, edificio = opción L sin alero).
-   Elegida por Alejo el 29/09 sobre la referencia work/propuestas/flexit-loader/flexit-en-camino.html:
-   colores de flexit.ar (violeta #0F0241, turquesa #02C4B8, menta #97E4C7) sobre el fondo oscuro de la app.
-   Loop de 3,6 s: la camioneta entra, se prende una ventana, deja una caja en la puerta del edificio, aparece el tilde y se va.
+/* Animación de carga "Recorrido con 3 entregas" (opción P + cielo de la opción O; Alejo, 30/09).
+   A todo el ancho de la tarjeta: la camioneta Flexit turquesa cruza la ciudad de noche y entrega
+   en una casa, un edificio y un local. Ciclo de 7.2 s. Colores de flexit.ar (violeta #0F0241,
+   turquesa #02C4B8, menta #97E4C7) sobre la tarjeta oscura. Solo CSS + SVG, sin dependencias.
    Sin fuentes externas: usa Poppins solo si ya está instalada, si no la letra del sistema. */
 .fx-loader{--fx-bg:#0D1F37;--fx-ink:#FFFFFF;--fx-muted:#A9B8C9;--fx-accent:#02C4B8;
-  height:370px;box-sizing:border-box;width:100%;max-width:100%;padding:24px;border-radius:20px;
+  box-sizing:border-box;width:100%;max-width:100%;padding:28px 0 24px;border-radius:20px;
   background:var(--fx-bg);border:1px solid rgba(118,174,220,.18);color:var(--fx-ink);
   font:14px/1.5 Poppins,system-ui,sans-serif;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;position:relative;text-align:center}
-.fx-loader .fx-brand{display:flex;align-items:center;justify-content:center;line-height:0}
-.fx-loader .fx-label{font-size:15px;font-weight:600;margin:20px 0 4px}
-.fx-loader .fx-sub{color:var(--fx-muted);font-size:12px}
+  display:flex;flex-direction:column;align-items:center;overflow:hidden;position:relative;text-align:center}
+.fx-loader .fx-brand{display:flex;align-items:center;justify-content:center;line-height:0;padding:0 16px}
+.fx-loader .fx-label{font-size:16px;font-weight:600;margin:14px 16px 4px}
+.fx-loader .fx-sub{color:var(--fx-muted);font-size:12px;margin:0 16px}
 .fx-loader .fx-eyebrow{position:absolute;top:20px;left:24px;color:var(--fx-muted);font-size:11px;letter-spacing:1.5px;text-transform:uppercase}
+.fx-loader .fx-route{display:block;width:100%;height:auto;aspect-ratio:1400/300;min-height:220px;max-height:360px;margin-top:14px}
 
-.fx-loader .fx-scene{flex-shrink:0;width:280px;height:120px;position:relative;overflow:hidden;margin-top:18px}
-.fx-loader .fx-building{position:absolute;left:190px;top:2px}
-.fx-loader .fx-door{animation:fx-door 3.6s infinite}
-.fx-loader .fx-blink{animation:fx-blink 3.6s infinite}
-.fx-loader .fx-road{position:absolute;left:0;top:91px;width:100%;height:2px;background:rgba(255,255,255,.14)}
-.fx-loader .fx-van{position:absolute;left:48px;top:30px;overflow:visible;animation:fx-drive 3.6s infinite}
-.fx-loader .fx-wheel{transform-box:fill-box;transform-origin:center;animation:fx-wspin 3.6s infinite}
-.fx-loader .fx-box{position:absolute;left:62px;top:50px;width:16px;height:16px;border-radius:3px;background:#C98E4E;opacity:0;animation:fx-hop 3.6s infinite;z-index:2}
-.fx-loader .fx-box:before{content:'';position:absolute;left:6px;top:0;width:4px;height:16px;background:#E9C48F}
-.fx-loader .fx-ok{position:absolute;left:250px;top:4px;width:22px;height:22px;border-radius:50%;background:var(--fx-accent);display:flex;align-items:center;justify-content:center;opacity:0;animation:fx-ok 3.6s infinite;z-index:2;box-shadow:0 0 0 4px rgba(2,196,184,.18)}
+/* Camioneta: base frente al edificio (es donde queda con movimiento reducido) */
+.fx-loader .fx-van{transform:translateX(560px);animation:fx-route-drive 7.2s infinite ease-in-out}
+.fx-loader .fx-wheel{transform-box:fill-box;transform-origin:center;animation:fx-route-spin 7.2s infinite ease-in-out}
+.fx-loader .fx-tw{animation:fx-twinkle 6s infinite}
+@keyframes fx-route-drive{0%{transform:translateX(-500px)}10%{transform:translateX(180px)}22%{transform:translateX(180px)}34%{transform:translateX(560px)}46%{transform:translateX(560px)}58%{transform:translateX(940px)}70%{transform:translateX(940px)}90%{transform:translateX(1600px)}100%{transform:translateX(1600px)}}
+@keyframes fx-route-spin{0%{transform:rotate(0deg)}10%{transform:rotate(900deg)}22%{transform:rotate(900deg)}34%{transform:rotate(1700deg)}46%{transform:rotate(1700deg)}58%{transform:rotate(2500deg)}70%{transform:rotate(2500deg)}90%{transform:rotate(4200deg)}100%{transform:rotate(4200deg)}}
+@keyframes fx-twinkle{0%,40%,100%{opacity:.8}50%,80%{opacity:.1}}
+.fx-loader .fx-box0{opacity:0;animation:fx-route-hop0 7.2s infinite}
+@keyframes fx-route-hop0{0%,11%{opacity:0;transform:translate(210px,185px) scale(.5)}12%{opacity:1;transform:translate(210px,185px)}16%{transform:translate(332.25px,105px) rotate(90deg)}20%{opacity:1;transform:translate(442.5px,220px) rotate(180deg)}22%,100%{opacity:0;transform:translate(442.5px,220px) scale(.6)}}
+.fx-loader .fx-ok0{opacity:0;transform-box:fill-box;transform-origin:center;animation:fx-route-ok0 7.2s infinite}
+@keyframes fx-route-ok0{0%,20%{opacity:0;transform:scale(.3)}22%{opacity:1;transform:scale(1.15)}24%,92%{opacity:1;transform:scale(1)}97%,100%{opacity:0}}
+.fx-loader .fx-door0{animation:fx-route-door0 7.2s infinite}
+@keyframes fx-route-door0{0%,19%,25%,100%{fill:#2C4E78}21%,23%{fill:#02C4B8}}
+.fx-loader .fx-box1{opacity:0;animation:fx-route-hop1 7.2s infinite}
+@keyframes fx-route-hop1{0%,35%{opacity:0;transform:translate(590px,185px) scale(.5)}36%{opacity:1;transform:translate(590px,185px)}40%{transform:translate(716.5px,105px) rotate(90deg)}44%{opacity:1;transform:translate(831px,220px) rotate(180deg)}46%,100%{opacity:0;transform:translate(831px,220px) scale(.6)}}
+.fx-loader .fx-ok1{opacity:0;transform-box:fill-box;transform-origin:center;animation:fx-route-ok1 7.2s infinite}
+@keyframes fx-route-ok1{0%,44%{opacity:0;transform:scale(.3)}46%{opacity:1;transform:scale(1.15)}48%,92%{opacity:1;transform:scale(1)}97%,100%{opacity:0}}
+.fx-loader .fx-door1{animation:fx-route-door1 7.2s infinite}
+@keyframes fx-route-door1{0%,43%,49%,100%{fill:#2C4E78}45%,47%{fill:#02C4B8}}
+.fx-loader .fx-box2{opacity:0;animation:fx-route-hop2 7.2s infinite}
+@keyframes fx-route-hop2{0%,59%{opacity:0;transform:translate(970px,185px) scale(.5)}60%{opacity:1;transform:translate(970px,185px)}64%{transform:translate(1093.75px,105px) rotate(90deg)}68%{opacity:1;transform:translate(1205.5px,218px) rotate(180deg)}70%,100%{opacity:0;transform:translate(1205.5px,218px) scale(.6)}}
+.fx-loader .fx-ok2{opacity:0;transform-box:fill-box;transform-origin:center;animation:fx-route-ok2 7.2s infinite}
+@keyframes fx-route-ok2{0%,68%{opacity:0;transform:scale(.3)}70%{opacity:1;transform:scale(1.15)}72%,92%{opacity:1;transform:scale(1)}97%,100%{opacity:0}}
+.fx-loader .fx-door2{animation:fx-route-door2 7.2s infinite}
+@keyframes fx-route-door2{0%,67%,73%,100%{fill:#2C4E78}69%,71%{fill:#02C4B8}}
 
-@keyframes fx-drive{0%{transform:translateX(-200px);animation-timing-function:cubic-bezier(.2,.7,.3,1)}30%{transform:translateX(0)}33%{transform:translateX(0) rotate(-.6deg)}36%{transform:translateX(0) rotate(0)}62%{transform:translateX(0);animation-timing-function:cubic-bezier(.6,0,.9,.4)}100%{transform:translateX(290px)}}
-@keyframes fx-wspin{0%{transform:rotate(0);animation-timing-function:cubic-bezier(.2,.7,.3,1)}30%{transform:rotate(540deg)}62%{transform:rotate(540deg);animation-timing-function:cubic-bezier(.6,0,.9,.4)}100%{transform:rotate(1300deg)}}
-@keyframes fx-hop{0%,31%{opacity:0;transform:translate(0,0) scale(.5)}34%{opacity:1;transform:translate(0,0) scale(1)}43%{transform:translate(78px,-36px) rotate(90deg)}52%{opacity:1;transform:translate(160px,18px) rotate(180deg)}58%,100%{opacity:0;transform:translate(160px,18px) scale(.6)}}
-@keyframes fx-ok{0%,52%{opacity:0;transform:scale(.3)}58%{opacity:1;transform:scale(1.15)}63%{transform:scale(1)}88%{opacity:1;transform:scale(1)}96%,100%{opacity:0;transform:scale(1)}}
-@keyframes fx-door{0%,50%,70%,100%{fill:#2C4E78}56%,62%{fill:#02C4B8}}
-@keyframes fx-blink{0%,40%{fill:#0B2340}45%,100%{fill:#FFE7A3}}
-
-/* Movimiento reducido: todo quieto (la camioneta queda frente al edificio, sin caja ni tilde) */
+/* Movimiento reducido: todo quieto (camioneta frente al edificio, sin cajas ni tildes) */
 @media (prefers-reduced-motion:reduce){.fx-loader *{animation:none!important}}
-/* Pantallas angostas: la escena se achica visualmente para no cortarse */
-@media (max-width:380px){.fx-loader{padding:18px;height:340px}.fx-loader .fx-brand svg{height:34px;width:auto}.fx-loader .fx-scene{transform:scale(.82);transform-origin:center top;margin-bottom:-22px}}
+/* Pantallas angostas: escena más baja; el SVG se recorta a los costados y queda centrado */
+@media (max-width:600px){.fx-loader{padding:22px 0 18px}.fx-loader .fx-brand svg{height:36px;width:auto}}
 
 /* Indicador discreto para actualizaciones con datos ya visibles */
 .fx-refresh{display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.72);font-size:11px}

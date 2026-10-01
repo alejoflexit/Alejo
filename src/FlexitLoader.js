@@ -1,7 +1,8 @@
 import React from "react";
 import "./FlexitLoader.css";
 
-// Animación de carga "La entrega": camioneta Flexit turquesa que deja una caja en un edificio.
+// Animación de carga "Recorrido": la camioneta Flexit turquesa cruza la ciudad de noche y
+// entrega en una casa, un edificio y un local (opción P + cielo de la O, 30/09).
 // Elegida por Alejo el 29/09 (opción E con camioneta J) a partir de la referencia
 // work/propuestas/flexit-loader/flexit-en-camino.html, con los colores de flexit.ar.
 // Arriba va el logo oficial de Flexit (letras en blanco por el fondo oscuro); es decorativo
@@ -47,9 +48,10 @@ function Wheel({ cx }) {
   );
 }
 
-function Van() {
+// Camioneta: SVG anidado dentro de la escena (unidades de la escena).
+function Van({ x = 0, y = 0, scale = 1 }) {
   return (
-    <svg className="fx-van" width="130" height="62" viewBox="0 0 130 62" fill="none">
+    <svg x={x} y={y} width={130 * scale} height={62 * scale} viewBox="0 0 130 62" fill="none" overflow="visible">
       <ellipse cx="64" cy="60" rx="56" ry="2.5" fill="rgba(0,0,0,.45)" />
       <path d="M6 13Q6 6 13 6H86Q93 6 98 11.5L112 27Q119 29.5 121 35V45Q121 50 116 50H10Q6 50 6 46Z" fill={VAN.body} />
       <path d="M6 38H121V45Q121 50 116 50H10Q6 50 6 46Z" fill={VAN.shade} />
@@ -71,30 +73,161 @@ function Van() {
   );
 }
 
-// Destino de la entrega: edificio de departamentos (opción L, elegida por Alejo el 30/09).
-// Una ventana se prende al frenar la camioneta y la puerta se ilumina al llegar la caja.
-function Building() {
+// ---- Escena a todo el ancho: "Recorrido con 3 entregas" sobre la ciudad de noche ----
+// Opción P + cielo de la opción O, elegidas por Alejo el 30/09. Unidades de la escena:
+// 1400 × 300, calle en y = 250. El SVG se recorta a los costados en pantallas angostas
+// (preserveAspectRatio "slice"), así que en el celular queda centrado en el edificio.
+const W = 1400;
+const ROAD = 250;
+const LIT = "#FFE7A3";
+const GLASS = "#0B2340";
+const WALL = "#1E3A60";
+const WALL2 = "#17304F";
+
+// Generador pseudoaleatorio con semilla fija: la ciudad es siempre la misma.
+function seeded(seed) {
+  let a = seed;
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const CITY = (() => {
+  const r = seeded(11);
+  const int = (lo, hi) => lo + Math.floor(r() * (hi - lo + 1));
+  const blocks = [];
+  const windows = [];
+  for (let x = -20; x < W + 20;) {
+    const w = int(46, 96), h = int(50, 150);
+    blocks.push({ x, y: ROAD - h, w, h });
+    for (let wy = ROAD - h + 12; wy < ROAD - 14; wy += 16) {
+      for (let wx = x + 8; wx < x + w - 10; wx += 14) {
+        if (r() < 0.18) windows.push({ x: wx, y: wy, twinkle: r() < 0.25, delay: (r() * 6).toFixed(1) });
+      }
+    }
+    x += w + int(4, 18);
+  }
+  const stars = Array.from({ length: 40 }, () => ({ x: int(0, W), y: int(40, 125) }));
+  return { blocks, windows, stars };
+})();
+
+function NightCity() {
   return (
-    <svg className="fx-building" width="84" height="90" viewBox="0 0 84 90" fill="none">
-      <rect x="8" y="4" width="68" height="86" fill="#1E3A60" />
-      <rect x="56" y="4" width="20" height="86" fill="#17304F" opacity=".6" />
+    <g>
+      {CITY.stars.map((s, i) => <circle key={i} cx={s.x} cy={s.y} r="1.4" fill="#E4EEEB" opacity=".5" />)}
+      <circle cx="1180" cy="78" r="26" fill="#E4EEEB" opacity=".9" />
+      <circle cx="1192" cy="70" r="24" fill="#0D1F37" />
+      {CITY.blocks.map((b, i) => <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} fill="#112645" opacity=".75" />)}
+      {CITY.windows.map((w, i) => (
+        <rect key={i} className={w.twinkle ? "fx-tw" : undefined} style={w.twinkle ? { animationDelay: `-${w.delay}s` } : undefined}
+          x={w.x} y={w.y} width="6" height="7" rx="1" fill={LIT} opacity=".7" />
+      ))}
+      {[90, 320, 550, 780, 1010, 1240].map(lx => (
+        <g key={lx}>
+          <path d={`M${lx} ${ROAD}V${ROAD - 62}Q${lx} ${ROAD - 70} ${lx + 10} ${ROAD - 70}H${lx + 16}`} stroke="#2C4E78" strokeWidth="3" fill="none" strokeLinecap="round" />
+          <ellipse cx={lx + 16} cy={ROAD - 67} rx="6" ry="3" fill={LIT} />
+        </g>
+      ))}
+      <rect x="0" y={ROAD} width={W} height="2" fill="rgba(255,255,255,.16)" />
+      <rect x="0" y={ROAD + 2} width={W} height="40" fill="rgba(255,255,255,.025)" />
+      <path d={`M0 ${ROAD + 22}H${W}`} stroke="rgba(255,255,255,.12)" strokeWidth="2" strokeDasharray="26 22" />
+    </g>
+  );
+}
+
+// Destinos (escala 1,5). Cada puerta se ilumina cuando le llega su caja.
+function House({ x, y, door }) {
+  return (
+    <svg x={x} y={y} width={92 * 1.5} height={73 * 1.5} viewBox="0 0 92 73" fill="none">
+      <rect x="64" y="8" width="8" height="16" fill="#0F0241" />
+      <rect x="10" y="30" width="44" height="42" fill={WALL} />
+      <rect x="54" y="30" width="28" height="42" fill={WALL2} />
+      <path d="M2 32L46 6L90 32" stroke="#0F0241" strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />
+      <rect x="14" y="40" width="16" height="13" rx="2" fill={LIT} />
+      <path d="M22 40V53M14 46.5H30" stroke={WALL} strokeWidth="1.6" />
+      <rect x="60" y="40" width="16" height="11" rx="2" fill={LIT} opacity=".75" />
+      <rect className={door} x="36" y="47" width="15" height="25" rx="2" fill="#2C4E78" />
+      <circle cx="47.5" cy="60" r="1.2" fill={LIT} />
+      <circle cx="6" cy="67" r="6" fill="#019A91" />
+      <circle cx="86" cy="67" r="5" fill="#019A91" />
+    </svg>
+  );
+}
+
+const BUILDING_LIT = new Set(["0,0", "1,2", "2,1", "0,3", "2,3", "1,0"]);
+function Building({ x, y, door }) {
+  const wins = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+    wins.push(<rect key={`${r}-${c}`} x={16 + c * 18} y={12 + r * 14} width="11" height="9" rx="1.5" fill={BUILDING_LIT.has(`${r},${c}`) ? LIT : GLASS} />);
+  }
+  return (
+    <svg x={x} y={y} width={84 * 1.5} height={90 * 1.5} viewBox="0 0 84 90" fill="none">
+      <rect x="8" y="4" width="68" height="86" fill={WALL} />
+      <rect x="56" y="4" width="20" height="86" fill={WALL2} opacity=".6" />
       <rect x="5" y="2" width="74" height="5" rx="1" fill="#0F0241" />
-      <rect x="16" y="12" width="11" height="9" rx="1.5" fill="#FFE7A3" />
-      <rect x="34" y="12" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect x="52" y="12" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect x="16" y="26" width="11" height="9" rx="1.5" fill="#FFE7A3" />
-      <rect className="fx-blink" x="34" y="26" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect x="52" y="26" width="11" height="9" rx="1.5" fill="#FFE7A3" />
-      <rect x="16" y="40" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect x="34" y="40" width="11" height="9" rx="1.5" fill="#FFE7A3" />
-      <rect x="52" y="40" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect x="16" y="54" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect x="34" y="54" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect x="52" y="54" width="11" height="9" rx="1.5" fill="#0B2340" />
-      <rect className="fx-door" x="34" y="70" width="16" height="20" rx="1.5" fill="#2C4E78" />
-      <path d="M42 70V90" stroke="#1E3A60" strokeWidth="1.2" />
+      {wins}
+      <rect className={door} x="34" y="70" width="16" height="20" rx="1.5" fill="#2C4E78" />
+      <path d="M42 70V90" stroke={WALL} strokeWidth="1.2" />
       <rect x="60" y="72" width="10" height="7" rx="1.5" fill="#0F0241" />
       <rect x="62" y="74" width="6" height="1.5" fill="#02C4B8" />
+    </svg>
+  );
+}
+
+function Shop({ x, y, door }) {
+  return (
+    <svg x={x} y={y} width={92 * 1.5} height={78 * 1.5} viewBox="0 0 92 78" fill="none">
+      <rect x="6" y="10" width="80" height="68" fill={WALL} />
+      <rect x="4" y="6" width="84" height="7" rx="1.5" fill="#0F0241" />
+      {Array.from({ length: 8 }, (_, i) => (
+        <path key={i} d={`M${6 + i * 10} 18H${16 + i * 10}V26Q${11 + i * 10} 30 ${6 + i * 10} 26Z`} fill={i % 2 === 0 ? "#02C4B8" : "#E4EEEB"} />
+      ))}
+      <rect x="10" y="36" width="24" height="30" rx="2" fill={GLASS} />
+      <rect x="14" y="42" width="6" height="6" rx="1" fill="#C98E4E" />
+      <rect x="22" y="44" width="5" height="4" rx="1" fill="#E9C48F" />
+      <rect x="36" y="40" width="18" height="38" rx="2" fill="#2C4E78" />
+      <rect className={door} x="38" y="43" width="14" height="33" rx="1" fill={GLASS} />
+      <rect x="58" y="36" width="24" height="30" rx="2" fill={GLASS} />
+      <path d="M61 44Q70 38 79 44" stroke={LIT} strokeWidth="1.5" strokeLinecap="round" opacity=".8" />
+    </svg>
+  );
+}
+
+function Box({ className }) {
+  return (
+    <g className={className}>
+      <rect width="22" height="22" rx="4" fill="#C98E4E" />
+      <rect x="8" width="6" height="22" fill="#E9C48F" />
+    </g>
+  );
+}
+
+function Check({ cx, cy, className }) {
+  return (
+    <g className={className}>
+      <circle cx={cx} cy={cy} r="21" fill="#02C4B8" opacity=".18" />
+      <circle cx={cx} cy={cy} r="16" fill="#02C4B8" />
+      <path d={`M${cx - 7} ${cy + 1}l5 5l10-11`} stroke="#0F0241" strokeWidth="3.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </g>
+  );
+}
+
+function DeliveryRoute() {
+  return (
+    <svg className="fx-route" viewBox={`0 0 ${W} 300`} preserveAspectRatio="xMidYMax slice" fill="none" aria-hidden="true">
+      <NightCity />
+      <House x={390} y={ROAD - 73 * 1.5} door="fx-door0" />
+      <Building x={780} y={ROAD - 90 * 1.5} door="fx-door1" />
+      <Shop x={1150} y={ROAD - 78 * 1.5} door="fx-door2" />
+      <g className="fx-van"><Van y={ROAD - 95} scale={1.6} /></g>
+      <Box className="fx-box0" />
+      <Box className="fx-box1" />
+      <Box className="fx-box2" />
+      <Check className="fx-ok0" cx={507} cy={145} />
+      <Check className="fx-ok1" cx={900} cy={119} />
+      <Check className="fx-ok2" cx={1270} cy={137} />
     </svg>
   );
 }
@@ -109,19 +242,9 @@ export default function FlexitLoader({
     <div className="fx-loader" role="status" aria-live="polite" style={style}>
       {eyebrow && <span className="fx-eyebrow" aria-hidden="true">{eyebrow}</span>}
       <div className="fx-brand" aria-hidden="true">
-        <FlexitLogo height={40} wordInk="#FFFFFF" />
+        <FlexitLogo height={44} wordInk="#FFFFFF" />
       </div>
-      <div className="fx-scene" aria-hidden="true">
-        <Building />
-        <div className="fx-road" />
-        <div className="fx-box" />
-        <Van />
-        <div className="fx-ok">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0F0241" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-      </div>
+      <DeliveryRoute />
       <div className="fx-label">{label}</div>
       {sub && <div className="fx-sub">{sub}</div>}
     </div>
