@@ -17,26 +17,25 @@
 /* Camioneta: base frente al edificio (es donde queda con movimiento reducido) */
 .fx-loader .fx-van{transform:translateX(560px);animation:fx-route-drive 7.2s infinite ease-in-out}
 .fx-loader .fx-wheel{transform-box:fill-box;transform-origin:center;animation:fx-route-spin 7.2s infinite ease-in-out}
-.fx-loader .fx-arm{opacity:0;transform-box:view-box;transform-origin:99px 23px;animation:fx-route-arm 7.2s infinite}
-@keyframes fx-route-arm{0%{opacity:0;transform:rotate(35deg) scale(.35)}8%{opacity:0;transform:rotate(35deg) scale(.35)}10%{opacity:1;transform:rotate(-12deg) scale(1)}11.5%{opacity:1;transform:rotate(-30deg) scale(1)}13%{opacity:1;transform:rotate(18deg) scale(1)}15%{opacity:1;transform:rotate(0) scale(1)}17%{opacity:0;transform:rotate(35deg) scale(.35)}32%{opacity:0;transform:rotate(35deg) scale(.35)}34%{opacity:1;transform:rotate(-12deg) scale(1)}35.5%{opacity:1;transform:rotate(-30deg) scale(1)}37%{opacity:1;transform:rotate(18deg) scale(1)}39%{opacity:1;transform:rotate(0) scale(1)}41%{opacity:0;transform:rotate(35deg) scale(.35)}56%{opacity:0;transform:rotate(35deg) scale(.35)}58%{opacity:1;transform:rotate(-12deg) scale(1)}59.5%{opacity:1;transform:rotate(-30deg) scale(1)}61%{opacity:1;transform:rotate(18deg) scale(1)}63%{opacity:1;transform:rotate(0) scale(1)}65%{opacity:0;transform:rotate(35deg) scale(.35)}100%{opacity:0;transform:rotate(35deg) scale(.35)}}
 .fx-loader .fx-tw{animation:fx-twinkle 6s infinite}
 @keyframes fx-route-drive{0%{transform:translateX(-500px)}10%{transform:translateX(180px)}22%{transform:translateX(180px)}34%{transform:translateX(560px)}46%{transform:translateX(560px)}58%{transform:translateX(940px)}70%{transform:translateX(940px)}90%{transform:translateX(1600px)}100%{transform:translateX(1600px)}}
 @keyframes fx-route-spin{0%{transform:rotate(0deg)}10%{transform:rotate(900deg)}22%{transform:rotate(900deg)}34%{transform:rotate(1700deg)}46%{transform:rotate(1700deg)}58%{transform:rotate(2500deg)}70%{transform:rotate(2500deg)}90%{transform:rotate(4200deg)}100%{transform:rotate(4200deg)}}
 @keyframes fx-twinkle{0%,40%,100%{opacity:.8}50%,80%{opacity:.1}}
+.fx-loader .fx-box0,.fx-loader .fx-box1,.fx-loader .fx-box2{transform-box:fill-box;transform-origin:center}
 .fx-loader .fx-box0{opacity:0;animation:fx-route-hop0 7.2s infinite}
-@keyframes fx-route-hop0{0%,11%{opacity:0;transform:translate(358px,158px) scale(.4)}12%{opacity:1;transform:translate(358px,158px) scale(1)}16%{transform:translate(400.75px,96px) rotate(140deg)}20%{opacity:1;transform:translate(443.5px,220px) rotate(260deg)}22%,100%{opacity:0;transform:translate(443.5px,220px) rotate(260deg) scale(.6)}}
+@keyframes fx-route-hop0{0%,11%{opacity:0;transform:translate(326px,176px) scale(.3)}12%{opacity:1;transform:translate(326px,176px) scale(.45)}14%{opacity:1;transform:translate(348px,140px) scale(1) rotate(40deg)}17%{transform:translate(395.75px,110px) rotate(150deg)}20%{opacity:1;transform:translate(443.5px,220px) rotate(260deg)}22%,100%{opacity:0;transform:translate(443.5px,220px) rotate(260deg) scale(.6)}}
 .fx-loader .fx-ok0{opacity:0;transform-box:fill-box;transform-origin:center;animation:fx-route-ok0 7.2s infinite}
 @keyframes fx-route-ok0{0%,20%{opacity:0;transform:scale(.3)}22%{opacity:1;transform:scale(1.15)}24%,92%{opacity:1;transform:scale(1)}97%,100%{opacity:0}}
 .fx-loader .fx-door0{animation:fx-route-door0 7.2s infinite}
 @keyframes fx-route-door0{0%,19%,25%,100%{fill:#2C4E78}21%,23%{fill:#02C4B8}}
 .fx-loader .fx-box1{opacity:0;animation:fx-route-hop1 7.2s infinite}
-@keyframes fx-route-hop1{0%,35%{opacity:0;transform:translate(738px,158px) scale(.4)}36%{opacity:1;transform:translate(738px,158px) scale(1)}40%{transform:translate(785px,96px) rotate(140deg)}44%{opacity:1;transform:translate(832px,220px) rotate(260deg)}46%,100%{opacity:0;transform:translate(832px,220px) rotate(260deg) scale(.6)}}
+@keyframes fx-route-hop1{0%,35%{opacity:0;transform:translate(706px,176px) scale(.3)}36%{opacity:1;transform:translate(706px,176px) scale(.45)}38%{opacity:1;transform:translate(728px,140px) scale(1) rotate(40deg)}41%{transform:translate(780px,110px) rotate(150deg)}44%{opacity:1;transform:translate(832px,220px) rotate(260deg)}46%,100%{opacity:0;transform:translate(832px,220px) rotate(260deg) scale(.6)}}
 .fx-loader .fx-ok1{opacity:0;transform-box:fill-box;transform-origin:center;animation:fx-route-ok1 7.2s infinite}
 @keyframes fx-route-ok1{0%,44%{opacity:0;transform:scale(.3)}46%{opacity:1;transform:scale(1.15)}48%,92%{opacity:1;transform:scale(1)}97%,100%{opacity:0}}
 .fx-loader .fx-door1{animation:fx-route-door1 7.2s infinite}
 @keyframes fx-route-door1{0%,43%,49%,100%{fill:#2C4E78}45%,47%{fill:#02C4B8}}
 .fx-loader .fx-box2{opacity:0;animation:fx-route-hop2 7.2s infinite}
-@keyframes fx-route-hop2{0%,59%{opacity:0;transform:translate(1118px,158px) scale(.4)}60%{opacity:1;transform:translate(1118px,158px) scale(1)}64%{transform:translate(1162.25px,96px) rotate(140deg)}68%{opacity:1;transform:translate(1206.5px,218px) rotate(260deg)}70%,100%{opacity:0;transform:translate(1206.5px,218px) rotate(260deg) scale(.6)}}
+@keyframes fx-route-hop2{0%,59%{opacity:0;transform:translate(1086px,176px) scale(.3)}60%{opacity:1;transform:translate(1086px,176px) scale(.45)}62%{opacity:1;transform:translate(1108px,140px) scale(1) rotate(40deg)}65%{transform:translate(1157.25px,110px) rotate(150deg)}68%{opacity:1;transform:translate(1206.5px,218px) rotate(260deg)}70%,100%{opacity:0;transform:translate(1206.5px,218px) rotate(260deg) scale(.6)}}
 .fx-loader .fx-ok2{opacity:0;transform-box:fill-box;transform-origin:center;animation:fx-route-ok2 7.2s infinite}
 @keyframes fx-route-ok2{0%,68%{opacity:0;transform:scale(.3)}70%{opacity:1;transform:scale(1.15)}72%,92%{opacity:1;transform:scale(1)}97%,100%{opacity:0}}
 .fx-loader .fx-door2{animation:fx-route-door2 7.2s infinite}
