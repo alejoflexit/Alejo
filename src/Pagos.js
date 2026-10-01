@@ -2162,16 +2162,19 @@ function PagosInner({ session }) {
                     return pills.map(([k, l]) => {
                       const n = cuenta(k);
                       const active = filtroEstado === k;
-                      // "Falta confirmar" siempre en ámbar (activo = ámbar sólido); el resto, azul estándar.
-                      const st = k === 'confirmar'
+                      // "Falta confirmar": sin seleccionar se ve gris como los demás (antes tenía borde y
+                      // fondo ámbar y parecía elegido); el aviso queda solo en el ⚠ y el número en ámbar.
+                      // Seleccionado = ámbar sólido.
+                      const avisa = k === 'confirmar' && !active && n > 0;
+                      const st = k === 'confirmar' && active
                         ? { padding: '5px 14px', fontSize: 12, fontWeight: 700, borderRadius: 20, cursor: 'pointer', border: `1px solid ${BRAND.amber}`,
-                            background: active ? BRAND.amber : 'rgba(255,176,32,0.12)', color: active ? '#2b1a00' : BRAND.amber }
+                            background: BRAND.amber, color: '#2b1a00' }
                         : btnPill(active);
                       return (
                         <button key={k} onClick={() => setFiltroEstado(active ? 'todos' : k)}
                           title={active ? 'tocá de nuevo para ver todos los estados' : ''}
                           style={{ ...st, opacity: n === 0 && !active ? 0.45 : 1 }}>
-                          {k === 'confirmar' ? '⚠ ' : ''}{l} <span style={{ opacity: 0.7, fontWeight: 400 }}>{n}</span>
+                          {k === 'confirmar' && <span style={avisa ? { color: BRAND.amber } : undefined}>⚠ </span>}{l} <span style={avisa ? { color: BRAND.amber, fontWeight: 700 } : { opacity: 0.7, fontWeight: 400 }}>{n}</span>
                         </button>
                       );
                     });

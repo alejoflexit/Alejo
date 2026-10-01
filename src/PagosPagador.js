@@ -598,8 +598,9 @@ export default function PagosPagador({ tarifas }) {
               {[['falta_factura', 'Falta factura', BRAND.amber], ['listos', '💸 Listos para pagar', BRAND.teal], ['pagados', '✓ Pagados', BRAND.blue]].map(([k, l, color], i) => (
                 <React.Fragment key={k}>
                   {i > 0 && <span style={{ color: BRAND.muted, fontSize: 14 }}>›</span>}
-                  <button onClick={() => setFiltro(k)} style={{ ...pill(filtro === k, color), ...(k === 'falta_factura' && counts[k] > 0 && filtro !== k ? { borderColor: `${BRAND.amber}88`, color: BRAND.amber } : {}), ...(k === 'listos' ? { fontWeight: 700 } : {}) }}>
-                    {l} <span style={{ opacity: 0.7 }}>({counts[k]})</span>
+                  <button onClick={() => setFiltro(k)} style={{ ...pill(filtro === k, color), ...(k === 'listos' ? { fontWeight: 700 } : {}) }}>
+                    {/* Sin seleccionar todos se ven iguales; el aviso de "Falta factura" va solo en el número. */}
+                    {l} <span style={k === 'falta_factura' && counts[k] > 0 && filtro !== k ? { color: BRAND.amber, fontWeight: 700 } : { opacity: 0.7 }}>({counts[k]})</span>
                   </button>
                 </React.Fragment>
               ))}
