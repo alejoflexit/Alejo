@@ -139,19 +139,28 @@ function NightCity() {
 
 // Destinos (escala 1,5). Cada puerta se ilumina cuando le llega su caja.
 function House({ x, y, door }) {
+  // Casa: techo macizo con alero, frontón relleno (con ventanita redonda) y arbustos apoyados en el piso.
   return (
     <svg x={x} y={y} width={92 * 1.5} height={73 * 1.5} viewBox="0 0 92 73" fill="none">
-      <rect x="64" y="8" width="8" height="16" fill="#0F0241" />
-      <rect x="10" y="30" width="44" height="42" fill={WALL} />
-      <rect x="54" y="30" width="28" height="42" fill={WALL2} />
-      <path d="M2 32L46 6L90 32" stroke="#0F0241" strokeWidth="6" strokeLinejoin="round" strokeLinecap="round" />
-      <rect x="14" y="40" width="16" height="13" rx="2" fill={LIT} />
-      <path d="M22 40V53M14 46.5H30" stroke={WALL} strokeWidth="1.6" />
-      <rect x="60" y="40" width="16" height="11" rx="2" fill={LIT} opacity=".75" />
-      <rect className={door} x="36" y="47" width="15" height="25" rx="2" fill="#2C4E78" />
-      <circle cx="47.5" cy="60" r="1.2" fill={LIT} />
-      <circle cx="6" cy="67" r="6" fill="#019A91" />
-      <circle cx="86" cy="67" r="5" fill="#019A91" />
+      <rect x="63" y="9" width="8" height="18" fill="#0F0241" />
+      <rect x="61" y="7" width="12" height="3" rx="1" fill="#0F0241" />
+      <path d="M10 33L46 11L82 33V73H10Z" fill={WALL} />
+      <path d="M54 33H82V73H54Z" fill={WALL2} />
+      <path d="M46 11L82 33H54Z" fill={WALL2} opacity=".55" />
+      <circle cx="46" cy="25" r="4.2" fill={LIT} opacity=".9" />
+      <path d="M41.8 25H50.2M46 20.8V29.2" stroke={WALL} strokeWidth="1.2" />
+      <path d="M0 35L46 5L92 35L86 37L46 11.5L6 37Z" fill="#0F0241" />
+      <path d="M46 5L92 35" stroke="#02C4B8" strokeWidth="1.2" opacity=".45" />
+      <rect x="15" y="42" width="17" height="13" rx="2" fill={LIT} />
+      <path d="M23.5 42V55M15 48.5H32" stroke={WALL} strokeWidth="1.6" />
+      <rect x="60" y="42" width="16" height="11" rx="2" fill={LIT} opacity=".75" />
+      <path d="M68 42V53" stroke={WALL2} strokeWidth="1.6" />
+      <rect className={door} x="37" y="48" width="15" height="25" rx="2" fill="#2C4E78" />
+      <circle cx="48.5" cy="61" r="1.2" fill={LIT} />
+      <rect x="34" y="71" width="21" height="2" rx="1" fill="#2C4E78" />
+      <path d="M1 73Q1 64 8 64Q15 64 15 73Z" fill="#019A91" />
+      <path d="M5 73Q5 67 11 67Q17 67 17 73Z" fill="#02C4B8" opacity=".8" />
+      <path d="M77 73Q77 65 83.5 65Q90 65 90 73Z" fill="#019A91" />
     </svg>
   );
 }
