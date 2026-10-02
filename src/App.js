@@ -125,8 +125,8 @@ function VistaSkeleton() {
 
 // Ítems de la sidebar: filas planas; en hover solo cambian fondo y colores (sin reflujo)
 const NAV_CSS = `
-.fx-nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.72);font-size:14px;font-weight:500;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit;transition:background-color .15s,color .15s,border-color .15s}
-.fx-nav i{font-size:18px;color:rgba(255,255,255,0.5);transition:color .15s}
+.fx-nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.72);font-size:14px;font-weight:500;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit;transition:background-color .1s,color .1s,border-color .1s}
+.fx-nav i{font-size:18px;color:rgba(255,255,255,0.5);transition:color .1s}
 @media (hover:hover){.fx-nav:hover{background:rgba(255,255,255,0.05);color:#fff}.fx-nav:hover i{color:#2ECFAA}}
 .fx-nav:focus-visible{outline:none;border-color:rgba(46,207,170,0.45)}
 .fx-nav.on{background:rgba(46,207,170,0.1);border-color:rgba(46,207,170,0.25);color:#2ECFAA}
@@ -1078,9 +1078,9 @@ export default function App() {
       {/* Sidebar overlay (se abre con ☰) */}
       {sidebarOpen && (
         <div onClick={() => setSidebarOpen(false)}
-          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, backdropFilter:"blur(2px)" }}>
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.68)", zIndex:1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem" }}>
+            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", transform:"translateZ(0)", contain:"layout paint" }}>
             <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} comBadge={comNuevos} />
           </div>
         </div>
