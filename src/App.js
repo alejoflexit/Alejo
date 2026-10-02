@@ -1090,7 +1090,7 @@ export default function App() {
         <div onClick={() => setSidebarOpen(false)}
           style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.68)", zIndex:1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, background:"#0D0D2B", borderRight:"1px solid rgba(255,255,255,0.1)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", transform:"translateZ(0)", contain:"layout paint" }}>
+            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, backgroundColor:BRAND.navy, backgroundImage:"radial-gradient(circle at 0% 0%, rgba(46,207,170,0.10), transparent 45%), radial-gradient(circle at 100% 85%, rgba(20,125,170,0.16), transparent 50%), linear-gradient(180deg, #08182D 0%, #050E1D 100%)", borderRight:`1px solid ${BRAND.border}`, boxShadow:"12px 0 40px rgba(0,0,0,0.35)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", transform:"translateZ(0)", contain:"layout paint" }}>
             <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} comBadge={comNuevos} />
           </div>
         </div>
