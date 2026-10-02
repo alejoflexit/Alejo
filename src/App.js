@@ -123,6 +123,16 @@ function VistaSkeleton() {
   );
 }
 
+// Ítems de la sidebar: filas planas; en hover solo cambian fondo y colores (sin reflujo)
+const NAV_CSS = `
+.fx-nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.72);font-size:14px;font-weight:500;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit;transition:background-color .15s,color .15s,border-color .15s}
+.fx-nav i{font-size:18px;color:rgba(255,255,255,0.5);transition:color .15s}
+@media (hover:hover){.fx-nav:hover{background:rgba(255,255,255,0.05);color:#fff}.fx-nav:hover i{color:#2ECFAA}}
+.fx-nav:focus-visible{outline:none;border-color:rgba(46,207,170,0.45)}
+.fx-nav.on{background:rgba(46,207,170,0.1);border-color:rgba(46,207,170,0.25);color:#2ECFAA}
+.fx-nav.on i{color:#2ECFAA}
+`;
+
 // Panel de navegación (compartido entre la sidebar fija de desktop y el overlay de mobile)
 function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
   const items = [
@@ -137,6 +147,7 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
   ].filter(it => puedeVer(it.id));
   return (
     <>
+      <style>{NAV_CSS}</style>
       <div onClick={() => go("home")} title="Ir al inicio" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "2rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(255,255,255,0.08)", cursor: "pointer" }}>
         <img src={logo} alt="Flexit" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 8 }} />
         <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Flexit</span>
@@ -146,9 +157,8 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
         {items.map(it => {
           const active = seccion === it.id;
           return (
-            <button key={it.id} onClick={() => go(it.id)}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${active ? "rgba(46,207,170,0.3)" : "rgba(255,255,255,0.08)"}`, background: active ? "rgba(46,207,170,0.1)" : "rgba(255,255,255,0.04)", color: active ? "#2ECFAA" : "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
-              <i className={it.icon} style={{ fontSize: 18 }} />
+            <button key={it.id} onClick={() => go(it.id)} className={"fx-nav" + (active ? " on" : "")}>
+              <i className={it.icon} />
               {it.label}
               {it.id === "pizarra" && comBadge > 0 && (
                 <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: "#E24B4A", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{comBadge}</span>
@@ -156,16 +166,14 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
             </button>
           );
         })}
-        {puedeVer("choferes") && <a href="/choferes.html"
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
-          <i className="ti ti-user-plus" style={{ fontSize: 18 }} />
+        {puedeVer("choferes") && <a href="/choferes.html" className="fx-nav">
+          <i className="ti ti-user-plus" />
           Alta de Choferes
         </a>}
         {getSession() && esAdmin() && (<>
           <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "18px 0 6px", paddingLeft: 10 }}>Administración</div>
-          <button onClick={() => go("usuarios")}
-            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1px solid ${seccion === "usuarios" ? "rgba(46,207,170,0.3)" : "rgba(255,255,255,0.08)"}`, background: seccion === "usuarios" ? "rgba(46,207,170,0.1)" : "rgba(255,255,255,0.04)", color: seccion === "usuarios" ? "#2ECFAA" : "rgba(255,255,255,0.75)", fontSize: 14, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
-            <i className="ti ti-shield-lock" style={{ fontSize: 18 }} />
+          <button onClick={() => go("usuarios")} className={"fx-nav" + (seccion === "usuarios" ? " on" : "")}>
+            <i className="ti ti-shield-lock" />
             Usuarios y permisos
           </button>
         </>)}
