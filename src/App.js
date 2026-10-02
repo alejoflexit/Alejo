@@ -699,11 +699,21 @@ function ThHeader({ label, col, tip, sortCol, sortDir, toggleSort }) {
   );
 }
 
+// Tarjetas KPI estilo vidrio: transparencia + luz en el borde superior. Sin backdrop-filter
+// (el blur repinta todo lo de atrás en cada hover). Hover solo cambia el color del borde.
+const GLASS_CSS = `
+.fx-glass{background:rgba(255,255,255,0.04)!important;border:1px solid rgba(255,255,255,0.09)!important;border-radius:14px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,0.12),0 10px 30px rgba(0,0,0,0.25);transition:border-color .15s}
+@media (hover:hover){.fx-glass:hover{border-color:rgba(255,255,255,0.2)!important}}
+`;
+if (typeof document !== "undefined" && !document.getElementById("fx-glass-css")) {
+  const st = document.createElement("style"); st.id = "fx-glass-css"; st.textContent = GLASS_CSS; document.head.appendChild(st);
+}
+
 function TooltipKpi({ label, val, color, icon, tooltip, tooltipDem, tooltipInfo }) {
   const [show, setShow] = React.useState(false);
   const hasTooltip = !!(tooltip || tooltipDem || tooltipInfo);
   return (
-    <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:10, padding:"1rem", position:"relative" }}
+    <div className="fx-glass" style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:10, padding:"1rem", position:"relative" }}
       tabIndex={tooltipInfo ? 0 : undefined}
       onFocus={()=>tooltipInfo&&setShow(true)} onBlur={()=>tooltipInfo&&setShow(false)}
       onClick={()=>tooltipInfo&&setShow(true)}
@@ -1284,7 +1294,7 @@ export default function App() {
                 const circ = 2 * Math.PI * 28;
                 const offset = slaPromedio !== null ? circ - (slaPromedio / 100) * circ : circ;
                 return (
-                  <div style={{ ...card, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"0.9rem 0.5rem" }}>
+                  <div className="fx-glass" style={{ ...card, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"0.9rem 0.5rem" }}>
                     <div style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.08em" }}>SLA Meli</div>
                     <div style={{ position:"relative", width:62, height:62 }}>
                       <svg width="62" height="62" style={{ transform:"rotate(-90deg)" }}>
@@ -1513,7 +1523,7 @@ export default function App() {
                       ["OK ≥98%", okMes.length, "#2ECFAA", "ti-circle-check"],
                       ["Reincidentes", reincidentes.length, "#EF9F27", "ti-repeat"],
                     ].map(([label,val,color,icon]) => (
-                      <div key={label} style={{ ...card, padding:"1rem" }}>
+                      <div key={label} className="fx-glass" style={{ ...card, padding:"1rem" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                           <div style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</div>
                           <i className={`ti ${icon}`} style={{ fontSize:16, color, opacity:0.7 }} />
