@@ -155,7 +155,7 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
                 style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: '#C9D3E3', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                💡 Ayuda <span style={{ color: 'rgba(255,255,255,0.4)' }}>· ¿a quién se la doy?</span>
+                <span style={{ whiteSpace: 'nowrap' }}>💡 Ayuda <span style={{ color: 'rgba(255,255,255,0.4)' }}>· ¿a quién?</span></span>
                 <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{ayuda ? '▲' : '▼'}</span>
               </div>
             )}
