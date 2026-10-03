@@ -299,6 +299,16 @@ function ColectasInner({ soloArribos = false, irA }) {
   // Por eso la pestaña SÁBADOS opera sobre el sábado de la semana, no sobre el día seleccionado:
   // así confirmar una colecta entre semana ya no aparece confirmada en SÁBADOS (bug clientes doble-zona).
   useEffect(() => { if (tab !== 'SABADOS') diaSemanaRef.current = fecha; }, [fecha, tab]);
+  // Simétrico: CABA/SUR/NOROESTE no operan fin de semana → si caen en sábado o domingo, saltan al lunes siguiente
+  // (antes mostraban el sábado vacío, sin la precarga de choferes de semana, y parecía que se había borrado todo).
+  useEffect(() => {
+    if (tab === 'SABADOS' || !fecha) return;
+    const d = new Date(fecha + 'T12:00:00');
+    const dow = d.getDay();
+    if (dow !== 6 && dow !== 0) return;
+    d.setDate(d.getDate() + (dow === 6 ? 2 : 1));
+    setFecha(d.toISOString().slice(0, 10));
+  }, [fecha, tab]);
   const cambiarTab = (s) => {
     if (s === 'SABADOS' && tab !== 'SABADOS') {
       const sab = getWeekRange(fecha).end; // sábado de esa semana
