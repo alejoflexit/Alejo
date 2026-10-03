@@ -86,7 +86,7 @@ function LlegadaConfirm({ llego, cerca, nombre, subtitle, onToggle }) {
           <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
             <button onClick={confirm}
               style={{ display:'flex', alignItems:'center', gap:4, height:30, padding:'0 12px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:700, whiteSpace:'nowrap', touchAction:'manipulation',
-                border:`1px solid ${llego ? '#E24B4A' : '#2ECFAA'}`, background: llego ? 'rgba(226,75,74,0.15)' : 'rgba(46,207,170,0.15)', color: llego ? '#ff9b9a' : '#2ECFAA' }}>
+                border:`1px solid ${llego ? '#E24B4A' : '#2ECFAA'}`, background: llego ? 'rgba(226,75,74,0.15)' : 'rgba(46,207,170,0.15)', color: llego ? '#E24B4A' : '#2ECFAA' }}>
               {llego ? 'Sacar llegada' : '✓ Confirmar'}
             </button>
             <button onClick={cancel} title="Cancelar"
@@ -956,10 +956,10 @@ function ColectasInner({ soloArribos = false, irA }) {
     const zonaSab = c => (c.seccion === 'SABADOS' ? c.zona_sabado : c.seccion) || 'SIN';
     // Tabla agrupada por chofer (se reutiliza por zona en la pestaña Sábados)
     const tablaDe = (groups, order) => (
-        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'#1b1e24' }}>
+        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'rgba(255,255,255,0.025)' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580 }}>
             <thead>
-              <tr style={{ background:'#252932' }}>
+              <tr style={{ background:'rgba(255,255,255,0.045)' }}>
                 {['','Cliente','Chofer(es)','Dirección','Zona','Vehículo','Hora','$$$'].map((h,i) => (
                   <th key={i} style={{ ...thSt, width:i===0?36:undefined }}>{h}</th>
                 ))}
@@ -989,11 +989,11 @@ function ColectasInner({ soloArribos = false, irA }) {
                     {/* Group header */}
                     <tr onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
                       style={{ background: isActive ? 'rgba(58,143,212,0.14)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
-                      <td colSpan={8} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#3A8FD4'}` }}>
+                      <td colSpan={8} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#4A9EFF'}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
                             <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#FBBF24':'rgba(255,255,255,0.85)' }}>
-                              {isWarn ? '⚠️ ' : ''}{chofer}
+                              {isWarn && <i className="ti ti-alert-triangle" aria-hidden="true" style={{ marginRight:4, verticalAlign:'-2px' }} />}{chofer}
                             </span>
                             <span style={{ fontSize:12, color:isWarn?'rgba(251,191,36,0.7)':BRAND.teal, marginLeft:6 }}>
                               {rows.length}
@@ -1013,7 +1013,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 onMouseEnter={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='1'; }}
                                 onMouseLeave={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='0'; }}
                                 style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(46,207,170,0.5)'}`, color:'#2ECFAA', background:copiedChofer===chofer?'rgba(46,207,170,0.2)':'rgba(46,207,170,0.1)', fontSize:14, cursor:'pointer', transition:'all 0.2s' }}>
-                                {copiedChofer===chofer ? '✓' : '📱'}
+                                {copiedChofer===chofer ? <i className="ti ti-check" aria-hidden="true" /> : <i className="ti ti-brand-whatsapp" aria-hidden="true" style={{ fontSize:16 }} />}
                               </button>
                               <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', right:0, whiteSpace:'nowrap', background:'#1a2e3a', color:'#2ECFAA', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,207,170,0.3)', pointerEvents:'none', zIndex:400 }}>
                                 Copiar {chofer}
@@ -1037,8 +1037,8 @@ function ColectasInner({ soloArribos = false, irA }) {
                       const unassigned = chs.every(x => x === 'A coordinar');
                       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
 
-                      const ECOLOR  = { blanco:'transparent', amarillo:'#FBBF24', rojo:'#E5604D', verde:'#2ECFAA' };
-                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#FBBF24', rojo:'#E5604D', verde:'#2ECFAA' };
+                      const ECOLOR  = { blanco:'transparent', amarillo:'#FBBF24', rojo:'#E24B4A', verde:'#2ECFAA' };
+                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#FBBF24', rojo:'#E24B4A', verde:'#2ECFAA' };
                       const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
 
                       // Para divididas: el círculo muestra el estado del chofer de ESTA sección
@@ -1145,7 +1145,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 title={reg.zona_barrio ? `Zona de hoy · la fija es: ${c.zona_barrio||'—'}` : 'Click para una zona puntual de hoy'}
                                 style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
                                 {(reg.zona_barrio || c.zona_barrio)
-                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, textTransform:'capitalize', background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(58,143,212,0.15)', color: reg.zona_barrio ? '#FBBF24' : '#3A8FD4' }}>{String(reg.zona_barrio || c.zona_barrio).toLowerCase()}</span>
+                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, textTransform:'capitalize', background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(74,158,255,0.15)', color: reg.zona_barrio ? '#FBBF24' : '#4A9EFF' }}>{String(reg.zona_barrio || c.zona_barrio).toLowerCase()}</span>
                                   : <span style={{ fontSize:11, color:BRAND.muted }}>+ zona</span>}
                                 {reg.zona_barrio
                                   ? <button onClick={ev => { ev.stopPropagation(); updateRegistro(c.id, { zona_barrio: null }); }} title="Volver a la zona fija" style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:0 }}>↩</button>
@@ -1195,7 +1195,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                         {compactar && rojas.length > 0 && (
                           <tr onClick={() => setRojasOpen(p => ({ ...p, [chofer]: !p[chofer] }))} style={{ cursor:'pointer' }}>
                             <td colSpan={8} style={{ padding:'7px 14px 7px 44px', fontSize:11.5, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
-                              <span style={{ color:'#E5604D', opacity:0.75, marginRight:7, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
+                              <span style={{ color:'#E24B4A', opacity:0.75, marginRight:7, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
                               {rojas.length} sin envíos
                             </td>
                           </tr>
@@ -1227,13 +1227,13 @@ function ColectasInner({ soloArribos = false, irA }) {
         {/* Toolbar */}
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
-            <span>📅</span>
+            <i className="ti ti-calendar" aria-hidden="true" style={{ fontSize:16 }} />
             <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
               style={{ ...inpSt, padding:'5px 10px' }} />
           </div>
           <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
             onKeyDown={e => { if (e.key==='Escape') setBusqueda(''); }}
-            placeholder="🔍 Cliente o chofer..."
+            placeholder="Buscar cliente o chofer..."
             style={{ ...inpSt, padding:'5px 10px', width:180 }} />
           {busqueda && (
             <button onClick={() => setBusqueda('')} title="Limpiar búsqueda"
@@ -1241,18 +1241,18 @@ function ColectasInner({ soloArribos = false, irA }) {
           )}
           {sinAsignar > 0 && (
             <div style={{ padding:'3px 12px', borderRadius:20, background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:12, fontWeight:600 }}>
-              ⚠️ {sinAsignar} sin asignar
+              <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {sinAsignar} sin asignar
             </div>
           )}
           {(() => { const pend = seccionClientes.filter(c => (registros[c.id]?.estado || 'blanco') === 'blanco'); return pend.length > 0 && (
             <button onClick={() => preguntarPendientes(pend)} title="Preguntarles por WhatsApp si tienen envíos hoy (bot)"
               style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(74,158,255,0.4)', background:'rgba(74,158,255,0.08)', color:'#4A9EFF', fontSize:12, fontWeight:600, cursor:'pointer' }}>
-              🤖 Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
+              <i className="ti ti-robot" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
             </button>
           ); })()}
           {avisoBot && <div style={{ fontSize:12, color:'#4A9EFF' }}>{avisoBot}</div>}
           <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
-            {saveStatus==='saving' && '💾 Guardando...'}
+            {saveStatus==='saving' && 'Guardando...'}
             {saveStatus==='saved'  && '✓ Guardado'}
             {saveStatus==='error'  && '✗ Error al guardar'}
           </div>
@@ -1472,10 +1472,10 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
         )}
 
-        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'#1b1e24' }}>
+        <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'rgba(255,255,255,0.025)' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:480 }}>
             <thead>
-              <tr style={{ background:'#252932' }}>
+              <tr style={{ background:'rgba(255,255,255,0.045)' }}>
                 {['Cliente / Dirección','Sección','Zona','Monto','Estado',''].map((h,i) => (
                   <th key={i} style={thSt}>{h}</th>
                 ))}
@@ -1489,7 +1489,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                     <div style={{ fontSize:11, color:BRAND.muted, marginTop:2 }}>{c.direccion}{c.horario ? ` · 🕐 ${c.horario}` : ''}</div>
                   </td>
                   <td style={{ padding:'8px 12px' }}>
-                    <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(58,143,212,0.15)', color:'#3A8FD4' }}>{c.seccion}</span>
+                    <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(74,158,255,0.15)', color:'#4A9EFF' }}>{c.seccion}</span>
                     {c.opera_sabados && <span style={{ marginLeft:4, fontSize:10, padding:'2px 6px', borderRadius:20, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>🗓️ Sáb</span>}
                     {VEHICULOS[c.vehiculo] && (
                       <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`}
@@ -1718,11 +1718,11 @@ function ColectasInner({ soloArribos = false, irA }) {
         <style>{`@keyframes flexitTiemble { 0%, 86%, 100% { transform: translateX(0); } 88% { transform: translateX(-2px) rotate(-0.4deg); } 90% { transform: translateX(2px) rotate(0.4deg); } 92% { transform: translateX(-2px); } 94% { transform: translateX(2px); } 96% { transform: translateX(-1px); } 98% { transform: translateX(1px); } }`}</style>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
-            <span>📅</span>
+            <i className="ti ti-calendar" aria-hidden="true" style={{ fontSize:16 }} />
             <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={{ ...inpSt, padding:'5px 10px' }} />
           </div>
           <input type="text" value={busquedaArribos} onChange={e => setBusquedaArribos(e.target.value)}
-            placeholder="🔍 Buscar cadete..." style={{ ...inpSt, padding:'5px 10px', width:180 }} />
+            placeholder="Buscar cadete..." style={{ ...inpSt, padding:'5px 10px', width:180 }} />
           {saveStatus === 'error' && (
             <div style={{ fontSize:12, marginTop:2, color:'#E24B4A' }}>✗ Error al guardar</div>
           )}
@@ -1904,11 +1904,11 @@ function ColectasInner({ soloArribos = false, irA }) {
   // ── SIDEBAR CONFIG ──
   const sidebarItems = [
     { section: 'OPERACIÓN', items: [
-      { id: 'colectas', icon: '📦', label: 'Colectas' },
+      { id: 'colectas', icon: 'package', label: 'Colectas' },
     ]},
     { section: 'CONFIG', items: [
-      { id: 'clientes', icon: '📋', label: 'Clientes' },
-      { id: 'choferes', icon: '👤', label: 'Choferes' },
+      { id: 'clientes', icon: 'building-store', label: 'Clientes' },
+      { id: 'choferes', icon: 'users', label: 'Choferes' },
     ]},
   ];
 
@@ -1946,14 +1946,14 @@ function ColectasInner({ soloArribos = false, irA }) {
         );
       })}
       <div style={{ marginLeft:'auto', display:'flex', gap:4, alignSelf:'center', paddingBottom:4 }}>
-        {[['tabla','📋','Tabla'],['mapa','🗺️','Mapa']].map(([v,ico,lbl]) => (
+        {[['tabla','table','Tabla'],['mapa','map-2','Mapa']].map(([v,ico,lbl]) => (
           <button key={v} onClick={() => setVistaColectas(v)}
             title={v === 'mapa' ? 'Ver las colectas del día en el mapa y asignar por lazo' : 'Ver la tabla por chofer'}
             style={{ display:'inline-flex', alignItems:'center', gap:5, height:32, padding:'0 12px', borderRadius:8, cursor:'pointer', fontSize:12.5, fontWeight:600, touchAction:'manipulation',
               border:`1px solid ${vistaColectas===v ? BRAND.teal : BRAND.border}`,
               background: vistaColectas===v ? 'rgba(46,207,170,0.12)' : BRAND.faint,
               color: vistaColectas===v ? BRAND.teal : BRAND.muted }}>
-            <span>{ico}</span>{lbl}
+            <i className={`ti ti-${ico}`} aria-hidden="true" style={{ fontSize:15 }} />{lbl}
           </button>
         ))}
       </div>
@@ -2051,7 +2051,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                 color: active ? BRAND.teal : BRAND.muted,
                 fontSize:13, fontWeight:600, whiteSpace:'nowrap', touchAction:'manipulation',
               }}>
-                <span style={{ fontSize:14 }}>{item.icon}</span>{item.label}
+                <i className={`ti ti-${item.icon}`} aria-hidden="true" style={{ fontSize:16 }} />{item.label}
               </button>
             );
           })}
@@ -2084,7 +2084,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                     borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
                     textAlign:'left', transition:'all 0.15s',
                   }}>
-                    <span style={{ fontSize:14 }}>{item.icon}</span>
+                    <i className={`ti ti-${item.icon}`} aria-hidden="true" style={{ fontSize:16 }} />
                     {item.label}
                   </button>
                 );
