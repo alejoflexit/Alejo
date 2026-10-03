@@ -190,6 +190,7 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
   const [dirEdit, setDirEdit] = useState(null); // { id, valor } — dirección puntual del día
   const [zonaEdit, setZonaEdit] = useState(null); // { id, valor } — zona puntual del día
+  const [menuChofer, setMenuChofer] = useState(null); // ⋮ del grupo: { chofer, x, y, paso:'menu'|'pasar', q, a }
   const [zonasSabCerradas, setZonasSabCerradas] = useState({}); // pestaña Sábados: zonas plegadas
   const [filtroEstado, setFiltroEstado] = useState(null); // null = todos | verde/amarillo/blanco/rojo
   const [rojasOpen, setRojasOpen] = useState({}); // grupos con las canceladas desplegadas
@@ -827,6 +828,28 @@ function ColectasInner({ soloArribos = false, irA }) {
     });
   }
 
+  // Pasa TODAS las colectas del día de un chofer a otro (en la pestaña actual). Reemplaza el nombre en
+  // choferes y en confirmado_por, sin duplicar; el estado no cambia. Como la precarga copia el último día,
+  // mañana quedan precargadas al nuevo chofer (si el original vuelve, se pasan de nuevo con el mismo menú).
+  function pasarColectas(de, a) {
+    if (!de || !a || de === a) return 0;
+    let n = 0;
+    seccionClientes.forEach(c => {
+      const reg = registros[c.id];
+      const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
+      if (!chs.includes(de)) return;
+      const nuevos = [...new Set(chs.map(x => x === de ? a : x))];
+      const conf = [...new Set((reg?.confirmado_por || []).map(x => x === de ? a : x))];
+      updateRegistro(c.id, { choferes: nuevos, confirmado_por: conf });
+      n++;
+    });
+    return n;
+  }
+  const abrirMenuChofer = (e, chofer) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenuChofer(m => m && m.chofer === chofer ? null : { chofer, x: r.right, y: r.bottom + 6, paso: 'menu', q: '', a: null });
+  };
+
   const inpSt = {
     padding:'7px 10px', fontSize:12, border:`1px solid ${BRAND.border}`,
     borderRadius:8, background:BRAND.faint, color:BRAND.white, outline:'none',
@@ -946,6 +969,10 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 Copiar {chofer}
                               </div>
                             </div>
+                            <button onClick={e => abrirMenuChofer(e, chofer)} aria-label={`Más opciones de ${chofer}`} title="Más opciones"
+                              style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, border:`1px solid ${menuChofer?.chofer === chofer ? 'rgba(255,255,255,0.18)' : 'transparent'}`, background: menuChofer?.chofer === chofer ? 'rgba(255,255,255,0.08)' : 'none', color: menuChofer?.chofer === chofer ? '#fff' : 'rgba(255,255,255,0.45)', fontSize:18, lineHeight:1, cursor:'pointer', padding:0 }}>
+                              ⋮
+                            </button>
                             </div>
                           )}
                         </div>
@@ -1907,6 +1934,53 @@ function ColectasInner({ soloArribos = false, irA }) {
   const navFlat = sidebarItems.flatMap(g => g.items);
   return (
     <div style={{ display:'flex', flexDirection: esMovil ? 'column' : 'row', gap:0, minHeight:'60vh', borderRadius:14, overflow:'hidden', border:`1px solid ${BRAND.border}` }}>
+      {menuChofer && (() => {
+        const m = menuChofer;
+        const W = m.paso === 'menu' ? 220 : 280;
+        const left = Math.max(8, Math.min(m.x - W, window.innerWidth - W - 8));
+        const cant = seccionClientes.filter(c => (registros[c.id]?.choferes || []).includes(m.chofer)).length;
+        const qn = normNombre(m.q || '');
+        const sugeridos = qn ? choferesFull.filter(ch => ch !== m.chofer && normNombre(ch).includes(qn)).slice(0, 8) : [];
+        const panel = { position:'fixed', top:m.y, left, width:W, zIndex:1200, background:'#0E1E38', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, padding: m.paso === 'menu' ? 4 : 12, boxShadow:'0 12px 30px rgba(0,0,0,0.45)', color:BRAND.white, fontSize:13 };
+        return (<>
+          <div onClick={() => setMenuChofer(null)} style={{ position:'fixed', inset:0, zIndex:1199 }} />
+          {m.paso === 'menu' ? (
+            <div role="menu" style={panel}>
+              <button role="menuitem" onClick={() => setMenuChofer({ ...m, paso:'pasar' })}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'9px 10px', borderRadius:8, border:'none', background:'none', color:BRAND.white, fontSize:13, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+                <span style={{ color:BRAND.muted }}>⇄</span> Pasar colectas a otro chofer
+              </button>
+            </div>
+          ) : (
+            <div style={panel}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:BRAND.muted, marginBottom:8 }}>
+                <button onClick={() => setMenuChofer({ ...m, paso:'menu', q:'', a:null })} aria-label="Volver"
+                  style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', padding:0, fontSize:14 }}>←</button>
+                Pasar {cant === 1 ? 'la colecta' : `las ${cant} colectas`} de {m.chofer.split(' ')[0]} a…
+              </div>
+              <input autoFocus value={m.q} placeholder="Buscar chofer..."
+                onChange={e => setMenuChofer({ ...m, q: e.target.value, a: null })}
+                onKeyDown={e => { if (e.key === 'Escape') setMenuChofer(null); if (e.key === 'Enter' && sugeridos[0]) setMenuChofer({ ...m, a: sugeridos[0], q: sugeridos[0] }); }}
+                style={{ ...inpSt, width:'100%', boxSizing:'border-box', fontSize:13, padding:'8px 10px' }} />
+              {!m.a && sugeridos.length > 0 && (
+                <div style={{ marginTop:6, maxHeight:220, overflowY:'auto' }}>
+                  {sugeridos.map(ch => (
+                    <button key={ch} onClick={() => setMenuChofer({ ...m, a: ch, q: ch })}
+                      style={{ width:'100%', display:'block', padding:'7px 8px', borderRadius:8, border:'none', background:'none', color:BRAND.white, fontSize:13, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+                      {ch}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!m.a && qn && sugeridos.length === 0 && <div style={{ marginTop:8, fontSize:12, color:BRAND.muted }}>Ningún chofer con ese nombre.</div>}
+              <button disabled={!m.a} onClick={() => { pasarColectas(m.chofer, m.a); setMenuChofer(null); }}
+                style={{ marginTop:10, width:'100%', height:34, borderRadius:8, border:'none', background:'#2ECFAA', color:'#04150f', fontWeight:600, fontSize:13, cursor: m.a ? 'pointer' : 'default', opacity: m.a ? 1 : 0.4, fontFamily:'inherit' }}>
+                {m.a ? `Pasar a ${m.a}` : 'Elegí un chofer'}
+              </button>
+            </div>
+          )}
+        </>);
+      })()}
 
       {/* NAV — barra horizontal en celular (no se come el ancho), sidebar vertical en desktop */}
       {esMovil ? (
