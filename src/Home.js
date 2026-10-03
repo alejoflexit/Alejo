@@ -270,14 +270,17 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     if (!session) return;
     let vivo = true;
     Promise.all([
-      sbFetch("colectas_clientes?select=id,activo,fija"),
+      sbFetch("colectas_clientes?select=id,activo,fija,seccion,opera_sabados"),
       sbFetch(`colectas_registros?select=cliente_id,estado,choferes,confirmado_por&fecha=eq.${hoy}`),
       sbFetch(`colectas_arribos?select=cadete,llego_at&fecha=eq.${hoy}`),
     ]).then(([clientes, regs, arr]) => {
       if (!vivo) return;
       const regById = {}; (regs || []).forEach((r) => { regById[r.cliente_id] = r; });
       let sinChofer = 0, confirmadas = 0, conColecta = 0;
-      (clientes || []).filter((c) => c.activo).forEach((c) => {
+      // Sábado = solo las colectas que operan sábados; entre semana = sin las fichas de sábado (mismo criterio que Colectas)
+      const esSabado = new Date(hoy + "T12:00:00").getDay() === 6;
+      const aplica = (c) => esSabado ? (c.seccion === "SABADOS" || c.opera_sabados) : c.seccion !== "SABADOS";
+      (clientes || []).filter((c) => c.activo && aplica(c)).forEach((c) => {
         const r = regById[c.id];
         const est = (c.fija && (!r?.estado || r.estado === "blanco")) ? "amarillo" : (r?.estado || "blanco");
         if (est === "rojo") return;

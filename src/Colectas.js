@@ -231,7 +231,7 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [loadingPagos, setLoadingPagos] = useState(false);
 
   // Clientes ABM
-  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false, vehiculo:'' };
+  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false, vehiculo:'', zona_sabado:'' };
   const [gruposWA, setGruposWA] = useState([]); // grupos de WhatsApp que conoce el bot (agente_config)
   const [avisoBot, setAvisoBot] = useState('');
   const [clienteForm, setClienteForm] = useState(emptyForm);
@@ -671,6 +671,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       chat_id: clienteForm.chat_id || null,
       opera_sabados: !!clienteForm.opera_sabados,
       vehiculo: clienteForm.vehiculo || null, // '' rompería el CHECK de la columna
+      zona_sabado: clienteForm.seccion === 'SABADOS' ? (clienteForm.zona_sabado || null) : null,
     };
     try {
       if (editId) {
@@ -716,7 +717,7 @@ function ColectasInner({ soloArribos = false, irA }) {
 
   const editCliente = c => {
     setEditId(c.id);
-    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados, vehiculo:c.vehiculo||'' });
+    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados, vehiculo:c.vehiculo||'', zona_sabado:c.zona_sabado||'' });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1299,6 +1300,19 @@ function ColectasInner({ soloArribos = false, irA }) {
                   <span style={{ fontSize:13, color: clienteForm.opera_sabados ? BRAND.white : BRAND.muted }}>Opera sábados</span>
                 </label>
               </div>
+              {clienteForm.seccion === 'SABADOS' && (
+              <div>
+                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Zona (para Arribos)</div>
+                <select value={clienteForm.zona_sabado} onChange={e => setClienteForm(p => ({...p, zona_sabado:e.target.value}))}
+                  title="Sábados es un día, no una zona: elegí dónde queda este cliente"
+                  style={{ ...inpSt, width:'100%' }}>
+                  <option value="">— Sin definir —</option>
+                  <option value="CABA">CABA</option>
+                  <option value="SUR">Sur</option>
+                  <option value="NOROESTE">Noroeste</option>
+                </select>
+              </div>
+              )}
               <div>
                 <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Grupo WhatsApp (avisos del bot)</div>
                 <select value={clienteForm.chat_id} onChange={e => setClienteForm(p => ({...p,chat_id:e.target.value}))}
@@ -1482,7 +1496,8 @@ function ColectasInner({ soloArribos = false, irA }) {
     // Cadetes con al menos una colecta CONFIRMADA hoy
     const map = {};
     const seccionPorCliente = {};
-    clientes.forEach(c => { seccionPorCliente[c.id] = c.seccion; });
+    // SABADOS es un día, no una zona: las fichas de sábado usan su zona real (zona_sabado)
+    clientes.forEach(c => { seccionPorCliente[c.id] = c.seccion === 'SABADOS' ? (c.zona_sabado || null) : c.seccion; });
     Object.entries(registros).forEach(([cid, r]) => {
       (r.choferes || []).forEach(ch => {
         if (!ch || ch === 'A coordinar') return;
@@ -1547,7 +1562,6 @@ function ColectasInner({ soloArribos = false, irA }) {
       { id: 'CABA', label: 'CABA', color: '#6CB4F5' },
       { id: 'SUR', label: 'Sur', color: '#F2A65A' },
       { id: 'NOROESTE', label: 'Noroeste', color: '#C4A3F7' },
-      { id: 'SABADOS', label: 'Sábados', color: '#FBBF24' },
     ];
     const zonasArr = ZONAS_ARR.map(z => {
       const deZona = lista.filter(c => c.zona === z.id);
