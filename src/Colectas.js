@@ -299,14 +299,15 @@ function ColectasInner({ soloArribos = false, irA }) {
   // Por eso la pestaña SÁBADOS opera sobre el sábado de la semana, no sobre el día seleccionado:
   // así confirmar una colecta entre semana ya no aparece confirmada en SÁBADOS (bug clientes doble-zona).
   useEffect(() => { if (tab !== 'SABADOS') diaSemanaRef.current = fecha; }, [fecha, tab]);
-  // Simétrico: CABA/SUR/NOROESTE no operan fin de semana → si caen en sábado o domingo, saltan al lunes siguiente
-  // (antes mostraban el sábado vacío, sin la precarga de choferes de semana, y parecía que se había borrado todo).
+  // CABA/SUR/NOROESTE no operan fin de semana → si caen en sábado o domingo muestran el VIERNES anterior
+  // (cómo quedó la semana, con la precarga de choferes). Antes mostraban el sábado vacío y parecía que se había
+  // borrado todo. Alejo (03/10): "que quede igual que quedó el viernes" + aviso de que es sábado.
   useEffect(() => {
     if (tab === 'SABADOS' || !fecha) return;
     const d = new Date(fecha + 'T12:00:00');
     const dow = d.getDay();
     if (dow !== 6 && dow !== 0) return;
-    d.setDate(d.getDate() + (dow === 6 ? 2 : 1));
+    d.setDate(d.getDate() - (dow === 6 ? 1 : 2));
     setFecha(d.toISOString().slice(0, 10));
   }, [fecha, tab]);
   const cambiarTab = (s) => {
@@ -1134,6 +1135,15 @@ function ColectasInner({ soloArribos = false, irA }) {
 
     return (
       <>
+        {tab !== 'SABADOS' && (() => { const dow = new Date(todayStr() + 'T12:00:00').getDay(); return (dow === 6 || dow === 0) && (
+          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'10px 14px', marginBottom:14, borderRadius:10, background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:13 }}>
+            <span>🗓️ Hoy es {dow === 6 ? 'sábado' : 'domingo'}: acá ves cómo quedó la semana ({fecha.slice(8,10)}/{fecha.slice(5,7)}). Las colectas de {dow === 6 ? 'hoy' : 'ayer'} están en Sábados.</span>
+            <button onClick={() => cambiarTab('SABADOS')}
+              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:8, border:'1px solid rgba(251,191,36,0.5)', background:'rgba(251,191,36,0.12)', color:'#FBBF24', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              Ir a Sábados →
+            </button>
+          </div>
+        ); })()}
         {/* Notas de la pizarra cuyo día es la fecha vigente — resolvibles sin salir de Colectas */}
         <NotasHoy fecha={fecha} irAPizarra={irA ? () => irA('pizarra') : undefined} />
         {/* Toolbar */}
