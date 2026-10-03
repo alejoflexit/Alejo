@@ -1215,7 +1215,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       <>
         {tab !== 'SABADOS' && (() => { const dow = new Date(todayStr() + 'T12:00:00').getDay(); return (dow === 6 || dow === 0) && (
           <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'10px 14px', marginBottom:14, borderRadius:10, background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:13 }}>
-            <span>🗓️ Hoy es {dow === 6 ? 'sábado' : 'domingo'}: acá ves cómo quedó la semana ({fecha.slice(8,10)}/{fecha.slice(5,7)}). Las colectas de {dow === 6 ? 'hoy' : 'ayer'} están en Sábados.</span>
+            <span><i className="ti ti-calendar-event" aria-hidden="true" style={{ verticalAlign:'-2px', marginRight:4 }} />Hoy es {dow === 6 ? 'sábado' : 'domingo'}: acá ves cómo quedó la semana ({fecha.slice(8,10)}/{fecha.slice(5,7)}). Las colectas de {dow === 6 ? 'hoy' : 'ayer'} están en Sábados.</span>
             <button onClick={() => cambiarTab('SABADOS')}
               style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:8, border:'1px solid rgba(251,191,36,0.5)', background:'rgba(251,191,36,0.12)', color:'#FBBF24', fontSize:12, fontWeight:600, cursor:'pointer' }}>
               Ir a Sábados →
