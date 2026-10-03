@@ -1226,15 +1226,18 @@ function ColectasInner({ soloArribos = false, irA }) {
         <NotasHoy fecha={fecha} irAPizarra={irA ? () => irA('pizarra') : undefined} />
         {/* Toolbar */}
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
-            <i className="ti ti-calendar" aria-hidden="true" style={{ fontSize:16 }} />
-            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-              style={{ ...inpSt, padding:'5px 10px' }} />
+          {/* Fecha solo como texto (Alejo 03/10: el selector no se usaba) */}
+          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:'rgba(255,255,255,0.8)', fontWeight:500, textTransform:'capitalize' }}>
+            <i className="ti ti-calendar" aria-hidden="true" style={{ fontSize:16, color:BRAND.muted }} />
+            {new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'2-digit', month:'2-digit' }).replace(',', '')}
           </div>
-          <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
-            onKeyDown={e => { if (e.key==='Escape') setBusqueda(''); }}
-            placeholder="Buscar cliente o chofer..."
-            style={{ ...inpSt, padding:'5px 10px', width:180 }} />
+          <div style={{ position:'relative' }}>
+            <i className="ti ti-search" aria-hidden="true" style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', fontSize:14, color:BRAND.muted, pointerEvents:'none' }} />
+            <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              onKeyDown={e => { if (e.key==='Escape') setBusqueda(''); }}
+              placeholder="Buscar cliente o chofer..."
+              style={{ ...inpSt, padding:'5px 10px 5px 28px', width:200 }} />
+          </div>
           {busqueda && (
             <button onClick={() => setBusqueda('')} title="Limpiar búsqueda"
               style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:2 }}>✕</button>
@@ -1278,6 +1281,30 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
         )}
 
+        {/* Búsqueda B: si hay coincidencias en otras zonas de semana, avisar y permitir saltar (manteniendo la búsqueda) */}
+        {busqueda.trim() && tab !== 'SABADOS' && (() => {
+          const q = norm(busqueda);
+          const ZN = { CABA:{ label:'CABA', color:'#6CB4F5' }, SUR:{ label:'Sur', color:'#F2A65A' }, NOROESTE:{ label:'Noroeste', color:'#C4A3F7' } };
+          const otras = ['NOROESTE','CABA','SUR'].filter(z => z !== tab).map(z => ({ z, n: clientes.filter(c => c.activo && c.seccion === z && (
+            norm(c.nombre).includes(q) || (registros[c.id]?.choferes || []).some(ch => norm(ch).includes(q))
+          )).length })).filter(x => x.n > 0);
+          if (!otras.length) return null;
+          return (
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'8px 12px', marginBottom:12, borderRadius:10, border:'1px dashed rgba(255,255,255,0.18)', fontSize:13, color:'rgba(255,255,255,0.8)' }}>
+              <i className="ti ti-arrow-right" aria-hidden="true" style={{ color:BRAND.muted }} />
+              <span>También hay</span>
+              {otras.map((x, i) => (
+                <React.Fragment key={x.z}>
+                  {i > 0 && <span>{i === otras.length - 1 ? 'y' : ','}</span>}
+                  <button onClick={() => cambiarTab(x.z)} title={`Ir a ${ZN[x.z].label} con esta búsqueda`}
+                    style={{ border:'none', background:'none', padding:0, cursor:'pointer', fontSize:13, fontFamily:'inherit', color:ZN[x.z].color, fontWeight:600, textDecoration:'underline', textUnderlineOffset:3 }}>
+                    {x.n} en {ZN[x.z].label}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          );
+        })()}
         {/* Table */}
         {order.length === 0 && (filtroEstado || busqueda) ? (
           <div style={{ color:BRAND.muted, padding:'2.5rem', textAlign:'center', fontSize:13 }}>
