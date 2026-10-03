@@ -194,7 +194,11 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [fechaVolver, setFechaVolver] = useState(null);
   const [calAbierto, setCalAbierto] = useState(false);
   const soloLecturaRef = useRef(false);
-  const soloLectura = fechaVolver !== null;
+  // Fin de semana en CABA/SUR/NOROESTE: se muestra el viernes (ya pasó) → también es solo mirar.
+  const dowHoy = new Date(todayStr() + 'T12:00:00').getDay();
+  const finDeSemanaSemana = tab !== 'SABADOS' && (dowHoy === 6 || dowHoy === 0);
+  const soloLectura = fechaVolver !== null || finDeSemanaSemana;
+  soloLecturaRef.current = soloLectura;
   const verDia = (d) => {
     setCalAbierto(false);
     const base = fechaVolver ?? fecha;
@@ -1232,7 +1236,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       <>
         {tab !== 'SABADOS' && (() => { const dow = new Date(todayStr() + 'T12:00:00').getDay(); return (dow === 6 || dow === 0) && (
           <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'10px 14px', marginBottom:14, borderRadius:10, background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:13 }}>
-            <span><i className="ti ti-calendar-event" aria-hidden="true" style={{ verticalAlign:'-2px', marginRight:4 }} />Hoy es {dow === 6 ? 'sábado' : 'domingo'}: acá ves cómo quedó la semana ({fecha.slice(8,10)}/{fecha.slice(5,7)}). Las colectas de {dow === 6 ? 'hoy' : 'ayer'} están en Sábados.</span>
+            <span><i className="ti ti-calendar-event" aria-hidden="true" style={{ verticalAlign:'-2px', marginRight:4 }} />Hoy es {dow === 6 ? 'sábado' : 'domingo'}: acá ves cómo quedó la semana ({fecha.slice(8,10)}/{fecha.slice(5,7)}), solo para mirar. Las colectas de {dow === 6 ? 'hoy' : 'ayer'} están en Sábados.</span>
             <button onClick={() => cambiarTab('SABADOS')}
               style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:8, border:'1px solid rgba(251,191,36,0.5)', background:'rgba(251,191,36,0.12)', color:'#FBBF24', fontSize:12, fontWeight:600, cursor:'pointer' }}>
               Ir a Sábados →
@@ -1334,7 +1338,7 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
         )}
 
-        {soloLectura && (
+        {fechaVolver !== null && (
           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'8px 12px', marginBottom:12, borderRadius:10, background:'rgba(74,158,255,0.08)', border:'1px solid rgba(74,158,255,0.3)', color:'#8EC5FF', fontSize:13 }}>
             <i className="ti ti-lock" aria-hidden="true" />
             <span>Estás viendo el {new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long' })} {fecha.slice(8,10)}/{fecha.slice(5,7)} · solo para mirar, no se puede editar</span>
