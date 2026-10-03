@@ -862,11 +862,11 @@ function ColectasInner({ soloArribos = false, irA }) {
       return acc;
     }, {});
 
-    // Pestaña Sábados: bloques por zona real (Sábados es un día, no una zona)
+    // Pestaña Sábados: bloques por zona real, de norte a sur (Sábados es un día, no una zona)
     const ZONAS_SAB = [
+      { id:'NOROESTE', label:'Noroeste', color:'#C4A3F7' },
       { id:'CABA', label:'CABA', color:'#6CB4F5' },
       { id:'SUR', label:'Sur', color:'#F2A65A' },
-      { id:'NOROESTE', label:'Noroeste', color:'#C4A3F7' },
       { id:'SIN', label:'Sin zona', color:'rgba(255,255,255,0.35)' },
     ];
     const zonaSab = c => (c.seccion === 'SABADOS' ? c.zona_sabado : c.seccion) || 'SIN';
