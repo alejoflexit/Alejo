@@ -1229,7 +1229,7 @@ function ColectasInner({ soloArribos = false, irA }) {
           {/* Fecha solo como texto (Alejo 03/10: el selector no se usaba) */}
           <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:'rgba(255,255,255,0.8)', fontWeight:500, textTransform:'capitalize' }}>
             <i className="ti ti-calendar" aria-hidden="true" style={{ fontSize:16, color:BRAND.muted }} />
-            {new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'2-digit', month:'2-digit' }).replace(',', '')}
+            {`${new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long' })} ${fecha.slice(8,10)}/${fecha.slice(5,7)}`}
           </div>
           <div style={{ position:'relative' }}>
             <i className="ti ti-search" aria-hidden="true" style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', fontSize:14, color:BRAND.muted, pointerEvents:'none' }} />
