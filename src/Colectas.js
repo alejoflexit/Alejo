@@ -845,6 +845,56 @@ function ColectasInner({ soloArribos = false, irA }) {
     });
     return n;
   }
+  // 💡 Ayuda del selector: hasta 3 choferes para una colecta, por historial (quién la hizo antes),
+  // cercanía (quién ya pasa cerca ese día) y carga (cuántas lleva ese día). Se calcula al pedirla.
+  async function sugerirChoferes(c) {
+    const asignados = new Set(registros[c.id]?.choferes || []);
+    const valido = ch => ch && ch !== 'A coordinar' && !asignados.has(ch);
+    const carga = {}, cerca = {};
+    const km = (a, b) => {
+      const dy = (a.lat - b.lat) * 111, dx = (a.lng - b.lng) * 111 * Math.cos(a.lat * Math.PI / 180);
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+    const porId = {}; clientes.forEach(x => { porId[x.id] = x; });
+    Object.entries(registros).forEach(([cid, r]) => {
+      if (Number(cid) === Number(c.id) || String(cid) === String(c.id)) return;
+      const cli = porId[cid];
+      if (!cli || estadoEfectivo(cli, r) === 'rojo') return;
+      (r.choferes || []).forEach(ch => {
+        if (!ch || ch === 'A coordinar') return;
+        carga[ch] = (carga[ch] || 0) + 1;
+        if (c.lat != null && cli.lat != null) {
+          const d = km(c, cli);
+          if (cerca[ch] == null || d < cerca[ch]) cerca[ch] = d;
+        }
+      });
+    });
+    const hist = {}, ult = {};
+    try {
+      const prev = await sbFetch(`colectas_registros?select=fecha,choferes,estado&cliente_id=eq.${c.id}&fecha=lt.${fecha}&order=fecha.desc&limit=300`);
+      prev.forEach(r => {
+        if (r.estado === 'rojo') return;
+        (r.choferes || []).forEach(ch => {
+          if (!ch || ch === 'A coordinar') return;
+          hist[ch] = (hist[ch] || 0) + 1;
+          if (!ult[ch]) ult[ch] = r.fecha;
+        });
+      });
+    } catch (_) {}
+    const ddmm = f => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
+    const motivo = ch => [
+      hist[ch] ? `la hizo ${hist[ch]} ${hist[ch] === 1 ? 'vez' : 'veces'} · última ${ddmm(ult[ch])}` : null,
+      cerca[ch] != null && cerca[ch] <= 3 ? `pasa a ${cerca[ch] < 1 ? Math.round(cerca[ch] * 1000) + ' m' : cerca[ch].toFixed(1).replace('.', ',') + ' km'}` : null,
+      `lleva ${carga[ch] || 0} hoy`,
+    ].filter(Boolean).join(' · ');
+    const porHist = Object.keys(hist).filter(valido).sort((a, b) => hist[b] - hist[a]);
+    const porCerca = Object.keys(cerca).filter(ch => valido(ch) && cerca[ch] <= 3).sort((a, b) => cerca[a] - cerca[b]);
+    const out = [];
+    porHist.slice(0, 2).forEach(ch => out.push(ch));
+    porCerca.forEach(ch => { if (out.length < 3 && !out.includes(ch)) out.push(ch); });
+    porHist.slice(2).forEach(ch => { if (out.length < 3 && !out.includes(ch)) out.push(ch); });
+    return out.map(ch => ({ ch, motivo: motivo(ch) }));
+  }
   const abrirMenuChofer = (e, chofer) => {
     const r = e.currentTarget.getBoundingClientRect();
     setMenuChofer(m => m && m.chofer === chofer ? null : { chofer, x: r.right, y: r.bottom + 6, paso: 'menu', q: '', a: null });
@@ -1058,6 +1108,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 choferesList={choferesFull}
                                 onUpdate={updates => updateRegistro(c.id, updates)}
                                 hideChips={!isDividida && chofer !== 'A coordinar'}
+                                sugerir={() => sugerirChoferes(c)}
                               />
                               )}
                             </div>

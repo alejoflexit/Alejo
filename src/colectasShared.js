@@ -68,14 +68,16 @@ export function estadoEfectivo(cliente, reg) {
 // abrirArriba: el desplegable se abre hacia ARRIBA. Necesario cuando el picker vive al pie de
 // un panel flotante (el mapa): abriéndose hacia abajo queda fuera de la pantalla y parece que el
 // botón no hace nada.
-export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArriba }) {
+// sugerir (opcional): async () => [{ ch, motivo }] — se pide recién cuando tocan "💡 Ayuda" (queda escondido).
+export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArriba, sugerir }) {
   const [open, setOpen] = useState(false);
+  const [ayuda, setAyuda] = useState(null); // null = cerrada | 'cargando' | [{ch, motivo}]
   const [query, setQuery] = useState('');
   const [editIdx, setEditIdx] = useState(null);
   const ref = useRef(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setAyuda(null); return; }
     const h = e => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setQuery(''); } };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -142,6 +144,34 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(226,75,74,0.08)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 × Desasignar
+              </div>
+            )}
+            {sugerir && !query && (
+              <div onClick={async () => {
+                  if (ayuda) { setAyuda(null); return; }
+                  setAyuda('cargando');
+                  try { setAyuda(await sugerir()); } catch (_) { setAyuda([]); }
+                }}
+                style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: '#C9D3E3', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                💡 Ayuda <span style={{ color: 'rgba(255,255,255,0.4)' }}>· ¿a quién se la doy?</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{ayuda ? '▲' : '▼'}</span>
+              </div>
+            )}
+            {sugerir && !query && ayuda && (
+              <div style={{ background: 'rgba(46,207,170,0.05)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '4px 0' }}>
+                {ayuda === 'cargando' && <div style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Buscando…</div>}
+                {Array.isArray(ayuda) && ayuda.length === 0 && <div style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Sin datos para sugerir (nadie la hizo y no hay nadie cerca).</div>}
+                {Array.isArray(ayuda) && ayuda.map(s => (
+                  <div key={s.ch} onClick={() => assign(s.ch)}
+                    style={{ padding: '6px 12px', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <div style={{ fontSize: 12, color: '#5CF2C4' }}>{s.ch}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 1 }}>{s.motivo}</div>
+                  </div>
+                ))}
               </div>
             )}
             {filtered.slice(0, 12).map(ch => (
