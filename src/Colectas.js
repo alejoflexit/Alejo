@@ -2017,7 +2017,8 @@ function ColectasInner({ soloArribos = false, irA }) {
         //    sábado te muestra 32/19/33 pendientes que nunca se van a confirmar).
         const esSabadoHoy = new Date(fecha + 'T12:00:00').getDay() === 6;
         const aplicaHoy = s === 'SABADOS' ? esSabadoHoy : !esSabadoHoy;
-        const sinConfirmar = !aplicaHoy ? 0 : clientes.filter(c => c.activo && (s === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === s)).filter(c => {
+        // Sin número mientras carga el día (si no, parpadea un conteo falso) ni en días de solo mirar.
+        const sinConfirmar = (!aplicaHoy || loading || soloLectura) ? 0 : clientes.filter(c => c.activo && (s === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === s)).filter(c => {
           const reg = registros[c.id];
           const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
           return estEf === 'amarillo';
