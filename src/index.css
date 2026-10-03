@@ -30,3 +30,13 @@ select option {
 .flexit-scroll::-webkit-scrollbar-track { background: transparent; }
 .flexit-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 4px; }
 .flexit-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
+
+/* Scrollbar Flexit en TODA la app (antes solo en .flexit-scroll): fina, sin flechas, pulgar tenue con toque teal.
+   scrollbar-color (Chrome 121+/Firefox) y ::-webkit-* (Safari) — así no aparece la barra blanca de Windows. */
+* { scrollbar-width: thin; scrollbar-color: rgba(46,207,170,0.28) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(46,207,170,0.28); border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(46,207,170,0.5); }
+*::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+*::-webkit-scrollbar-corner { background: transparent; }
