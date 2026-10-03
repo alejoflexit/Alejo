@@ -190,6 +190,7 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
   const [dirEdit, setDirEdit] = useState(null); // { id, valor } — dirección puntual del día
   const [zonaEdit, setZonaEdit] = useState(null); // { id, valor } — zona puntual del día
+  const [zonasSabCerradas, setZonasSabCerradas] = useState({}); // pestaña Sábados: zonas plegadas
   const [filtroEstado, setFiltroEstado] = useState(null); // null = todos | verde/amarillo/blanco/rojo
   const [rojasOpen, setRojasOpen] = useState({}); // grupos con las canceladas desplegadas
   const [busqueda, setBusqueda] = useState(''); // buscador de cliente o chofer
@@ -861,74 +862,16 @@ function ColectasInner({ soloArribos = false, irA }) {
       return acc;
     }, {});
 
-    return (
-      <>
-        {/* Notas de la pizarra cuyo día es la fecha vigente — resolvibles sin salir de Colectas */}
-        <NotasHoy fecha={fecha} irAPizarra={irA ? () => irA('pizarra') : undefined} />
-        {/* Toolbar */}
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
-            <span>📅</span>
-            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-              style={{ ...inpSt, padding:'5px 10px' }} />
-          </div>
-          <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
-            onKeyDown={e => { if (e.key==='Escape') setBusqueda(''); }}
-            placeholder="🔍 Cliente o chofer..."
-            style={{ ...inpSt, padding:'5px 10px', width:180 }} />
-          {busqueda && (
-            <button onClick={() => setBusqueda('')} title="Limpiar búsqueda"
-              style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:2 }}>✕</button>
-          )}
-          {sinAsignar > 0 && (
-            <div style={{ padding:'3px 12px', borderRadius:20, background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:12, fontWeight:600 }}>
-              ⚠️ {sinAsignar} sin asignar
-            </div>
-          )}
-          {(() => { const pend = seccionClientes.filter(c => (registros[c.id]?.estado || 'blanco') === 'blanco'); return pend.length > 0 && (
-            <button onClick={() => preguntarPendientes(pend)} title="Preguntarles por WhatsApp si tienen envíos hoy (bot)"
-              style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(74,158,255,0.4)', background:'rgba(74,158,255,0.08)', color:'#4A9EFF', fontSize:12, fontWeight:600, cursor:'pointer' }}>
-              🤖 Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
-            </button>
-          ); })()}
-          {avisoBot && <div style={{ fontSize:12, color:'#4A9EFF' }}>{avisoBot}</div>}
-          <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
-            {saveStatus==='saving' && '💾 Guardando...'}
-            {saveStatus==='saved'  && '✓ Guardado'}
-            {saveStatus==='error'  && '✗ Error al guardar'}
-          </div>
-        </div>
-
-        {/* Conteo de estados */}
-        {seccionClientes.length > 0 && (
-          <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
-            {[
-              { key:'verde',   label:'Confirmado', color:'#2ECFAA', bg:'rgba(46,207,170,0.1)',  border:'rgba(46,207,170,0.3)'  },
-              { key:'amarillo',label:'Con envíos',  color:'#FBBF24', bg:'rgba(251,191,36,0.1)', border:'rgba(251,191,36,0.3)'  },
-              { key:'blanco',  label:'Pendiente',   color:BRAND.muted, bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.12)' },
-              { key:'rojo',    label:'Sin envíos',  color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
-            ].map(({ key, label, color, bg, border }) => conteoEstados[key] ? (
-              <div key={key} onClick={() => setFiltroEstado(filtroEstado === key ? null : key)}
-                title={filtroEstado === key ? 'Quitar filtro' : `Ver solo ${label.toLowerCase()}`}
-                style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:20, background:bg, border:`1px solid ${filtroEstado === key ? color : border}`, cursor:'pointer', userSelect:'none', opacity: filtroEstado && filtroEstado !== key ? 0.4 : 1, boxShadow: filtroEstado === key ? `0 0 0 1px ${color}` : 'none' }}>
-                <span style={{ fontSize:11, fontWeight:700, color }}>{conteoEstados[key]}</span>
-                <span style={{ fontSize:11, color }}>{label}</span>
-                {filtroEstado === key && <span style={{ fontSize:10, color }}>✕</span>}
-              </div>
-            ) : null)}
-          </div>
-        )}
-
-        {/* Table */}
-        {order.length === 0 && (filtroEstado || busqueda) ? (
-          <div style={{ color:BRAND.muted, padding:'2.5rem', textAlign:'center', fontSize:13 }}>
-            Sin resultados con el filtro actual.
-            <button onClick={() => { setFiltroEstado(null); setBusqueda(''); }}
-              style={{ marginLeft:8, padding:'3px 10px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:12 }}>
-              Limpiar filtros
-            </button>
-          </div>
-        ) : (
+    // Pestaña Sábados: bloques por zona real (Sábados es un día, no una zona)
+    const ZONAS_SAB = [
+      { id:'CABA', label:'CABA', color:'#6CB4F5' },
+      { id:'SUR', label:'Sur', color:'#F2A65A' },
+      { id:'NOROESTE', label:'Noroeste', color:'#C4A3F7' },
+      { id:'SIN', label:'Sin zona', color:'rgba(255,255,255,0.35)' },
+    ];
+    const zonaSab = c => (c.seccion === 'SABADOS' ? c.zona_sabado : c.seccion) || 'SIN';
+    // Tabla agrupada por chofer (se reutiliza por zona en la pestaña Sábados)
+    const tablaDe = (groups, order) => (
         <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'#1b1e24' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580 }}>
             <thead>
@@ -1183,6 +1126,108 @@ function ColectasInner({ soloArribos = false, irA }) {
             </tbody>
           </table>
         </div>
+    );
+
+    return (
+      <>
+        {/* Notas de la pizarra cuyo día es la fecha vigente — resolvibles sin salir de Colectas */}
+        <NotasHoy fecha={fecha} irAPizarra={irA ? () => irA('pizarra') : undefined} />
+        {/* Toolbar */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, color:BRAND.muted }}>
+            <span>📅</span>
+            <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+              style={{ ...inpSt, padding:'5px 10px' }} />
+          </div>
+          <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+            onKeyDown={e => { if (e.key==='Escape') setBusqueda(''); }}
+            placeholder="🔍 Cliente o chofer..."
+            style={{ ...inpSt, padding:'5px 10px', width:180 }} />
+          {busqueda && (
+            <button onClick={() => setBusqueda('')} title="Limpiar búsqueda"
+              style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:2 }}>✕</button>
+          )}
+          {sinAsignar > 0 && (
+            <div style={{ padding:'3px 12px', borderRadius:20, background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:12, fontWeight:600 }}>
+              ⚠️ {sinAsignar} sin asignar
+            </div>
+          )}
+          {(() => { const pend = seccionClientes.filter(c => (registros[c.id]?.estado || 'blanco') === 'blanco'); return pend.length > 0 && (
+            <button onClick={() => preguntarPendientes(pend)} title="Preguntarles por WhatsApp si tienen envíos hoy (bot)"
+              style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(74,158,255,0.4)', background:'rgba(74,158,255,0.08)', color:'#4A9EFF', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              🤖 Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
+            </button>
+          ); })()}
+          {avisoBot && <div style={{ fontSize:12, color:'#4A9EFF' }}>{avisoBot}</div>}
+          <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
+            {saveStatus==='saving' && '💾 Guardando...'}
+            {saveStatus==='saved'  && '✓ Guardado'}
+            {saveStatus==='error'  && '✗ Error al guardar'}
+          </div>
+        </div>
+
+        {/* Conteo de estados */}
+        {seccionClientes.length > 0 && (
+          <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+            {[
+              { key:'verde',   label:'Confirmado', color:'#2ECFAA', bg:'rgba(46,207,170,0.1)',  border:'rgba(46,207,170,0.3)'  },
+              { key:'amarillo',label:'Con envíos',  color:'#FBBF24', bg:'rgba(251,191,36,0.1)', border:'rgba(251,191,36,0.3)'  },
+              { key:'blanco',  label:'Pendiente',   color:BRAND.muted, bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.12)' },
+              { key:'rojo',    label:'Sin envíos',  color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
+            ].map(({ key, label, color, bg, border }) => conteoEstados[key] ? (
+              <div key={key} onClick={() => setFiltroEstado(filtroEstado === key ? null : key)}
+                title={filtroEstado === key ? 'Quitar filtro' : `Ver solo ${label.toLowerCase()}`}
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:20, background:bg, border:`1px solid ${filtroEstado === key ? color : border}`, cursor:'pointer', userSelect:'none', opacity: filtroEstado && filtroEstado !== key ? 0.4 : 1, boxShadow: filtroEstado === key ? `0 0 0 1px ${color}` : 'none' }}>
+                <span style={{ fontSize:11, fontWeight:700, color }}>{conteoEstados[key]}</span>
+                <span style={{ fontSize:11, color }}>{label}</span>
+                {filtroEstado === key && <span style={{ fontSize:10, color }}>✕</span>}
+              </div>
+            ) : null)}
+          </div>
+        )}
+
+        {/* Table */}
+        {order.length === 0 && (filtroEstado || busqueda) ? (
+          <div style={{ color:BRAND.muted, padding:'2.5rem', textAlign:'center', fontSize:13 }}>
+            Sin resultados con el filtro actual.
+            <button onClick={() => { setFiltroEstado(null); setBusqueda(''); }}
+              style={{ marginLeft:8, padding:'3px 10px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:12 }}>
+              Limpiar filtros
+            </button>
+          </div>
+        ) : (
+        tab === 'SABADOS' ? (
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            {ZONAS_SAB.map(z => {
+              const todos = seccionClientes.filter(c => zonaSab(c) === z.id);
+              const visibles = clientesFiltrados.filter(c => zonaSab(c) === z.id);
+              if (!visibles.length) return null;
+              const conEnvios = todos.filter(c => estEf(c) !== 'rojo');
+              const ok = conEnvios.filter(c => estEf(c) === 'verde').length;
+              const pctZ = conEnvios.length ? Math.round(ok / conEnvios.length * 100) : 0;
+              const cerrada = !!zonasSabCerradas[z.id];
+              const { groups: gz, order: oz } = getGroups(visibles);
+              return (
+                <div key={z.id}>
+                  <button onClick={() => setZonasSabCerradas(p => ({ ...p, [z.id]: !p[z.id] }))} aria-expanded={!cerrada}
+                    style={{ width:'100%', display:'flex', alignItems:'center', gap:10, padding:'8px 4px', background:'none', border:'none', color:BRAND.white, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+                    <span style={{ display:'inline-block', fontSize:11, color:BRAND.muted, transform: cerrada ? 'rotate(-90deg)' : 'none', transition:'transform .15s' }}>▼</span>
+                    <span style={{ width:10, height:10, borderRadius:'50%', background:z.color, flexShrink:0 }} />
+                    <span style={{ fontSize:15, fontWeight:600 }}>{z.label}</span>
+                    <span style={{ fontSize:12, color:BRAND.muted }}>{todos.length} cliente{todos.length === 1 ? '' : 's'}</span>
+                    <span style={{ marginLeft:'auto', fontSize:12, color: conEnvios.length && ok === conEnvios.length ? BRAND.teal : BRAND.muted }}>
+                      {ok}/{conEnvios.length} confirmadas
+                    </span>
+                  </button>
+                  <div style={{ height:3, borderRadius:2, background:'rgba(255,255,255,0.08)', margin:'0 4px 8px', overflow:'hidden' }}>
+                    <div style={{ width:`${pctZ}%`, height:'100%', background:z.color, transition:'width .3s' }} />
+                  </div>
+                  {!cerrada && tablaDe(gz, oz)}
+                </div>
+              );
+            })}
+          </div>
+        ) : tablaDe(groups, order)
         )}
       </>
     );
