@@ -13,7 +13,7 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 2. En Colectas → pestaña CABA → botón **"Bot de confirmación"**: el equipo elige el grupo de WhatsApp de cada cliente y prende el bot. Los fijos (amarillos) no se preguntan.
 3. **Lun-vie 9:00 AR** (`pg_cron` `colectas_bot_9am`, 12:00 UTC) → `colecta_bot_encolar()` crea un caso `estado='enviando'` por cliente con el link, escalonados cada 20 s (`casos.enviar_desde`). No pregunta a quien el equipo ya marcó ese día.
 4. El workflow n8n **"Flexit WA - Enviar aprobados"** (ya existente) los manda leyendo la vista `casos_enviables`.
-5. El cliente toca **Sí / Hoy no** → `colecta_link_responder()` → `colectas_registros` queda **amarillo** (sí) o **rojo** (hoy no) + `link_respuesta/link_at/link_bultos`. Corte 11:30 AR.
+5. El cliente toca **Sí / Hoy no** → `colecta_link_responder()` → `colectas_registros` queda **amarillo** (sí) o **rojo** (hoy no) + `link_respuesta/link_at/link_bultos`. Corte 13:00 AR (antes 11:30; cambiado 06/10).
 6. En la tabla de Colectas aparece la marca 🔗 "Sí 9:14" / "Hoy no" al lado del nombre (realtime).
 
 ## Decisiones que hay que conservar

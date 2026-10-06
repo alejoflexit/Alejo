@@ -171,7 +171,7 @@ h1.sm{font-size:32px;line-height:1.1;margin-top:0}
         '<p class="sub">Puede que esté incompleto o que ya no sea válido. Escribinos al grupo de WhatsApp y te ayudamos.</p>';
     } else if (info.abierto && (editando || !info.respuesta)) {
       h = cabecera("¿Tenés colecta hoy?") +
-        '<p class="sub">Respondé antes de las 11:30 así armamos el recorrido de retiro.</p>' +
+        '<p class="sub">Respondé antes de las 13 así armamos el recorrido de retiro.</p>' +
         '<div class="acciones">' +
           '<button class="btn btn-si" data-r="si">' + ICON.checkSm + 'Sí, hay colecta</button>' +
           '<button class="btn btn-no" data-r="no">' + ICON.x + 'Hoy no</button>' +
@@ -192,7 +192,7 @@ h1.sm{font-size:32px;line-height:1.1;margin-top:0}
         '<p class="sub">Gracias por avisar. Mañana te volvemos a preguntar.</p>' +
         '<button class="link" data-cambiar="1">¿Te equivocaste? Cambiar respuesta</button>';
     } else {
-      // Cerrado: pasadas las 11:30, fin de semana o bot apagado
+      // Cerrado: pasadas las 13:00, fin de semana o bot apagado
       var tit, sub;
       if (info.motivo === "fin_de_semana") {
         tit = "Hoy no tomamos confirmaciones";
@@ -202,7 +202,7 @@ h1.sm{font-size:32px;line-height:1.1;margin-top:0}
         sub = "Por ahora coordinamos la colecta por el grupo de WhatsApp.";
       } else {
         tit = "Ya cerramos la lista de hoy";
-        sub = "A las 11:30 armamos los recorridos. Si tenés colecta, escribinos al grupo y vemos si llegamos.";
+        sub = "La lista de hoy cerró a las 13. Si tenés colecta, escribinos al grupo y vemos si llegamos.";
       }
       var resp = info.respuesta === "si" ? "Sí, hay colecta" : info.respuesta === "no" ? "Hoy no" : "Sin responder";
       h = '<div class="icono alerta">' + ICON.reloj + '</div>' +
