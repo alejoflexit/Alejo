@@ -4,6 +4,7 @@ import {
   BRAND, VEHICULOS, normNombre, estadoEfectivo, ChoferPicker,
   SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, mergeChoferes, LoginFlexit, NotasHoy,
 } from './colectasShared';
+import ColectasBot from './ColectasBot';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
 
@@ -185,6 +186,7 @@ class MapaBoundary extends React.Component {
 function ColectasInner({ soloArribos = false, irA }) {
   const [navView, setNavView] = useState(soloArribos ? 'arribos' : 'colectas'); // 'colectas' | 'arribos' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
+  const [botPanel, setBotPanel] = useState(false); // panel "Bot de confirmación" (piloto CABA)
   const [vistaColectas, setVistaColectas] = useState('tabla'); // 'tabla' | 'mapa'
   const [fecha, setFecha] = useState(todayStr);
   const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
@@ -430,6 +432,9 @@ function ColectasInner({ soloArribos = false, irA }) {
             confirmado_por: r.confirmado_por || [],
             direccion: r.direccion ?? null,
             zona_barrio: r.zona_barrio ?? null,
+            link_respuesta: r.link_respuesta ?? null,
+            link_at: r.link_at ?? null,
+            link_bultos: r.link_bultos ?? null,
           };
         });
         // Carry-forward: pre-cargar choferes del último día anterior para clientes sin registro hoy.
@@ -1127,6 +1132,16 @@ function ColectasInner({ soloArribos = false, irA }) {
                             {isDividida && (
                               <span style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>dividida</span>
                             )}
+                            {reg.link_respuesta && (() => {
+                              const hora = reg.link_at ? new Date(reg.link_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', timeZone:'America/Argentina/Buenos_Aires' }) : '';
+                              const si = reg.link_respuesta === 'si';
+                              return (
+                                <span title={`El cliente respondió por el link${hora ? ' a las ' + hora : ''}${reg.link_bultos ? ' · ~' + reg.link_bultos + ' paquetes' : ''}`}
+                                  style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, whiteSpace:'nowrap', textDecoration:'none', display:'inline-block', background: si ? 'rgba(46,207,170,0.12)' : 'rgba(226,75,74,0.12)', color: si ? '#2ECFAA' : '#E24B4A' }}>
+                                  <i className="ti ti-link" aria-hidden="true" style={{ verticalAlign:'-1px' }} /> {si ? 'Sí' : 'Hoy no'} {hora}{si && reg.link_bultos ? ` · ${reg.link_bultos}` : ''}
+                                </span>
+                              );
+                            })()}
                           </td>
                           {/* Choferes */}
                           <td style={{ padding:'8px 8px', minWidth:160 }}>
@@ -1322,6 +1337,19 @@ function ColectasInner({ soloArribos = false, irA }) {
               <i className="ti ti-robot" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
             </button>
           ); })()}
+          {tab === 'CABA' && !soloLectura && (() => { const preg = seccionClientes.filter(c => !c.fija); const on = preg.filter(c => c.bot_habilitado).length; return (
+            <button onClick={() => setBotPanel(true)} title="Configurar el bot que manda el link de confirmación a las 9"
+              style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(46,207,170,0.4)', background:'rgba(46,207,170,0.08)', color:'#2ECFAA', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              <i className="ti ti-link" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> Bot de confirmación {on}/{preg.length}
+            </button>
+          ); })()}
+          {botPanel && (
+            <ColectasBot
+              clientes={clientes.filter(c => c.activo && c.seccion === 'CABA')}
+              onClienteActualizado={upd => setClientes(prev => prev.map(c => c.id === upd.id ? { ...c, ...upd } : c))}
+              onClose={() => setBotPanel(false)}
+            />
+          )}
           {avisoBot && <div style={{ fontSize:12, color:'#4A9EFF' }}>{avisoBot}</div>}
           <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
             {saveStatus==='saving' && 'Guardando...'}

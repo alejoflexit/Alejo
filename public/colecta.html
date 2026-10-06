@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0F0F1B">
+<title>Flexit · Confirmar colecta</title>
+<meta property="og:title" content="Flexit · ¿Tenés colecta hoy?">
+<meta property="og:description" content="Confirmá con un toque si hoy pasamos a retirar.">
+<meta property="og:image" content="https://flota-logistica-iota.vercel.app/flexit-icon-512.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!--
+  Página pública del bot de colectas (piloto CABA, 2026-10).
+  El cliente la abre desde el link que le manda el bot a las 9. No usa sesión:
+  solo llama a dos funciones de Supabase (colecta_link_info / colecta_link_responder)
+  que validan el token del link. No lee ni escribe tablas directo.
+-->
+<style>
+:root{
+  --bg:#0F0F1B; --card:rgba(27,28,46,.72); --text:#F2F3F7; --muted:#A3A6BA; --faint:#8E91A6;
+  --teal:#2EE6B0; --teal-ink:#0B1F19; --line:rgba(255,255,255,.14); --line-soft:rgba(255,255,255,.06);
+  --amber:#FFB84D;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(0,255,180,.06), transparent 60%),
+    radial-gradient(100% 50% at 100% 100%, rgba(0,180,255,.05), transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+  color:var(--text); font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;-webkit-tap-highlight-color:transparent}
+.page{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;justify-content:space-between;padding:22px clamp(22px,4vw,48px);border-bottom:1px solid transparent}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:34px;height:34px;border-radius:10px;background:rgba(46,230,176,.12);border:1px solid rgba(46,230,176,.28);display:flex;align-items:center;justify-content:center}
+.word{font-family:'Sora',sans-serif;font-weight:700;font-size:19px;letter-spacing:-.02em}
+.top small{font-size:13px;color:var(--muted)}
+main{flex:1;display:flex;align-items:center;justify-content:center;padding:24px 22px 32px}
+.card{width:100%;max-width:440px}
+.foot{padding:0 22px 28px;text-align:center;font-size:13px;color:var(--faint);line-height:1.5}
+.chip{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);background:rgba(46,230,176,.10);border:1px solid rgba(46,230,176,.22);padding:6px 10px;border-radius:999px}
+.hola{font-size:17px;color:var(--muted);margin-top:14px}
+h1{font-family:'Sora',sans-serif;font-weight:700;letter-spacing:-.03em;line-height:1.08;font-size:38px;margin-top:10px}
+h1.sm{font-size:32px;line-height:1.1;margin-top:0}
+.sub{font-size:15px;line-height:1.5;color:var(--muted);margin-top:12px}
+.acciones{display:flex;flex-direction:column;gap:12px;margin-top:30px}
+.btn{height:64px;border-radius:18px;font-size:18px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;transition:transform .1s, opacity .2s}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-si{border:none;background:var(--teal);color:var(--teal-ink);font-weight:600;box-shadow:0 0 35px rgba(0,255,180,.18)}
+.btn-no{background:var(--card);border:1px solid var(--line);color:var(--text);font-weight:500}
+.icono{width:72px;height:72px;border-radius:22px;display:flex;align-items:center;justify-content:center;margin-bottom:26px}
+.icono.ok{background:rgba(46,230,176,.14);border:1px solid rgba(46,230,176,.35);box-shadow:0 0 35px rgba(0,255,180,.15)}
+.icono.neutro{background:rgba(255,255,255,.06);border:1px solid var(--line)}
+.icono.alerta{background:rgba(255,184,77,.12);border:1px solid rgba(255,184,77,.35)}
+.panel{margin-top:26px;padding:18px;border-radius:18px;background:var(--card);border:1px solid var(--line-soft)}
+.panel span{font-size:14px;color:var(--muted)}
+.bultos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.bulto{height:44px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.16)}
+.bulto[aria-pressed="true"]{background:var(--teal);color:var(--teal-ink);border-color:var(--teal)}
+.link{background:none;border:none;padding:10px 0;margin-top:18px;color:var(--teal);font-size:15px;font-weight:500;cursor:pointer}
+.estado-hoy{display:flex;flex-direction:column;gap:6px}
+.estado-hoy b{font-size:17px;font-weight:600}
+.alerta-txt{color:var(--amber)}
+.err{margin-top:16px;font-size:14px;color:var(--amber);min-height:20px}
+.spinner{width:28px;height:28px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:var(--teal);animation:g 0.8s linear infinite;margin:0 auto}
+@keyframes g{to{transform:rotate(360deg)}}
+.fade{animation:f .2s ease-out}
+@keyframes f{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){.fade{animation:none}.spinner{animation-duration:2s}}
+@media (min-width:720px){
+  .top{border-bottom-color:var(--line-soft)}
+  main{padding:48px 16px}
+  .card{max-width:520px;padding:44px;border-radius:28px;background:var(--card);border:1px solid var(--line-soft);box-shadow:0 20px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05)}
+  h1{font-size:44px}
+  .acciones{display:grid;grid-template-columns:1fr 1fr}
+  .btn{height:60px;font-size:17px;border-radius:16px}
+  .btn-no{background:transparent}
+  .panel{background:rgba(15,15,27,.6)}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="brand">
+      <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2EE6B0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h12l-3-3"/><path d="M20 17H8l3 3"/></svg></div>
+      <span class="word">flexit</span>
+    </div>
+    <small>Colectas</small>
+  </header>
+  <main><div class="card" id="app" aria-live="polite"><div class="spinner" role="status" aria-label="Cargando"></div></div></main>
+  <p class="foot" id="foot">¿Algo distinto? Escribinos al grupo de WhatsApp.</p>
+</div>
+
+<script>
+(function () {
+  var SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
+  var KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
+  var token = new URLSearchParams(location.search).get("t") || "";
+  var app = document.getElementById("app");
+  var foot = document.getElementById("foot");
+  var info = null;      // última respuesta del servidor
+  var editando = false; // "Cambiar respuesta"
+  var enviando = false;
+
+  var ICON = {
+    check: '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#2EE6B0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    checkSm: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B1F19" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    x: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2F3F7" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    cal: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#F2F3F7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3M16 3v3M4 9h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/></svg>',
+    reloj: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFB84D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    link: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FFB84D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>'
+  };
+  var BULTOS = [["1-10","1–10"],["11-30","11–30"],["31-60","31–60"],["+60","+60"]];
+
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+  function rpc(fn, body) {
+    return fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
+      method: "POST",
+      headers: { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  }
+
+  function cargar() {
+    if (!token) { info = { ok: false, motivo: "link_invalido" }; return render(); }
+    rpc("colecta_link_info", { p_token: token })
+      .then(function (j) { info = j; render(); })
+      .catch(function () { renderError("No pudimos cargar la página. Revisá tu conexión e intentá de nuevo."); });
+  }
+
+  function responder(resp, bultos) {
+    if (enviando) return;
+    enviando = true;
+    setBotones(true);
+    rpc("colecta_link_responder", { p_token: token, p_respuesta: resp, p_bultos: bultos || null })
+      .then(function (j) { info = j; editando = false; enviando = false; render(); })
+      .catch(function () {
+        enviando = false; setBotones(false);
+        var e = document.getElementById("err");
+        if (e) e.textContent = "No se pudo guardar. Probá de nuevo en un ratito.";
+      });
+  }
+
+  function setBotones(dis) {
+    Array.prototype.forEach.call(app.querySelectorAll("button"), function (b) { b.disabled = dis; });
+  }
+
+  function cabecera(titulo) {
+    return '<span class="chip">' + esc(info.fecha_label) + '</span>' +
+      '<p class="hola">Hola, ' + esc(info.nombre) + '</p>' +
+      '<h1>' + titulo + '</h1>';
+  }
+
+  function render() {
+    foot.textContent = "¿Algo distinto? Escribinos al grupo de WhatsApp.";
+    var h = "";
+    if (!info || !info.ok) {
+      h = '<div class="icono alerta">' + ICON.link + '</div>' +
+        '<h1 class="sm">Este link no funciona</h1>' +
+        '<p class="sub">Puede que esté incompleto o que ya no sea válido. Escribinos al grupo de WhatsApp y te ayudamos.</p>';
+    } else if (info.abierto && (editando || !info.respuesta)) {
+      h = cabecera("¿Tenés colecta hoy?") +
+        '<p class="sub">Respondé antes de las 11:30 así armamos el recorrido de retiro.</p>' +
+        '<div class="acciones">' +
+          '<button class="btn btn-si" data-r="si">' + ICON.checkSm + 'Sí, hay colecta</button>' +
+          '<button class="btn btn-no" data-r="no">' + ICON.x + 'Hoy no</button>' +
+        '</div><p class="err" id="err"></p>';
+    } else if (info.abierto && info.respuesta === "si") {
+      h = '<div class="icono ok">' + ICON.check + '</div>' +
+        '<h1 class="sm">Listo, colecta confirmada</h1>' +
+        '<p class="sub">Hoy pasamos a retirar tus envíos.</p>' +
+        '<div class="panel"><span>Opcional · ¿Más o menos cuántos paquetes?</span><div class="bultos">' +
+        BULTOS.map(function (b) {
+          return '<button class="bulto" data-b="' + b[0] + '" aria-pressed="' + (info.bultos === b[0]) + '">' + b[1] + '</button>';
+        }).join("") +
+        '</div></div><p class="err" id="err"></p>' +
+        '<button class="link" data-cambiar="1">¿Te equivocaste? Cambiar respuesta</button>';
+    } else if (info.abierto && info.respuesta === "no") {
+      h = '<div class="icono neutro">' + ICON.cal + '</div>' +
+        '<h1 class="sm">Anotado, hoy no pasamos</h1>' +
+        '<p class="sub">Gracias por avisar. Mañana te volvemos a preguntar.</p>' +
+        '<button class="link" data-cambiar="1">¿Te equivocaste? Cambiar respuesta</button>';
+    } else {
+      // Cerrado: pasadas las 11:30, fin de semana o bot apagado
+      var tit, sub;
+      if (info.motivo === "fin_de_semana") {
+        tit = "Hoy no tomamos confirmaciones";
+        sub = "El bot pregunta de lunes a viernes. Si necesitás algo, escribinos al grupo.";
+      } else if (info.motivo === "deshabilitado") {
+        tit = "Este link está pausado";
+        sub = "Por ahora coordinamos la colecta por el grupo de WhatsApp.";
+      } else {
+        tit = "Ya cerramos la lista de hoy";
+        sub = "A las 11:30 armamos los recorridos. Si tenés colecta, escribinos al grupo y vemos si llegamos.";
+      }
+      var resp = info.respuesta === "si" ? "Sí, hay colecta" : info.respuesta === "no" ? "Hoy no" : "Sin responder";
+      h = '<div class="icono alerta">' + ICON.reloj + '</div>' +
+        '<span class="chip" style="color:var(--amber);background:rgba(255,184,77,.10);border-color:rgba(255,184,77,.25)">' + esc(info.fecha_label) + '</span>' +
+        '<h1 class="sm" style="margin-top:12px">' + tit + '</h1>' +
+        '<p class="sub">' + sub + '</p>' +
+        (info.motivo === "cerrado" ? '<div class="panel estado-hoy"><span>Tu respuesta de hoy</span><b>' + resp + '</b></div>' : '');
+      if (info.motivo !== "deshabilitado") foot.textContent = "Te volvemos a preguntar el próximo día hábil a las 9.";
+    }
+    app.innerHTML = '<div class="fade">' + h + '</div>';
+    Array.prototype.forEach.call(app.querySelectorAll("[data-r]"), function (b) {
+      b.addEventListener("click", function () { responder(b.getAttribute("data-r")); });
+    });
+    Array.prototype.forEach.call(app.querySelectorAll("[data-b]"), function (b) {
+      b.addEventListener("click", function () { responder("si", b.getAttribute("data-b")); });
+    });
+    Array.prototype.forEach.call(app.querySelectorAll("[data-cambiar]"), function (b) {
+      b.addEventListener("click", function () { editando = true; render(); });
+    });
+  }
+
+  function renderError(msg) {
+    app.innerHTML = '<div class="fade"><div class="icono alerta">' + ICON.reloj + '</div>' +
+      '<h1 class="sm">Algo falló</h1><p class="sub">' + esc(msg) + '</p>' +
+      '<button class="link" id="reintentar">Reintentar</button></div>';
+    document.getElementById("reintentar").addEventListener("click", function () {
+      app.innerHTML = '<div class="spinner" role="status" aria-label="Cargando"></div>'; cargar();
+    });
+  }
+
+  cargar();
+})();
+</script>
+</body>
+</html>
