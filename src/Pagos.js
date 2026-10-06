@@ -299,6 +299,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
   const colectasSinMatch = [];
   const colectaResumen = new Map(); // desglose por chofer para la seccion Colectas de Liquidaciones (solo lectura)
   const fleteroMap = new Map(); // fleteros: solo hacen colectas y cobran el monto de cada una
+  const colectaItems = new Map(); // key -> [{fecha, cliente, monto, con}] colectas que se le pagan, para copiar el detalle
   colectas.forEach(c => {
     if (c.estado === 'rojo') return; // cancelada: aunque haya quedado confirmado_por de antes, no se paga
     const monto = Number(c.monto ?? c.colectas_clientes?.monto ?? 0) || 0; // fallback al precio del cliente (el monto por colecta casi nunca se guarda)
@@ -316,6 +317,12 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
       if (alC && alC.regla === 'merge' && alC.paga_como) raw = alC.paga_como;
       const key = norm(raw);
       const tC = tarifaByLD.get(key);
+      if (tC) {
+        const con = dividida ? chsCol.filter(x => x && x !== ch && norm(String(x).trim()) !== 'a coordinar') : [];
+        const cliItem = (c.colectas_clientes?.nombre || 'Sin cliente').trim() || 'Sin cliente';
+        if (!colectaItems.has(key)) colectaItems.set(key, []);
+        colectaItems.get(key).push({ fecha: c.fecha, cliente: cliItem, monto, con });
+      }
       if (tC && tC.fletero) {
         const f = fleteroMap.get(key) || { key, nombre: tC.nombre_lightdata || raw, cantidad: 0, monto: 0, entregas: 0 };
         f.cantidad += 1; f.monto += monto;
@@ -462,7 +469,7 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
     }).sort((x, y) => y.cantidad - x.cantidad);
     cpsPorCadete.set(canonKey, arr);
   }
-  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete, porDarAlta };
+  return { filas, aparte, ignorados, configErrors, colectasSinMatch, sinCadete, colectaResumen, cpsPorCadete, porDarAlta, colectaItems };
 }
 
 // aplica los overrides editables en la UI (reparto por tarifa, cantidad y/o colecta) a una fila calculada
@@ -1389,7 +1396,8 @@ function PagosInner({ session }) {
   const [histRows, setHistRows] = useState(null); // eventos del historial (null = cargando)
   const [histBusy, setHistBusy] = useState(false);
   const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
-  const [copiadoKey, setCopiadoKey] = useState(null); // fila cuyo mensaje se acaba de copiar
+  const [copiadoKey, setCopiadoKey] = useState(null);
+  const [colCopiadoKey, setColCopiadoKey] = useState(null); // fila cuyo detalle de colectas se acaba de copiar // fila cuyo mensaje se acaba de copiar
   const [divKey, setDivKey] = useState(null);         // fila con el divisor de pago abierto
   const [divFactura, setDivFactura] = useState('');   // monto de la primera parte
   const [divTipo, setDivTipo] = useState('mixto');    // mixto | dos_facturas
@@ -1414,6 +1422,25 @@ function PagosInner({ session }) {
       // Si fue sin querer, el chip "✓ Avisado" lo desmarca.
       if (!avisados.has(norm(f.nombre))) toggleAviso(f);
     }).catch(() => setError('No se pudo copiar el mensaje al portapapeles'));
+  }
+  // detalle de colectas día por día, para cruzarlo con lo que anotó el cadete
+  const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  function copiarDetalleColectas(f) {
+    const items = [...(calc.colectaItems.get(f.key) || [])].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || a.cliente.localeCompare(b.cliente));
+    const nombrePila = (f.nombre || '').trim().split(/\s+/)[0];
+    const lineas = items.map(it => {
+      const [y, m, d] = (it.fecha || '').split('-');
+      const dia = y ? DIAS_CORTOS[new Date(Number(y), Number(m) - 1, Number(d)).getDay()] + ` ${d}/${m}` : 'Sin fecha';
+      return `${dia} · ${it.cliente} · ${money(it.monto)}` + (it.con.length ? ` (dividida con ${it.con.join(', ')})` : '');
+    });
+    const suma = items.reduce((s, it) => s + it.monto, 0);
+    let msg = `${nombrePila}, tus colectas de la semana ${fmtSemanaLabel(semanaLunes)}:\n` + lineas.join('\n') +
+      `\nTotal: ${items.length} colecta${items.length === 1 ? '' : 's'} · ${money(suma)}`;
+    if (f.colectaEditado && Math.round(f.colecta) !== Math.round(suma)) msg += `\n(ajustado a mano a ${money(f.colecta)})`;
+    navigator.clipboard.writeText(msg).then(() => {
+      setColCopiadoKey(f.key);
+      setTimeout(() => setColCopiadoKey(k => (k === f.key ? null : k)), 1500);
+    }).catch(() => setError('No se pudo copiar el detalle al portapapeles'));
   }
   const [revExpand, setRevExpand] = useState({}); // Tarea 4: tarjetas expandibles de 'A revisar'
 
@@ -1510,7 +1537,7 @@ function PagosInner({ session }) {
   }, []);
 
   const calc = useMemo(() => {
-    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map(), porDarAlta: [] };
+    if (loadingConfig || loadingSemana) return { filas: [], aparte: [], ignorados: [], configErrors: [], colectasSinMatch: [], sinCadete: [], colectaResumen: new Map(), cpsPorCadete: new Map(), porDarAlta: [], colectaItems: new Map() };
     return calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes });
   }, [entregados, tarifas, alias, cpOverrides, cpTarifas, zonas, colectas, ajustes, loadingConfig, loadingSemana]);
 
@@ -2324,6 +2351,13 @@ function PagosInner({ session }) {
                                   </button>
                                 );
                               })()}
+                              {(calc.colectaItems.get(f.key) || []).length > 0 && (
+                                <button onClick={e => { e.stopPropagation(); copiarDetalleColectas(f); }}
+                                  title="copiar el detalle de colectas día por día (fecha · cliente · monto) para cruzarlo con el cadete. No lo marca como avisado."
+                                  style={{ marginLeft: 4, fontSize: colCopiadoKey === f.key ? 10.5 : 13, fontWeight: 700, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${colCopiadoKey === f.key ? 'rgba(46,207,170,0.45)' : BRAND.border}`, cursor: 'pointer', color: colCopiadoKey === f.key ? BRAND.teal : BRAND.muted, verticalAlign: 'middle', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                                  {colCopiadoKey === f.key ? '✓ Copiado' : '📋'}
+                                </button>
+                              )}
                               {f.modo === 'cp' && (
                                 <button onClick={() => setExpandido(open ? null : f.key)} title="ver detalle por CP" style={{ marginLeft: 2, fontSize: 13, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>👁</button>
                               )}
