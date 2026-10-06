@@ -34,10 +34,11 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - `npm run build` OK. Commit `09ff1b1` pusheado a main.
 - Producción: `/colecta.html` responde y consulta la base (token inválido → "Este link no funciona"; token real con bot apagado → "Este link está pausado").
 
-## Bloqueo para salir (2026-10-06 madrugada)
-- **El bot de WhatsApp no está mandando.** Caso de prueba #197 al grupo "Flexit test" quedó en `enviando` (la vista `casos_enviables` sí lo devuelve, así que el lado Supabase está bien). Coincide con la spec `spec-agente-openwa-webhook-silencio` del vault: el agente no registra nada desde el 19/08 → probablemente la sesión de WhatsApp de OpenWA está caída/deslogueada o el workflow "Enviar aprobados" está apagado.
-- Arreglo: Alejo entra a n8n y a OpenWA (puede pedir escanear QR con el celular del chip). Cuando vuelva a andar, el caso #197 sale solo ("🧪 Prueba del bot de colectas (ignorar)") y eso confirma el circuito.
-- Hasta que eso no esté, **no conviene que Santi agregue el bot a los grupos** ni prenda clientes: los links se encolarían y no saldrían.
+## Bloqueo para salir (actualizado 2026-10-06 10:15)
+- Causa del silencio desde el 20/08: el Chrome interno de OpenWA colgado (`Runtime.callFunctionOn timed out`) + sesión desconectada. Se reinició `openwa-api` y se re-vinculó por QR la sesión `flexit-agente` al número **original del bot 5491125841662** ("Soporte Flexit"). La noche del 05/10 quedó vinculada un rato por error al número de Alejo (2408); ya corregido.
+- **El envío funciona pero DUPLICA:** n8n "Flexit WA - Enviar aprobados" manda el mensaje pero no llega a marcar el caso como `esperando_cliente` (OpenWA tarda en confirmar → n8n da error) → lo reenvía cada minuto (la prueba llegó 3 veces a "Flexit test"). Casos de prueba 197–200 cerrados a mano.
+- Arreglo pendiente (en la UI de n8n + Publish): marcar el caso ANTES de enviar (o "continuar ante error" + PATCH siempre), y subir el timeout del nodo HTTP de envío. Hasta eso, **nadie prende clientes en el panel**.
+- VPS: Hostinger limitó CPU (100% desde 22:20 del 05/10 por OpenWA trabado). Memoria sin swap → I/O de disco enorme (450 GB OpenWA, 1,38 TB n8n). Se agregó swap de 2 GB (`/swapfile`, en fstab), se reinició `lightdata-bridge` (489→64 MB) y quedó cron 05:00 de reinicio diario del bridge.
 
 ## Pendientes / limitaciones
 - Feriados: el cron pregunta igual un feriado de semana. Si molesta, agregar tabla de feriados.
