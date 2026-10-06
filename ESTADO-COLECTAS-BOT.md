@@ -34,11 +34,12 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - `npm run build` OK. Commit `09ff1b1` pusheado a main.
 - Producción: `/colecta.html` responde y consulta la base (token inválido → "Este link no funciona"; token real con bot apagado → "Este link está pausado").
 
-## Bloqueo para salir (actualizado 2026-10-06 10:15)
-- Causa del silencio desde el 20/08: el Chrome interno de OpenWA colgado (`Runtime.callFunctionOn timed out`) + sesión desconectada. Se reinició `openwa-api` y se re-vinculó por QR la sesión `flexit-agente` al número **original del bot 5491125841662** ("Soporte Flexit"). La noche del 05/10 quedó vinculada un rato por error al número de Alejo (2408); ya corregido.
-- **El envío funciona pero DUPLICA:** n8n "Flexit WA - Enviar aprobados" manda el mensaje pero no llega a marcar el caso como `esperando_cliente` (OpenWA tarda en confirmar → n8n da error) → lo reenvía cada minuto (la prueba llegó 3 veces a "Flexit test"). Casos de prueba 197–200 cerrados a mano.
-- Arreglo pendiente (en la UI de n8n + Publish): marcar el caso ANTES de enviar (o "continuar ante error" + PATCH siempre), y subir el timeout del nodo HTTP de envío. Hasta eso, **nadie prende clientes en el panel**.
-- VPS: Hostinger limitó CPU (100% desde 22:20 del 05/10 por OpenWA trabado). Memoria sin swap → I/O de disco enorme (450 GB OpenWA, 1,38 TB n8n). Se agregó swap de 2 GB (`/swapfile`, en fstab), se reinició `lightdata-bridge` (489→64 MB) y quedó cron 05:00 de reinicio diario del bridge.
+## Estado de salida (2026-10-06 20:15) — DESBLOQUEADO
+- Sesión OpenWA `flexit-agente` vinculada al número original del bot **5491125841662** ("Soporte Flexit").
+- n8n "Flexit WA - Enviar aprobados": nodo "Enviar por WhatsApp (OpenWA)" con **On Error = Continue** + **Timeout 60 s**, publicado. Así el PATCH "Marcar esperando_cliente" corre siempre (toma el id de "Casos aprobados (Supabase)") y no hay reenvíos. Prueba #203 a "Flexit test": llegó y quedó `esperando_cliente` (una sola vez).
+- Contra aceptada: un envío que falla de verdad no se reintenta; ese cliente aparece como "sin responder" a las 11.
+- Historia del bloqueo: Chrome de OpenWA colgado desde el 20/08 + sesión caída; durante el fix duplicaba (n8n daba timeout después de mandar). VPS: swap 2 GB, reinicio diario del bridge 05:00, reintentos en el disparador de métricas.
+- Siguiente: Santi agrega 5491125841662 a los grupos de CABA → aparecen en `agente_config` como `pendiente` (sync cada 15 min) → los configura en Colectas › CABA › "Bot de confirmación". Arrancar con ~10 clientes la primera semana.
 
 ## Pendientes / limitaciones
 - Feriados: el cron pregunta igual un feriado de semana. Si molesta, agregar tabla de feriados.
