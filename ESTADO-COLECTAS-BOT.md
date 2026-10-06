@@ -31,7 +31,13 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 ## Pruebas
 - SQL (en transacción revertida, con hora simulada 09:30): info, sí + bultos → amarillo con choferes precargados, cambio a no → rojo, verde no se pisa, token inválido, cerrado después de 11:30, encolado con link correcto.
 - Página: render en celular y compu con API simulada (pregunta, confirmado, hoy no, cerrado, link inválido).
-- `npm run build` OK.
+- `npm run build` OK. Commit `09ff1b1` pusheado a main.
+- Producción: `/colecta.html` responde y consulta la base (token inválido → "Este link no funciona"; token real con bot apagado → "Este link está pausado").
+
+## Bloqueo para salir (2026-10-06 madrugada)
+- **El bot de WhatsApp no está mandando.** Caso de prueba #197 al grupo "Flexit test" quedó en `enviando` (la vista `casos_enviables` sí lo devuelve, así que el lado Supabase está bien). Coincide con la spec `spec-agente-openwa-webhook-silencio` del vault: el agente no registra nada desde el 19/08 → probablemente la sesión de WhatsApp de OpenWA está caída/deslogueada o el workflow "Enviar aprobados" está apagado.
+- Arreglo: Alejo entra a n8n y a OpenWA (puede pedir escanear QR con el celular del chip). Cuando vuelva a andar, el caso #197 sale solo ("🧪 Prueba del bot de colectas (ignorar)") y eso confirma el circuito.
+- Hasta que eso no esté, **no conviene que Santi agregue el bot a los grupos** ni prenda clientes: los links se encolarían y no saldrían.
 
 ## Pendientes / limitaciones
 - Feriados: el cron pregunta igual un feriado de semana. Si molesta, agregar tabla de feriados.
