@@ -197,13 +197,23 @@ function ColectasInner({ soloArribos = false, irA }) {
   // Fin de semana en CABA/SUR/NOROESTE: se muestra el viernes (ya pasó) → también es solo mirar.
   const dowHoy = new Date(todayStr() + 'T12:00:00').getDay();
   const finDeSemanaSemana = tab !== 'SABADOS' && (dowHoy === 6 || dowHoy === 0);
-  const soloLectura = fechaVolver !== null || finDeSemanaSemana;
+  // Día siguiente EDITABLE (Alejo 05/10): se carga un día antes ("mañana no viene X").
+  // Lun–Jue → mañana; sáb/dom → lunes. El viernes no hay: el sábado se carga en la pestaña Sábados.
+  // Más adelante que eso va a la Pizarra. Hacia atrás sigue siendo solo mirar.
+  const diaSiguiente = (() => {
+    if (tab === 'SABADOS' || dowHoy === 5) return null;
+    const d = new Date(todayStr() + 'T12:00:00');
+    d.setDate(d.getDate() + (dowHoy === 6 ? 2 : 1));
+    return d.toISOString().slice(0, 10);
+  })();
+  const esFutura = diaSiguiente !== null && fecha === diaSiguiente;
+  const soloLectura = !esFutura && (fechaVolver !== null || finDeSemanaSemana);
   soloLecturaRef.current = soloLectura;
   const verDia = (d) => {
     setCalAbierto(false);
     const base = fechaVolver ?? fecha;
     if (d === base) { soloLecturaRef.current = false; setFechaVolver(null); setFecha(base); return; }
-    soloLecturaRef.current = true;
+    soloLecturaRef.current = d !== diaSiguiente;
     if (fechaVolver === null) setFechaVolver(fecha);
     setFecha(d);
   };
@@ -1234,7 +1244,7 @@ function ColectasInner({ soloArribos = false, irA }) {
 
     return (
       <>
-        {tab !== 'SABADOS' && (() => { const dow = new Date(todayStr() + 'T12:00:00').getDay(); return (dow === 6 || dow === 0) && (
+        {tab !== 'SABADOS' && !esFutura && (() => { const dow = new Date(todayStr() + 'T12:00:00').getDay(); return (dow === 6 || dow === 0) && (
           <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'10px 14px', marginBottom:14, borderRadius:10, background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:13 }}>
             <span><i className="ti ti-calendar-event" aria-hidden="true" style={{ verticalAlign:'-2px', marginRight:4 }} />Hoy es {dow === 6 ? 'sábado' : 'domingo'}: acá ves cómo quedó la semana ({fecha.slice(8,10)}/{fecha.slice(5,7)}), solo para mirar. Las colectas de {dow === 6 ? 'hoy' : 'ayer'} están en Sábados.</span>
             <button onClick={() => cambiarTab('SABADOS')}
@@ -1266,20 +1276,22 @@ function ColectasInner({ soloArribos = false, irA }) {
                 dias.push(d.toISOString().slice(0, 10));
               }
               dias.reverse();
+              if (diaSiguiente && diaSiguiente > base) dias.push(diaSiguiente);
               return (<>
                 <div onClick={() => setCalAbierto(false)} style={{ position:'fixed', inset:0, zIndex:299 }} />
                 <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:300, background:'#0E1E38', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, padding:10, boxShadow:'0 12px 30px rgba(0,0,0,0.45)', textTransform:'none' }}>
-                  <div style={{ fontSize:11, color:BRAND.muted, letterSpacing:'0.04em', marginBottom:8 }}>VER CÓMO QUEDÓ…</div>
+                  <div style={{ fontSize:11, color:BRAND.muted, letterSpacing:'0.04em', marginBottom:8 }}>{diaSiguiente && diaSiguiente > base ? 'VER CÓMO QUEDÓ… O CARGAR MAÑANA' : 'VER CÓMO QUEDÓ…'}</div>
                   <div style={{ display:'flex', gap:6 }}>
                     {dias.map(f => {
-                      const esBase = f === base, esSel = f === fecha && !esBase;
+                      const esBase = f === base, esSel = f === fecha && !esBase, esSig = f === diaSiguiente;
                       return (
-                        <button key={f} onClick={() => verDia(f)}
+                        <button key={f} onClick={() => verDia(f)} title={esSig ? 'Cargar el día siguiente (editable)' : esBase ? undefined : 'Solo para mirar'}
                           style={{ width:44, padding:'6px 0', borderRadius:8, cursor:'pointer', fontFamily:'inherit', fontSize:11, lineHeight:1.3,
-                            border:`1px solid ${esBase ? 'rgba(46,207,170,0.5)' : esSel ? 'rgba(74,158,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                            background: esSel ? 'rgba(74,158,255,0.15)' : 'none', color: esBase ? '#5CF2C4' : esSel ? '#8EC5FF' : BRAND.white }}>
+                            border:`1px solid ${esBase ? 'rgba(46,207,170,0.5)' : esSig ? 'rgba(251,191,36,0.55)' : esSel ? 'rgba(74,158,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                            background: esSig && esSel ? 'rgba(251,191,36,0.15)' : esSel ? 'rgba(74,158,255,0.15)' : 'none', color: esBase ? '#5CF2C4' : esSig ? '#FBBF24' : esSel ? '#8EC5FF' : BRAND.white }}>
                           {new Date(f + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'short' }).replace('.', '')}
                           <b style={{ display:'block', fontSize:14, fontWeight:600 }}>{f.slice(8,10)}</b>
+                          {esSig && <i className="ti ti-pencil" aria-hidden="true" style={{ fontSize:11 }} />}
                         </button>
                       );
                     })}
@@ -1304,7 +1316,7 @@ function ColectasInner({ soloArribos = false, irA }) {
               <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {sinAsignar} sin asignar
             </div>
           )}
-          {!soloLectura && (() => { const pend = seccionClientes.filter(c => (registros[c.id]?.estado || 'blanco') === 'blanco'); return pend.length > 0 && (
+          {!soloLectura && !esFutura && (() => { const pend = seccionClientes.filter(c => (registros[c.id]?.estado || 'blanco') === 'blanco'); return pend.length > 0 && (
             <button onClick={() => preguntarPendientes(pend)} title="Preguntarles por WhatsApp si tienen envíos hoy (bot)"
               style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(74,158,255,0.4)', background:'rgba(74,158,255,0.08)', color:'#4A9EFF', fontSize:12, fontWeight:600, cursor:'pointer' }}>
               <i className="ti ti-robot" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
@@ -1338,7 +1350,17 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
         )}
 
-        {fechaVolver !== null && (
+        {fechaVolver !== null && esFutura && (
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'8px 12px', marginBottom:12, borderRadius:10, background:'rgba(251,191,36,0.1)', border:'1px solid rgba(251,191,36,0.45)', color:'#FBBF24', fontSize:13 }}>
+            <i className="ti ti-alert-triangle" aria-hidden="true" />
+            <span><b>Estás cargando el {new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long' })} {fecha.slice(8,10)}/{fecha.slice(5,7)}, no hoy.</b> Lo que cambies queda guardado para ese día.</span>
+            <button onClick={() => verDia(fechaVolver)}
+              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:8, border:'1px solid rgba(251,191,36,0.5)', background:'rgba(251,191,36,0.12)', color:'#FBBF24', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+              Volver a hoy
+            </button>
+          </div>
+        )}
+        {fechaVolver !== null && !esFutura && (
           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'8px 12px', marginBottom:12, borderRadius:10, background:'rgba(74,158,255,0.08)', border:'1px solid rgba(74,158,255,0.3)', color:'#8EC5FF', fontSize:13 }}>
             <i className="ti ti-lock" aria-hidden="true" />
             <span>Estás viendo el {new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long' })} {fecha.slice(8,10)}/{fecha.slice(5,7)} · solo para mirar, no se puede editar</span>
@@ -2018,7 +2040,7 @@ function ColectasInner({ soloArribos = false, irA }) {
         const esSabadoHoy = new Date(fecha + 'T12:00:00').getDay() === 6;
         const aplicaHoy = s === 'SABADOS' ? esSabadoHoy : !esSabadoHoy;
         // Sin número mientras carga el día (si no, parpadea un conteo falso) ni en días de solo mirar.
-        const sinConfirmar = (!aplicaHoy || loading || soloLectura) ? 0 : clientes.filter(c => c.activo && (s === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === s)).filter(c => {
+        const sinConfirmar = (!aplicaHoy || loading || soloLectura || esFutura) ? 0 : clientes.filter(c => c.activo && (s === 'SABADOS' ? (c.opera_sabados || c.seccion === 'SABADOS') : c.seccion === s)).filter(c => {
           const reg = registros[c.id];
           const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
           return estEf === 'amarillo';
