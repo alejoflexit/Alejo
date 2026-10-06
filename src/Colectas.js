@@ -7,6 +7,7 @@ import {
 import ColectasBot from './ColectasBot';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
+const ClienteUbicacion = React.lazy(() => import('./ClienteUbicacion'));
 
 // Bridge LightData (VPS) — solo lectura, riesgo aceptado de exponer la key en el bundle (ver spec-lightdata-bridge)
 const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
@@ -186,7 +187,8 @@ class MapaBoundary extends React.Component {
 function ColectasInner({ soloArribos = false, irA }) {
   const [navView, setNavView] = useState(soloArribos ? 'arribos' : 'colectas'); // 'colectas' | 'arribos' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
-  const [botPanel, setBotPanel] = useState(false); // panel "Bot de confirmación" (piloto CABA)
+  const [botPanel, setBotPanel] = useState(false);
+  const [mapaForm, setMapaForm] = useState(false); // mini mapa para ubicar el cliente en el formulario // panel "Bot de confirmación" (piloto CABA)
   const [vistaColectas, setVistaColectas] = useState('tabla'); // 'tabla' | 'mapa'
   const [fecha, setFecha] = useState(todayStr);
   const [montoEdit, setMontoEdit] = useState(null); // { id, valor } — edición del precio del día
@@ -262,8 +264,7 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [loadingPagos, setLoadingPagos] = useState(false);
 
   // Clientes ABM
-  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false, vehiculo:'', zona_sabado:'' };
-  const [gruposWA, setGruposWA] = useState([]); // grupos de WhatsApp que conoce el bot (agente_config)
+  const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false, vehiculo:'', zona_sabado:'', lat:null, lng:null, geo_fuente:null, geo_direccion:null };
   const [clienteForm, setClienteForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -401,12 +402,6 @@ function ColectasInner({ soloArribos = false, irA }) {
   useEffect(() => {
     try { localStorage.setItem('flexit_choferes', JSON.stringify(choferesList)); } catch {}
   }, [choferesList]);
-
-  // Grupos de WhatsApp del bot (para vincular clientes y mandar avisos)
-  useEffect(() => {
-    sbFetch('agente_config?tipo=eq.grupo&estado=eq.activo&select=chat_id,nombre_grupo,cliente&order=nombre_grupo.asc')
-      .then(setGruposWA).catch(() => setGruposWA([]));
-  }, []);
 
   // Load clients
   useEffect(() => {
@@ -697,7 +692,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       }
       const updated = await sbFetch('colectas_clientes?select=*&order=seccion.asc,nombre.asc');
       setClientes(updated);
-      setShowForm(false);
+      setShowForm(false); setMapaForm(false);
       setEditId(null);
       setClienteForm(emptyForm);
     } catch(e) { setError('Error: ' + e.message); }
@@ -731,8 +726,8 @@ function ColectasInner({ soloArribos = false, irA }) {
 
   const editCliente = c => {
     setEditId(c.id);
-    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados, vehiculo:c.vehiculo||'', zona_sabado:c.zona_sabado||'' });
-    setShowForm(true);
+    setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados, vehiculo:c.vehiculo||'', zona_sabado:c.zona_sabado||'', lat:c.lat??null, lng:c.lng??null, geo_fuente:c.geo_fuente??null, geo_direccion:c.geo_direccion??null });
+    setShowForm(true); setMapaForm(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1497,7 +1492,7 @@ function ColectasInner({ soloArribos = false, irA }) {
               </button>
             ))}
           </div>
-          <button onClick={() => { setShowForm(true); setEditId(null); setClienteForm(emptyForm); }}
+          <button onClick={() => { setShowForm(true); setEditId(null); setClienteForm(emptyForm); setMapaForm(false); }}
             style={{ marginLeft:'auto', padding:'6px 14px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'rgba(46,207,170,0.1)', color:BRAND.teal, fontSize:13, fontWeight:600, cursor:'pointer' }}>
             + Agregar cliente
           </button>
@@ -1506,45 +1501,50 @@ function ColectasInner({ soloArribos = false, irA }) {
         {showForm && (
           <div style={{ background:BRAND.navyCard, border:'1px solid rgba(46,207,170,0.3)', borderRadius:12, padding:'1.25rem', marginBottom:16 }}>
             <div style={{ fontSize:14, fontWeight:700, marginBottom:12 }}>{editId ? 'Editar cliente' : 'Nuevo cliente'}</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:10 }}>
-              {[['nombre','Nombre','text'],['direccion','Dirección','text'],['zona_barrio','Zona/Barrio','text'],['horario','Horario (opcional)','time'],['monto','Monto ($)','number']].map(([key,lbl,type]) => (
+            {(() => {
+              // Todos los campos con la misma altura y el rótulo en una sola línea: antes el time input,
+              // el checkbox y el rótulo largo del grupo dejaban la fila desalineada (Alejo 06/10).
+              const lblSt = { fontSize:11, color:BRAND.muted, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.06em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' };
+              const ctlSt = { ...inpSt, width:'100%', height:36, boxSizing:'border-box', fontSize:13 };
+              const ubicado = clienteForm.lat != null && clienteForm.lng != null;
+              const dirCambio = ubicado && clienteForm.geo_fuente === 'manual' && clienteForm.geo_direccion && clienteForm.geo_direccion !== clienteForm.direccion;
+              return (<>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(200px, calc((100% - 36px) / 4)), 1fr))', gap:12, alignItems:'end' }}>
+              {[['nombre','Nombre','text'],['direccion','Dirección','text'],['zona_barrio','Zona / Barrio','text'],['horario','Horario (opcional)','time'],['monto','Monto ($)','number']].map(([key,lbl,type]) => (
                 <div key={key}>
-                  <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>{lbl}</div>
-                  <input type={type} value={clienteForm[key]} onChange={e => setClienteForm(p => ({...p,[key]:e.target.value}))}
-                    style={{ ...inpSt, width:'100%' }} placeholder={lbl} />
+                  <div style={lblSt}>{lbl}</div>
+                  <input type={type} value={clienteForm[key] ?? ''} onChange={e => setClienteForm(p => ({...p,[key]:e.target.value}))}
+                    style={ctlSt} placeholder={type === 'time' ? undefined : lbl} />
                 </div>
               ))}
               <div>
-                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Sección</div>
-                <select value={clienteForm.seccion} onChange={e => setClienteForm(p => ({...p,seccion:e.target.value}))}
-                  style={{ ...inpSt, width:'100%' }}>
+                <div style={lblSt}>Sección</div>
+                <select value={clienteForm.seccion} onChange={e => setClienteForm(p => ({...p,seccion:e.target.value}))} style={ctlSt}>
                   {SECCIONES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
-                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Vehículo</div>
+                <div style={lblSt}>Vehículo</div>
                 <select value={clienteForm.vehiculo} onChange={e => setClienteForm(p => ({...p,vehiculo:e.target.value}))}
-                  title="Vehículo que necesita la colecta de este cliente (fijo, no cambia por día)"
-                  style={{ ...inpSt, width:'100%' }}>
+                  title="Vehículo que necesita la colecta de este cliente (fijo, no cambia por día)" style={ctlSt}>
                   <option value="">— Sin definir —</option>
                   {Object.entries(VEHICULOS).map(([k,v]) => <option key={k} value={k}>{v.emoji} {v.label}</option>)}
                 </select>
               </div>
               <div>
-                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Sábados</div>
-                <label style={{ ...inpSt, width:'100%', display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+                <div style={lblSt}>Sábados</div>
+                <label style={{ ...ctlSt, display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
                   <input type="checkbox" checked={!!clienteForm.opera_sabados}
                     onChange={e => setClienteForm(p => ({...p, opera_sabados: e.target.checked}))}
-                    style={{ width:16, height:16, accentColor:'#2ECFAA', cursor:'pointer' }} />
+                    style={{ width:16, height:16, margin:0, accentColor:'#2ECFAA', cursor:'pointer' }} />
                   <span style={{ fontSize:13, color: clienteForm.opera_sabados ? BRAND.white : BRAND.muted }}>Opera sábados</span>
                 </label>
               </div>
               {clienteForm.seccion === 'SABADOS' && (
               <div>
-                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Zona (para Arribos)</div>
+                <div style={lblSt}>Zona (para Arribos)</div>
                 <select value={clienteForm.zona_sabado} onChange={e => setClienteForm(p => ({...p, zona_sabado:e.target.value}))}
-                  title="Sábados es un día, no una zona: elegí dónde queda este cliente"
-                  style={{ ...inpSt, width:'100%' }}>
+                  title="Sábados es un día, no una zona: elegí dónde queda este cliente" style={ctlSt}>
                   <option value="">— Sin definir —</option>
                   <option value="CABA">CABA</option>
                   <option value="SUR">Sur</option>
@@ -1552,21 +1552,38 @@ function ColectasInner({ soloArribos = false, irA }) {
                 </select>
               </div>
               )}
-              <div>
-                <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Grupo WhatsApp (avisos del bot)</div>
-                <select value={clienteForm.chat_id} onChange={e => setClienteForm(p => ({...p,chat_id:e.target.value}))}
-                  style={{ ...inpSt, width:'100%' }}>
-                  <option value="">— Sin grupo —</option>
-                  {gruposWA.map(g => <option key={g.chat_id} value={g.chat_id}>{g.nombre_grupo}{g.cliente ? ` (${g.cliente})` : ''}</option>)}
-                </select>
-              </div>
             </div>
+
+            {/* Ubicación en el mapa */}
+            <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${BRAND.border}` }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                <div style={{ ...lblSt, marginBottom:0 }}>Ubicación en el mapa</div>
+                <span style={{ fontSize:12, color: ubicado ? BRAND.teal : BRAND.muted }}>
+                  {ubicado ? (clienteForm.geo_fuente === 'manual' ? '📍 Ubicado a mano' : '📍 Ubicado automático (por la dirección)') : 'Sin ubicar — se ubica sola por la dirección al abrir el Mapa'}
+                </span>
+                <button type="button" onClick={() => setMapaForm(v => !v)}
+                  style={{ padding:'5px 12px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.white, fontSize:12, cursor:'pointer' }}>
+                  {mapaForm ? 'Cerrar mapa' : ubicado ? 'Ver / cambiar en el mapa' : 'Ubicar en el mapa'}
+                </button>
+              </div>
+              {dirCambio && <div style={{ fontSize:12, color:'#FBBF24', marginTop:6 }}>La dirección cambió desde que se ubicó el pin: revisalo en el mapa.</div>}
+              {mapaForm && (
+                <div style={{ marginTop:10 }}>
+                  <React.Suspense fallback={<div style={{ fontSize:12, color:BRAND.muted, padding:12 }}>Cargando mapa…</div>}>
+                    <ClienteUbicacion direccion={clienteForm.direccion} lat={clienteForm.lat} lng={clienteForm.lng}
+                      onChange={(la, ln) => setClienteForm(p => ({ ...p, lat: la, lng: ln, geo_fuente: 'manual', geo_direccion: p.direccion }))} />
+                  </React.Suspense>
+                </div>
+              )}
+            </div>
+              </>);
+            })()}
             <div style={{ display:'flex', gap:8, marginTop:14 }}>
               <button onClick={saveCliente}
                 style={{ padding:'7px 18px', borderRadius:8, border:'none', background:BRAND.teal, color:'#0d1b2a', fontWeight:700, fontSize:13, cursor:'pointer' }}>
                 {editId ? 'Guardar cambios' : 'Agregar'}
               </button>
-              <button onClick={() => { setShowForm(false); setEditId(null); }}
+              <button onClick={() => { setShowForm(false); setEditId(null); setMapaForm(false); }}
                 style={{ padding:'7px 14px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, fontSize:13, cursor:'pointer' }}>
                 Cancelar
               </button>

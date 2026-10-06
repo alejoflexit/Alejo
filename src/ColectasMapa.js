@@ -184,7 +184,7 @@ async function candidatosPhoton(texto) {
 
 // Buscador de direcciones estilo Google Maps: escribís → 🔍 → candidatos → elegís uno.
 // El pin elegido por búsqueda se guarda como manual (el geocoding automático nunca lo pisa).
-function BuscadorDireccion({ inicial, onElegir }) {
+export function BuscadorDireccion({ inicial, onElegir }) {
   const [texto, setTexto] = useState(inicial || '');
   const [candidatos, setCandidatos] = useState(null); // null = sin buscar | [] = sin resultados
   const [buscando, setBuscando] = useState(false);
