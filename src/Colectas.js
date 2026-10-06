@@ -264,7 +264,6 @@ function ColectasInner({ soloArribos = false, irA }) {
   // Clientes ABM
   const emptyForm = { nombre:'', direccion:'', zona_barrio:'', seccion:'CABA', horario:'', monto:'', activo:true, chat_id:'', opera_sabados:false, vehiculo:'', zona_sabado:'' };
   const [gruposWA, setGruposWA] = useState([]); // grupos de WhatsApp que conoce el bot (agente_config)
-  const [avisoBot, setAvisoBot] = useState('');
   const [clienteForm, setClienteForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -499,40 +498,6 @@ function ColectasInner({ soloArribos = false, irA }) {
       console.error('Save error:', e);
     }
   }, [fecha]);
-
-  // Preguntar por WhatsApp a los pendientes de hoy si tienen envios (via bot: casos estado 'enviando')
-  const preguntarPendientes = async (pendientes) => {
-    const conGrupo = pendientes.filter(c => c.chat_id);
-    const sinGrupo = pendientes.length - conGrupo.length;
-    if (!conGrupo.length) { setAvisoBot('Ningún pendiente tiene grupo de WhatsApp vinculado (se vincula en Clientes).'); setTimeout(() => setAvisoBot(''), 8000); return; }
-    const MSG = 'Hola, buen día! 👋 ¿Cómo va? ¿Tienen envíos para hoy?';
-    if (!window.confirm(`Mandar "${MSG}" a ${conGrupo.length} grupo(s)` + (sinGrupo ? ` — ojo: ${sinGrupo} pendiente(s) sin grupo vinculado no reciben` : '') + '?')) return;
-    const quien = (getSession() || {}).nombre || 'Colectas';
-    // dedup: no volver a preguntarle a un chat que ya recibió el aviso de colecta hoy
-    const hoyIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
-    const yaHechos = new Set();
-    try {
-      const ex = await sbFetch(`casos?select=chat_id&tipo=eq.colecta&autor=eq.${encodeURIComponent('Colectas Flexit')}&created_at=gte.${hoyIso}`);
-      (ex || []).forEach(r => { if (r.chat_id) yaHechos.add(r.chat_id); });
-    } catch (e) {}
-    let ok = 0, fail = 0, dup = 0;
-    for (const c of conGrupo) {
-      if (yaHechos.has(c.chat_id)) { dup++; continue; }
-      yaHechos.add(c.chat_id); // evitar duplicar si el mismo chat aparece dos veces en la tanda
-      const g = gruposWA.find(x => x.chat_id === c.chat_id);
-      try {
-        await sbFetch('casos', { method: 'POST', body: JSON.stringify({
-          chat_id: c.chat_id, grupo: g?.nombre_grupo || c.nombre, autor: 'Colectas Flexit',
-          mensaje: `(aviso automático) Consulta de colecta a ${c.nombre}`,
-          tipo: 'colecta', estado: 'enviando', respuesta_enviada: MSG,
-          enviado_via: 'colectas', enviado_por: quien, enviado_at: new Date().toISOString(),
-        }) });
-        ok++;
-      } catch (e) { fail++; }
-    }
-    setAvisoBot(`🤖 ${ok} mensaje(s) encolado(s) — el bot los manda en el próximo minuto (solo a grupos habilitados).` + (dup ? ` ${dup} ya tenían aviso de hoy (omitidos).` : '') + (fail ? ` ${fail} fallaron.` : ''));
-    setTimeout(() => setAvisoBot(''), 12000);
-  };
 
   const updateRegistro = useCallback((clienteId, updates) => {
     if (soloLecturaRef.current) return; // viendo un día anterior: solo mirar
@@ -1331,12 +1296,6 @@ function ColectasInner({ soloArribos = false, irA }) {
               <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {sinAsignar} sin asignar
             </div>
           )}
-          {!soloLectura && !esFutura && (() => { const pend = seccionClientes.filter(c => (registros[c.id]?.estado || 'blanco') === 'blanco'); return pend.length > 0 && (
-            <button onClick={() => preguntarPendientes(pend)} title="Preguntarles por WhatsApp si tienen envíos hoy (bot)"
-              style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(74,158,255,0.4)', background:'rgba(74,158,255,0.08)', color:'#4A9EFF', fontSize:12, fontWeight:600, cursor:'pointer' }}>
-              <i className="ti ti-robot" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> Preguntar a pendientes ({pend.filter(c=>c.chat_id).length}/{pend.length})
-            </button>
-          ); })()}
           {tab === 'CABA' && !soloLectura && (() => { const preg = seccionClientes.filter(c => !c.fija); const on = preg.filter(c => c.bot_habilitado).length; return (
             <button onClick={() => setBotPanel(true)} title="Configurar el bot que manda el link de confirmación a las 9"
               style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(46,207,170,0.4)', background:'rgba(46,207,170,0.08)', color:'#2ECFAA', fontSize:12, fontWeight:600, cursor:'pointer' }}>
@@ -1350,7 +1309,6 @@ function ColectasInner({ soloArribos = false, irA }) {
               onClose={() => setBotPanel(false)}
             />
           )}
-          {avisoBot && <div style={{ fontSize:12, color:'#4A9EFF' }}>{avisoBot}</div>}
           <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
             {saveStatus==='saving' && 'Guardando...'}
             {saveStatus==='saved'  && '✓ Guardado'}
