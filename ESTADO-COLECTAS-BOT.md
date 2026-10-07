@@ -49,7 +49,7 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - Sacar el parche cuando salga una versión de whatsapp-web.js corregida y se actualice OpenWA.
 
 ## Robustez (2026-10-07) — migración `20261007230000_colectas_bot_robustez.sql`
-**Estado: escrita, SIN aplicar** (el pedido de confirmación se canceló 3 veces). Para aplicarla: aceptar el pedido cuando Claude la reintente, o pegar el archivo en Supabase › SQL Editor.
+**Aplicada 2026-10-07 20:15** (Alejo, desde Supabase › SQL Editor). Verificado: el Sync de n8n de las 20:15:37 actualizó `bot_salud.ultimo_sync`; cron en `0,30 12-13 * * 1-5`; 16 feriados; 0 casos del bot abiertos.
 - **Señal de vida:** tabla `bot_salud`. Cada corrida del "Sync grupos" de n8n (upsert a `agente_config`, cada 15 min) actualiza `ultimo_sync` vía trigger de statement (cuenta todo lo que no sea rol `authenticated`, o sea los cambios del equipo desde la app no cuentan).
 - **Guardia en encolar:** si `ultimo_sync` tiene más de 40 min, no encola (los mensajes se perderían) y deja `ultimo_aviso`. Cron ahora 9:00, 9:30, 10:00 y 10:30 (`'0,30 12-13 * * 1-5'`); el dedupe por día evita duplicados y permite recuperarse si el guardián levanta OpenWA.
 - **App:** `rpc/colecta_bot_estado` → el botón de CABA se pone rojo "Bot sin señal desde HH:MM" y el panel muestra el aviso. Sin la migración, la llamada falla en silencio y no se muestra nada.
@@ -59,7 +59,7 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - **Cliente de prueba:** oculto en Colectas, Home y Pizarra (`bot_prueba=not.is.true`). Sigue existiendo y manda su link diario a "Flexit test" para verificar que todo funciona.
 
 ## Guardián OpenWA (VPS) — `vps/flexit-openwa-guardian.sh`
-- Cada 10 min (`/etc/cron.d/flexit-openwa-guardian`). Sesión caída → start. "ready" pero `/groups` no responde 2 veces → `docker restart openwa-api` + start. Trabada en initializing 30 min → restart. Pide QR → solo log (hay que escanear con la línea del bot).
+- **Instalado 2026-10-07** (primera corrida OK, log vacío). Cada 10 min (`/etc/cron.d/flexit-openwa-guardian`). Sesión caída → start. "ready" pero `/groups` no responde 2 veces → `docker restart openwa-api` + start. Trabada en initializing 30 min → restart. Pide QR → solo log (hay que escanear con la línea del bot).
 - Log: `/var/log/flexit-openwa-guardian.log`. La key se lee dentro del container, no se guarda.
 
 ## Pendientes / limitaciones
