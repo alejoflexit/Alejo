@@ -173,7 +173,6 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
           {grupos !== null && lista.map(c => {
             const g = grupoDe(c.chat_id);
             const ocupado = !!guardando[c.id];
-            const opciones = ordenarGrupos(grupos, c.nombre);
             const grupoOk = g && ['activo', 'solo_envio'].includes(g.estado) && g.envio_habilitado;
             return (
               <div key={c.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px,1.1fr) minmax(180px,1.6fr) auto auto', gap: 10, alignItems: 'center', padding: '10px 12px', borderBottom: `1px solid ${BRAND.border}`, opacity: c.fija ? 0.55 : 1 }}>
