@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
+  LineChart, ComposedChart, Area, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { authedFetch } from "./auth";
@@ -82,8 +82,11 @@ function rangoFechas(fechas) {
 // Es lo que hace movible el corte del titular: no hay que reprocesar el Excel, se suma distinto.
 function sumaHoras(dst, src) { if (!src) return dst; for (const k of Object.keys(src)) dst[k] = (dst[k] || 0) + (src[k] || 0); return dst; }
 function totalHoras(h) { let t = 0; if (h) for (const k of Object.keys(h)) t += h[k] || 0; return t; }
+// Hora "operativa": una entrega a las 00:xx o 01:xx es del MISMO día operativo, después de las 23
+// (el histograma guarda la hora de reloj). Sin esto, las de pasada la medianoche contaban "en horario".
+const horaOp = (k) => (+k < 6 ? +k + 24 : +k);
 // Entregas a partir del corte (>= corte) = "fuera de horario".
-function fueraDeCorte(h, corte) { let t = 0; if (h) for (const k of Object.keys(h)) { if (+k >= corte) t += h[k] || 0; } return t; }
+function fueraDeCorte(h, corte) { let t = 0; if (h) for (const k of Object.keys(h)) { if (horaOp(k) >= corte) t += h[k] || 0; } return t; }
 // % entregado ANTES del corte. null si esa fila/período todavía no tiene histograma cargado.
 function antesDeCorte(h, corte) { const t = totalHoras(h); return t > 0 ? (t - fueraDeCorte(h, corte)) / t * 100 : null; }
 
@@ -183,6 +186,126 @@ function Spark({ vals, color, w = 62, h = 24 }) {
       <polyline points={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" opacity="0.9" />
       <circle cx={last[0].toFixed(1)} cy={last[1].toFixed(1)} r="2.1" fill={color} />
     </svg>
+  );
+}
+
+// Animaciones compartidas de los gráficos de Análisis (idea Bklit: entrada escalonada, nada más).
+// Se respeta prefers-reduced-motion. Solo transform (la opacity queda libre para el atenuado del hover).
+const FX_CSS = `
+@keyframes fxNotchIn { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes fxCellIn { from { transform: scale(.4); } to { transform: none; } }
+.fx-notch { animation: fxNotchIn .32s cubic-bezier(.2,.8,.2,1) both; transform-origin: 50% 100%; }
+.fx-cell { animation: fxCellIn .4s ease both; transition: opacity .15s ease, box-shadow .15s ease; }
+@media (prefers-reduced-motion: reduce) { .fx-notch, .fx-cell { animation: none; } }
+`;
+
+// Barra de muescas (idea "linear gauge" de Bklit) para el titular de horario. Cada muesca es un
+// pedacito del total: las de la izquierda son entregas en horario, las de la derecha fuera.
+// La marca "meta" es el umbral de CFG (12% fuera → 88% en horario): se ve cuánto falta o sobra.
+function NotchBar({ pct, meta, n = 60 }) {
+  const step = 100 / n;
+  return (
+    <div style={{ position: "relative", marginTop: 12, paddingBottom: 14 }}>
+      <div style={{ display: "flex", gap: 2, height: 14 }}>
+        {Array.from({ length: n }, (_, i) => {
+          const en = (i + 0.5) * step <= pct;
+          return <span key={i} className="fx-notch" style={{ flex: 1, borderRadius: 2, background: en ? C.good : C.crit, opacity: en ? 0.85 : 0.6, animationDelay: `${i * 6}ms` }} />;
+        })}
+      </div>
+      {meta != null && (
+        <div style={{ position: "absolute", left: `${meta}%`, top: -4, bottom: 0, width: 0, pointerEvents: "none" }}>
+          <div style={{ position: "absolute", left: -1, top: 0, height: 22, borderLeft: `2px solid ${C.ink}`, opacity: 0.85 }} />
+          <div style={{ position: "absolute", top: 21, right: -2, fontSize: 9.5, color: C.muted, whiteSpace: "nowrap" }}>meta {fmt0(meta)}%</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mapa de calor "¿a qué hora se entrega?" (idea Heatmap de Bklit, matriz día × hora).
+// Reemplaza al gráfico de línea Post-21: el % fuera de horario sigue estando (columna derecha),
+// pero ahora se ve DÓNDE cae la carga de la noche. Cada fila se normaliza contra su propio total:
+// un sábado de 700 envíos se lee igual que un lunes de 3.000.
+const HM_COLS = ["m", 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, "n"]; // m = antes de las 14 · n = pasada la medianoche
+const hmCol = (k) => { const h = horaOp(k); return h < 14 ? "m" : h >= 24 ? "n" : h; };
+const hmHoraDe = (c) => (c === "m" ? 0 : c === "n" ? 24 : c); // para comparar contra el corte
+const hmLbl = (c) => (c === "m" ? "<14" : c === "n" ? "00+" : String(c));
+const hmLblLargo = (c) => (c === "m" ? "antes de las 14 h" : c === "n" ? "pasada la medianoche" : `${c}–${c + 1} h`);
+const HM_ALPHA = [0, 0.16, 0.34, 0.56, 0.86];
+// Lo de después del corte va más saturado a propósito: es poco volumen, pero es lo que hay que ver.
+const HM_ALPHA_TARDE = [0, 0.3, 0.55, 0.78, 0.95];
+// Calendario de volumen: 4 escalones relativos al día más cargado del histórico.
+const CAL_ALPHA = [0, 0.14, 0.28, 0.46, 0.68];
+const calNivel = (r) => (r <= 0 ? 0 : r < 0.3 ? 1 : r < 0.55 ? 2 : r < 0.8 ? 3 : 4);
+const hmNivel = (share) => (share <= 0 ? 0 : share < 0.04 ? 1 : share < 0.1 ? 2 : share < 0.17 ? 3 : 4);
+function HoraHeatmap({ rows, corte, isMobile }) {
+  const [sel, setSel] = useState(null); // {r, c} — celda bajo el cursor / tocada
+  const data = rows.map((r) => {
+    const cells = {}; HM_COLS.forEach((c) => { cells[c] = 0; });
+    if (r.horas) for (const k of Object.keys(r.horas)) cells[hmCol(k)] += r.horas[k] || 0;
+    const tot = totalHoras(r.horas);
+    return { ...r, cells, tot, fuera: tot > 0 ? fueraDeCorte(r.horas, corte) / tot * 100 : null };
+  });
+  const conDato = data.filter((r) => r.tot > 0);
+  if (!conDato.length) return <div style={{ color: C.muted, fontSize: 12, padding: "16px 0" }}>Este período se cargó antes de que se guardara la hora de cada entrega.</div>;
+  // Hora pico del período entero, para el texto por defecto del pie.
+  const totCol = {}; HM_COLS.forEach((c) => { totCol[c] = conDato.reduce((a, r) => a + r.cells[c], 0); });
+  const totAll = conDato.reduce((a, r) => a + r.tot, 0);
+  const pico = HM_COLS.slice().sort((a, b) => totCol[b] - totCol[a])[0];
+  const fueraColor = (v) => (v == null ? C.muted : v >= CFG.tarde_post21 * 100 ? C.critText : v >= CFG.tarde_post21 * 50 ? C.warn : C.goodText);
+  const cellH = isMobile ? 22 : 24;
+  const grid = { display: "grid", gridTemplateColumns: `${isMobile ? 50 : 62}px repeat(${HM_COLS.length}, minmax(0, 1fr)) ${isMobile ? 40 : 48}px`, gap: 3, alignItems: "center" };
+  const s = sel && data[sel.r];
+  return (
+    <div onMouseLeave={() => setSel(null)}>
+      <div style={{ ...grid, marginBottom: 4 }}>
+        <span />
+        {HM_COLS.map((c) => (
+          <span key={c} style={{ fontSize: 9, textAlign: "center", color: hmHoraDe(c) >= corte ? C.critText : C.muted, fontWeight: hmHoraDe(c) === corte ? 800 : 400 }}>{hmLbl(c)}</span>
+        ))}
+        <span style={{ fontSize: 9, textAlign: "right", color: C.muted }}>fuera</span>
+      </div>
+      {data.map((r, ri) => (
+        <div key={r.name} style={{ ...grid, marginBottom: 3 }}>
+          <span style={{ fontSize: 10.5, color: sel && sel.r === ri ? C.ink : C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textTransform: "capitalize" }}>{isMobile && r.largo ? r.name.replace(/\/\d+$/, "") : r.name}</span>
+          {HM_COLS.map((c, ci) => {
+            const v = r.cells[c];
+            const lv = r.tot > 0 ? hmNivel(v / r.tot) : 0;
+            const tarde = hmHoraDe(c) >= corte;
+            const on = sel && sel.r === ri && sel.c === c;
+            const dim = sel && sel.r !== ri && sel.c !== c;
+            return (
+              <div key={c} className="fx-cell"
+                onMouseEnter={r.tot > 0 ? () => setSel({ r: ri, c }) : undefined}
+                onClick={r.tot > 0 ? () => setSel({ r: ri, c }) : undefined}
+                style={{ height: cellH, borderRadius: 4, cursor: r.tot > 0 ? "pointer" : "default", animationDelay: `${ri * 40 + ci * 12}ms`,
+                  background: r.tot === 0 ? "transparent" : lv === 0 ? "rgba(255,255,255,0.035)" : tarde ? `rgba(240,110,88,${HM_ALPHA_TARDE[lv]})` : `rgba(46,207,170,${HM_ALPHA[lv]})`,
+                  border: r.tot === 0 ? `1px dashed ${C.faint}` : "none",
+                  boxShadow: on ? `0 0 0 1.5px ${C.ink}` : hmHoraDe(c) === corte ? `inset 2px 0 0 ${C.ink}` : "none",
+                  opacity: dim ? 0.38 : 1 }} />
+            );
+          })}
+          <span style={{ fontSize: 11, fontWeight: 700, textAlign: "right", color: fueraColor(r.fuera) }}>{r.fuera != null ? fmt1(r.fuera) + "%" : "—"}</span>
+        </div>
+      ))}
+      {/* Pie de altura fija: lo que dice cambia, el alto no — nada salta al pasar el mouse. */}
+      <div style={{ marginTop: 10, borderTop: `1px solid ${C.faint}`, paddingTop: 8, fontSize: isMobile ? 11.5 : 12, height: isMobile ? 54 : 34, display: "flex", alignItems: "center", gap: 10 }}>
+        {s && s.tot > 0 ? (
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ textTransform: "capitalize" }}>{s.largo || s.name}</b> · {hmLblLargo(sel.c)} · <b>{fmtInt(s.cells[sel.c])}</b> entregas
+            <span style={{ color: C.muted }}> ({fmt1(s.cells[sel.c] / s.tot * 100)}% {s.largo ? "del día" : "del período"})</span>
+            {hmHoraDe(sel.c) >= corte && <span style={{ color: C.critText }}> · fuera de horario</span>}
+          </span>
+        ) : (
+          <span style={{ flex: 1, minWidth: 0, color: C.muted, fontSize: 11.5 }}>
+            El pico es {hmLblLargo(pico)} ({fmt1(totCol[pico] / totAll * 100)}% de las entregas). {isMobile ? "Tocá" : "Pasá por"} una celda para el detalle.
+          </span>
+        )}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 9.5, color: C.muted, flex: "0 0 auto" }}>
+          menos{[1, 2, 3, 4].map((lv) => <span key={lv} style={{ width: 9, height: 9, borderRadius: 2, background: `rgba(46,207,170,${HM_ALPHA[lv]})` }} />)}más
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -772,7 +895,8 @@ export default function Analisis({ semanas }) {
         let cant = 0, ml = 0, dm = 0, d2 = 0, p21 = 0, pend = 0; const horas = {};
         for (const m of dia.datos) { cant += m.cantidad; ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); p21 += (m.post21 || 0); pend += m.pendientes; sumaHoras(horas, m.horas); }
         const ent = cant - pend;
-        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, cant, pend, horas, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null };
+        const dw = DIAS_SEM[new Date(dia.fecha + "T12:00:00").getDay()];
+        return { name: fmtDDMM(dia.fecha), fecha: dia.fecha, dw: dw.slice(0, 3), largo: `${dw} ${fmtDDMM(dia.fecha)}`, cant, pend, horas, sla: slaMeli(ml, dm, d2), p21r: ent > 0 ? p21 / ent * 100 : null };
       }) };
     }
     if (periodo.t === "ult4") {
@@ -781,11 +905,31 @@ export default function Analisis({ semanas }) {
     const byMonth = {};
     semanas.forEach((s) => s.dias.forEach((dia) => {
       const mk = dia.fecha.slice(0, 7);
-      const g = byMonth[mk] || (byMonth[mk] = { cant: 0, ml: 0, dm: 0, d2: 0, p21: 0, pend: 0 });
-      for (const m of dia.datos) { g.cant += m.cantidad; g.ml += m.envios_ml; g.dm += m.demorados; g.d2 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.pend += m.pendientes; }
+      const g = byMonth[mk] || (byMonth[mk] = { cant: 0, ml: 0, dm: 0, d2: 0, p21: 0, pend: 0, horas: {} });
+      for (const m of dia.datos) { g.cant += m.cantidad; g.ml += m.envios_ml; g.dm += m.demorados; g.d2 += (m.dem21 || 0); g.p21 += (m.post21 || 0); g.pend += m.pendientes; sumaHoras(g.horas, m.horas); }
     }));
-    return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); const ent = g.cant - g.pend; return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, pend: g.pend, sla: slaMeli(g.ml, g.dm, g.d2), p21r: ent > 0 ? g.p21 / ent * 100 : null }; }) };
+    return { modo: "mes", datos: Object.keys(byMonth).sort().map((mk) => { const g = byMonth[mk]; const [y, mo] = mk.split("-"); const ent = g.cant - g.pend; return { name: `${MES[+mo - 1]} ${y.slice(2)}`, cant: g.cant, pend: g.pend, horas: g.horas, sla: slaMeli(g.ml, g.dm, g.d2), p21r: ent > 0 ? g.p21 / ent * 100 : null }; }) };
   }, [periodo.t, periodW, completas, semanas, topeMap]);
+
+  // Serie del gráfico de SLA. En "Esta semana" se dibuja la semana anterior como línea fantasma
+  // (mismo día de la semana): un martes, con un solo punto cargado, el gráfico igual dice algo.
+  const prevSemLbl = periodo.t === "sem" && periodW ? labels[labels.indexOf(periodW) - 1] || null : null;
+  const slaSerie = useMemo(() => {
+    if (periodo.t !== "sem") {
+      return { ghost: false, datos: tendData.datos.filter((d) => d.sla != null).map((d) => ({ x: d.name, largo: d.name, sla: d.sla })) };
+    }
+    const ps = prevSemLbl ? semanas.find((x) => x.label === prevSemLbl) : null;
+    const slaDia = (dia) => { let ml = 0, dm = 0, d2 = 0; for (const m of dia.datos) { ml += m.envios_ml; dm += m.demorados; d2 += (m.dem21 || 0); } return slaMeli(ml, dm, d2); };
+    const slots = [1, 2, 3, 4, 5, 6].map((wd) => {
+      const c = tendData.datos.find((d) => new Date(d.fecha + "T12:00:00").getDay() === wd);
+      const pd = ps && ps.dias.find((d) => new Date(d.fecha + "T12:00:00").getDay() === wd);
+      const nom = DIAS_SEM[wd];
+      return { x: nom.slice(0, 3), sla: c ? c.sla : null, slaPrev: pd ? slaDia(pd) : null,
+        largo: c ? `${nom} ${fmtDDMM(c.fecha)}` : nom, largoPrev: pd ? `${nom} ${fmtDDMM(pd.fecha)}` : null };
+    }).filter((d) => d.sla != null || d.slaPrev != null);
+    return { ghost: !!ps, datos: slots };
+  }, [periodo.t, tendData, prevSemLbl, semanas]);
+  const [slaHover, setSlaHover] = useState(null); // índice del punto bajo el cursor (gráfico de SLA)
 
   // Calendario del histórico: stats por fecha (todas las semanas cargadas) para la vista mensual.
   const calStats = useMemo(() => {
@@ -805,6 +949,7 @@ export default function Analisis({ semanas }) {
   }, [semanas]);
   const [calSel, setCalSel] = useState(null); // día seleccionado del calendario: {fecha, s}
   const [calMes, setCalMes] = useState(null); // mes visible del calendario (default: el último con datos)
+  const [calHover, setCalHover] = useState(null); // día bajo el cursor: atenúa el resto (solo opacity, no reflujo)
 
   // Patrones: reincidentes de demora (nunca "Sin asignar" ni basura — esos van a alertas operativas).
   const patrones = useMemo(() => {
@@ -1141,6 +1286,7 @@ export default function Analisis({ semanas }) {
 
   return (
     <div style={{ color: C.ink }}>
+      <style>{FX_CSS}</style>
       {/* Selector de período — control segmentado prominente y fijo arriba */}
       <div style={{ position: "sticky", top: 0, zIndex: 5, background: C.bg, paddingTop: 8, paddingBottom: 10, marginBottom: 12, borderBottom: `1px solid ${C.faint}` }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 7 }}>¿Qué querés revisar?</div>
@@ -1234,12 +1380,10 @@ export default function Analisis({ semanas }) {
                 )}
               </span>
             </div>
-            <div style={{ display: "flex", height: 11, borderRadius: 8, overflow: "hidden", background: "rgba(255,255,255,0.06)", marginTop: 11 }}>
-              <div style={{ width: `${antes21}%`, background: colorAntes21, transition: "width .5s ease" }} />
-              <div style={{ width: `${100 - antes21}%`, background: C.crit, opacity: 0.85 }} />
-            </div>
+            {/* Muescas (idea Bklit): verde = en horario, rojo = fuera; la marca es la meta de CFG. */}
+            <NotchBar pct={antes21} meta={100 - CFG.tarde_post21 * 100} />
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.muted, marginTop: 8 }}>
-              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: colorAntes21, display: "inline-block", marginRight: 6 }} />{fmtInt(entregasConHora - fueraCorte)} en horario</span>
+              <span><span style={{ width: 8, height: 8, borderRadius: 3, background: C.good, display: "inline-block", marginRight: 6 }} />{fmtInt(entregasConHora - fueraCorte)} en horario</span>
               <span><span style={{ width: 8, height: 8, borderRadius: 3, background: C.crit, display: "inline-block", marginRight: 6 }} />{fmtInt(fueraCorte)} fuera de horario</span>
               {corte !== 21 && <span style={{ color: C.teal }}>· a las 21:00 era {fmt1(antesDeCorte(cur.g.horas, 21))}%</span>}
               {peorPunto && <span style={{ marginLeft: "auto", color: "rgba(255,255,255,0.42)" }}>peor {tendData.modo}: {peorPunto.name} · {fmt1(peorPunto.antes)}%</span>}
@@ -1635,19 +1779,26 @@ export default function Analisis({ semanas }) {
                     {" · "}{T.dias} {T.dias === 1 ? "día" : "días"} con datos
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Más verde = más envíos · puntito = SLA flojo ese día (🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%). Tocá un día para el detalle.</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 11, color: C.muted, marginBottom: 8 }}>
+                  <span style={{ flex: "1 1 200px" }}>Puntito = SLA flojo ese día (🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%). Tocá un día para el detalle.</span>
+                  {/* Escala por niveles (Bklit): 4 escalones se leen mejor que un degradé continuo. */}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 9.5 }}>
+                    menos envíos{CAL_ALPHA.slice(1).map((a) => <span key={a} style={{ width: 10, height: 10, borderRadius: 3, background: `rgba(46,207,170,${a})` }} />)}más
+                  </span>
+                </div>
                 {pico && <div style={{ fontSize: 12, color: C.ink, marginBottom: 8 }}><span style={{ color: C.blue, fontWeight: 700 }}>⬆ pico:</span> <b style={{ textTransform: "capitalize" }}>{DIAS_SEM[new Date(pico.f + "T12:00:00").getDay()]} {fmtDDMM(pico.f)}</b> · {fmtInt(pico.s.cant)} envíos</div>}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(26px, 1fr))", gap: 3 }}>
+                <div onMouseLeave={() => setCalHover(null)} style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(26px, 1fr))", gap: 3 }}>
                   {["L", "M", "X", "J", "V", "S", "D"].map((d, i) => <div key={d + i} style={{ fontSize: 9, color: C.muted, textAlign: "center" }}>{d}</div>)}
                   {cells.map((d, i) => {
                     if (d == null) return <div key={"e" + i} />;
                     const iso = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
                     const s = calStats.map[iso];
-                    const alpha = s && calStats.max ? 0.12 + 0.5 * (s.cant / calStats.max) : 0;
+                    const alpha = s && calStats.max ? CAL_ALPHA[calNivel(s.cant / calStats.max)] : 0;
                     const sel = calSel && calSel.fecha === iso;
+                    const dim = calHover && calHover !== iso;
                     return (
-                      <div key={iso} onMouseEnter={s ? () => setCalSel({ fecha: iso, s }) : undefined} onClick={s ? () => setCalSel({ fecha: iso, s }) : undefined}
-                        style={{ height: 32, borderRadius: 6, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: s ? "pointer" : "default", background: s ? `rgba(46,207,170,${alpha.toFixed(2)})` : "transparent", border: `1px solid ${sel ? C.teal : "transparent"}` }}>
+                      <div key={iso} onMouseEnter={s ? () => { setCalSel({ fecha: iso, s }); setCalHover(iso); } : undefined} onClick={s ? () => setCalSel({ fecha: iso, s }) : undefined}
+                        style={{ height: 32, borderRadius: 6, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: s ? "pointer" : "default", background: s ? `rgba(46,207,170,${alpha})` : "transparent", border: `1px solid ${sel ? C.teal : "transparent"}`, opacity: dim ? 0.45 : 1, transition: "opacity .15s ease" }}>
                         <span style={{ fontSize: 10.5, fontWeight: s ? 700 : 400, color: s ? C.ink : C.dim, lineHeight: 1 }}>{d}</span>
                         {s && s.sla != null && s.sla < CFG.slaOk && <span style={{ width: 5, height: 5, borderRadius: "50%", background: slaColor(s.sla), marginTop: 2 }} />}
                       </div>
@@ -1669,31 +1820,68 @@ export default function Analisis({ semanas }) {
             );
           })()}
         </div>
+        {/* SLA con área + banda de riesgo + lectura fija arriba (ideas del line chart de Bklit).
+            Sin tooltip flotante: el número de arriba cambia con el cursor, el alto no. */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>SLA Meli por {tendData.modo}</div>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>Una línea. La punteada es el objetivo (98%).</div>
-          <ResponsiveContainer width="100%" height={190}>
-            <LineChart data={tendData.datos.filter((d) => d.sla != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" axisLine={{ stroke: C.faint }} tickLine={false} />
-              <YAxis domain={[90, 100]} ticks={[90, 95, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ stroke: C.border }} contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt1(v) + "%", "SLA"]} labelStyle={{ color: C.muted }} />
-              <ReferenceLine y={98} stroke={C.good} strokeOpacity={0.45} strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="sla" stroke={C.teal} strokeWidth={2.5} dot={{ r: 2.5, fill: C.teal }} />
-            </LineChart>
-          </ResponsiveContainer>
+          {(() => {
+            const D = slaSerie.datos;
+            const lastIdx = (() => { for (let k = D.length - 1; k >= 0; k--) if (D[k].sla != null) return k; return null; })();
+            const idx = slaHover != null && D[slaHover] ? slaHover : lastIdx;
+            const pt = idx != null ? D[idx] : null;
+            const v = pt ? (pt.sla != null ? pt.sla : pt.slaPrev) : null;
+            const esPrev = pt && pt.sla == null;
+            const dd = pt && pt.sla != null && pt.slaPrev != null ? pt.sla - pt.slaPrev : null;
+            return (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, height: 44 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>SLA Meli por {tendData.modo}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {slaSerie.ghost ? <>— esta semana · <span style={{ color: "rgba(255,255,255,0.45)" }}>┄ semana anterior</span></> : "La punteada es el objetivo (98%)."}
+                    </div>
+                  </div>
+                  {pt && (
+                    <div style={{ textAlign: "right", flex: "0 0 auto" }}>
+                      <div style={{ fontSize: 10.5, color: C.muted, textTransform: "capitalize" }}>{esPrev ? `${pt.largoPrev} (sem. ant.)` : pt.largo}</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.1, color: esPrev ? C.muted : slaColor(v) }}>
+                        {v != null ? fmt1(v) + "%" : "—"}
+                        {dd != null && <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, color: dd >= 0 ? C.goodText : C.critText }}>{(dd >= 0 ? "+" : "−") + fmt1(Math.abs(dd))}</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <ResponsiveContainer width="100%" height={196}>
+                  <ComposedChart data={D} margin={{ top: 8, right: 10, left: -8, bottom: 0 }}
+                    onMouseMove={(st) => { const k = st && st.activeTooltipIndex != null ? Number(st.activeTooltipIndex) : null; setSlaHover(Number.isNaN(k) ? null : k); }}
+                    onMouseLeave={() => setSlaHover(null)}>
+                    <defs>
+                      <linearGradient id="fxSlaGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.teal} stopOpacity={0.32} />
+                        <stop offset="100%" stopColor={C.teal} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="x" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" axisLine={{ stroke: C.faint }} tickLine={false} />
+                    <YAxis domain={[90, 100]} ticks={[90, 95, 98, 100]} allowDataOverflow tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(t) => t + "%"} axisLine={false} tickLine={false} />
+                    <Tooltip content={() => null} cursor={{ stroke: "rgba(255,255,255,0.35)", strokeDasharray: "3 3" }} />
+                    <ReferenceLine y={CFG.slaOk} stroke={C.good} strokeOpacity={0.45} strokeDasharray="4 4" />
+                    {slaSerie.ghost && <Line type="monotone" dataKey="slaPrev" stroke="rgba(255,255,255,0.38)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} activeDot={{ r: 3, fill: "rgba(255,255,255,0.6)", stroke: "none" }} connectNulls isAnimationActive={false} />}
+                    <Area type="monotone" dataKey="sla" stroke={C.teal} strokeWidth={2.5} fill="url(#fxSlaGrad)" baseValue={90} connectNulls={false}
+                      dot={{ r: 2.5, fill: C.teal, stroke: "none" }} activeDot={{ r: 5, fill: C.teal, stroke: C.bg, strokeWidth: 2 }} animationDuration={900} animationEasing="ease-out" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </>
+            );
+          })()}
         </div>
+        {/* Mapa de calor día × hora — reemplaza a la línea "Post-21 por día" (mismo dato + dónde cae). */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>Post-21 por {tendData.modo}</div>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>% de entregas después de las 21 — ¿la operación se está corriendo a la noche? La punteada es el umbral de "tarde" ({CFG.tarde_post21 * 100}%).</div>
-          <ResponsiveContainer width="100%" height={190}>
-            <LineChart data={tendData.datos.filter((d) => d.p21r != null)} margin={{ top: 6, right: 10, left: -8, bottom: 0 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 9, fill: C.muted }} interval="preserveStartEnd" axisLine={{ stroke: C.faint }} tickLine={false} />
-              <YAxis domain={[0, "auto"]} tick={{ fontSize: 9, fill: C.muted }} tickFormatter={(v) => v + "%"} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ stroke: C.border }} contentStyle={{ background: "#0B0B24", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v) => [fmt1(v) + "%", "Post-21"]} labelStyle={{ color: C.muted }} />
-              <ReferenceLine y={CFG.tarde_post21 * 100} stroke={C.warn} strokeOpacity={0.5} strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="p21r" stroke={C.warn} strokeWidth={2.5} dot={{ r: 2.5, fill: C.warn }} />
-            </LineChart>
-          </ResponsiveContainer>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minHeight: 44, marginBottom: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600 }}>¿A qué hora se entrega?</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>Cada fila es {tendData.modo === "semana" ? "una semana" : `un ${tendData.modo}`}; en rojo, lo que cae después del corte de las {String(corte).padStart(2, "0")}:00. A la derecha, el % fuera de horario.</div>
+            </div>
+          </div>
+          <HoraHeatmap rows={tendData.datos.map((d) => ({ name: d.dw ? `${d.dw} ${d.name}` : d.name, largo: d.largo, horas: d.horas }))} corte={corte} isMobile={isMobile} />
         </div>
       </div>
 
