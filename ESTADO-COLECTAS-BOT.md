@@ -63,6 +63,7 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - Log: `/var/log/flexit-openwa-guardian.log`. La key se lee dentro del container, no se guarda.
 
 ## QR del bot en la app (2026-10-07) — migración `20261007233000_bot_wa_qr.sql`
+- **Aplicado y verificado 2026-10-07 20:25:** migración corrida por Alejo, Telegram de prueba OK (200), el guardián reportó `wa_estado=ready` con la clave válida.
 - Si WhatsApp desvincula el bot, el guardián publica el QR cada 15 s (`rpc/bot_wa_reportar`, validado contra el hash de `/root/flexit/bot-wa.key`; tabla `bot_secreto` sin políticas) y avisa una vez por Telegram (token/chat de `/root/.hermes/.env`).
 - Colectas › CABA: el botón dice "Bot pide QR"; en el panel, **solo admin@flexit.app** ve el QR (RLS de `bot_qr` por email). El resto ve "avisale a Alejo".
 - Cada corrida del guardián reporta `bot_salud.wa_estado`. El QR se borra solo cuando la sesión vuelve a `ready`.
