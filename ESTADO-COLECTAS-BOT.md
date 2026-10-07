@@ -69,6 +69,9 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - Cada corrida del guardián reporta `bot_salud.wa_estado`. El QR se borra solo cuando la sesión vuelve a `ready`.
 - Si se regenera la clave del VPS, actualizar `bot_secreto.clave_hash` con `sha256sum < /root/flexit/bot-wa.key`.
 
+## Barrido 11:30 (2026-10-08) — migración `20261008000000_colectas_barrido_1130.sql`
+- pg_cron `colectas_bot_barrido` (`30 14 * * 1-5` = 11:30 AR, salta feriados) → `colecta_bot_barrido()` deja una nota en la Pizarra (autor 'Bot colectas', ⏰ antes de las 13) con los clientes del bot que no respondieron. Si respondieron todos, no deja nada; si se corre de nuevo, actualiza la misma nota.
+
 ## Pendientes / limitaciones
 - Cargar los feriados de 2028 a fin de 2027 (tabla `feriados`).
 - La sección 📱 Grupos de la tiquetera no tiene badge para `solo_envio` (se ve como estado desconocido).
