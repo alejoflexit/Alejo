@@ -10,11 +10,31 @@ import { sbFetch, BRAND, normNombre } from './colectasShared';
 
 const linkDe = (c) => `${window.location.origin}/colecta.html?t=${c.bot_token}`;
 
-// Grupos ordenados por parecido con el nombre del cliente (para no buscar entre 100)
+// ── Parecido cliente ↔ grupo ──
+// Los grupos se llaman tipo "Soporte Sabor Pampeano - Flexit" y el cliente "Sabor Pameano" (¡con typo!):
+// se comparan palabra por palabra, sin las de relleno, tolerando 1-2 letras de diferencia.
+const RELLENO = new Set(['soporte', 'flexit', 'grupo', 'de', 'del', 'la', 'el', 'los', 'las', 'y', 'sa', 'srl', 'sas', 'envios', 'colectas']);
+const palabras = s => normNombre(s).replace(/[^a-z0-9 ]/g, ' ').split(' ').filter(t => t.length >= 2 && !RELLENO.has(t));
+function distancia(a, b) {
+  const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[m][n];
+}
+const parecidas = (a, b) => a === b || (a.length >= 5 && b.length >= 5 && distancia(a, b) <= (Math.max(a.length, b.length) >= 8 ? 2 : 1))
+  || (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a)));
+// 0..1: qué parte de las palabras del cliente aparecen en el nombre del grupo
+function parecido(cliente, grupo) {
+  const pc = palabras(cliente), pg = palabras(grupo);
+  if (!pc.length || !pg.length) return 0;
+  return pc.filter(t => pg.some(u => parecidas(t, u))).length / pc.length;
+}
+// Grupos ordenados por parecido con el cliente (los más parecidos arriba)
 function ordenarGrupos(grupos, nombre) {
-  const toks = normNombre(nombre).split(' ').filter(t => t.length >= 3);
-  const score = g => { const n = normNombre(g.nombre_grupo); return toks.filter(t => n.includes(t)).length; };
-  return [...grupos].sort((a, b) => (score(b) - score(a)) || String(a.nombre_grupo).localeCompare(String(b.nombre_grupo)));
+  return grupos.map(g => ({ g, p: parecido(nombre, g.nombre_grupo) }))
+    .sort((a, b) => (b.p - a.p) || String(a.g.nombre_grupo).localeCompare(String(b.g.nombre_grupo)))
+    .map(x => ({ ...x.g, parecido: x.p }));
 }
 
 export default function ColectasBot({ clientes, onClienteActualizado, onClose }) {
@@ -25,6 +45,9 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
   const [guardando, setGuardando] = useState({}); // id → true
   const [avisos, setAvisos] = useState({}); // id → texto
   const [copiado, setCopiado] = useState(null);
+  const [abierto, setAbierto] = useState(null); // cliente con el buscador de grupo abierto
+  const [qGrupo, setQGrupo] = useState('');
+  const [vinculando, setVinculando] = useState(false);
 
   useEffect(() => {
     sbFetch('agente_config?tipo=eq.grupo&select=chat_id,nombre_grupo,estado,envio_habilitado&order=nombre_grupo.asc')
@@ -42,6 +65,21 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
   const prendidos = preguntables.filter(c => c.bot_habilitado).length;
   const grupoDe = chat => (grupos || []).find(g => g.chat_id === chat);
 
+  // Sugerencia automática: el grupo que coincide con TODAS las palabras del cliente, si es uno solo
+  // y no está asignado a otro cliente. Si hay dudas (dos candidatos parecidos) no sugiere nada.
+  const sugerencias = useMemo(() => {
+    const out = {};
+    if (!grupos) return out;
+    const usados = new Set(clientes.map(c => c.chat_id).filter(Boolean));
+    clientes.forEach(c => {
+      if (c.fija || c.chat_id) return;
+      const cands = grupos.filter(g => !usados.has(g.chat_id) && parecido(c.nombre, g.nombre_grupo) >= 0.999);
+      if (cands.length === 1) out[c.id] = cands[0];
+    });
+    return out;
+  }, [grupos, clientes]);
+  const nSugeridos = Object.keys(sugerencias).length;
+
   const lista = useMemo(() => {
     const q = normNombre(busqueda);
     return [...clientes]
@@ -51,6 +89,7 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
   }, [clientes, busqueda, filtro]);
 
   const configurar = async (c, habilitado, chatId) => {
+    setAbierto(null);
     setGuardando(p => ({ ...p, [c.id]: true }));
     setAvisos(p => ({ ...p, [c.id]: '' }));
     try {
@@ -71,6 +110,14 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
     } finally {
       setGuardando(p => ({ ...p, [c.id]: false }));
     }
+  };
+
+  const vincularSugeridos = async () => {
+    if (!nSugeridos || vinculando) return;
+    if (!window.confirm(`Vincular ${nSugeridos} cliente(s) con el grupo sugerido? (El bot queda apagado: lo prendés después en cada uno.)`)) return;
+    setVinculando(true);
+    for (const c of clientes) { const g = sugerencias[c.id]; if (g) await configurar(c, false, g.chat_id); }
+    setVinculando(false);
   };
 
   const copiar = async c => {
@@ -108,6 +155,13 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
             <button style={chip(filtro === 'todos')} onClick={() => setFiltro('todos')}>Todos</button>
             <button style={chip(filtro === 'faltan')} onClick={() => setFiltro('faltan')}>Sin configurar ({preguntables.length - prendidos})</button>
             <button style={chip(filtro === 'prendidos')} onClick={() => setFiltro('prendidos')}>Prendidos ({prendidos})</button>
+            {nSugeridos > 0 && (
+              <button onClick={vincularSugeridos} disabled={vinculando}
+                title="Vincula cada cliente con el grupo que coincide con su nombre. El bot queda apagado."
+                style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: '1px solid rgba(251,191,36,0.45)', background: 'rgba(251,191,36,0.10)', color: '#FBBF24', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <i className="ti ti-sparkles" aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {vinculando ? 'Vinculando…' : `Vincular ${nSugeridos} sugerido${nSugeridos === 1 ? '' : 's'}`}
+              </button>
+            )}
           </div>
           {errorGrupos && <div style={{ marginTop: 8, fontSize: 12, color: '#E24B4A' }}>{errorGrupos}</div>}
         </div>
@@ -133,16 +187,15 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
                   {avisos[c.id] && <div style={{ fontSize: 11, color: '#FBBF24', marginTop: 2 }}>{avisos[c.id]}</div>}
                 </div>
 
-                <select value={c.chat_id || ''} disabled={c.fija || ocupado}
-                  onChange={e => configurar(c, c.bot_habilitado && !!e.target.value, e.target.value)}
-                  aria-label={`Grupo de WhatsApp de ${c.nombre}`} style={sel}>
-                  <option value="">— Elegí el grupo —</option>
-                  {opciones.map(o => (
-                    <option key={o.chat_id} value={o.chat_id}>
-                      {o.nombre_grupo}{o.estado === 'activo' ? ' (agente)' : o.estado === 'inactivo' ? ' (pausado)' : ''}
-                    </option>
-                  ))}
-                </select>
+                <button type="button" disabled={c.fija || ocupado}
+                  onClick={() => { setAbierto(abierto === c.id ? null : c.id); setQGrupo(''); }}
+                  aria-expanded={abierto === c.id} aria-label={`Grupo de WhatsApp de ${c.nombre}`}
+                  style={{ ...sel, textAlign: 'left', cursor: c.fija ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: g ? BRAND.white : BRAND.muted }}>
+                    {g ? g.nombre_grupo : c.chat_id ? 'Grupo no encontrado' : '— Elegí el grupo —'}
+                  </span>
+                  <i className={abierto === c.id ? 'ti ti-chevron-up' : 'ti ti-chevron-down'} aria-hidden="true" style={{ color: BRAND.muted }} />
+                </button>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: c.fija ? 'default' : 'pointer', fontSize: 12, color: BRAND.muted, whiteSpace: 'nowrap' }}>
                   <input type="checkbox" checked={!!c.bot_habilitado} disabled={c.fija || ocupado || (!c.bot_habilitado && !c.chat_id)}
@@ -156,6 +209,55 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
                   style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'transparent', color: copiado === c.id ? BRAND.teal : BRAND.white, fontSize: 12, cursor: c.fija ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                   <i className={copiado === c.id ? 'ti ti-check' : 'ti ti-link'} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {copiado === c.id ? 'Copiado' : 'Copiar link'}
                 </button>
+
+                {sugerencias[c.id] && abierto !== c.id && (
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#FBBF24', marginTop: -2 }}>
+                    <i className="ti ti-sparkles" aria-hidden="true" />
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Sugerido: <b>{sugerencias[c.id].nombre_grupo}</b></span>
+                    <button onClick={() => configurar(c, false, sugerencias[c.id].chat_id)} disabled={ocupado}
+                      style={{ padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(251,191,36,0.45)', background: 'rgba(251,191,36,0.10)', color: '#FBBF24', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      Vincular
+                    </button>
+                  </div>
+                )}
+
+                {abierto === c.id && (() => {
+                  const usadosPor = {};
+                  clientes.forEach(x => { if (x.chat_id && x.id !== c.id) usadosPor[x.chat_id] = x.nombre; });
+                  const q = normNombre(qGrupo);
+                  const lista = ordenarGrupos(grupos, c.nombre).filter(o => !q || normNombre(o.nombre_grupo).includes(q));
+                  return (
+                    <div style={{ gridColumn: '1 / -1', background: '#0E1E38', border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: 8 }}>
+                      <input autoFocus value={qGrupo} onChange={e => setQGrupo(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setAbierto(null); } if (e.key === 'Enter' && lista[0]) configurar(c, c.bot_habilitado, lista[0].chat_id); }}
+                        placeholder="Buscar grupo…" aria-label="Buscar grupo"
+                        style={{ ...sel, background: BRAND.faint, marginBottom: 6 }} />
+                      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                        {lista.length === 0 && <div style={{ fontSize: 12, color: BRAND.muted, padding: 8 }}>Ningún grupo con ese nombre. ¿Ya agregaron el bot al grupo?</div>}
+                        {lista.map(o => {
+                          const elegido = o.chat_id === c.chat_id;
+                          return (
+                            <button key={o.chat_id} onClick={() => configurar(c, c.bot_habilitado, o.chat_id)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', borderRadius: 6, border: 'none', background: elegido ? 'rgba(46,207,170,0.12)' : 'transparent', color: BRAND.white, fontSize: 12, cursor: 'pointer' }}>
+                              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.nombre_grupo}</span>
+                              {o.parecido >= 0.999 && !usadosPor[o.chat_id] && <span style={{ fontSize: 11, color: '#FBBF24' }}>coincide</span>}
+                              {usadosPor[o.chat_id] && <span style={{ fontSize: 11, color: BRAND.muted }}>ya es de {usadosPor[o.chat_id]}</span>}
+                              {o.estado === 'activo' && <span style={{ fontSize: 11, color: BRAND.muted }}>agente</span>}
+                              {o.estado === 'inactivo' && <span style={{ fontSize: 11, color: '#E24B4A' }}>pausado</span>}
+                              {elegido && <i className="ti ti-check" aria-hidden="true" style={{ color: BRAND.teal }} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {c.chat_id && (
+                        <button onClick={() => configurar(c, false, '')}
+                          style={{ marginTop: 6, padding: '4px 8px', border: 'none', background: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer' }}>
+                          Quitar grupo
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
