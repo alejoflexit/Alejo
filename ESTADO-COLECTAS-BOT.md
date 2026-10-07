@@ -41,6 +41,13 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - Historia del bloqueo: Chrome de OpenWA colgado desde el 20/08 + sesión caída; durante el fix duplicaba (n8n daba timeout después de mandar). VPS: swap 2 GB, reinicio diario del bridge 05:00, reintentos en el disparador de métricas.
 - Siguiente: Santi agrega 5491125841662 a los grupos de CABA → aparecen en `agente_config` como `pendiente` (sync cada 15 min) → los configura en Colectas › CABA › "Bot de confirmación". Arrancar con ~10 clientes la primera semana.
 
+## Parche OpenWA (2026-10-07) — detector de grupos
+- Síntoma: "Flexit WA - Sync grupos" fallaba cada 15 min (500). Causa: whatsapp-web.js 1.34.7 + WhatsApp Web 2.3000.x renombró `MsgKey._serialized` → `$1`; `getChats()` tira `r: r` (wwebjs issue #201862). Enviar seguía funcionando.
+- Arreglo: getter `_serialized → $1` inyectado al inicio de `LoadUtils` en `src/util/Injected/Utils.js`. El container es `read_only`, así que el archivo parcheado se monta desde `/opt/flexit/openwa/patches/wwebjs-Utils.js` vía `docker-compose.override.yml` (que conserva `SSRF_ALLOWED_HOSTS=n8n`). Copias: `/root/Utils.js.orig`, `/root/override-original.yml`.
+- Verificado: sesión `ready` sin QR, `/groups` devuelve la lista (Sabor Pampeano incluido), envío a Flexit test OK (#209).
+- Volver atrás: `cp /root/override-original.yml /opt/flexit/openwa/docker-compose.override.yml && docker compose up -d --no-deps openwa-api`.
+- Sacar el parche cuando salga una versión de whatsapp-web.js corregida y se actualice OpenWA.
+
 ## Pendientes / limitaciones
 - Feriados: el cron pregunta igual un feriado de semana. Si molesta, agregar tabla de feriados.
 - La sección 📱 Grupos de la tiquetera no tiene badge para `solo_envio` (se ve como estado desconocido).
