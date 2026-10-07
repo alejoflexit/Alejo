@@ -62,6 +62,12 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - **Instalado 2026-10-07** (primera corrida OK, log vacío). Cada 10 min (`/etc/cron.d/flexit-openwa-guardian`). Sesión caída → start. "ready" pero `/groups` no responde 2 veces → `docker restart openwa-api` + start. Trabada en initializing 30 min → restart. Pide QR → solo log (hay que escanear con la línea del bot).
 - Log: `/var/log/flexit-openwa-guardian.log`. La key se lee dentro del container, no se guarda.
 
+## QR del bot en la app (2026-10-07) — migración `20261007233000_bot_wa_qr.sql`
+- Si WhatsApp desvincula el bot, el guardián publica el QR cada 15 s (`rpc/bot_wa_reportar`, validado contra el hash de `/root/flexit/bot-wa.key`; tabla `bot_secreto` sin políticas) y avisa una vez por Telegram (token/chat de `/root/.hermes/.env`).
+- Colectas › CABA: el botón dice "Bot pide QR"; en el panel, **solo admin@flexit.app** ve el QR (RLS de `bot_qr` por email). El resto ve "avisale a Alejo".
+- Cada corrida del guardián reporta `bot_salud.wa_estado`. El QR se borra solo cuando la sesión vuelve a `ready`.
+- Si se regenera la clave del VPS, actualizar `bot_secreto.clave_hash` con `sha256sum < /root/flexit/bot-wa.key`.
+
 ## Pendientes / limitaciones
 - Cargar los feriados de 2028 a fin de 2027 (tabla `feriados`).
 - La sección 📱 Grupos de la tiquetera no tiene badge para `solo_envio` (se ve como estado desconocido).

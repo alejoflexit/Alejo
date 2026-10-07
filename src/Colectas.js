@@ -231,7 +231,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       .then(r => { if (vivo) setBotEstado(r || null); })
       .catch(() => { if (vivo) setBotEstado(null); });
     cargar();
-    const t = setInterval(cargar, 5 * 60 * 1000);
+    const t = setInterval(cargar, 60 * 1000);
     return () => { vivo = false; clearInterval(t); };
   }, [tab]);
   soloLecturaRef.current = soloLectura;
@@ -1319,7 +1319,7 @@ function ColectasInner({ soloArribos = false, irA }) {
             return (
             <button onClick={() => setBotPanel(true)} title={caido ? (botEstado.aviso || 'El bot de WhatsApp no da señal') : 'Configurar el bot que manda el link de confirmación a las 9'}
               style={{ padding:'4px 12px', borderRadius:20, border:`1px solid ${caido ? 'rgba(226,75,74,0.5)' : 'rgba(46,207,170,0.4)'}`, background: caido ? 'rgba(226,75,74,0.10)' : 'rgba(46,207,170,0.08)', color: col, fontSize:12, fontWeight:600, cursor:'pointer' }}>
-              <i className={`ti ${caido ? 'ti-alert-triangle' : 'ti-link'}`} aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {caido ? `Bot sin señal${botEstado.ultimo_sync ? ' desde ' + horaSync(botEstado.ultimo_sync) : ''}` : `Bot de confirmación ${on}/${preg.length}`}
+              <i className={`ti ${caido ? 'ti-alert-triangle' : 'ti-link'}`} aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {caido ? (botEstado.pide_qr ? 'Bot pide QR' : `Bot sin señal${botEstado.ultimo_sync ? ' desde ' + horaSync(botEstado.ultimo_sync) : ''}`) : `Bot de confirmación ${on}/${preg.length}`}
             </button>
           ); })()}
           {botPanel && (

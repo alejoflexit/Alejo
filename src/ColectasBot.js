@@ -7,6 +7,50 @@
 // (el bot manda ahí pero no lee ni contesta). El equipo no puede escribir agente_config directo.
 import React, { useEffect, useMemo, useState } from 'react';
 import { sbFetch, BRAND, normNombre } from './colectasShared';
+import { esAdmin } from './permisos';
+
+// QR para re-vincular el WhatsApp del bot. Lo publica el guardián del VPS (bot_wa_reportar) y
+// solo lo puede leer admin@flexit.app (RLS de bot_qr): da acceso completo a la cuenta del bot.
+function QrBot() {
+  const [qr, setQr] = useState(null);        // { qr, qr_at }
+  const [img, setImg] = useState('');
+  const [visto, setVisto] = useState(false); // ya mostró un QR en esta apertura
+  useEffect(() => {
+    let vivo = true;
+    const cargar = () => sbFetch('bot_qr?select=qr,qr_at&id=eq.1')
+      .then(r => { if (vivo) setQr(r && r[0] ? r[0] : null); })
+      .catch(() => {});
+    cargar();
+    const t = setInterval(cargar, 6000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
+  const fresco = qr && qr.qr && qr.qr_at && (Date.now() - new Date(qr.qr_at).getTime()) < 2 * 60 * 1000;
+  useEffect(() => {
+    if (!fresco) { setImg(''); return; }
+    setVisto(true);
+    if (qr.qr.startsWith('data:image')) { setImg(qr.qr); return; }
+    import('qrcode').then(m => m.toDataURL(qr.qr, { width: 280, margin: 2 })).then(setImg).catch(() => setImg(''));
+  }, [fresco, qr]);
+  if (!fresco) {
+    return visto ? (
+      <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(46,207,170,0.10)', border: '1px solid rgba(46,207,170,0.4)', color: BRAND.teal, fontSize: 12 }}>
+        <i className="ti ti-circle-check" aria-hidden="true" style={{ verticalAlign: '-2px' }} /> QR escaneado: el bot se está reconectando.
+      </div>
+    ) : null;
+  }
+  return (
+    <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: 12, borderRadius: 10, background: 'rgba(226,75,74,0.08)', border: '1px solid rgba(226,75,74,0.4)' }}>
+      <div style={{ background: '#fff', padding: 8, borderRadius: 8, lineHeight: 0 }}>
+        {img ? <img src={img} alt="QR para vincular el WhatsApp del bot" width={220} height={220} /> : <div style={{ width: 220, height: 220 }} />}
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.6, flex: '1 1 220px' }}>
+        <div style={{ fontWeight: 700, color: '#F09595', marginBottom: 4 }}>WhatsApp pide volver a vincular el bot</div>
+        En el <b>teléfono de la línea del bot</b> (11 2584-1662): WhatsApp › ⋮ › <b>Dispositivos vinculados</b> › Vincular un dispositivo, y escaneá este código.
+        <div style={{ fontSize: 11, color: BRAND.muted, marginTop: 6 }}>Se renueva solo cada pocos segundos. No lo compartas: da acceso al WhatsApp del bot.</div>
+      </div>
+    </div>
+  );
+}
 
 const linkDe = (c) => `${window.location.origin}/colecta.html?t=${c.bot_token}`;
 
@@ -164,12 +208,13 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
             )}
           </div>
           {errorGrupos && <div style={{ marginTop: 8, fontSize: 12, color: '#E24B4A' }}>{errorGrupos}</div>}
+          {esAdmin() && estado && (estado.ok === false || estado.pide_qr) && <QrBot />}
           {estado && (estado.ok === false || estado.aviso) && (
             <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(226,75,74,0.10)', border: '1px solid rgba(226,75,74,0.4)', color: '#F09595', fontSize: 12, lineHeight: 1.5 }}>
               <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign: '-2px' }} />{' '}
-              {estado.aviso || 'El WhatsApp del bot no da señal: si sigue así, a las 9 no salen los links.'}
+              {estado.aviso || (estado.pide_qr ? 'WhatsApp desvinculó el bot y hay que escanear el QR de nuevo.' : 'El WhatsApp del bot no da señal: si sigue así, a las 9 no salen los links.')}
               {estado.ultimo_sync && <> Última señal: {new Date(estado.ultimo_sync).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.</>}
-              {' '}Avisale a Alejo.
+              {!esAdmin() && ' Avisale a Alejo.'}
             </div>
           )}
           {estado && estado.feriado && (
