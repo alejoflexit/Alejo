@@ -37,7 +37,7 @@ function ordenarGrupos(grupos, nombre) {
     .map(x => ({ ...x.g, parecido: x.p }));
 }
 
-export default function ColectasBot({ clientes, onClienteActualizado, onClose }) {
+export default function ColectasBot({ clientes, estado, onClienteActualizado, onClose }) {
   const [grupos, setGrupos] = useState(null);
   const [errorGrupos, setErrorGrupos] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -164,6 +164,19 @@ export default function ColectasBot({ clientes, onClienteActualizado, onClose })
             )}
           </div>
           {errorGrupos && <div style={{ marginTop: 8, fontSize: 12, color: '#E24B4A' }}>{errorGrupos}</div>}
+          {estado && (estado.ok === false || estado.aviso) && (
+            <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(226,75,74,0.10)', border: '1px solid rgba(226,75,74,0.4)', color: '#F09595', fontSize: 12, lineHeight: 1.5 }}>
+              <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign: '-2px' }} />{' '}
+              {estado.aviso || 'El WhatsApp del bot no da señal: si sigue así, a las 9 no salen los links.'}
+              {estado.ultimo_sync && <> Última señal: {new Date(estado.ultimo_sync).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.</>}
+              {' '}Avisale a Alejo.
+            </div>
+          )}
+          {estado && estado.feriado && (
+            <div style={{ marginTop: 10, fontSize: 12, color: '#FBBF24' }}>
+              <i className="ti ti-calendar-off" aria-hidden="true" style={{ verticalAlign: '-2px' }} /> Hoy es feriado ({estado.feriado}): el bot no manda links.
+            </div>
+          )}
         </div>
 
         {/* Lista */}

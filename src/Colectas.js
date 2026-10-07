@@ -184,6 +184,14 @@ class MapaBoundary extends React.Component {
   }
 }
 
+// "14:05" si es de hoy, "06/10 14:05" si es de otro día (hora Argentina)
+function horaSync(iso) {
+  const d = new Date(iso); const tz = { timeZone: 'America/Argentina/Buenos_Aires' };
+  const hora = d.toLocaleTimeString('es-AR', { ...tz, hour: '2-digit', minute: '2-digit' });
+  const dia = d.toLocaleDateString('es-AR', { ...tz, day: '2-digit', month: '2-digit' });
+  return dia === new Date().toLocaleDateString('es-AR', { ...tz, day: '2-digit', month: '2-digit' }) ? hora : `${dia} ${hora}`;
+}
+
 function ColectasInner({ soloArribos = false, irA }) {
   const [navView, setNavView] = useState(soloArribos ? 'arribos' : 'colectas'); // 'colectas' | 'arribos' | 'pagos' | 'clientes' | 'choferes'
   const [tab, setTab] = useState('CABA');
@@ -212,6 +220,20 @@ function ColectasInner({ soloArribos = false, irA }) {
   })();
   const esFutura = diaSiguiente !== null && fecha === diaSiguiente;
   const soloLectura = !esFutura && (fechaVolver !== null || finDeSemanaSemana);
+
+  // Señal de vida del bot (colecta_bot_estado): si el sync de grupos no corre hace +40 min,
+  // WhatsApp está caído y a las 9 no se mandan los links. Se muestra en rojo en el botón y el panel.
+  const [botEstado, setBotEstado] = useState(null);
+  useEffect(() => {
+    if (tab !== 'CABA') return;
+    let vivo = true;
+    const cargar = () => sbFetch('rpc/colecta_bot_estado', { method: 'POST', body: '{}' })
+      .then(r => { if (vivo) setBotEstado(r || null); })
+      .catch(() => { if (vivo) setBotEstado(null); });
+    cargar();
+    const t = setInterval(cargar, 5 * 60 * 1000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [tab]);
   soloLecturaRef.current = soloLectura;
   const verDia = (d) => {
     setCalAbierto(false);
@@ -405,7 +427,7 @@ function ColectasInner({ soloArribos = false, irA }) {
 
   // Load clients
   useEffect(() => {
-    sbFetch('colectas_clientes?select=*&order=seccion.asc,nombre.asc')
+    sbFetch('colectas_clientes?select=*&bot_prueba=not.is.true&order=seccion.asc,nombre.asc')
       .then(setClientes)
       .catch(e => setError('Error cargando clientes: ' + e.message));
   }, []);
@@ -690,7 +712,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       } else {
         await sbFetch('colectas_clientes', { method: 'POST', body: JSON.stringify(payload) });
       }
-      const updated = await sbFetch('colectas_clientes?select=*&order=seccion.asc,nombre.asc');
+      const updated = await sbFetch('colectas_clientes?select=*&bot_prueba=not.is.true&order=seccion.asc,nombre.asc');
       setClientes(updated);
       setShowForm(false); setMapaForm(false);
       setEditId(null);
@@ -1291,16 +1313,20 @@ function ColectasInner({ soloArribos = false, irA }) {
               <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {sinAsignar} sin asignar
             </div>
           )}
-          {tab === 'CABA' && !soloLectura && (() => { const preg = seccionClientes.filter(c => !c.fija); const on = preg.filter(c => c.bot_habilitado).length; return (
-            <button onClick={() => setBotPanel(true)} title="Configurar el bot que manda el link de confirmación a las 9"
-              style={{ padding:'4px 12px', borderRadius:20, border:'1px solid rgba(46,207,170,0.4)', background:'rgba(46,207,170,0.08)', color:'#2ECFAA', fontSize:12, fontWeight:600, cursor:'pointer' }}>
-              <i className="ti ti-link" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> Bot de confirmación {on}/{preg.length}
+          {tab === 'CABA' && !soloLectura && (() => { const preg = seccionClientes.filter(c => !c.fija); const on = preg.filter(c => c.bot_habilitado).length;
+            const caido = botEstado && (botEstado.ok === false || botEstado.aviso);
+            const col = caido ? '#E24B4A' : '#2ECFAA';
+            return (
+            <button onClick={() => setBotPanel(true)} title={caido ? (botEstado.aviso || 'El bot de WhatsApp no da señal') : 'Configurar el bot que manda el link de confirmación a las 9'}
+              style={{ padding:'4px 12px', borderRadius:20, border:`1px solid ${caido ? 'rgba(226,75,74,0.5)' : 'rgba(46,207,170,0.4)'}`, background: caido ? 'rgba(226,75,74,0.10)' : 'rgba(46,207,170,0.08)', color: col, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              <i className={`ti ${caido ? 'ti-alert-triangle' : 'ti-link'}`} aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {caido ? `Bot sin señal${botEstado.ultimo_sync ? ' desde ' + horaSync(botEstado.ultimo_sync) : ''}` : `Bot de confirmación ${on}/${preg.length}`}
             </button>
           ); })()}
           {botPanel && (
             <ColectasBot
               clientes={clientes.filter(c => c.activo && c.seccion === 'CABA')}
               onClienteActualizado={upd => setClientes(prev => prev.map(c => c.id === upd.id ? { ...c, ...upd } : c))}
+              estado={botEstado}
               onClose={() => setBotPanel(false)}
             />
           )}

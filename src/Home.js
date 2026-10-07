@@ -270,7 +270,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     if (!session) return;
     let vivo = true;
     Promise.all([
-      sbFetch("colectas_clientes?select=id,activo,fija,seccion,opera_sabados"),
+      sbFetch("colectas_clientes?select=id,activo,fija,seccion,opera_sabados&bot_prueba=not.is.true"),
       sbFetch(`colectas_registros?select=cliente_id,estado,choferes,confirmado_por&fecha=eq.${hoy}`),
       sbFetch(`colectas_arribos?select=cadete,llego_at&fecha=eq.${hoy}`),
     ]).then(([clientes, regs, arr]) => {

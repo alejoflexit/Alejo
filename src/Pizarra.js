@@ -1003,7 +1003,7 @@ function PizarraInner({ usuario }) {
     let vivo = true;
     Promise.all([
       cargarNotas(hoy),
-      sbFetch('colectas_clientes?select=id,nombre&activo=eq.true&order=nombre.asc').catch(() => []),
+      sbFetch('colectas_clientes?select=id,nombre&activo=eq.true&bot_prueba=not.is.true&order=nombre.asc').catch(() => []),
       cargarChoferesFull(),
     ]).then(([ns, cs, chs]) => {
       if (!vivo) return;

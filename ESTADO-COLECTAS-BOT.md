@@ -1,6 +1,6 @@
 # Estado — Bot de confirmación de colectas (piloto CABA)
 
-*Última actualización: 2026-10-06*
+*Última actualización: 2026-10-07*
 
 ## Objetivo
 Que los clientes confirmen solos si tienen colecta, con un link, en vez de que el equipo pregunte grupo por grupo. Piloto: solo clientes de **CABA**.
@@ -48,7 +48,21 @@ Que los clientes confirmen solos si tienen colecta, con un link, en vez de que e
 - Volver atrás: `cp /root/override-original.yml /opt/flexit/openwa/docker-compose.override.yml && docker compose up -d --no-deps openwa-api`.
 - Sacar el parche cuando salga una versión de whatsapp-web.js corregida y se actualice OpenWA.
 
+## Robustez (2026-10-07) — migración `20261007230000_colectas_bot_robustez.sql`
+**Estado: escrita, SIN aplicar** (el pedido de confirmación se canceló 3 veces). Para aplicarla: aceptar el pedido cuando Claude la reintente, o pegar el archivo en Supabase › SQL Editor.
+- **Señal de vida:** tabla `bot_salud`. Cada corrida del "Sync grupos" de n8n (upsert a `agente_config`, cada 15 min) actualiza `ultimo_sync` vía trigger de statement (cuenta todo lo que no sea rol `authenticated`, o sea los cambios del equipo desde la app no cuentan).
+- **Guardia en encolar:** si `ultimo_sync` tiene más de 40 min, no encola (los mensajes se perderían) y deja `ultimo_aviso`. Cron ahora 9:00, 9:30, 10:00 y 10:30 (`'0,30 12-13 * * 1-5'`); el dedupe por día evita duplicados y permite recuperarse si el guardián levanta OpenWA.
+- **App:** `rpc/colecta_bot_estado` → el botón de CABA se pone rojo "Bot sin señal desde HH:MM" y el panel muestra el aviso. Sin la migración, la llamada falla en silencio y no se muestra nada.
+- **Grupo compartido:** si varios clientes con bot usan el mismo grupo, el mensaje dice "¿Tienen colecta hoy en *Cliente*?".
+- **Tiquetera limpia:** trigger `caso_bot_autoresolver`: un caso de 'Bot colectas' que pasa a `esperando_cliente` queda `resuelto` (y marca `bot_salud.ultimo_envio`).
+- **Feriados:** tabla `feriados` (nacionales de días de semana, oct-2026 a dic-2027; los trasladables de 2027 están "a confirmar" con el decreto). Ese día no se manda.
+- **Cliente de prueba:** oculto en Colectas, Home y Pizarra (`bot_prueba=not.is.true`). Sigue existiendo y manda su link diario a "Flexit test" para verificar que todo funciona.
+
+## Guardián OpenWA (VPS) — `vps/flexit-openwa-guardian.sh`
+- Cada 10 min (`/etc/cron.d/flexit-openwa-guardian`). Sesión caída → start. "ready" pero `/groups` no responde 2 veces → `docker restart openwa-api` + start. Trabada en initializing 30 min → restart. Pide QR → solo log (hay que escanear con la línea del bot).
+- Log: `/var/log/flexit-openwa-guardian.log`. La key se lee dentro del container, no se guarda.
+
 ## Pendientes / limitaciones
-- Feriados: el cron pregunta igual un feriado de semana. Si molesta, agregar tabla de feriados.
+- Cargar los feriados de 2028 a fin de 2027 (tabla `feriados`).
 - La sección 📱 Grupos de la tiquetera no tiene badge para `solo_envio` (se ve como estado desconocido).
 - Si el bot no está en el grupo, no aparece en la lista (el sync de grupos corre cada 15 min).
