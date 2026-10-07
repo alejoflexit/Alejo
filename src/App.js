@@ -1163,8 +1163,9 @@ export default function App() {
 
 
 
-      {/* Filtros semana y dia */}
-      {semanas.length > 0 && (
+      {/* Filtros semana y dia — en Análisis no se muestran: Análisis tiene su propio selector de
+          período y estos filtros no la afectan (dos selectores = dos verdades). */}
+      {semanas.length > 0 && tab !== "analisis" && (
         <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:10, padding:"10px 16px", marginBottom:"1rem" }}>
           <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
             <div style={{ position:"relative" }} ref={historialRef}>
@@ -1242,8 +1243,9 @@ export default function App() {
         </div>
       ) : (
         <>
-          {/* KPIs */}
-          {isMobile ? (
+          {/* KPIs — ocultos en Análisis: ahí los mismos números (con comparación y tendencia) están
+              en las tiles de "Datos de la semana". Verlos dos veces era la mitad del ruido. */}
+          {tab !== "analisis" && (isMobile ? (
             <>
               {/* SLA Meli — card grande featured en mobile */}
               {(() => {
@@ -1315,9 +1317,9 @@ export default function App() {
               <TooltipKpi label="SLA Flexit" tooltipInfo="Porcentaje de envíos resueltos sobre el total de Mercado Libre y particulares. Fórmula: (total − pendientes) ÷ total × 100. Entregados y cancelados cuentan como resueltos. No mide entregas a horario. Cuanto más alto, mejor." val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
               <TooltipKpi label="Cadetes" val={acumulado.length} color={BRAND.muted} icon="ti-users" />
             </div>
-          )}
+          ))}
 
-          {criticos > 0 && (
+          {tab !== "analisis" && criticos > 0 && (
             <div style={{ background:"rgba(226,75,74,0.1)", border:"1px solid rgba(226,75,74,0.3)", borderRadius:10, padding:"10px 16px", marginBottom:"1rem", fontSize:13, color:"#E24B4A" }}>
               <i className="ti ti-alert-circle" style={{ marginRight:8 }} />
               <strong>{criticos} cadete{criticos>1?"s":""} con SLA crítico</strong> — por debajo del 95%. Requieren atención inmediata.

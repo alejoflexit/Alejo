@@ -528,6 +528,9 @@ export default function Analisis({ semanas }) {
   const [verAtender, setVerAtender] = useState(true); // "A atender" colapsable (abierto por defecto, es lo principal)
   const [verHist, setVerHist] = useState(false); // "ver historial completo" en el drill (modo Historial)
   const [verTodosPat, setVerTodosPat] = useState(false); // Patrones: ver todos
+  const [verPat, setVerPat] = useState(false);           // Patrones plegado: repite a "Atención" en la semana; es para mirar con tiempo
+  const [verTodasAt, setVerTodasAt] = useState(false);   // Atención: arriba van las 3 más urgentes, el resto a un clic
+  const [verRankTodo, setVerRankTodo] = useState(false); // Ranking: 10 filas por defecto (eran ~80)
   const [patSort, setPatSort] = useState("diasDem"); // Patrones: columna de orden
 
   useEffect(() => {
@@ -555,7 +558,7 @@ export default function Analisis({ semanas }) {
   const enCursoActual = periodo.t === "sem" && !!curWeek?.enCurso;
   const nCurDias = curWeek ? curWeek.fechas.length : 0;
   const prevLbl = periodo.t === "sem"
-    ? (prevLabels ? (enCursoActual ? `mismos ${nCurDias} días de sem. ${fmtSemLabel(prevLabels[0])}` : "sem. " + fmtSemLabel(prevLabels[0])) : "")
+    ? (prevLabels ? (enCursoActual ? (nCurDias === 1 ? `mismo día de sem. ${fmtSemLabel(prevLabels[0])}` : `mismos ${nCurDias} días de sem. ${fmtSemLabel(prevLabels[0])}`) : "sem. " + fmtSemLabel(prevLabels[0])) : "")
     : "4 sem. anteriores";
 
   const cur = useMemo(() => aggWeeks(semanas, new Set(periodLabels), topeMap), [semanas, periodLabels, topeMap]);
@@ -867,6 +870,8 @@ export default function Analisis({ semanas }) {
     caida: (c) => c.delta != null && c.delta <= -CFG.deltaSla,
   };
   const rankingF = chip ? ranking.filter(chipPred[chip]) : ranking;
+  // Sin filtro se ven 10 (los de más volumen); con un chip activo, todo lo que cumple el filtro.
+  const rankVis = chip || verRankTodo ? rankingF : rankingF.slice(0, 10);
 
   // SLA por cadete en las últimas 4 semanas (columna "Últimas 4 semanas" de Patrones).
   const hist4 = useMemo(() => {
@@ -1289,7 +1294,6 @@ export default function Analisis({ semanas }) {
       <style>{FX_CSS}</style>
       {/* Selector de período — control segmentado prominente y fijo arriba */}
       <div style={{ position: "sticky", top: 0, zIndex: 5, background: C.bg, paddingTop: 8, paddingBottom: 10, marginBottom: 12, borderBottom: `1px solid ${C.faint}` }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 7 }}>¿Qué querés revisar?</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[["sem", "Esta semana"], ["ult4", "Últimas 4 semanas"], ["todo", "Historial"]].map(([t, txt]) => {
             const on = periodo.t === t;
@@ -1311,40 +1315,27 @@ export default function Analisis({ semanas }) {
             })}
           </select>
         )}
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
-          {periodDesc}{prevLabels ? " · comparado contra " + (periodo.t === "sem" ? (enCursoActual ? `los mismos ${nCurDias} días de la sem. del ` : "la semana del ") + fmtSemLabel(prevLabels[0]) : "las 4 semanas anteriores") : ""}
+        {/* UNA línea de contexto: antes eran tres (esta línea + "Datos hasta" + el banner amarillo de
+            semana en curso) diciendo lo mismo. */}
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {enCursoActual && <span style={{ color: "#f3c886", fontWeight: 700 }}>⏳ En curso</span>}
+          <span>datos hasta <b style={{ color: C.ink }}>{maxFecha ? fmtDMY(maxFecha) : "—"}</b>{prevLabels ? " · se compara contra " + (periodo.t === "sem" ? (enCursoActual ? (nCurDias === 1 ? "el mismo día de la sem. del " : `los mismos ${nCurDias} días de la sem. del `) : "la semana del ") + fmtSemLabel(prevLabels[0]) : "las 4 semanas anteriores") : ""}</span>
+          {periodoParcial && !enCursoActual && badge("semana en curso · parcial")}
+          {pocasZonas && badge(`localidades: histórico corto${zonasInfo.desde ? " (desde " + fmtDDMM(zonasInfo.desde) + ")" : ""}`)}
         </div>
       </div>
 
-      {/* Frescura de datos — arriba de todo */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
-        <span>📅 Datos hasta <b style={{ color: C.ink }}>{maxFecha ? fmtDMY(maxFecha) : "—"}</b></span>
-        {periodoParcial && !enCursoActual && badge("semana en curso · parcial")}
-        {pocasZonas && badge(`localidades: histórico corto${zonasInfo.desde ? " (desde " + fmtDDMM(zonasInfo.desde) + ")" : ""}`)}
-      </div>
-
-      {/* Banner fuerte cuando la semana elegida está en curso (todavía se está llenando) */}
-      {enCursoActual && (
-        <div style={{ background: "rgba(239,159,39,0.12)", border: "1px solid rgba(239,159,39,0.40)", borderRadius: 12, padding: "10px 14px", marginBottom: 14, display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: "#f3c886" }}>⏳ Semana en curso · datos hasta {maxFecha ? fmtDMY(maxFecha) : "—"}</span>
-          <span style={{ fontSize: 12, color: C.muted }}>La comparación es contra los <b style={{ color: C.ink }}>mismos {nCurDias} día{nCurDias === 1 ? "" : "s"}</b> de la semana anterior, no contra la semana completa.</span>
-        </div>
-      )}
-
-      {/* Titular del analista (agente del VPS) — arriba de todo, con el informe completo colapsable */}
+      {/* Analista: 2 líneas y se abre al tocar. Antes era un párrafo entero arriba de todo. */}
       {informeStd && informeStd.titular && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 5 }}>🧠 Análisis del {informeStd.row.tipo === "semanal" ? "semanal" : "día"} · {fmtDDMM(informeStd.row.fecha)}</div>
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.5, color: C.ink }}>{informeStd.titular}</div>
-            <div onClick={() => setVerInforme((v) => !v)} style={{ marginTop: 9, fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600 }}>
-              {verInforme ? "▾ ocultar informe completo" : "▸ ver informe completo del analista"}
-            </div>
-            {verInforme && <div style={{ marginTop: 8, borderTop: `1px solid ${C.faint}`, paddingTop: 8 }}><Markdown md={informeStd.row.informe_md} /></div>}
+        <div onClick={() => setVerInforme((v) => !v)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 16, cursor: "pointer" }}>
+          <div style={{ display: "flex", gap: isMobile ? 4 : 10, alignItems: "flex-start", flexWrap: isMobile ? "wrap" : "nowrap" }}>
+            <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", paddingTop: 2, flex: isMobile ? "1 0 80%" : "0 0 auto" }}>🧠 Analista · {informeStd.row.tipo === "semanal" ? "sem." : "día"} {fmtDDMM(informeStd.row.fecha)}</span>
+            <span style={{ flex: isMobile ? "1 1 100%" : 1, order: isMobile ? 3 : 0, minWidth: 0, fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.86)", ...(verInforme ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{informeStd.titular}</span>
+            <span style={{ color: C.teal, fontSize: 12, flex: "0 0 auto", paddingTop: 2 }}>{verInforme ? "▾" : "▸"}</span>
           </div>
+          {verInforme && <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 8, borderTop: `1px solid ${C.faint}`, paddingTop: 8, cursor: "default" }}><Markdown md={informeStd.row.informe_md} /></div>}
         </div>
       )}
-
 
       {/* === Decisiones de la semana (v2) === */}
       <div style={{ marginBottom: 24 }}>
@@ -1424,7 +1415,7 @@ export default function Analisis({ semanas }) {
             <div id="regiones-bloque" style={{ marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>🗺️ Regiones</span>
-                <span style={{ fontSize: 11, color: C.muted }}>¿qué zona se está rompiendo? · tocá una región para el detalle</span>
+                <span style={{ fontSize: 11, color: C.muted }}>tocá una para ver sus zonas</span>
                 {/* Dos lentes sobre las MISMAS tarjetas — no son tarjetas nuevas. El SLA casi no se
                     mueve (todo verde, cero señal); el horario sí discrimina. */}
                 <span style={{ marginLeft: "auto", display: "inline-flex", gap: 4, padding: 3, borderRadius: 10, background: "rgba(0,0,0,0.3)", border: `1px solid ${C.border}` }}>
@@ -1563,26 +1554,34 @@ export default function Analisis({ semanas }) {
             <div style={{ fontSize: 12.5, color: C.muted, padding: "6px" }}>Nadie en rojo este período. 👏</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {alertas.cadetes.map((a, i) => {
+              {(verTodasAt ? alertas.cadetes : alertas.cadetes.slice(0, 3)).map((a, i) => {
                 const enr = informeStd && informeStd.porCadete[a.name];
                 const abierto = isOpen("cadete", a.name, "alert");
                 const urgente = i === 0;
                 return (
                   <div key={a.key} style={{ border: `1px solid ${urgente ? "rgba(229,96,77,0.55)" : C.border}`, background: urgente ? "rgba(229,96,77,0.07)" : C.cardAlt, borderRadius: 10, overflow: "hidden" }}>
-                    <div onClick={() => toggleDrill("cadete", a.name, "alert")} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "11px 13px", cursor: "pointer" }}>
+                    <div onClick={() => toggleDrill("cadete", a.name, "alert")} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 12px", cursor: "pointer" }}>
                       <span style={{ width: 9, height: 9, borderRadius: "50%", background: urgente ? C.crit : "#F2953F", marginTop: 5, flex: "0 0 auto" }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 700 }}>{a.name} <span style={{ color: C.teal, fontWeight: 600 }}>· {a.accion}</span>{urgente && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: C.critText, background: "rgba(229,96,77,0.16)", borderRadius: 5, padding: "1px 6px" }}>MÁS URGENTE</span>}</div>
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{a.motivo}</div>
-                        {enr && enr.accion && <div style={{ fontSize: 12, color: C.goodText, marginTop: 4, lineHeight: 1.45 }}>💡 Analista: {enr.accion}</div>}
-                        {segNode(a)}
+                        {enr && enr.accion && <div style={{ fontSize: 11.5, color: C.goodText, marginTop: 3, lineHeight: 1.4 }}>💡 {enr.accion}</div>}
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{a.dato}</div>
+                      {/* El "Hecho" va a la derecha, junto al número: era una línea entera por tarjeta. */}
+                      <div style={{ display: "flex", flexDirection: isMobile ? "column-reverse" : "row", alignItems: isMobile ? "flex-end" : "center", gap: isMobile ? 0 : 10, marginLeft: 8, alignSelf: isMobile ? "flex-start" : "center" }}>
+                        <div style={{ marginTop: isMobile ? 0 : -5 }}>{segNode(a)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>{a.dato}</div>
+                      </div>
                       <span style={{ color: C.teal, fontSize: 12, marginLeft: 4, flex: "0 0 auto" }}>{abierto ? "▾" : "▸"}</span>
                     </div>
                   </div>
                 );
               })}
+              {alertas.cadetes.length > 3 && (
+                <div onClick={() => setVerTodasAt((v) => !v)} style={{ fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600, padding: "2px 4px" }}>
+                  {verTodasAt ? "ver menos" : `ver ${alertas.cadetes.length - 3} más`}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1657,11 +1656,8 @@ export default function Analisis({ semanas }) {
         })()}
       </div>
 
-      {/* === 2 · Cadetes (Semáforo migrado) === */}
-      <h2 style={{ fontSize: 16, margin: "28px 0 14px", borderTop: `1px solid ${C.faint}`, paddingTop: 18 }}>Cadetes <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· ranking, semáforo y filtros</span></h2>
-
-      {/* Ranking completo */}
-      <h3 style={{ fontSize: 14, margin: "0 0 8px" }}>Ranking completo <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>{isMobile ? "(tocá una tarjeta para el detalle)" : "(clic en una columna para ordenar · clic en una fila para el detalle)"}</span></h3>
+      {/* === 2 · Cadetes === un solo título (antes: h2 "Cadetes · ranking…" + h3 "Ranking completo (clic…)") */}
+      <h2 style={{ fontSize: 16, margin: "28px 0 12px", borderTop: `1px solid ${C.faint}`, paddingTop: 18 }}>Cadetes <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· {ranking.length} en el período · {isMobile ? "tocá" : "clic en"} uno para el detalle</span></h2>
       {/* chips de filtro rápido */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
         {[["criticos", "🔴 Solo críticos"], ["riesgo", "🟡 En riesgo"], ["ok", "🟢 OK"], ["sobre", "📦 Sobre tope"], ["tarde", "🌙 Terminan tarde"], ["caida", "📉 En caída"]].map(([k, lbl]) => (
@@ -1680,7 +1676,7 @@ export default function Analisis({ semanas }) {
       </div>
       {isMobile ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-          {rankingF.map((c, i) => (
+          {rankVis.map((c, i) => (
             <div key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ background: C.cardAlt, border: `1px solid ${isOpen("cadete", c.name, "rank") ? C.teal : C.border}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
@@ -1707,7 +1703,7 @@ export default function Analisis({ semanas }) {
             </tr>
           </thead>
           <tbody>
-            {rankingF.map((c, i) => (
+            {rankVis.map((c, i) => (
               <tr key={i} onClick={() => toggleDrill("cadete", c.name, "rank")} style={{ borderBottom: `1px solid ${C.faint}`, cursor: "pointer", background: isOpen("cadete", c.name, "rank") ? "rgba(46,207,170,0.08)" : "transparent" }}>
                 <td style={{ padding: "9px 10px", fontWeight: 600 }}>{c.name}</td>
                 <td style={{ padding: "9px 10px", textAlign: "right" }}>{fmtInt(c.cant)}</td>
@@ -1727,9 +1723,11 @@ export default function Analisis({ semanas }) {
       </div>
       )}
 
-      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
-        Calidad de datos del período: {fmtInt(cur.g.sin)} envíos sin cadete asignado{cur.g.basura > 0 ? ` · ${fmtInt(cur.g.basura)} bajo nombres basura ("Repro gramar", "devuelto depósito") que conviene limpiar en LightData` : ""}. Los sin-asignar y basura cuentan en los KPIs pero quedan fuera del ranking de cadetes (ver "Alertas operativas" arriba).
-      </div>
+      {!chip && rankingF.length > 10 && (
+        <div onClick={() => setVerRankTodo((v) => !v)} style={{ fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600, margin: "8px 2px 4px" }}>
+          {verRankTodo ? "ver menos" : `ver los ${rankingF.length} cadetes`}
+        </div>
+      )}
 
       {/* === 3 · Tendencia (Mensual migrado) — evolución adaptativa por período === */}
       <h2 style={{ fontSize: 16, margin: "28px 0 14px", borderTop: `1px solid ${C.faint}`, paddingTop: 18 }}>Tendencia <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· evolución {tendData.modo === "día" ? "diaria" : tendData.modo === "semana" ? "semanal" : "mensual"} de SLA y volumen</span></h2>
@@ -1780,7 +1778,7 @@ export default function Analisis({ semanas }) {
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 11, color: C.muted, marginBottom: 8 }}>
-                  <span style={{ flex: "1 1 200px" }}>Puntito = SLA flojo ese día (🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%). Tocá un día para el detalle.</span>
+                  <span style={{ flex: "1 1 160px" }}>puntito = SLA del día 🟡 &lt;{CFG.slaOk}% · 🔴 &lt;{CFG.slaCritico}%</span>
                   {/* Escala por niveles (Bklit): 4 escalones se leen mejor que un degradé continuo. */}
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 9.5 }}>
                     menos envíos{CAL_ALPHA.slice(1).map((a) => <span key={a} style={{ width: 10, height: 10, borderRadius: 3, background: `rgba(46,207,170,${a})` }} />)}más
@@ -1878,7 +1876,7 @@ export default function Analisis({ semanas }) {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minHeight: 44, marginBottom: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 600 }}>¿A qué hora se entrega?</div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>Cada fila es {tendData.modo === "semana" ? "una semana" : `un ${tendData.modo}`}; en rojo, lo que cae después del corte de las {String(corte).padStart(2, "0")}:00. A la derecha, el % fuera de horario.</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>En rojo, después de las {String(corte).padStart(2, "0")}:00 · a la derecha, % fuera de horario</div>
             </div>
           </div>
           <HoraHeatmap rows={tendData.datos.map((d) => ({ name: d.dw ? `${d.dw} ${d.name}` : d.name, largo: d.largo, horas: d.horas }))} corte={corte} isMobile={isMobile} />
@@ -1886,8 +1884,8 @@ export default function Analisis({ semanas }) {
       </div>
 
       {/* === 4 · Patrones (reincidentes — reemplaza las tarjetas masivas de Mensual) === */}
-      <h2 style={{ fontSize: 16, margin: "28px 0 14px", borderTop: `1px solid ${C.faint}`, paddingTop: 18 }}>Patrones <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· reincidentes de demora en {periodDesc.toLowerCase()}</span></h2>
-      {patrones.length === 0 ? (
+      <h2 onClick={() => setVerPat((v) => !v)} style={{ fontSize: 16, margin: "28px 0 14px", borderTop: `1px solid ${C.faint}`, paddingTop: 18, cursor: "pointer" }}><span style={{ color: C.teal, fontSize: 12, marginRight: 6 }}>{verPat ? "▾" : "▸"}</span>Patrones <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· quién repite demoras · {patrones.length}</span></h2>
+      {verPat && (patrones.length === 0 ? (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, color: C.muted, fontSize: 12.5, marginBottom: 22 }}>Sin cadetes con demoras en el período. 👏</div>
       ) : (
         <>
@@ -1922,7 +1920,7 @@ export default function Analisis({ semanas }) {
             </div>
           )}
         </>
-      )}
+      ))}
 
       {/* === 5 · Localidades (SLA por localidad + zona operativa) === */}
       <h2 style={{ fontSize: 16, margin: "28px 0 10px", borderTop: `1px solid ${C.faint}`, paddingTop: 18 }}>Localidades <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>· SLA por localidad y zona operativa</span></h2>
