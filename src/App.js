@@ -11,6 +11,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
 const Colectas = lazy(() => import("./Colectas"));
 const Tiquetera = lazy(() => import("./Tiquetera"));
+const BuscarEnvio = lazy(() => import("./BuscarEnvio"));
 const PendientesHistoricos = lazy(() => import("./PendientesHistoricos"));
 const Pagos = lazy(() => import("./Pagos"));
 const Analisis = lazy(() => import("./Analisis"));
@@ -142,6 +143,7 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
     { id: "zonas", icon: "ti ti-alarm", label: "Zonas" },
     { id: "pizarra", icon: "ti ti-notes", label: "Pizarra" },
     { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
+    { id: "envio", icon: "ti ti-search", label: "Buscar envío" },
     { id: "pendientes", icon: "ti ti-history", label: "Pendientes históricos" },
     ...(getSession() && esAdmin() ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
   ].filter(it => puedeVer(it.id));
@@ -809,10 +811,21 @@ export default function App() {
     return () => window.removeEventListener('resize', handler);
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Texto compartido para "Buscar envío": Android (Compartir → Flexit, share_target) y el atajo de
+  // iPhone abren /?text=… (o ?q=…). Se lee una vez y se limpia la URL.
+  const [envioQ] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const t = [p.get("q"), p.get("title"), p.get("text"), p.get("url")].filter(Boolean).join(" ").trim();
+      if (t) window.history.replaceState(null, "", window.location.pathname + "#envio");
+      return t;
+    } catch { return ""; }
+  });
   const [seccion, setSeccion] = useState(() => {
     // Deep-link por hash (#colectas, #metricas…): lo usan los atajos del widget de Paco
+    if (envioQ) return "envio";
     const h = (window.location.hash || "").replace("#", "");
-    return ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "pendientes", "pagos", "usuarios", "home"].includes(h) ? h : "home";
+    return ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "envio", "pendientes", "pagos", "usuarios", "home"].includes(h) ? h : "home";
   });
   const [session, setSession] = useState(() => getSession());
   usePermisos(session ? session.email : ""); // re-renderiza cuando llegan los permisos del usuario
@@ -844,7 +857,7 @@ export default function App() {
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
-    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", pendientes: "Pendientes históricos", pagos: "Liquidaciones", usuarios: "Usuarios" };
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", envio: "Buscar envío", pendientes: "Pendientes históricos", pagos: "Liquidaciones", usuarios: "Usuarios" };
     const base = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
     document.title = (comNuevos > 0 && seccion !== "pizarra") ? `(${comNuevos}) ${base}` : base;
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
@@ -1107,8 +1120,8 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
@@ -1142,6 +1155,7 @@ export default function App() {
       {vista === "pizarra" && <Suspense fallback={<VistaSkeleton />}><Pizarra /></Suspense>}
 
       {vista === "tiquetera" && <Suspense fallback={<VistaSkeleton />}><Tiquetera /></Suspense>}
+      {vista === "envio" && <Suspense fallback={<VistaSkeleton />}><BuscarEnvio inicial={envioQ} /></Suspense>}
 
       {vista === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
 

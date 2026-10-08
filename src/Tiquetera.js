@@ -1030,3 +1030,6 @@ export default function Tiquetera() {
     </div>
   );
 }
+
+// Para "Buscar envío" (BuscarEnvio.js): mismo panel y misma búsqueda que la Tiquetera.
+export { PanelEnvio, numerosDelTexto, sb as sbTiquetera };

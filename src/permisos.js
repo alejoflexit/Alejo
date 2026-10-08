@@ -47,6 +47,7 @@ export function esAdmin() {
 
 export function puedeVer(id) {
   if (id === "home") return true;
+  if (id === "envio") return puedeVer("tiquetera"); // Buscar envío usa los mismos datos que la Tiquetera
   if (id === "usuarios") return esAdmin();
   const p = permisosActuales();
   if (!p) return true; // sin sesión: igual que antes (cada sección pide su propio login; Pagos el del admin)
