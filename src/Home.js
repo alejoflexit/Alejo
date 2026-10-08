@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { puedeVer, esAdmin } from "./permisos";
 import { slaMeli } from "./slaShared";
-import { useClima, textoNivel, iconoNivel } from "./Clima";
+import { useClima, textoNivel, iconoNivel, Lluvia } from "./Clima";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -460,6 +460,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           const color = fuerte ? C.rojo : C.ambar;
           return (
             <div style={{ ...cardBase, padding: isMobile ? '14px 16px' : '16px 20px', marginTop: 14, borderColor: fuerte ? 'rgba(232,97,95,0.45)' : 'rgba(245,192,68,0.4)', background: `linear-gradient(135deg, ${fuerte ? 'rgba(232,97,95,0.10)' : 'rgba(245,192,68,0.08)'}, transparent 70%), ${C.glass}` }}>
+              {hoyMal && <Lluvia intensidad={clima.ahora || r.nivel} />}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 28, lineHeight: 1 }}>{iconoNivel(r)}</span>
                 <div style={{ minWidth: 0 }}>
@@ -510,6 +511,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           )}
           {clima && (
             <Stat cap="Clima en horario de reparto" span2 orden={4}>
+              {(clima.ahora || clima.hoy.nivel === 'fuerte' || clima.hoy.nivel === 'lluvia') && <Lluvia intensidad={clima.ahora || clima.hoy.nivel} />}
               <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
                 {[['Hoy', clima.hoy], ['Mañana', clima.manana]].filter(([, r]) => r).map(([k, r]) => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>

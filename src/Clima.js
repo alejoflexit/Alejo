@@ -42,7 +42,12 @@ export function useClima() {
         min: j.daily ? Math.round(j.daily.temperature_2m_min[i]) : null,
         max: j.daily ? Math.round(j.daily.temperature_2m_max[i]) : null,
       }));
-      setClima({ hoy: semana[0], manana: semana[1] || null, semana });
+      // ¿está lloviendo ahora? (la hora actual del pronóstico, hora Argentina)
+      const ahoraAR = new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).slice(0, 13).replace(' ', 'T');
+      const iAhora = j.hourly.time.findIndex((t) => t.slice(0, 13) === ahoraAR);
+      const mmAhora = iAhora >= 0 ? j.hourly.precipitation[iAhora] || 0 : 0;
+      const ahora = mmAhora >= 2 ? 'fuerte' : mmAhora >= 0.3 ? 'lluvia' : null;
+      setClima({ hoy: semana[0], manana: semana[1] || null, semana, ahora });
     }).catch(() => {});
     cargar();
     const t = setInterval(cargar, 60 * 60 * 1000);
@@ -55,3 +60,30 @@ export const textoNivel = (r) => !r ? '' : r.nivel === 'fuerte' ? `Lluvia fuerte
   : r.nivel === 'lluvia' ? `Lluvia${r.franja ? ' ' + r.franja : ''} · ${r.mm} mm`
   : r.nivel === 'puede' ? `Puede llover (${r.prob}%)` : 'Sin lluvia en horario de reparto';
 export const iconoNivel = (r) => !r ? '' : r.nivel === 'fuerte' ? '⛈️' : r.nivel === 'lluvia' ? '🌧️' : r.nivel === 'puede' ? '🌦️' : '☀️';
+
+// Animación de lluvia de fondo (tipo app del clima del iPhone). Va detrás del contenido de la tarjeta:
+// zIndex -1 dentro de la tarjeta, que ya crea su propio contexto de apilamiento (backdrop-filter).
+// No cambia el alto de nada y se apaga si el usuario pidió reducir movimiento.
+const CSS_LLUVIA = `
+@keyframes fx-gota { from { top: -30px; } to { top: 105%; } }
+.fx-lluvia { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: -1; }
+.fx-lluvia i { position: absolute; top: -30px; width: 1.5px; border-radius: 2px; transform: rotate(12deg);
+  background: linear-gradient(to bottom, rgba(150,200,255,0), rgba(150,200,255,0.55)); animation: fx-gota linear infinite; }
+@media (prefers-reduced-motion: reduce) { .fx-lluvia { display: none; } }`;
+
+export function Lluvia({ intensidad = 'lluvia' }) {
+  const n = intensidad === 'fuerte' ? 46 : intensidad === 'lluvia' ? 26 : 12;
+  const vel = intensidad === 'fuerte' ? 0.55 : intensidad === 'lluvia' ? 0.8 : 1.15;
+  const gotas = [];
+  for (let i = 0; i < n; i++) {
+    const r = (k) => ((i * 9301 + k * 49297) % 233280) / 233280; // pseudo-azar estable (no cambia en cada render)
+    gotas.push(<i key={i} style={{
+      left: `${(r(1) * 104 - 2).toFixed(1)}%`,
+      height: `${Math.round(12 + r(2) * 16)}px`,
+      opacity: (0.35 + r(3) * 0.65) * (intensidad === 'puede' ? 0.6 : 1),
+      animationDuration: `${(vel + r(4) * 0.5).toFixed(2)}s`,
+      animationDelay: `${(-r(5) * 2).toFixed(2)}s`,
+    }} />);
+  }
+  return (<><style>{CSS_LLUVIA}</style><div className="fx-lluvia" aria-hidden="true">{gotas}</div></>);
+}
