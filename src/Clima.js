@@ -1,5 +1,5 @@
 // Pronóstico de lluvia para el Home (Open-Meteo: gratis, sin clave, CABA).
-// Mira el horario de reparto (10 a 21 hs) de hoy y mañana y avisa cuando viene lluvia que complica:
+// Mira el horario de reparto (10 a 23 hs) de hoy y mañana y avisa cuando viene lluvia que complica:
 //   fuerte  → ≥ 10 mm en el horario de reparto o alguna hora con ≥ 4 mm
 //   lluvia  → ≥ 2 mm en el horario de reparto
 //   puede   → probabilidad ≥ 50 % aunque marque poca agua
@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 const URL = 'https://api.open-meteo.com/v1/forecast?latitude=-34.61&longitude=-58.38'
   + '&hourly=precipitation,precipitation_probability&daily=precipitation_sum,precipitation_probability_max,temperature_2m_min,temperature_2m_max'
   + '&timezone=America%2FArgentina%2FBuenos_Aires&forecast_days=7';
-const DESDE = 10, HASTA = 21;
+const DESDE = 10, HASTA = 22; // reparto de 10 a 23 hs (la hora 22 cubre 22 a 23)
 
 export function resumirDia(horas) {
   // horas: [{ hora: 0-23, mm, prob }]

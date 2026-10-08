@@ -536,7 +536,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
                   })}
                 </div>
               )}
-              <div style={{ fontSize: 10.5, color: C.ink3, marginTop: 9 }}>CABA · 10 a 21 hs · Open-Meteo</div>
+              <div style={{ fontSize: 10.5, color: C.ink3, marginTop: 9 }}>CABA · 10 a 23 hs · Open-Meteo</div>
             </Stat>
           )}
           {!session && (
