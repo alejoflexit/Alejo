@@ -509,7 +509,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             </Stat>
           )}
           {clima && (
-            <Stat cap="Clima en horario de reparto" span2={!isMobile} orden={4}>
+            <Stat cap="Clima en horario de reparto" span2 orden={4}>
               <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
                 {[['Hoy', clima.hoy], ['Mañana', clima.manana]].filter(([, r]) => r).map(([k, r]) => (
                   <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
