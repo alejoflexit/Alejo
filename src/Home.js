@@ -402,6 +402,13 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            {session && puedeVer("envio") && (
+              <button onClick={() => onNav("envio")} title="Buscar envío" aria-label="Buscar envío"
+                style={{ height: 38, padding: "0 12px", borderRadius: 12, border: "1px solid rgba(46,230,182,0.35)", background: "rgba(46,230,182,0.10)", color: C.teal, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                {!isMobile && "Buscar envío"}
+              </button>
+            )}
             {session && <Buzon notas={notas} onIr={onNav} onResolver={resolverLocal} />}
             {onLogin && <LoginWidget session={session} onLogin={onLogin} onLogout={onLogout} />}
           </div>
