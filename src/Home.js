@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { puedeVer, esAdmin } from "./permisos";
 import { slaMeli } from "./slaShared";
+import { useClima, textoNivel, iconoNivel } from "./Clima";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -215,6 +216,7 @@ function PacoEgg({ onClose }) {
 }
 
 export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout, comBadge = 0 }) {
+  const clima = useClima(); // pronóstico de lluvia en horario de reparto (Open-Meteo)
   const [eggPaco, setEggPaco] = useState(false); // easter egg: 5 clics seguidos en el logo del header
   const eggClicks = useRef({ n: 0, t: 0 });
   const clickLogoEgg = () => {
@@ -448,6 +450,30 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           </>)}
         </div>
 
+        {/* LLUVIA — solo aparece cuando el pronóstico complica el reparto (hoy o mañana) */}
+        {clima && (() => {
+          const hoyMal = clima.hoy.nivel === 'fuerte' || clima.hoy.nivel === 'lluvia';
+          const mananaMal = clima.manana && clima.manana.nivel === 'fuerte';
+          if (!hoyMal && !mananaMal) return null;
+          const r = hoyMal ? clima.hoy : clima.manana;
+          const fuerte = r.nivel === 'fuerte';
+          const color = fuerte ? C.rojo : C.ambar;
+          return (
+            <div style={{ ...cardBase, padding: isMobile ? '14px 16px' : '16px 20px', marginTop: 14, borderColor: fuerte ? 'rgba(232,97,95,0.45)' : 'rgba(245,192,68,0.4)', background: `linear-gradient(135deg, ${fuerte ? 'rgba(232,97,95,0.10)' : 'rgba(245,192,68,0.08)'}, transparent 70%), ${C.glass}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 28, lineHeight: 1 }}>{iconoNivel(r)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: isMobile ? 15 : 17, color }}>{hoyMal ? 'Hoy' : 'Mañana'}: {textoNivel(r)}</div>
+                  <div style={{ fontSize: 12, color: C.ink2, marginTop: 3, lineHeight: 1.5 }}>
+                    {fuerte ? 'Va a complicar el reparto: avisá a los cadetes, sacá primero las zonas lejanas y prevé bolsas para los paquetes.' : 'Puede demorar el reparto: avisá a los cadetes y prevé bolsas para los paquetes.'}
+                    {hoyMal && mananaMal ? ' Mañana también llueve fuerte.' : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* AHORA — widgets. En la ventana de arribos (13–15:30) Arribos va primero. */}
         <div style={secSt}>Ahora</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: isMobile ? 11 : 14 }}>
@@ -480,6 +506,20 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             <Stat cap="SLA de ayer" capId="chart" span2={!isMobile} orden={3} onClick={() => onNav("metricas")} irA="Métricas">
               <div style={{ ...bigNum(isMobile), color: ayer.sla >= 98 ? C.teal : ayer.sla >= 95 ? C.ambar : C.rojo }}>{ayer.sla.toFixed(1)}%</div>
               <div style={{ fontSize: 11, color: C.ink3, marginTop: 10 }}>{fmt(ayer.envios)} envíos · {ayer.cadetes.length} en alerta</div>
+            </Stat>
+          )}
+          {clima && (
+            <Stat cap="Clima en horario de reparto" span2={!isMobile} orden={4}>
+              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                {[['Hoy', clima.hoy], ['Mañana', clima.manana]].filter(([, r]) => r).map(([k, r]) => (
+                  <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                    <span style={{ fontSize: 20, width: 26, textAlign: 'center' }}>{iconoNivel(r)}</span>
+                    <span style={{ width: 58, color: C.ink3, fontSize: 12 }}>{k}</span>
+                    <span style={{ color: r.nivel === 'fuerte' ? C.rojo : r.nivel === 'lluvia' ? C.ambar : C.ink, fontWeight: r.nivel === 'seco' ? 400 : 600 }}>{textoNivel(r)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 10.5, color: C.ink3, marginTop: 9 }}>CABA · 10 a 21 hs · Open-Meteo</div>
             </Stat>
           )}
           {!session && (
