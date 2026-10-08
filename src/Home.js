@@ -519,6 +519,23 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
                   </div>
                 ))}
               </div>
+              {clima.semana && clima.semana.length > 2 && (
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${clima.semana.length}, 1fr)`, gap: 4, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}` }}>
+                  {clima.semana.map((d, i) => {
+                    const dia = i === 0 ? 'Hoy' : ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'][new Date(d.fecha + 'T12:00:00').getDay()];
+                    const col = d.nivel === 'fuerte' ? C.rojo : d.nivel === 'lluvia' ? C.ambar : d.nivel === 'puede' ? C.azul : C.ink3;
+                    return (
+                      <div key={d.fecha} title={textoNivel(d)} style={{ textAlign: 'center', padding: '6px 0', borderRadius: 8, background: d.nivel === 'fuerte' ? 'rgba(232,97,95,0.10)' : d.nivel === 'lluvia' ? 'rgba(245,192,68,0.08)' : 'transparent' }}>
+                        <div style={{ fontSize: 11, color: C.ink2, fontWeight: 600 }}>{dia}</div>
+                        <div style={{ fontSize: 17, margin: '3px 0' }}>{iconoNivel(d)}</div>
+                        <div style={{ fontSize: 11, color: col, fontWeight: 700 }}>{d.prob >= 20 ? `${d.prob}%` : '—'}</div>
+                        {d.mm >= 1 && <div style={{ fontSize: 10, color: C.ink3 }}>{d.mm} mm</div>}
+                        {d.max != null && <div style={{ fontSize: 10, color: C.ink3, marginTop: 2 }}>{d.min}°/{d.max}°</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div style={{ fontSize: 10.5, color: C.ink3, marginTop: 9 }}>CABA · 10 a 21 hs · Open-Meteo</div>
             </Stat>
           )}

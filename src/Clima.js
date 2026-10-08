@@ -7,7 +7,8 @@
 import { useEffect, useState } from 'react';
 
 const URL = 'https://api.open-meteo.com/v1/forecast?latitude=-34.61&longitude=-58.38'
-  + '&hourly=precipitation,precipitation_probability&timezone=America%2FArgentina%2FBuenos_Aires&forecast_days=2';
+  + '&hourly=precipitation,precipitation_probability&daily=precipitation_sum,precipitation_probability_max,temperature_2m_min,temperature_2m_max'
+  + '&timezone=America%2FArgentina%2FBuenos_Aires&forecast_days=7';
 const DESDE = 10, HASTA = 21;
 
 export function resumirDia(horas) {
@@ -34,7 +35,14 @@ export function useClima() {
         (porDia[dia] = porDia[dia] || []).push({ hora: Number(t.slice(11, 13)), mm: j.hourly.precipitation[i], prob: j.hourly.precipitation_probability[i] });
       });
       const dias = Object.keys(porDia).sort();
-      setClima({ hoy: resumirDia(porDia[dias[0]] || []), manana: dias[1] ? resumirDia(porDia[dias[1]]) : null });
+      // semana: cada día con su resumen en horario de reparto + mínima/máxima
+      const semana = (j.daily && j.daily.time ? j.daily.time : dias).map((d, i) => ({
+        fecha: d,
+        ...resumirDia(porDia[d] || []),
+        min: j.daily ? Math.round(j.daily.temperature_2m_min[i]) : null,
+        max: j.daily ? Math.round(j.daily.temperature_2m_max[i]) : null,
+      }));
+      setClima({ hoy: semana[0], manana: semana[1] || null, semana });
     }).catch(() => {});
     cargar();
     const t = setInterval(cargar, 60 * 60 * 1000);
