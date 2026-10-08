@@ -6,7 +6,7 @@ import { cargarComentarios, useComentariosRealtime, aplicarCambioNota } from "./
 import { slaMeli } from "./slaShared";
 import { esDemoradoFlexit } from "./demoraTotalShared";
 import DemoraTotalCell from "./DemoraTotalCell";
-import FlexitLoader from "./FlexitLoader";
+import HistorialLoader from "./HistorialLoader";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
@@ -1065,9 +1065,8 @@ export default function App() {
   const btn  = (active) => ({ padding:"5px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${active?"#2ECFAA":BRAND.border}`, background:active?"rgba(46,207,170,0.15)":BRAND.faint, color:active?"#2ECFAA":BRAND.muted });
 
   if (loadingDB && seccion !== "home") return (
-    <div style={{ ...APP_BACKGROUND, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px 16px", boxSizing:"border-box" }}>
-      <FlexitLoader label="Cargando historial…" sub="Un momento, estamos trayendo las métricas de los cadetes."
-        style={{ maxWidth:960, boxShadow:"0 20px 60px rgba(0,0,0,.45)" }} />
+    <div style={{ ...APP_BACKGROUND, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <HistorialLoader />
     </div>
   );
 
