@@ -30,11 +30,11 @@ test("terminó cuando no le quedan pendientes", () => {
   expect(estadoCadete(cad({ e: 28, pend: 0, cancel: 2, salida: H(14) }), H(19)).clave).toBe("termino");
 });
 
-test("sin nada encima (solo Nadie/reprogramados) cuenta como terminado, no frenado", () => {
-  const c = cad({ e: 20, pend: 5, otros: 5, salida: H(16), primeraEnt: H(16, 30), ultimaEnt: H(20, 16) });
-  const st = estadoCadete(c, H(22, 4));
-  expect(st.clave).toBe("termino");
-  expect(st.label).toBe("Terminó · 5 sin entregar");
+test("con Nadie/reprogramados (aunque estén en planta) y nada sin gestionar = terminó, no frenado", () => {
+  const c = cad({ e: 20, pend: 5, planta: 3, otros: 2, nadie: 3, reproC: 1, reproM: 0, sinGest: 0, flexSinGest: 0, salida: H(16), primeraEnt: H(16, 30), ultimaEnt: H(20, 16) });
+  expect(estadoCadete(c, H(22, 4)).clave).toBe("termino");
+  // si le queda uno sin ningún intento, sí está frenado
+  expect(estadoCadete({ ...c, sinGest: 1, flexSinGest: 1 }, H(22, 4)).clave).toBe("frenado");
 });
 
 test("proyección: ritmo y fin estimado; termina tarde si pasa las 21", () => {
@@ -55,6 +55,8 @@ test("ordena lo urgente arriba", () => {
   expect(lista.map((c) => c.nombre)).toEqual(["Planta", "Ruta", "Ok"]);
   const r = resumen(lista, { sinAsignar: { t: 3 }, internos: { "Repro gramar": 4 } });
   expect(r).toMatchObject({ noSalio: 1, termino: 1, enRuta: 1, sinAsignar: 3, internos: 4, atencion: 1 });
+  const r2 = resumen(armarCadetes({ A: cad({ e: 5, pend: 4, mlPend: 3, flexSinGest: 1, sinGest: 2, nadie: 1, reproC: 1, salida: H(14), primeraEnt: H(14), ultimaEnt: H(16, 50) }) }, H(17)), {});
+  expect(r2).toMatchObject({ flexPend: 3, flexSinGest: 1, sinGest: 2, nadie: 1, repro: 1 });
 });
 
 test("huecos: detecta una hora sin movimientos en pleno reparto, ignora la mañana", () => {

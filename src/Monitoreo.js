@@ -122,6 +122,8 @@ export default function Monitoreo() {
         {/* ── Números del día ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, margin: "14px 0 18px" }}>
           <Kpi titulo="Entregados" valor={`${num(res.e)} / ${num(res.total)}`} sub={`${pct}% del día`} color={C.ok} barra={pct} />
+          <Kpi titulo="Flex sin gestionar" valor={num(res.flexSinGest)} sub={`de ${num(res.flexPend)} Flex pendientes · sin Nadie ni reprogramado`} color={!res.flexSinGest ? C.ok : ahoraDato >= 20 * 60 ? C.crit : C.warn} />
+          <Kpi titulo="Ya gestionados" valor={num(res.nadie + res.repro)} sub={`${num(res.nadie)} Nadie · ${num(res.repro)} reprogramados`} />
           <Kpi titulo="En la calle" valor={num(res.camino)} sub={`${res.enRuta} cadetes en ruta`} />
           <Kpi titulo="No salieron" valor={num(res.noSalio)} sub="todo en planta" color={res.noSalio ? C.crit : null} onClick={() => { setFiltro("atencion"); setBusca(""); }} />
           <Kpi titulo="Para mirar" valor={num(res.atencion)} sub="frenados · sin entregas · tarde" color={res.atencion ? C.warn : null} onClick={() => { setFiltro("atencion"); setBusca(""); }} />
@@ -162,7 +164,8 @@ export default function Monitoreo() {
           </div>
         )}
         <div style={{ fontSize: 11.5, color: C.faint, marginTop: 14, lineHeight: 1.6 }}>
-          Envíos con Fecha A planta = hoy (todos los orígenes). "Salió" = primer movimiento fuera de planta · "Frenado" = con pendientes y sin entregar hace 60' o más ·
+          Envíos con Fecha A planta = hoy (todos los orígenes). "Salió" = primer movimiento fuera de planta · "Sin gestionar" = pendiente sin Nadie ni reprogramado hoy (se cruza con el historial de LightData, también los que volvieron a planta) ·
+          "Frenado" = le quedan sin gestionar y no entrega hace 60' o más ·
           "Termina tarde" = a su ritmo actual pasaría las 21:00. Se actualiza solo cada 3 minutos.
         </div>
       </>)}
@@ -233,6 +236,11 @@ function Actividad({ datos, huecos, ahora }) {
   );
 }
 
+function Chip({ tono, children }) {
+  const t = TONO[tono] || TONO.info;
+  return <span style={{ fontSize: 12, padding: "2px 9px", borderRadius: 999, background: t.bg, color: t.c, fontWeight: 600 }}>{children}</span>;
+}
+
 function Kpi({ titulo, valor, sub, color, barra, onClick }) {
   return (
     <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", cursor: onClick ? "pointer" : "default" }}>
@@ -270,11 +278,22 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
           <span style={{ fontSize: 11.5, padding: "2px 9px", borderRadius: 999, background: t.bg, color: t.c, fontWeight: 700 }}>{c.estado.label}</span>
           <span style={{ marginLeft: "auto", fontSize: 13, color: C.muted }}>
             <b style={{ color: C.text }}>{c.e}</b>/{c.t} · <b style={{ color: c.pend ? C.text : C.ok }}>{c.pend}</b> pend.
+            {c.mlPend !== undefined && c.mlPend > 0 && <> · <b style={{ color: c.flexSinGest ? C.crit : C.text }}>{c.mlPend}</b> Flex</>}
           </span>
         </div>
         <div style={{ height: 7, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", marginBottom: 9 }}>
           <div style={{ width: `${pct.toFixed(1)}%`, height: "100%", background: c.estado.clave === "termino" ? C.ok : t.c, transition: "width .5s" }} />
         </div>
+        {c.pend > 0 && c.sinGest !== undefined && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 9 }}>
+            {c.flexSinGest > 0 && <Chip tono={ahora >= 20 * 60 ? "crit" : "warn"}>{c.flexSinGest} Flex sin gestionar</Chip>}
+             {c.sinGest - c.flexSinGest > 0 && <Chip tono="info">{c.sinGest - c.flexSinGest} sin gestionar (particular)</Chip>}
+            {c.nadie > 0 && <Chip tono="info">{c.nadie} Nadie</Chip>}
+            {c.reproC > 0 && <Chip tono="info">{c.reproC} Repro. comprador</Chip>}
+            {c.reproM > 0 && <Chip tono="info">{c.reproM} Repro. Meli</Chip>}
+            {c.tarde > 0 && <Chip tono="warn">{c.tarde} marcados después de las 21</Chip>}
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
           {dato("Salió", c.salida !== null ? hhmm(c.salida) : "—", c.salida === null && c.pend ? C.crit : null)}
           {dato("Última entrega", ref !== null ? `${hhmm(ref)} · ${hace(Math.max(0, ahora - ref))}` : "—", c.estado.clave === "frenado" ? C.warn : null)}

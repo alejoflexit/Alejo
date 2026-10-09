@@ -23,9 +23,11 @@ export function hace(min) {
 
 // Ritmo (entregas por hora) y hora estimada de fin, con lo que lleva entregado.
 // Necesita al menos 3 entregas separadas por 20' o más; si no, no inventa.
-// Lo que el cadete todavía tiene encima: en la calle o en planta. "Nadie", reprogramados, etc. ya
-// tuvieron su intento del día: cuentan como pendientes del SLA pero no frenan su recorrido.
-export const enMano = (c) => (c.camino || 0) + (c.planta || 0);
+// Lo que el cadete todavía tiene que gestionar: pendientes SIN ningún intento hoy (ni Nadie ni
+// reprogramado — el bridge lo cruza con el historial de LightData). Los que ya tuvieron intento cuentan
+// como pendientes del SLA pero no frenan su recorrido. Sin el dato del historial: en la calle + en planta.
+export const enMano = (c) => (c.sinGest !== undefined ? c.sinGest : (c.camino || 0) + (c.planta || 0));
+export const intentos = (c) => (c.nadie || 0) + (c.reproC || 0) + (c.reproM || 0);
 
 export function proyeccion(c, ahora) {
   if (!c || c.e < 3 || c.primeraEnt === null || c.ultimaEnt === null) return null;
@@ -42,7 +44,7 @@ export function proyeccion(c, ahora) {
 // Estado de un cadete. orden: menor = más urgente (va arriba).
 export function estadoCadete(c, ahora) {
   const pr = proyeccion(c, ahora);
-  if (c.pend === 0 || (enMano(c) === 0 && c.e > 0)) return { clave: "termino", label: c.pend ? `Terminó · ${c.pend} sin entregar` : "Terminó", tono: "ok", orden: 6, atencion: false, pr };
+  if (c.pend === 0 || (enMano(c) === 0 && (c.e > 0 || intentos(c) > 0))) return { clave: "termino", label: "Terminó", tono: "ok", orden: 6, atencion: false, pr };
   if (c.e === 0 && c.salida === null) {
     return { clave: "no_salio", label: "No salió", tono: "crit", orden: 1, atencion: true, pr };
   }
@@ -63,7 +65,7 @@ export function estadoCadete(c, ahora) {
 export function armarCadetes(porCadete, ahora) {
   return Object.entries(porCadete || {})
     .map(([nombre, c]) => ({ nombre, ...c, estado: estadoCadete(c, ahora) }))
-    .sort((a, b) => a.estado.orden - b.estado.orden || b.pend - a.pend || a.nombre.localeCompare(b.nombre));
+    .sort((a, b) => a.estado.orden - b.estado.orden || (b.flexSinGest || 0) - (a.flexSinGest || 0) || enMano(b) - enMano(a) || a.nombre.localeCompare(b.nombre));
 }
 
 // Huecos: tramos de 45' o más SIN ningún movimiento en todo LightData, dentro del reparto.
@@ -115,9 +117,11 @@ export function saludDatos(d, ahora) {
 }
 
 export function resumen(cadetes, d) {
-  const r = { total: 0, e: 0, pend: 0, camino: 0, enRuta: 0, noSalio: 0, atencion: 0, termino: 0 };
+  const r = { total: 0, e: 0, pend: 0, camino: 0, enRuta: 0, noSalio: 0, atencion: 0, termino: 0, flexPend: 0, flexSinGest: 0, nadie: 0, repro: 0, sinGest: 0 };
   for (const c of cadetes) {
     r.total += c.t; r.e += c.e; r.pend += c.pend; r.camino += c.camino;
+    r.flexPend += c.mlPend || 0; r.flexSinGest += c.flexSinGest || 0; r.sinGest += enMano(c);
+    r.nadie += c.nadie || 0; r.repro += (c.reproC || 0) + (c.reproM || 0);
     if (c.estado.clave === "termino") r.termino++;
     else if (c.estado.clave === "no_salio") r.noSalio++;
     else r.enRuta++;
