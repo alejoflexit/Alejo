@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { armarCadetes, resumen, enMano, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE, CORTE_21 } from "./monitoreoShared";
+import { armarCadetes, resumen, enMano, quedaronPlanta, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE, CORTE_21 } from "./monitoreoShared";
 
 // Monitoreo — progreso del reparto POR CADETE, en vivo, + detector de caída de datos.
 // Fuente: bridge del VPS GET /reparto (Excel de ENVIOS con Fecha A planta = hoy, obs=2, cache 3 min).
@@ -287,7 +287,8 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
         {c.pend > 0 && c.sinGest !== undefined && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 9 }}>
             {c.flexSinGest > 0 && <Chip tono={ahora >= 20 * 60 ? "crit" : "warn"}>{c.flexSinGest} Flex sin gestionar</Chip>}
-             {c.sinGest - c.flexSinGest > 0 && <Chip tono="info">{c.sinGest - c.flexSinGest} sin gestionar (particular)</Chip>}
+             {enMano(c) > 0 && <Chip tono="info">{enMano(c)} en la calle sin intento</Chip>}
+            {quedaronPlanta(c) > 0 && <Chip tono="warn">{quedaronPlanta(c)} quedaron en planta</Chip>}
             {c.nadie > 0 && <Chip tono="info">{c.nadie} Nadie</Chip>}
             {c.reproC > 0 && <Chip tono="info">{c.reproC} Repro. comprador</Chip>}
             {c.reproM > 0 && <Chip tono="info">{c.reproM} Repro. Meli</Chip>}

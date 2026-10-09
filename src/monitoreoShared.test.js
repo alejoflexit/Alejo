@@ -37,6 +37,11 @@ test("con Nadie/reprogramados (aunque estén en planta) y nada sin gestionar = t
   expect(estadoCadete({ ...c, sinGest: 1, flexSinGest: 1 }, H(22, 4)).clave).toBe("frenado");
 });
 
+test("Félix 08/10: 2 Nadie Flex + 3 particulares que nunca salieron de planta = terminó, no frenado", () => {
+  const c = cad({ t: 25, e: 20, pend: 5, planta: 3, otros: 2, mlPend: 2, nadie: 2, reproC: 0, reproM: 0, sinGest: 3, sinGestPlanta: 3, flexSinGest: 0, salida: H(16, 23), primeraEnt: H(16, 23), ultimaEnt: H(20, 16) });
+  expect(estadoCadete(c, H(22, 7)).clave).toBe("termino");
+});
+
 test("proyección: ritmo y fin estimado; termina tarde si pasa las 21", () => {
   // 10 entregas en 2 h = 5/h; quedan 25 → 5 h más desde las 16 = 21:00 justo
   const c = cad({ e: 10, pend: 25, camino: 25, salida: H(13, 50), primeraEnt: H(14), ultimaEnt: H(16) });
