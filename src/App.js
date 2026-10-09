@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect, lazy, Suspense } from "react"; // build: 20 nav + lazy
 import Home from "./Home";
-import { getSession, login, logout, authedFetch } from "./auth";
+import { getSession, getToken, login, logout, authedFetch } from "./auth";
 import { puedeVer, esAdmin, usePermisos } from "./permisos";
-import { cargarComentarios, useComentariosRealtime, aplicarCambioNota } from "./colectasShared";
+import { cargarComentarios, useComentariosRealtime, aplicarCambioNota, LoginFlexit } from "./colectasShared";
 import { slaMeli } from "./slaShared";
 import { esDemoradoFlexit } from "./demoraTotalShared";
 import DemoraTotalCell from "./DemoraTotalCell";
@@ -831,6 +831,17 @@ export default function App() {
     return ["metricas", "colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "pagos", "usuarios", "home"].includes(h) ? h : "home";
   });
   const [session, setSession] = useState(() => getSession());
+  useEffect(() => {
+    if (!session) return;
+    let vivo = true;
+    (async () => {
+      const t = await getToken();
+      const r = t ? await fetch("https://svlagoosmxxcsbevkrhy.supabase.co/auth/v1/user", { headers: { apikey: "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI", Authorization: `Bearer ${t}` } }).catch(() => null) : null;
+      // Solo se cierra la sesión si Supabase la rechaza; sin red se deja entrar (no trabar la operación)
+      if (vivo && (!t || (r && (r.status === 401 || r.status === 403)))) { logout(); setSession(null); }
+    })();
+    return () => { vivo = false; };
+  }, [session]);
   usePermisos(session ? session.email : ""); // re-renderiza cuando llegan los permisos del usuario
   const vista = puedeVer(seccion) ? seccion : "sin-acceso";
   const fileRef = useRef();
@@ -1065,6 +1076,14 @@ export default function App() {
   const inp  = { padding:"7px 12px", fontSize:13, border:`1px solid ${BRAND.border}`, borderRadius:8, background:BRAND.faint, color:BRAND.white, outline:"none" };
   const card = { background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:"1.25rem" };
   const btn  = (active) => ({ padding:"5px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${active?"#2ECFAA":BRAND.border}`, background:active?"rgba(46,207,170,0.15)":BRAND.faint, color:active?"#2ECFAA":BRAND.muted });
+
+  // Toda la app pide usuario del equipo (antes, sin sesión se veía todo). Las páginas públicas
+  // (colecta.html para clientes, choferes.html) son archivos aparte y no pasan por acá.
+  if (!session) return (
+    <div style={{ ...APP_BACKGROUND, minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"1.5rem", color:BRAND.white, fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <LoginFlexit titulo="Flexit" subtitulo="Ingresá con tu usuario del equipo" icono={<img src={FLEXIT_LOGO} alt="Flexit" style={{ width:52, height:52, borderRadius:14 }} />} onOk={() => setSession(getSession())} />
+    </div>
+  );
 
   if (loadingDB && seccion !== "home") return (
     <div style={{ ...APP_BACKGROUND, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
