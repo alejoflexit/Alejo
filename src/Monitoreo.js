@@ -286,7 +286,12 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
         <div style={{ height: 4, borderRadius: 2, background: C.soft, overflow: "hidden", marginBottom: 9 }}>
           <div style={{ width: `${pct.toFixed(1)}%`, height: "100%", background: C.teal, opacity: 0.75, transition: "width .5s" }} />
         </div>
-        {queda.length > 0 && <div style={{ fontSize: 12.5, color: C.ink2, marginBottom: 9 }}>{queda.join(" · ")}</div>}
+        {queda.length > 0 && (
+          <div style={{ fontSize: 12.5, color: C.ink2, marginBottom: 9, display: "flex", gap: 10, alignItems: "baseline" }}>
+            <span style={{ flex: 1 }}>{queda.join(" · ")}</span>
+            {(c.detalle || []).length > 0 && <span style={{ color: C.ink3, whiteSpace: "nowrap" }}>{abierto ? "ocultar" : "ver envíos"}</span>}
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
           {dato("Salió", c.salida !== null ? hhmm(c.salida) : "—")}
           {dato("Última entrega", ref !== null ? `${hhmm(ref)} · ${hace(Math.max(0, ahora - ref))}` : "—")}
@@ -294,15 +299,60 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
           {dato("Fin estimado", finTxt)}
         </div>
       </button>
-      {abierto && hMin !== null && (
-        <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {Array.from({ length: hMax - hMin + 1 }, (_, i) => hMin + i).map((h) => (
-            <span key={h} style={{ background: C.soft, borderRadius: 7, padding: "3px 9px", fontSize: 12, color: C.ink2 }}>
-              {h}h <span style={{ color: C.ink, fontWeight: 600 }}>{c.entH[h] || 0}</span>
-            </span>
-          ))}
+      {abierto && (
+        <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10 }}>
+          <DetalleEnvios detalle={c.detalle || []} nombre={c.nombre} />
+          {hMin !== null && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: (c.detalle || []).length ? 12 : 0 }}>
+              <span style={{ fontSize: 11, color: C.ink3, alignSelf: "center", marginRight: 2 }}>Entregas por hora</span>
+              {Array.from({ length: hMax - hMin + 1 }, (_, i) => hMin + i).map((h) => (
+                <span key={h} style={{ background: C.soft, borderRadius: 7, padding: "3px 9px", fontSize: 12, color: C.ink2 }}>
+                  {h}h <span style={{ color: C.ink, fontWeight: 600 }}>{c.entH[h] || 0}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Envíos que todavía se pueden gestionar (o ya penalizan), agrupados y copiables para mandar por WhatsApp.
+const GRUPOS = [["riesgo", "Flex en riesgo de demora"], ["repro21", "Repro 21hs"], ["particular", "Particulares sin visita"]];
+const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+function DetalleEnvios({ detalle, nombre }) {
+  const [copiado, setCopiado] = useState(false);
+  if (!detalle.length) return null;
+  const linea = (d) => [`#${d.id}`, d.cliente, d.dir || "sin dirección", capital(d.est || "sin estado")].filter(Boolean).join(" · ");
+  const texto = [nombre, ...GRUPOS.flatMap(([k, t]) => {
+    const xs = detalle.filter((d) => d.tipo === k);
+    return xs.length ? [`${t} (${xs.length}):`, ...xs.map((d) => `• ${linea(d)}`)] : [];
+  })].join("\n");
+  const copiar = async (e) => {
+    e.stopPropagation();
+    try { await navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 1800); } catch (err) {}
+  };
+  return (
+    <div>
+      {GRUPOS.map(([k, t]) => {
+        const xs = detalle.filter((d) => d.tipo === k);
+        if (!xs.length) return null;
+        return (
+          <div key={k} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: C.ink3, marginBottom: 3 }}>{t} · {xs.length}</div>
+            {xs.map((d) => (
+              <div key={d.id} style={{ fontSize: 12.5, color: C.ink2, lineHeight: 1.6 }}>
+                <span style={{ color: C.ink, fontFamily: C.grotesk }}>#{d.id}</span>{d.cliente ? ` · ${d.cliente}` : ""} · {d.dir || "sin dirección"} · <span style={{ color: C.ink3 }}>{capital(d.est || "sin estado")}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      <button onClick={copiar}
+        style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 9, color: copiado ? C.teal : C.ink2, padding: "6px 12px", fontSize: 12.5, cursor: "pointer" }}>
+        {copiado ? "Copiado" : "Copiar envíos"}
+      </button>
     </div>
   );
 }
