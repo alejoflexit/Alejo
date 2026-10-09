@@ -3,6 +3,8 @@
 // y desactivar acceso. Todo lo privilegiado pasa por la edge function admin-usuarios.
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { SECCIONES, adminUsuarios, esAdmin } from "./permisos";
+import { sbFetch } from "./colectasShared";
+import { QrBot } from "./ColectasBot";
 
 const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
@@ -284,6 +286,64 @@ function NuevoUsuario({ onCerrar, onCreado }) {
   );
 }
 
+
+// Estado del bot de WhatsApp (colecta_bot_estado). Señales:
+//  - ultimo_sync: el sync de grupos de n8n escribe cada pocos minutos → si pasa de 40 min, el bot no anda
+//  - wa_estado: lo reporta el guardián del VPS cada 10 min (ready / qr / colgado / …)
+//  - ultimo_envio: último link de colectas mandado
+const ESTADOS_WA = { ready: "Conectado", qr: "Pide escanear el QR", colgado: "Colgado (el guardián lo reinicia)", connecting: "Conectando…", disconnected: "Desconectado" };
+function horaAR(iso) {
+  if (!iso) return "—";
+  const tz = { timeZone: "America/Argentina/Buenos_Aires" };
+  const d = new Date(iso);
+  const hora = d.toLocaleTimeString("es-AR", { ...tz, hour: "2-digit", minute: "2-digit" });
+  const dia = d.toLocaleDateString("es-AR", { ...tz, day: "2-digit", month: "2-digit" });
+  return dia === new Date().toLocaleDateString("es-AR", { ...tz, day: "2-digit", month: "2-digit" }) ? `hoy ${hora}` : `${dia} ${hora}`;
+}
+function EstadoBot() {
+  const [e, setE] = useState(undefined); // undefined = cargando, null = error
+  useEffect(() => {
+    let vivo = true;
+    const cargar = () => sbFetch("rpc/colecta_bot_estado", { method: "POST", body: "{}" })
+      .then((r) => { if (vivo) setE(r || null); }).catch(() => { if (vivo) setE(null); });
+    cargar();
+    const t = setInterval(cargar, 60 * 1000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
+  if (e === undefined) return null;
+  const minGuardian = e && e.wa_estado_at ? (Date.now() - Date.parse(e.wa_estado_at)) / 60000 : Infinity;
+  const nivel = !e ? "rojo" : e.pide_qr || e.ok === false ? "rojo" : (e.wa_estado && e.wa_estado !== "ready") || minGuardian > 30 ? "ambar" : "ok";
+  const color = nivel === "ok" ? C.teal : nivel === "ambar" ? C.ambar : C.rojo;
+  const titulo = !e ? "No pude leer el estado del bot"
+    : e.pide_qr ? "Bot desconectado: pide escanear el QR"
+    : e.ok === false ? `Bot sin señal${e.ultimo_sync ? " desde " + horaAR(e.ultimo_sync) : ""}`
+    : nivel === "ambar" ? "Bot funcionando, con algo para mirar" : "Bot de WhatsApp activo";
+  const fila = (k, v, alerta) => (
+    <div style={{ display: "flex", gap: 10, fontSize: 13, padding: "3px 0" }}>
+      <span style={{ width: 150, flexShrink: 0, color: C.ink3 }}>{k}</span>
+      <span style={{ color: alerta ? C.ambar : C.ink2 }}>{v}</span>
+    </div>
+  );
+  return (
+    <div style={{ ...card, padding: 16, marginBottom: 16, borderColor: nivel === "ok" ? C.line : color }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: e ? 8 : 0 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 5, background: color, boxShadow: `0 0 10px ${color}` }} />
+        <i className="ti ti-brand-whatsapp" style={{ fontSize: 18, color: C.ink2 }} />
+        <span style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 15, color: nivel === "ok" ? C.ink : color }}>{titulo}</span>
+      </div>
+      {e && (<>
+        {fila("WhatsApp", `${ESTADOS_WA[e.wa_estado] || e.wa_estado || "sin dato"}${e.wa_estado_at ? " · revisado " + horaAR(e.wa_estado_at) : ""}`, e.wa_estado && e.wa_estado !== "ready")}
+        {minGuardian > 30 && minGuardian !== Infinity && fila("Guardián del VPS", `no reporta hace ${Math.round(minGuardian)} min (corre cada 10)`, true)}
+        {fila("Última señal", horaAR(e.ultimo_sync), e.ok === false)}
+        {fila("Último link de colectas", horaAR(e.ultimo_envio))}
+        {e.feriado && fila("Hoy", `feriado (${e.feriado}): no salen links`)}
+        {e.aviso && fila("Aviso", e.aviso, true)}
+      </>)}
+      {e && (e.pide_qr || e.ok === false) && <div style={{ marginTop: 10 }}><QrBot /></div>}
+    </div>
+  );
+}
+
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState(null);
   const [err, setErr] = useState("");
@@ -336,6 +396,8 @@ export default function Usuarios() {
         <div style={{ fontSize: 13, color: C.ink3 }}>{resumen}</div>
         <button type="button" style={{ ...btn("primario"), marginLeft: "auto" }} onClick={() => setNuevo(true)}><i className="ti ti-user-plus" /> Nuevo usuario</button>
       </div>
+
+      <EstadoBot />
 
       {err && <div style={{ ...card, padding: 14, color: C.rojo, fontSize: 13, marginBottom: 14 }}>{err}</div>}
       {!usuarios && !err && <div style={{ ...card, padding: 24, color: C.ink3 }}>Cargando usuarios…</div>}

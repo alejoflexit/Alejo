@@ -11,7 +11,7 @@ import { esAdmin } from './permisos';
 
 // QR para re-vincular el WhatsApp del bot. Lo publica el guardián del VPS (bot_wa_reportar) y
 // solo lo puede leer admin@flexit.app (RLS de bot_qr): da acceso completo a la cuenta del bot.
-function QrBot() {
+export function QrBot() {
   const [qr, setQr] = useState(null);        // { qr, qr_at }
   const [img, setImg] = useState('');
   const [visto, setVisto] = useState(false); // ya mostró un QR en esta apertura
