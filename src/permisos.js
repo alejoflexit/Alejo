@@ -17,6 +17,7 @@ export const SECCIONES = [
   { id: "colectas",   label: "Colectas",    icon: "ti ti-package" },
   { id: "arribos",    label: "Arribos",     icon: "ti ti-truck-delivery" },
   { id: "zonas",      label: "Zonas",       icon: "ti ti-alarm" },
+  { id: "monitoreo",  label: "Monitoreo",   icon: "ti ti-activity-heartbeat" },
   { id: "pizarra",    label: "Pizarra",     icon: "ti ti-notes" },
   { id: "tiquetera",  label: "Tiquetera",   icon: "ti ti-ticket" },
   { id: "pendientes", label: "Pendientes históricos", icon: "ti ti-history" },

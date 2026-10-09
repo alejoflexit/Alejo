@@ -18,6 +18,7 @@ const Pagos = lazy(() => import("./Pagos"));
 const Analisis = lazy(() => import("./Analisis"));
 const Seguimiento = lazy(() => import("./Seguimiento"));
 const Zonas = lazy(() => import("./Zonas"));
+const Monitoreo = lazy(() => import("./Monitoreo"));
 const Pizarra = lazy(() => import("./Pizarra"));
 const Usuarios = lazy(() => import("./Usuarios"));
 
@@ -142,6 +143,7 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
     { id: "colectas", icon: "ti ti-package", label: "Colectas" },
     { id: "arribos", icon: "ti ti-truck-delivery", label: "Arribos" },
     { id: "zonas", icon: "ti ti-alarm", label: "Zonas" },
+    { id: "monitoreo", icon: "ti ti-activity-heartbeat", label: "Monitoreo" },
     { id: "pizarra", icon: "ti ti-notes", label: "Pizarra" },
     { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
     { id: "envio", icon: "ti ti-search", label: "Buscar envío" },
@@ -826,7 +828,7 @@ export default function App() {
     // Deep-link por hash (#colectas, #metricas…): lo usan los atajos del widget de Paco
     if (envioQ) return "envio";
     const h = (window.location.hash || "").replace("#", "");
-    return ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "envio", "pendientes", "pagos", "usuarios", "home"].includes(h) ? h : "home";
+    return ["metricas", "colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "pagos", "usuarios", "home"].includes(h) ? h : "home";
   });
   const [session, setSession] = useState(() => getSession());
   usePermisos(session ? session.email : ""); // re-renderiza cuando llegan los permisos del usuario
@@ -858,7 +860,7 @@ export default function App() {
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
-    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", pizarra: "Pizarra", tiquetera: "Tiquetera", envio: "Buscar envío", pendientes: "Pendientes históricos", pagos: "Liquidaciones", usuarios: "Usuarios" };
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", monitoreo: "Monitoreo", pizarra: "Pizarra", tiquetera: "Tiquetera", envio: "Buscar envío", pendientes: "Pendientes históricos", pagos: "Liquidaciones", usuarios: "Usuarios" };
     const base = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
     document.title = (comNuevos > 0 && seccion !== "pizarra") ? `(${comNuevos}) ${base}` : base;
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
@@ -1118,8 +1120,8 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
@@ -1149,6 +1151,7 @@ export default function App() {
       {vista === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>}
 
       {vista === "zonas" && <Suspense fallback={<VistaSkeleton />}><Zonas /></Suspense>}
+      {vista === "monitoreo" && <Suspense fallback={<VistaSkeleton />}><Monitoreo /></Suspense>}
 
       {vista === "pizarra" && <Suspense fallback={<VistaSkeleton />}><Pizarra /></Suspense>}
 
