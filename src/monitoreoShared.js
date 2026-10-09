@@ -23,14 +23,20 @@ export function hace(min) {
 
 // Ritmo (entregas por hora) y hora estimada de fin, con lo que lleva entregado.
 // Necesita al menos 3 entregas separadas por 20' o más; si no, no inventa.
-// Lo que el cadete todavía tiene que gestionar: pendientes SIN ningún intento hoy (ni Nadie ni
-// reprogramado — el bridge lo cruza con el historial de LightData). Los que ya tuvieron intento cuentan
-// como pendientes del SLA pero no frenan su recorrido. Sin el dato del historial: en la calle + en planta.
-export const enMano = (c) => (c.sinGest !== undefined ? c.sinGest - (c.sinGestPlanta || 0) : (c.camino || 0) + (c.planta || 0));
-// Pendientes sin intento que siguen en planta: no los llevó (o volvieron sin marcar).
-export const quedaronPlanta = (c) => (c.sinGest !== undefined ? (c.sinGestPlanta || 0) : 0);
+// Reglas de Métricas aplicadas en vivo (las calcula el bridge /reparto; ver wiki spec-monitoreo-reparto):
+//   flexRiesgo   = Flex que serían DEMORADOS si el día cerrara ahora (en camino / en planta / vacío sin
+//                  intento válido antes de las 21, historial de hoy o ayer)
+//   repro21      = Flex con Nadie/Reprogramado a las 21:00 o después sin intento previo (dem21)
+//   partSinVisita = particulares vacío / en camino / en planta (demora Flexit)
+// "En mano" = lo que el cadete lleva encima sin intento (riesgo que NO está en planta).
+const n0 = (x) => x || 0;
+const tieneReglas = (c) => c.flexRiesgo !== undefined;
+export const enMano = (c) => (tieneReglas(c)
+  ? n0(c.flexRiesgo) - n0(c.flexRiesgoPlanta) + n0(c.partSinVisita) - n0(c.partSinVisitaPlanta)
+  : n0(c.camino) + n0(c.planta));
+export const quedaronPlanta = (c) => (tieneReglas(c) ? n0(c.flexRiesgoPlanta) + n0(c.partSinVisitaPlanta) : 0);
 export const otrosResultados = (c) => Object.values(c.otroRes || {}).reduce((s, n) => s + n, 0);
-export const intentos = (c) => (c.nadie || 0) + (c.reproC || 0) + (c.reproM || 0) + otrosResultados(c);
+export const intentos = (c) => n0(c.nadie) + n0(c.repro) + otrosResultados(c);
 
 export function proyeccion(c, ahora) {
   if (!c || c.e < 3 || c.primeraEnt === null || c.ultimaEnt === null) return null;
@@ -68,7 +74,7 @@ export function estadoCadete(c, ahora) {
 export function armarCadetes(porCadete, ahora) {
   return Object.entries(porCadete || {})
     .map(([nombre, c]) => ({ nombre, ...c, estado: estadoCadete(c, ahora) }))
-    .sort((a, b) => a.estado.orden - b.estado.orden || (b.flexSinGest || 0) - (a.flexSinGest || 0) || enMano(b) - enMano(a) || a.nombre.localeCompare(b.nombre));
+    .sort((a, b) => a.estado.orden - b.estado.orden || n0(b.flexRiesgo) - n0(a.flexRiesgo) || enMano(b) - enMano(a) || a.nombre.localeCompare(b.nombre));
 }
 
 // Huecos: tramos de 45' o más SIN ningún movimiento en todo LightData, dentro del reparto.
@@ -120,11 +126,12 @@ export function saludDatos(d, ahora) {
 }
 
 export function resumen(cadetes, d) {
-  const r = { total: 0, e: 0, pend: 0, camino: 0, enRuta: 0, noSalio: 0, atencion: 0, termino: 0, flexPend: 0, flexSinGest: 0, nadie: 0, repro: 0, sinGest: 0, quedaronPlanta: 0, otros: 0 };
+  const r = { total: 0, e: 0, pend: 0, camino: 0, enRuta: 0, noSalio: 0, atencion: 0, termino: 0, ml: 0, mlE: 0, flexPend: 0, flexRiesgo: 0, repro21: 0, partSinVisita: 0, nadie: 0, repro: 0, otros: 0, quedaronPlanta: 0 };
   for (const c of cadetes) {
     r.total += c.t; r.e += c.e; r.pend += c.pend; r.camino += c.camino;
-    r.flexPend += c.mlPend || 0; r.flexSinGest += c.flexSinGest || 0; r.sinGest += enMano(c) + quedaronPlanta(c); r.quedaronPlanta += quedaronPlanta(c);
-    r.nadie += c.nadie || 0; r.repro += (c.reproC || 0) + (c.reproM || 0); r.otros += otrosResultados(c);
+    r.ml += n0(c.ml); r.mlE += n0(c.mlE); r.flexPend += n0(c.mlPend); r.flexRiesgo += n0(c.flexRiesgo); r.repro21 += n0(c.repro21);
+    r.partSinVisita += n0(c.partSinVisita); r.quedaronPlanta += quedaronPlanta(c);
+    r.nadie += n0(c.nadie); r.repro += n0(c.repro); r.otros += otrosResultados(c);
     if (c.estado.clave === "termino") r.termino++;
     else if (c.estado.clave === "no_salio") r.noSalio++;
     else r.enRuta++;

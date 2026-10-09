@@ -1,38 +1,34 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { armarCadetes, resumen, enMano, quedaronPlanta, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE, CORTE_21 } from "./monitoreoShared";
+import { armarCadetes, resumen, enMano, quedaronPlanta, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE } from "./monitoreoShared";
+import { slaMeli } from "./slaShared";
 
-// Monitoreo — progreso del reparto POR CADETE, en vivo, + detector de caída de datos.
-// Fuente: bridge del VPS GET /reparto (Excel de ENVIOS con Fecha A planta = hoy, obs=2, cache 3 min).
-// "Fecha estado" del Excel = hora del último estado de cada envío: de ahí salen la salida de cada
-// cadete, su última entrega, el ritmo y la actividad general cada 15' (si se corta, es una caída).
+// Monitoreo — avance del reparto POR CADETE, en vivo, + detector de caída de datos.
+// Fuente: bridge del VPS GET /reparto (Excel A planta = hoy, obs=2, cache 3 min). El bridge clasifica
+// cada pendiente con las MISMAS reglas que Métricas (demorados, Repro 21hs, demora Flexit) cruzando el
+// historial interno de LightData. Reglas y criterios: wiki analisis/spec-monitoreo-reparto.
+// Estética: la del Inicio (vidrio, grises, un solo acento). Color solo en un punto chico de estado.
 
 const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/reparto";
 const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // misma key que Arribos/Zonas (riesgo aceptado, ver spec-lightdata-bridge)
 const REFRESH_MS = 3 * 60 * 1000;
 
 const C = {
-  card: "#1A1A4A", cardAlt: "#12123A", border: "rgba(255,255,255,0.08)",
-  text: "#fff", muted: "rgba(255,255,255,0.55)", faint: "rgba(255,255,255,0.35)",
-  ok: "#2ECFAA", warn: "#EF9F27", crit: "#E24B4A", info: "#7FB2FF",
+  ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
+  glass: "rgba(27,28,46,0.72)", line: "rgba(255,255,255,0.06)", soft: "rgba(255,255,255,0.05)",
+  teal: "#2ee6b6", ambar: "#F5C044", rojo: "#E8615F",
+  grotesk: "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
 };
-const TONO = {
-  ok: { c: C.ok, bg: "rgba(46,207,170,0.12)" },
-  warn: { c: C.warn, bg: "rgba(239,159,39,0.12)" },
-  crit: { c: C.crit, bg: "rgba(226,75,74,0.12)" },
-  info: { c: C.info, bg: "rgba(127,178,255,0.12)" },
-};
+const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 16, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" };
+const PUNTO = { ok: C.teal, atencion: C.ambar, critico: C.rojo, neutro: C.ink3 };
 const num = (n) => new Intl.NumberFormat("es-AR").format(Math.round(n || 0));
 function minutosDe(iso) {
   const p = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(iso ? new Date(iso) : new Date());
   return (+p.find((x) => x.type === "hour").value % 24) * 60 + +p.find((x) => x.type === "minute").value;
 }
+const tonoEstado = (e) => (e.clave === "termino" ? "ok" : e.atencion || e.clave === "no_salio" ? "atencion" : "neutro");
 
-const FILTROS = [
-  ["atencion", "Atención"],
-  ["en_ruta", "En ruta"],
-  ["termino", "Terminaron"],
-  ["todos", "Todos"],
-];
+const FILTROS = [["atencion", "Para mirar"], ["en_ruta", "En ruta"], ["termino", "Terminaron"], ["todos", "Todos"]];
+const esAtencion = (c) => c.estado.atencion || c.estado.clave === "no_salio";
 
 export default function Monitoreo() {
   const [datos, setDatos] = useState(null);
@@ -55,14 +51,14 @@ export default function Monitoreo() {
       if (!r.ok || !j || !j.porCadete) throw new Error((j && j.error) || `bridge → ${r.status}`);
       setSinEndpoint(false); setDatos(j); setError(null);
     } catch (e) {
-      setError({ msg: String(e.message || e), at: new Date().toISOString() }); // conserva el último dato bueno
+      setError({ msg: String(e.message || e) }); // conserva el último dato bueno
     } finally { enCurso.current = false; setCargando(false); }
   }, []);
 
   useEffect(() => {
     cargar();
     const t = setInterval(cargar, REFRESH_MS);
-    const reloj = setInterval(() => setTick((x) => x + 1), 60 * 1000); // "hace X min" avanza solo
+    const reloj = setInterval(() => setTick((x) => x + 1), 60 * 1000);
     const vis = () => { if (document.visibilityState === "visible") cargar(); };
     document.addEventListener("visibilitychange", vis);
     return () => { clearInterval(t); clearInterval(reloj); document.removeEventListener("visibilitychange", vis); };
@@ -72,12 +68,12 @@ export default function Monitoreo() {
   const ahoraReal = minutosDe();
   const cadetes = useMemo(() => (datos ? armarCadetes(datos.porCadete, ahoraDato) : []), [datos, ahoraDato]);
   const res = useMemo(() => resumen(cadetes, datos), [cadetes, datos]);
-  // La salud se mide contra la hora REAL: si el bridge dejó de responder, el dato envejece y también alarma.
   const salud = useMemo(() => saludDatos(datos, ahoraReal), [datos, ahoraReal]);
+  const conReglas = cadetes.some((c) => c.flexRiesgo !== undefined);
 
   const cuenta = useMemo(() => ({
-    atencion: cadetes.filter((c) => c.estado.atencion || c.estado.clave === "no_salio").length,
-    en_ruta: cadetes.filter((c) => !["termino"].includes(c.estado.clave) && !c.estado.atencion && c.estado.clave !== "no_salio").length,
+    atencion: cadetes.filter(esAtencion).length,
+    en_ruta: cadetes.filter((c) => c.estado.clave !== "termino" && !esAtencion(c)).length,
     termino: cadetes.filter((c) => c.estado.clave === "termino").length,
     todos: cadetes.length,
   }), [cadetes]);
@@ -86,8 +82,8 @@ export default function Monitoreo() {
     const q = busca.trim().toLowerCase();
     return cadetes.filter((c) => {
       if (q) return c.nombre.toLowerCase().includes(q);
-      if (filtro === "atencion") return c.estado.atencion || c.estado.clave === "no_salio";
-      if (filtro === "en_ruta") return c.estado.clave !== "termino" && !c.estado.atencion && c.estado.clave !== "no_salio";
+      if (filtro === "atencion") return esAtencion(c);
+      if (filtro === "en_ruta") return c.estado.clave !== "termino" && !esAtencion(c);
       if (filtro === "termino") return c.estado.clave === "termino";
       return true;
     });
@@ -95,66 +91,62 @@ export default function Monitoreo() {
 
   if (sinEndpoint) {
     return (
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28, maxWidth: 620 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>Falta activar el monitoreo en el servidor</div>
-        <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6 }}>
-          El código ya está en el repo del vault (<code>vps/lightdata-bridge.js</code>, endpoint <code>/reparto</code>). Falta correr
-          <code> bash /root/obsidian-flexit/vps/deploy-bridge.sh</code> en el VPS (se lo podés pedir a Hermes). Después esta pantalla arranca sola.
+      <div style={{ ...card, padding: 28, maxWidth: 620 }}>
+        <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8, color: C.ink }}>Falta activar el monitoreo en el servidor</div>
+        <div style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.6 }}>
+          Falta correr <code>deploy-bridge.sh</code> en el VPS (endpoint <code>/reparto</code>). Después esta pantalla arranca sola.
         </div>
       </div>
     );
   }
 
   const pct = res.total ? Math.round((res.e / res.total) * 100) : 0;
-  const datoViejo = datos && ahoraReal - ahoraDato >= 10;
+  // SLA Meli si el día cerrara ahora: misma fórmula que Métricas (slaShared). Tiene sentido de noche.
+  const slaProy = conReglas && ahoraDato >= 20 * 60 ? slaMeli(res.ml, res.flexRiesgo, res.repro21) : null;
 
   return (
-    <div>
-      {/* ── Salud del dato ── */}
-      <SaludBanner salud={salud} error={error} datos={datos} datoViejo={datoViejo} ahoraReal={ahoraReal} ahoraDato={ahoraDato} />
+    <div style={{ color: C.ink }}>
+      <SaludBanner salud={salud} error={error} datos={datos} ahoraReal={ahoraReal} ahoraDato={ahoraDato} />
 
-      {!datos && !error && <div style={{ color: C.muted, fontSize: 14, padding: "30px 4px" }}>Bajando el reparto de hoy desde LightData… (tarda hasta un minuto)</div>}
+      {!datos && !error && <div style={{ color: C.ink2, fontSize: 14, padding: "30px 4px" }}>Bajando el reparto de hoy desde LightData… (puede tardar un minuto)</div>}
 
       {datos && (<>
-        {/* ── Actividad del día ── */}
-        <Actividad datos={datos} huecos={salud.huecos || []} ahora={ahoraReal} />
-
-        {/* ── Números del día ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, margin: "14px 0 18px" }}>
-          <Kpi titulo="Entregados" valor={`${num(res.e)} / ${num(res.total)}`} sub={`${pct}% del día`} color={C.ok} barra={pct} />
-          <Kpi titulo="Flex sin gestionar" valor={num(res.flexSinGest)} sub={`de ${num(res.flexPend)} Flex pendientes · sin Nadie ni reprogramado`} color={!res.flexSinGest ? C.ok : ahoraDato >= 20 * 60 ? C.crit : C.warn} />
-          <Kpi titulo="Ya gestionados" valor={num(res.nadie + res.repro + res.otros)} sub={`${num(res.nadie)} Nadie · ${num(res.repro)} reprogramados${res.otros ? ` · ${num(res.otros)} rechazados u otros` : ""}`} />
-          <Kpi titulo="En la calle" valor={num(res.camino)} sub={`${res.enRuta} cadetes en ruta`} />
-          <Kpi titulo="No salieron" valor={num(res.noSalio)} sub="todo en planta" color={res.noSalio ? C.crit : null} onClick={() => { setFiltro("atencion"); setBusca(""); }} />
-          <Kpi titulo="Para mirar" valor={num(res.atencion)} sub="frenados · sin entregas · tarde" color={res.atencion ? C.warn : null} onClick={() => { setFiltro("atencion"); setBusca(""); }} />
-          <Kpi titulo="Terminaron" valor={num(res.termino)} sub={`de ${cadetes.length} cadetes`} />
-          {(res.sinAsignar > 0 || res.internos > 0) && (
-            <Kpi titulo="Sin cadete" valor={num(res.sinAsignar)} sub={`${datos.sinAsignar.planta} en planta${res.internos ? ` · ${res.internos} en usuarios internos` : ""}`} color={datos.sinAsignar.planta ? C.warn : null} />
-          )}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, margin: "12px 0" }}>
+          <Kpi titulo="Entregados" valor={`${num(res.e)}`} extra={`/ ${num(res.total)}`} sub={`${pct}% del día`} barra={pct} />
+          {conReglas ? (<>
+            <Kpi titulo="Flex en riesgo de demora" valor={num(res.flexRiesgo)} punto={res.flexRiesgo ? "atencion" : "ok"}
+              sub={slaProy !== null ? `si cerrara ahora: SLA Meli ${slaProy.toFixed(1).replace(".", ",")}%` : `de ${num(res.flexPend)} Flex pendientes`} />
+            <Kpi titulo="Repro 21hs" valor={num(res.repro21)} punto={res.repro21 ? "atencion" : null} sub="Flex con intento después de las 21" />
+            <Kpi titulo="Con intento" valor={num(res.nadie + res.repro + res.otros)} sub={`${num(res.nadie)} Nadie · ${num(res.repro)} reprog.${res.otros ? ` · ${num(res.otros)} otros` : ""}`} />
+          </>) : <Kpi titulo="En la calle" valor={num(res.camino)} sub={`${res.enRuta} cadetes en ruta`} />}
+          <Kpi titulo="Cadetes" valor={num(res.termino)} extra={`/ ${num(cadetes.length)}`} sub={`terminaron · ${res.noSalio} sin salir`} />
         </div>
 
-        {/* ── Filtros ── */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ display: "flex", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden", flexWrap: "wrap" }}>
-            {FILTROS.map(([k, lbl]) => (
-              <button key={k} onClick={() => { setFiltro(k); setBusca(""); }}
-                style={{ background: filtro === k && !busca ? "rgba(46,207,170,0.15)" : "none", border: "none", color: filtro === k && !busca ? C.ok : C.muted, padding: "7px 12px", fontSize: 13, fontWeight: filtro === k ? 700 : 500, cursor: "pointer" }}>
-                {lbl} <span style={{ opacity: 0.7 }}>{cuenta[k]}</span>
-              </button>
-            ))}
+        <Actividad datos={datos} huecos={salud.huecos || []} ahora={ahoraReal} />
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "16px 0 10px" }}>
+          <div style={{ display: "flex", background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, padding: 3, flexWrap: "wrap" }}>
+            {FILTROS.map(([k, lbl]) => {
+              const on = filtro === k && !busca;
+              return (
+                <button key={k} onClick={() => { setFiltro(k); setBusca(""); }}
+                  style={{ background: on ? "rgba(255,255,255,0.09)" : "none", border: "none", borderRadius: 8, color: on ? C.ink : C.ink2, padding: "6px 12px", fontSize: 13, fontWeight: on ? 600 : 500, cursor: "pointer" }}>
+                  {lbl} <span style={{ color: C.ink3 }}>{cuenta[k]}</span>
+                </button>
+              );
+            })}
           </div>
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cadete…"
-            style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, padding: "7px 12px", fontSize: 13, width: 170, maxWidth: "50vw" }} />
-          <button onClick={cargar} disabled={cargando} title="Actualizar ahora"
-            style={{ marginLeft: "auto", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.muted, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
-            {cargando ? "Actualizando…" : "⟳ Actualizar"}
+            style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "8px 12px", fontSize: 13, width: 170, maxWidth: "50vw" }} />
+          <button onClick={cargar} disabled={cargando}
+            style={{ marginLeft: "auto", background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
+            {cargando ? "Actualizando…" : "Actualizar"}
           </button>
         </div>
 
-        {/* ── Cadetes ── */}
         {visibles.length === 0 ? (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 22, color: C.muted, fontSize: 14 }}>
-            {filtro === "atencion" && !busca ? "✅ Nadie para mirar: todos los cadetes con carga vienen avanzando." : "No hay cadetes para mostrar."}
+          <div style={{ ...card, padding: 22, color: C.ink2, fontSize: 14 }}>
+            {filtro === "atencion" && !busca ? "Nadie para mirar: todos los cadetes con carga vienen avanzando." : "No hay cadetes para mostrar."}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -163,163 +155,152 @@ export default function Monitoreo() {
             ))}
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: C.faint, marginTop: 14, lineHeight: 1.6 }}>
-          Envíos con Fecha A planta = hoy (todos los orígenes). "Salió" = primer movimiento fuera de planta · "Sin gestionar" = pendiente sin ningún intento hoy (Nadie, reprogramado, rechazado, dirección incorrecta…) (se cruza con el historial de LightData, también los que volvieron a planta) ·
-          "Frenado" = le quedan sin gestionar y no entrega hace 60' o más ·
-          "Termina tarde" = a su ritmo actual pasaría las 21:00. Se actualiza solo cada 3 minutos.
+        <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 14, lineHeight: 1.6 }}>
+          Mismas reglas que Métricas. Flex en riesgo = en camino, en planta o sin estado sin un Nadie/reprogramado antes de las 21 (historial de hoy o ayer): sería demorado si el día cerrara ahora.
+          Repro 21hs = Nadie o reprogramado a las 21:00 o después sin intento previo. Particulares sin visita = en camino, en planta o sin estado.
+          Frenado = lleva envíos sin intento y no entrega hace 60' o más. Se actualiza cada 3 minutos.
         </div>
       </>)}
     </div>
   );
 }
 
-function SaludBanner({ salud, error, datos, datoViejo, ahoraReal, ahoraDato }) {
-  let nivel = salud.nivel, titulo = salud.titulo, detalle = salud.detalle;
-  if (error) {
-    nivel = "crit";
-    titulo = "No se pudo bajar el dato de LightData";
-    detalle = datos ? `Mostrando lo último que llegó (${hhmm(ahoraDato)}, ${hace(ahoraReal - ahoraDato)}). Error: ${error.msg}` : `Error: ${error.msg}`;
-  } else if (datoViejo && nivel === "ok") {
-    nivel = "warn"; titulo = "El dato no se está actualizando"; detalle = `Último dato bajado a las ${hhmm(ahoraDato)} (${hace(ahoraReal - ahoraDato)}).`;
-  }
+function Punto({ tono }) {
+  if (!tono) return null;
+  return <span aria-hidden="true" style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, background: PUNTO[tono] || PUNTO.neutro, flexShrink: 0 }} />;
+}
+
+function SaludBanner({ salud, error, datos, ahoraReal, ahoraDato }) {
   if (!datos && !error) return null;
-  const t = TONO[nivel] || TONO.info;
-  const icono = nivel === "ok" ? "●" : nivel === "warn" ? "▲" : "■";
+  let tono = salud.nivel === "crit" ? "critico" : salud.nivel === "warn" ? "atencion" : "ok";
+  let titulo = salud.titulo, detalle = salud.detalle;
+  if (error) {
+    tono = "critico"; titulo = "No se pudo bajar el dato de LightData";
+    detalle = datos ? `Mostrando lo último que llegó (${hhmm(ahoraDato)}, ${hace(ahoraReal - ahoraDato)}). ${error.msg}` : error.msg;
+  } else if (datos && ahoraReal - ahoraDato >= 10 && tono === "ok") {
+    tono = "atencion"; titulo = "El dato no se está actualizando"; detalle = `Último dato bajado a las ${hhmm(ahoraDato)} (${hace(ahoraReal - ahoraDato)}).`;
+  }
   return (
-    <div role="status" style={{ background: t.bg, border: `1px solid ${t.c}55`, borderRadius: 12, padding: "11px 14px", marginBottom: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
-      <span style={{ color: t.c, fontSize: 14, lineHeight: "20px" }} aria-hidden="true">{icono}</span>
+    <div role="status" style={{ ...card, padding: "11px 14px", display: "flex", gap: 10, alignItems: "baseline" }}>
+      <Punto tono={tono} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, color: nivel === "ok" ? C.text : t.c, fontSize: 14 }}>{titulo}</div>
-        {detalle && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>{detalle}</div>}
+        <span style={{ fontWeight: 600, fontSize: 14 }}>{titulo}</span>
+        {detalle && <span style={{ fontSize: 13, color: C.ink2 }}> · {detalle}</span>}
         {salud.huecos && salud.huecos.length > 0 && (
-          <div style={{ fontSize: 12.5, color: C.warn, marginTop: 4 }}>
+          <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 3 }}>
             Hoy hubo {salud.huecos.length === 1 ? "un tramo" : `${salud.huecos.length} tramos`} sin datos: {salud.huecos.map((h) => `${hhmm(h.desde)}–${hhmm(h.hasta)}`).join(" · ")}
           </div>
         )}
       </div>
-      {datos && <span style={{ fontSize: 11.5, color: C.faint, whiteSpace: "nowrap" }}>dato {hhmm(ahoraDato)}</span>}
     </div>
   );
 }
 
-// Barras de entregas cada 15' de 10 a 23 hs; los tramos sin ningún movimiento quedan marcados en rojo.
+// Entregas cada 15' de 10 a 23 hs. Un tramo sin ningún movimiento queda como hueco gris rayado.
 function Actividad({ datos, huecos, ahora }) {
   const baldes = [];
   for (let b = INICIO_REPARTO; b < FIN_REPARTO; b += BALDE) baldes.push(b);
   const max = Math.max(1, ...baldes.map((b) => datos.entregas[String(b)] || 0));
-  const enHueco = (b) => huecos.some((h) => b >= h.desde && b < h.hasta);
   const ultimo = datos.ultimoEvento;
-  const silencioActual = (b) => ultimo !== null && b > ultimo && b + BALDE <= ahora && ahora - ultimo >= 45;
+  const hueco = (b) => huecos.some((h) => b >= h.desde && b < h.hasta) || (ultimo !== null && b > ultimo && b + BALDE <= ahora && ahora - ultimo >= 45);
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "12px 14px 8px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 8 }}>
+    <div style={{ ...card, padding: "12px 14px 8px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.ink3, marginBottom: 8 }}>
         <span>Entregas cada 15 minutos</span>
-        <span>{datos.ultimaEntrega !== null ? `última entrega ${hhmm(datos.ultimaEntrega)}` : "sin entregas todavía"}</span>
+        <span>{datos.ultimaEntrega !== null ? `última ${hhmm(datos.ultimaEntrega)}` : "sin entregas todavía"}</span>
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 54 }} aria-label="Entregas cada 15 minutos">
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 48 }}>
         {baldes.map((b) => {
           const n = datos.entregas[String(b)] || 0;
-          const rojo = enHueco(b) || silencioActual(b);
-          const futuro = b > ahora;
           return (
             <div key={b} title={`${hhmm(b)}–${hhmm(b + BALDE)}: ${n} entregas`}
-              style={{ flex: 1, height: "100%", display: "flex", alignItems: "flex-end", background: rojo ? "rgba(226,75,74,0.22)" : "transparent", borderRadius: 2 }}>
-              <div style={{ width: "100%", height: `${Math.max(n ? 6 : 0, (n / max) * 100)}%`, background: futuro ? "rgba(255,255,255,0.1)" : b >= CORTE_21 ? C.warn : C.ok, borderRadius: 2, opacity: futuro ? 0.5 : 0.9 }} />
+              style={{ flex: 1, height: "100%", display: "flex", alignItems: "flex-end", borderRadius: 2,
+                background: hueco(b) ? "repeating-linear-gradient(135deg, rgba(255,255,255,0.10) 0 2px, transparent 2px 5px)" : "transparent" }}>
+              <div style={{ width: "100%", height: `${Math.max(n ? 5 : 0, (n / max) * 100)}%`, background: b > ahora ? C.soft : "rgba(46,230,182,0.55)", borderRadius: 2 }} />
             </div>
           );
         })}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: C.faint, marginTop: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: C.ink3, marginTop: 4 }}>
         {[10, 13, 16, 19, 21, 23].map((h) => <span key={h}>{h}h</span>)}
       </div>
     </div>
   );
 }
 
-function Chip({ tono, children }) {
-  const t = TONO[tono] || TONO.info;
-  return <span style={{ fontSize: 12, padding: "2px 9px", borderRadius: 999, background: t.bg, color: t.c, fontWeight: 600 }}>{children}</span>;
-}
-
-function Kpi({ titulo, valor, sub, color, barra, onClick }) {
+function Kpi({ titulo, valor, extra, sub, barra, punto }) {
   return (
-    <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 13px", cursor: onClick ? "pointer" : "default" }}>
-      <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 4 }}>{titulo}</div>
-      <div style={{ fontSize: 21, fontWeight: 700, color: color || C.text, letterSpacing: "-0.02em" }}>{valor}</div>
+    <div style={{ ...card, padding: "12px 14px" }}>
+      <div style={{ fontSize: 12, color: C.ink3, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}><Punto tono={punto} />{titulo}</div>
+      <div style={{ fontFamily: C.grotesk, fontSize: 24, fontWeight: 600, letterSpacing: "-0.5px" }}>
+        {valor}{extra && <span style={{ fontSize: 15, color: C.ink3, fontWeight: 500 }}> {extra}</span>}
+      </div>
       {barra !== undefined && (
-        <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)", margin: "6px 0 2px", overflow: "hidden" }}>
-          <div style={{ width: `${barra}%`, height: "100%", background: C.ok }} />
+        <div style={{ height: 3, borderRadius: 2, background: C.soft, margin: "7px 0 2px", overflow: "hidden" }}>
+          <div style={{ width: `${barra}%`, height: "100%", background: C.teal, opacity: 0.8 }} />
         </div>
       )}
-      <div style={{ fontSize: 11.5, color: C.faint, marginTop: 2 }}>{sub}</div>
+      <div style={{ fontSize: 12, color: C.ink2, marginTop: 3 }}>{sub}</div>
     </div>
   );
 }
 
 function FilaCadete({ c, ahora, abierto, onToggle }) {
-  const t = TONO[c.estado.tono] || TONO.info;
   const pct = c.t ? (c.e / c.t) * 100 : 0;
   const pr = c.estado.pr;
   const ref = c.ultimaEnt ?? null;
-  const dato = (lbl, val, color) => (
+  const conReglas = c.flexRiesgo !== undefined;
+  const dato = (lbl, val) => (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 10.5, color: C.faint }}>{lbl}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: color || C.text }}>{val}</div>
+      <div style={{ fontSize: 11, color: C.ink3 }}>{lbl}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: C.ink }}>{val}</div>
     </div>
   );
+  // Qué le queda: una línea en texto plano, lo importante primero
+  const queda = [];
+  if (conReglas) {
+    if (c.flexRiesgo) queda.push(`${c.flexRiesgo} Flex en riesgo`);
+    if (c.repro21) queda.push(`${c.repro21} Repro 21hs`);
+    if (c.partSinVisita) queda.push(`${c.partSinVisita} particular${c.partSinVisita > 1 ? "es" : ""} sin visita`);
+    if (quedaronPlanta(c)) queda.push(`${quedaronPlanta(c)} en planta`);
+    if (c.nadie) queda.push(`${c.nadie} Nadie`);
+    if (c.repro) queda.push(`${c.repro} reprogramado${c.repro > 1 ? "s" : ""}`);
+    for (const [nom, n] of Object.entries(c.otroRes || {})) queda.push(`${n} ${nom}`);
+  }
   const horas = Object.keys(c.entH || {}).map(Number);
   const hMin = horas.length ? Math.min(...horas) : null, hMax = horas.length ? Math.max(...horas) : null;
+  const finTxt = pr && pr.fin !== null ? (pr.fin >= 23 * 60 ? "después de las 23" : hhmm(pr.fin)) : enMano(c) === 0 ? "listo" : "—";
   return (
-    <div style={{ background: C.card, border: `1px solid ${c.estado.atencion || c.estado.clave === "no_salio" ? t.c + "44" : C.border}`, borderRadius: 12, padding: "11px 14px" }}>
-      <button onClick={onToggle} aria-expanded={abierto}
-        style={{ all: "unset", display: "block", width: "100%", cursor: "pointer" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 7 }}>
-          <span style={{ fontWeight: 700, fontSize: 14.5 }}>{c.nombre}</span>
-          <span style={{ fontSize: 11.5, padding: "2px 9px", borderRadius: 999, background: t.bg, color: t.c, fontWeight: 700 }}>{c.estado.label}</span>
-          <span style={{ marginLeft: "auto", fontSize: 13, color: C.muted }}>
-            <b style={{ color: C.text }}>{c.e}</b>/{c.t} · <b style={{ color: c.pend ? C.text : C.ok }}>{c.pend}</b> pend.
-            {c.mlPend !== undefined && c.mlPend > 0 && <> · <b style={{ color: c.flexSinGest ? C.crit : C.text }}>{c.mlPend}</b> Flex</>}
+    <div style={{ ...card, borderRadius: 14, padding: "12px 14px" }}>
+      <button onClick={onToggle} aria-expanded={abierto} style={{ all: "unset", display: "block", width: "100%", cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <span style={{ fontWeight: 600, fontSize: 14.5 }}>{c.nombre}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink2 }}>
+            <Punto tono={tonoEstado(c.estado)} />{c.estado.label}
+          </span>
+          <span style={{ marginLeft: "auto", fontSize: 13, color: C.ink2, fontFamily: C.grotesk }}>
+            <span style={{ color: C.ink }}>{c.e}</span>/{c.t}
+            {c.mlPend !== undefined && <> · <span style={{ color: C.ink }}>{c.mlPend}</span> Flex pend.</>}
           </span>
         </div>
-        <div style={{ height: 7, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", marginBottom: 9 }}>
-          <div style={{ width: `${pct.toFixed(1)}%`, height: "100%", background: c.estado.clave === "termino" ? C.ok : t.c, transition: "width .5s" }} />
+        <div style={{ height: 4, borderRadius: 2, background: C.soft, overflow: "hidden", marginBottom: 9 }}>
+          <div style={{ width: `${pct.toFixed(1)}%`, height: "100%", background: C.teal, opacity: 0.75, transition: "width .5s" }} />
         </div>
-        {c.pend > 0 && c.sinGest !== undefined && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 9 }}>
-            {c.flexSinGest > 0 && <Chip tono={ahora >= 20 * 60 ? "crit" : "warn"}>{c.flexSinGest} Flex sin gestionar</Chip>}
-             {enMano(c) > 0 && <Chip tono="info">{enMano(c)} en la calle sin intento</Chip>}
-            {quedaronPlanta(c) > 0 && <Chip tono="warn">{quedaronPlanta(c)} quedaron en planta</Chip>}
-            {c.nadie > 0 && <Chip tono="info">{c.nadie} Nadie</Chip>}
-            {c.reproC > 0 && <Chip tono="info">{c.reproC} Repro. comprador</Chip>}
-            {c.reproM > 0 && <Chip tono="info">{c.reproM} Repro. Meli</Chip>}
-            {Object.entries(c.otroRes || {}).map(([nom, n]) => <Chip key={nom} tono="info">{n} {nom.charAt(0).toUpperCase() + nom.slice(1)}</Chip>)}
-            {c.tarde > 0 && <Chip tono="warn">{c.tarde} marcados después de las 21</Chip>}
-          </div>
-        )}
+        {queda.length > 0 && <div style={{ fontSize: 12.5, color: C.ink2, marginBottom: 9 }}>{queda.join(" · ")}</div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
-          {dato("Salió", c.salida !== null ? hhmm(c.salida) : "—", c.salida === null && c.pend ? C.crit : null)}
-          {dato("Última entrega", ref !== null ? `${hhmm(ref)} · ${hace(Math.max(0, ahora - ref))}` : "—", c.estado.clave === "frenado" ? C.warn : null)}
-          {dato("Ritmo", pr ? `${String(pr.ritmo).replace(".", ",")} /h` : "—")}
-          {dato("Fin estimado", pr && pr.fin !== null ? (pr.fin >= 23 * 60 ? "después de las 23" : hhmm(pr.fin)) : enMano(c) === 0 ? "listo" : "—", pr && pr.fin > CORTE_21 ? C.warn : null)}
+          {dato("Salió", c.salida !== null ? hhmm(c.salida) : "—")}
+          {dato("Última entrega", ref !== null ? `${hhmm(ref)} · ${hace(Math.max(0, ahora - ref))}` : "—")}
+          {dato("Ritmo", pr ? `${String(pr.ritmo).replace(".", ",")} por hora` : "—")}
+          {dato("Fin estimado", finTxt)}
         </div>
       </button>
-      {abierto && (
-        <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 10, paddingTop: 10, fontSize: 12.5, color: C.muted, lineHeight: 1.7 }}>
-          <div>
-            En la calle <b style={{ color: C.text }}>{c.camino}</b> · en planta <b style={{ color: c.planta ? C.warn : C.text }}>{c.planta}</b>
-            {c.otros ? <> · otros estados (nadie, reprogramado…) <b style={{ color: C.text }}>{c.otros}</b></> : null}
-            {c.cancel ? <> · cancelados <b style={{ color: C.text }}>{c.cancel}</b></> : null}
-            {c.ml ? <> · Flex <b style={{ color: C.text }}>{c.mlE}/{c.ml}</b></> : null}
-          </div>
-          {hMin !== null && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-              {Array.from({ length: hMax - hMin + 1 }, (_, i) => hMin + i).map((h) => (
-                <span key={h} style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 7, padding: "2px 8px", fontSize: 12 }}>
-                  {h}h: <b style={{ color: (c.entH[h] || 0) ? C.text : C.crit }}>{c.entH[h] || 0}</b>
-                </span>
-              ))}
-            </div>
-          )}
+      {abierto && hMin !== null && (
+        <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {Array.from({ length: hMax - hMin + 1 }, (_, i) => hMin + i).map((h) => (
+            <span key={h} style={{ background: C.soft, borderRadius: 7, padding: "3px 9px", fontSize: 12, color: C.ink2 }}>
+              {h}h <span style={{ color: C.ink, fontWeight: 600 }}>{c.entH[h] || 0}</span>
+            </span>
+          ))}
         </div>
       )}
     </div>

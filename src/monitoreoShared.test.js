@@ -30,22 +30,15 @@ test("terminó cuando no le quedan pendientes", () => {
   expect(estadoCadete(cad({ e: 28, pend: 0, cancel: 2, salida: H(14) }), H(19)).clave).toBe("termino");
 });
 
-test("con Nadie/reprogramados (aunque estén en planta) y nada sin gestionar = terminó, no frenado", () => {
-  const c = cad({ e: 20, pend: 5, planta: 3, otros: 2, nadie: 3, reproC: 1, reproM: 0, sinGest: 0, flexSinGest: 0, salida: H(16), primeraEnt: H(16, 30), ultimaEnt: H(20, 16) });
-  expect(estadoCadete(c, H(22, 4)).clave).toBe("termino");
-  // si le queda uno sin ningún intento, sí está frenado
-  expect(estadoCadete({ ...c, sinGest: 1, flexSinGest: 1 }, H(22, 4)).clave).toBe("frenado");
-});
-
-test("Terradas 08/10: Rechazado cuenta como gestión; le queda 1 particular en la calle", () => {
-  const c = cad({ t: 29, e: 25, pend: 4, camino: 1, otros: 3, mlPend: 2, nadie: 2, otroRes: { "rechazado por el comprador": 1 }, sinGest: 1, sinGestPlanta: 0, flexSinGest: 0, salida: H(15, 11), primeraEnt: H(16, 24), ultimaEnt: H(20, 35) });
-  expect(resumen([{ ...c, estado: estadoCadete(c, H(22, 20)) }], {})).toMatchObject({ nadie: 2, otros: 1, flexSinGest: 0 });
-  expect(estadoCadete({ ...c, sinGest: 0, camino: 0 }, H(22, 20)).clave).toBe("termino");
-});
-
 test("Félix 08/10: 2 Nadie Flex + 3 particulares que nunca salieron de planta = terminó, no frenado", () => {
-  const c = cad({ t: 25, e: 20, pend: 5, planta: 3, otros: 2, mlPend: 2, nadie: 2, reproC: 0, reproM: 0, sinGest: 3, sinGestPlanta: 3, flexSinGest: 0, salida: H(16, 23), primeraEnt: H(16, 23), ultimaEnt: H(20, 16) });
+  const c = cad({ t: 25, e: 20, pend: 5, planta: 3, otros: 2, mlPend: 2, flexRiesgo: 0, flexRiesgoPlanta: 0, repro21: 0, partSinVisita: 3, partSinVisitaPlanta: 3, nadie: 2, repro: 0, otroRes: {}, salida: H(16, 23), primeraEnt: H(16, 23), ultimaEnt: H(20, 16) });
   expect(estadoCadete(c, H(22, 7)).clave).toBe("termino");
+});
+
+test("Terradas 08/10: Rechazado no es demora; le queda 1 particular en la calle = frenado", () => {
+  const c = cad({ t: 29, e: 25, pend: 4, camino: 1, otros: 3, mlPend: 2, flexRiesgo: 0, flexRiesgoPlanta: 0, repro21: 0, partSinVisita: 1, partSinVisitaPlanta: 0, nadie: 2, repro: 0, otroRes: { "rechazado por el comprador": 1 }, salida: H(15, 11), primeraEnt: H(16, 24), ultimaEnt: H(20, 35) });
+  expect(estadoCadete(c, H(22, 20)).clave).toBe("frenado");
+  expect(resumen([{ ...c, estado: estadoCadete(c, H(22, 20)) }], {})).toMatchObject({ nadie: 2, otros: 1, flexRiesgo: 0, partSinVisita: 1 });
 });
 
 test("proyección: ritmo y fin estimado; termina tarde si pasa las 21", () => {
@@ -66,8 +59,8 @@ test("ordena lo urgente arriba", () => {
   expect(lista.map((c) => c.nombre)).toEqual(["Planta", "Ruta", "Ok"]);
   const r = resumen(lista, { sinAsignar: { t: 3 }, internos: { "Repro gramar": 4 } });
   expect(r).toMatchObject({ noSalio: 1, termino: 1, enRuta: 1, sinAsignar: 3, internos: 4, atencion: 1 });
-  const r2 = resumen(armarCadetes({ A: cad({ e: 5, pend: 4, mlPend: 3, flexSinGest: 1, sinGest: 2, nadie: 1, reproC: 1, salida: H(14), primeraEnt: H(14), ultimaEnt: H(16, 50) }) }, H(17)), {});
-  expect(r2).toMatchObject({ flexPend: 3, flexSinGest: 1, sinGest: 2, nadie: 1, repro: 1 });
+  const r2 = resumen(armarCadetes({ A: cad({ e: 5, pend: 4, ml: 8, mlE: 5, mlPend: 3, flexRiesgo: 1, repro21: 1, partSinVisita: 1, nadie: 1, repro: 0, salida: H(14), primeraEnt: H(14), ultimaEnt: H(16, 50) }) }, H(17)), {});
+  expect(r2).toMatchObject({ ml: 8, flexPend: 3, flexRiesgo: 1, repro21: 1, partSinVisita: 1, nadie: 1 });
 });
 
 test("huecos: detecta una hora sin movimientos en pleno reparto, ignora la mañana", () => {
