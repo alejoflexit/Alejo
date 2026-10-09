@@ -23,6 +23,10 @@ export function hace(min) {
 
 // Ritmo (entregas por hora) y hora estimada de fin, con lo que lleva entregado.
 // Necesita al menos 3 entregas separadas por 20' o más; si no, no inventa.
+// Lo que el cadete todavía tiene encima: en la calle o en planta. "Nadie", reprogramados, etc. ya
+// tuvieron su intento del día: cuentan como pendientes del SLA pero no frenan su recorrido.
+export const enMano = (c) => (c.camino || 0) + (c.planta || 0);
+
 export function proyeccion(c, ahora) {
   if (!c || c.e < 3 || c.primeraEnt === null || c.ultimaEnt === null) return null;
   const desde = c.primeraEnt, hasta = Math.max(c.ultimaEnt, ahora ?? c.ultimaEnt);
@@ -30,14 +34,15 @@ export function proyeccion(c, ahora) {
   if (horas < 20 / 60) return null;
   const ritmo = c.e / horas;
   if (!(ritmo > 0)) return null;
-  const fin = c.pend > 0 ? Math.round((ahora ?? c.ultimaEnt) + (c.pend / ritmo) * 60) : null;
+  const quedan = enMano(c);
+  const fin = quedan > 0 ? Math.round((ahora ?? c.ultimaEnt) + (quedan / ritmo) * 60) : null;
   return { ritmo: Math.round(ritmo * 10) / 10, fin };
 }
 
 // Estado de un cadete. orden: menor = más urgente (va arriba).
 export function estadoCadete(c, ahora) {
   const pr = proyeccion(c, ahora);
-  if (c.pend === 0) return { clave: "termino", label: "Terminó", tono: "ok", orden: 6, atencion: false, pr };
+  if (c.pend === 0 || (enMano(c) === 0 && c.e > 0)) return { clave: "termino", label: c.pend ? `Terminó · ${c.pend} sin entregar` : "Terminó", tono: "ok", orden: 6, atencion: false, pr };
   if (c.e === 0 && c.salida === null) {
     return { clave: "no_salio", label: "No salió", tono: "crit", orden: 1, atencion: true, pr };
   }

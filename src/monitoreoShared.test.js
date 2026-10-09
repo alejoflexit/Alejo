@@ -30,11 +30,18 @@ test("terminó cuando no le quedan pendientes", () => {
   expect(estadoCadete(cad({ e: 28, pend: 0, cancel: 2, salida: H(14) }), H(19)).clave).toBe("termino");
 });
 
+test("sin nada encima (solo Nadie/reprogramados) cuenta como terminado, no frenado", () => {
+  const c = cad({ e: 20, pend: 5, otros: 5, salida: H(16), primeraEnt: H(16, 30), ultimaEnt: H(20, 16) });
+  const st = estadoCadete(c, H(22, 4));
+  expect(st.clave).toBe("termino");
+  expect(st.label).toBe("Terminó · 5 sin entregar");
+});
+
 test("proyección: ritmo y fin estimado; termina tarde si pasa las 21", () => {
   // 10 entregas en 2 h = 5/h; quedan 25 → 5 h más desde las 16 = 21:00 justo
   const c = cad({ e: 10, pend: 25, camino: 25, salida: H(13, 50), primeraEnt: H(14), ultimaEnt: H(16) });
   expect(proyeccion(c, H(16))).toEqual({ ritmo: 5, fin: H(21) });
-  const c2 = { ...c, pend: 30 };
+  const c2 = { ...c, pend: 30, camino: 30 };
   expect(estadoCadete(c2, H(16)).clave).toBe("tarde");
   expect(proyeccion(cad({ e: 2, primeraEnt: H(14), ultimaEnt: H(15) }), H(15))).toBeNull();
 });

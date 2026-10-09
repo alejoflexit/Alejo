@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { armarCadetes, resumen, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE, CORTE_21 } from "./monitoreoShared";
+import { armarCadetes, resumen, enMano, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE, CORTE_21 } from "./monitoreoShared";
 
 // Monitoreo — progreso del reparto POR CADETE, en vivo, + detector de caída de datos.
 // Fuente: bridge del VPS GET /reparto (Excel de ENVIOS con Fecha A planta = hoy, obs=2, cache 3 min).
@@ -279,7 +279,7 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
           {dato("Salió", c.salida !== null ? hhmm(c.salida) : "—", c.salida === null && c.pend ? C.crit : null)}
           {dato("Última entrega", ref !== null ? `${hhmm(ref)} · ${hace(Math.max(0, ahora - ref))}` : "—", c.estado.clave === "frenado" ? C.warn : null)}
           {dato("Ritmo", pr ? `${String(pr.ritmo).replace(".", ",")} /h` : "—")}
-          {dato("Fin estimado", pr && pr.fin !== null ? (pr.fin >= 23 * 60 ? "después de las 23" : hhmm(pr.fin)) : c.pend === 0 ? "listo" : "—", pr && pr.fin > CORTE_21 ? C.warn : null)}
+          {dato("Fin estimado", pr && pr.fin !== null ? (pr.fin >= 23 * 60 ? "después de las 23" : hhmm(pr.fin)) : enMano(c) === 0 ? "listo" : "—", pr && pr.fin > CORTE_21 ? C.warn : null)}
         </div>
       </button>
       {abierto && (
