@@ -37,6 +37,12 @@ test("con Nadie/reprogramados (aunque estén en planta) y nada sin gestionar = t
   expect(estadoCadete({ ...c, sinGest: 1, flexSinGest: 1 }, H(22, 4)).clave).toBe("frenado");
 });
 
+test("Terradas 08/10: Rechazado cuenta como gestión; le queda 1 particular en la calle", () => {
+  const c = cad({ t: 29, e: 25, pend: 4, camino: 1, otros: 3, mlPend: 2, nadie: 2, otroRes: { "rechazado por el comprador": 1 }, sinGest: 1, sinGestPlanta: 0, flexSinGest: 0, salida: H(15, 11), primeraEnt: H(16, 24), ultimaEnt: H(20, 35) });
+  expect(resumen([{ ...c, estado: estadoCadete(c, H(22, 20)) }], {})).toMatchObject({ nadie: 2, otros: 1, flexSinGest: 0 });
+  expect(estadoCadete({ ...c, sinGest: 0, camino: 0 }, H(22, 20)).clave).toBe("termino");
+});
+
 test("Félix 08/10: 2 Nadie Flex + 3 particulares que nunca salieron de planta = terminó, no frenado", () => {
   const c = cad({ t: 25, e: 20, pend: 5, planta: 3, otros: 2, mlPend: 2, nadie: 2, reproC: 0, reproM: 0, sinGest: 3, sinGestPlanta: 3, flexSinGest: 0, salida: H(16, 23), primeraEnt: H(16, 23), ultimaEnt: H(20, 16) });
   expect(estadoCadete(c, H(22, 7)).clave).toBe("termino");

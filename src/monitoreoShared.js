@@ -29,7 +29,8 @@ export function hace(min) {
 export const enMano = (c) => (c.sinGest !== undefined ? c.sinGest - (c.sinGestPlanta || 0) : (c.camino || 0) + (c.planta || 0));
 // Pendientes sin intento que siguen en planta: no los llevó (o volvieron sin marcar).
 export const quedaronPlanta = (c) => (c.sinGest !== undefined ? (c.sinGestPlanta || 0) : 0);
-export const intentos = (c) => (c.nadie || 0) + (c.reproC || 0) + (c.reproM || 0);
+export const otrosResultados = (c) => Object.values(c.otroRes || {}).reduce((s, n) => s + n, 0);
+export const intentos = (c) => (c.nadie || 0) + (c.reproC || 0) + (c.reproM || 0) + otrosResultados(c);
 
 export function proyeccion(c, ahora) {
   if (!c || c.e < 3 || c.primeraEnt === null || c.ultimaEnt === null) return null;
@@ -119,11 +120,11 @@ export function saludDatos(d, ahora) {
 }
 
 export function resumen(cadetes, d) {
-  const r = { total: 0, e: 0, pend: 0, camino: 0, enRuta: 0, noSalio: 0, atencion: 0, termino: 0, flexPend: 0, flexSinGest: 0, nadie: 0, repro: 0, sinGest: 0, quedaronPlanta: 0 };
+  const r = { total: 0, e: 0, pend: 0, camino: 0, enRuta: 0, noSalio: 0, atencion: 0, termino: 0, flexPend: 0, flexSinGest: 0, nadie: 0, repro: 0, sinGest: 0, quedaronPlanta: 0, otros: 0 };
   for (const c of cadetes) {
     r.total += c.t; r.e += c.e; r.pend += c.pend; r.camino += c.camino;
     r.flexPend += c.mlPend || 0; r.flexSinGest += c.flexSinGest || 0; r.sinGest += enMano(c) + quedaronPlanta(c); r.quedaronPlanta += quedaronPlanta(c);
-    r.nadie += c.nadie || 0; r.repro += (c.reproC || 0) + (c.reproM || 0);
+    r.nadie += c.nadie || 0; r.repro += (c.reproC || 0) + (c.reproM || 0); r.otros += otrosResultados(c);
     if (c.estado.clave === "termino") r.termino++;
     else if (c.estado.clave === "no_salio") r.noSalio++;
     else r.enRuta++;

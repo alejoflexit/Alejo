@@ -123,7 +123,7 @@ export default function Monitoreo() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, margin: "14px 0 18px" }}>
           <Kpi titulo="Entregados" valor={`${num(res.e)} / ${num(res.total)}`} sub={`${pct}% del día`} color={C.ok} barra={pct} />
           <Kpi titulo="Flex sin gestionar" valor={num(res.flexSinGest)} sub={`de ${num(res.flexPend)} Flex pendientes · sin Nadie ni reprogramado`} color={!res.flexSinGest ? C.ok : ahoraDato >= 20 * 60 ? C.crit : C.warn} />
-          <Kpi titulo="Ya gestionados" valor={num(res.nadie + res.repro)} sub={`${num(res.nadie)} Nadie · ${num(res.repro)} reprogramados`} />
+          <Kpi titulo="Ya gestionados" valor={num(res.nadie + res.repro + res.otros)} sub={`${num(res.nadie)} Nadie · ${num(res.repro)} reprogramados${res.otros ? ` · ${num(res.otros)} rechazados u otros` : ""}`} />
           <Kpi titulo="En la calle" valor={num(res.camino)} sub={`${res.enRuta} cadetes en ruta`} />
           <Kpi titulo="No salieron" valor={num(res.noSalio)} sub="todo en planta" color={res.noSalio ? C.crit : null} onClick={() => { setFiltro("atencion"); setBusca(""); }} />
           <Kpi titulo="Para mirar" valor={num(res.atencion)} sub="frenados · sin entregas · tarde" color={res.atencion ? C.warn : null} onClick={() => { setFiltro("atencion"); setBusca(""); }} />
@@ -164,7 +164,7 @@ export default function Monitoreo() {
           </div>
         )}
         <div style={{ fontSize: 11.5, color: C.faint, marginTop: 14, lineHeight: 1.6 }}>
-          Envíos con Fecha A planta = hoy (todos los orígenes). "Salió" = primer movimiento fuera de planta · "Sin gestionar" = pendiente sin Nadie ni reprogramado hoy (se cruza con el historial de LightData, también los que volvieron a planta) ·
+          Envíos con Fecha A planta = hoy (todos los orígenes). "Salió" = primer movimiento fuera de planta · "Sin gestionar" = pendiente sin ningún intento hoy (Nadie, reprogramado, rechazado, dirección incorrecta…) (se cruza con el historial de LightData, también los que volvieron a planta) ·
           "Frenado" = le quedan sin gestionar y no entrega hace 60' o más ·
           "Termina tarde" = a su ritmo actual pasaría las 21:00. Se actualiza solo cada 3 minutos.
         </div>
@@ -292,6 +292,7 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
             {c.nadie > 0 && <Chip tono="info">{c.nadie} Nadie</Chip>}
             {c.reproC > 0 && <Chip tono="info">{c.reproC} Repro. comprador</Chip>}
             {c.reproM > 0 && <Chip tono="info">{c.reproM} Repro. Meli</Chip>}
+            {Object.entries(c.otroRes || {}).map(([nom, n]) => <Chip key={nom} tono="info">{n} {nom.charAt(0).toUpperCase() + nom.slice(1)}</Chip>)}
             {c.tarde > 0 && <Chip tono="warn">{c.tarde} marcados después de las 21</Chip>}
           </div>
         )}
