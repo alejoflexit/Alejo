@@ -153,6 +153,19 @@ function PanelEnvio({ caso }) {
   const e = data && data.envio;
   const match = comoEncontro(caso, e);
 
+  // QR de seguimiento: el mismo que muestra el add-on de LightData (codifica url_tracking).
+  // Sirve cuando el chofer tiene la etiqueta rota: se lo muestra en pantalla y lo escanea.
+  const urlQr = e && e.url_tracking;
+  const [qrImg, setQrImg] = useState("");
+  const [qrAbierto, setQrAbierto] = useState(false);
+  useEffect(() => {
+    setQrImg(""); setQrAbierto(false);
+    if (!urlQr) return;
+    let vivo = true;
+    import("qrcode").then((m) => m.toDataURL(urlQr, { width: 360, margin: 2 })).then((u) => { if (vivo) setQrImg(u); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [urlQr]);
+
   return (
     <div>
       {cargando && !data && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>Consultando LightData…</div>}
@@ -204,7 +217,27 @@ function PanelEnvio({ caso }) {
 
       {data && data.error && e && <div style={{ color: "#FFB020", fontSize: 12, marginTop: 10 }}>⚠ {data.error}</div>}
 
+      {qrAbierto && qrImg && (
+        <div onClick={() => setQrAbierto(false)} role="dialog" aria-label="QR de seguimiento"
+          style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(6,8,20,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, cursor: "pointer" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+              <img src={qrImg} alt={`QR de seguimiento del envío ${envioId}`} style={{ width: "min(78vw, 320px)", height: "auto", display: "block" }} />
+            </div>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>Envío {envioId}</div>
+            <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12.5 }}>QR de seguimiento · tocá en cualquier lado para cerrar</div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        {qrImg && (
+          <button onClick={() => setQrAbierto(true)} title="Mostrar el QR de seguimiento" aria-label="Mostrar el QR de seguimiento"
+            style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 10px 4px 4px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.8)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            <img src={qrImg} alt="" style={{ width: 28, height: 28, borderRadius: 4, background: "#fff", display: "block" }} />
+            QR
+          </button>
+        )}
         {e && e.url_tracking && (
           <a href={e.url_tracking} target="_blank" rel="noreferrer"
             style={{ flex: 1, textAlign: "center", padding: 8, borderRadius: 8, border: "1px solid rgba(74,158,255,0.3)", background: "rgba(74,158,255,0.07)", color: "#4A9EFF", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
