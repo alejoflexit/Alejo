@@ -354,14 +354,21 @@ function ColectasInner({ soloArribos = false, irA }) {
   // CABA/SUR/NOROESTE no operan fin de semana → si caen en sábado o domingo muestran el VIERNES anterior
   // (cómo quedó la semana, con la precarga de choferes). Antes mostraban el sábado vacío y parecía que se había
   // borrado todo. Alejo (03/10): "que quede igual que quedó el viernes" + aviso de que es sábado.
+  // Arribos NO: el sábado los cadetes llegan con las colectas del sábado, tiene que mostrar el día real.
   useEffect(() => {
-    if (tab === 'SABADOS' || !fecha) return;
+    if (tab === 'SABADOS' || navView === 'arribos' || !fecha) return;
     const d = new Date(fecha + 'T12:00:00');
     const dow = d.getDay();
     if (dow !== 6 && dow !== 0) return;
     d.setDate(d.getDate() - (dow === 6 ? 1 : 2));
     setFecha(d.toISOString().slice(0, 10));
-  }, [fecha, tab]);
+  }, [fecha, tab, navView]);
+  // Al entrar a Arribos un sábado desde Colectas (que venía mostrando el viernes), volver al sábado de hoy.
+  useEffect(() => {
+    if (navView !== 'arribos' || fechaVolver !== null) return;
+    const hoy = todayStr();
+    if (new Date(hoy + 'T12:00:00').getDay() === 6 && fecha !== hoy) setFecha(hoy);
+  }, [navView]); // eslint-disable-line react-hooks/exhaustive-deps
   const cambiarTab = (s) => {
     let fecha_ = fecha;
     if (fechaVolver !== null) { fecha_ = fechaVolver; soloLecturaRef.current = false; setFechaVolver(null); setFecha(fecha_); }
