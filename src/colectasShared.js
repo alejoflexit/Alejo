@@ -100,6 +100,9 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
     setOpen(false); setQuery(''); setEditIdx(null);
   };
 
+  // Desasignar saca al chofer pero NO toca el estado de la colecta: si tenía envíos, los sigue
+  // teniendo (antes la pasaba a blanco/"Pendiente" y se perdía el "Con envíos"). Si estaba
+  // confirmada, updateRegistro (Colectas.js) la baja a "Con envíos" al quedar sin chofer.
   const remove = (i, e) => {
     e.stopPropagation();
     const next = chs.filter((_, j) => j !== i);
@@ -139,7 +142,7 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
           </div>
           <div style={{ maxHeight: 185, overflowY: 'auto' }}>
             {!chs.every(x => x === 'A coordinar') && (
-              <div onClick={() => { onUpdate({ choferes: ['A coordinar'], estado: 'blanco', confirmado_por: [] }); setOpen(false); setQuery(''); }}
+              <div onClick={() => { onUpdate({ choferes: ['A coordinar'], confirmado_por: [] }); setOpen(false); setQuery(''); }}
                 style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: '#E24B4A', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(226,75,74,0.08)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>

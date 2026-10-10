@@ -528,6 +528,13 @@ function ColectasInner({ soloArribos = false, irA }) {
     setRegistros(prev => {
       const current = prev[clienteId] || { choferes: ['A coordinar'], estado: 'blanco', confirmado_por: [] };
       const next = { ...current, ...updates };
+      // Quedó sin chofer (desasignar, sacar el último, pasar a "A coordinar"): la colecta conserva
+      // sus envíos. Solo pierde la confirmación — la daba el chofer — así que verde baja a amarillo.
+      // Nunca se pasa a blanco/rojo por desasignar.
+      if ('choferes' in updates && !('estado' in updates) && (next.choferes || []).every(x => !x || x === 'A coordinar')) {
+        next.confirmado_por = [];
+        if (next.estado === 'verde') next.estado = 'amarillo';
+      }
       pendingSavesRef.current.set(clienteId, next);
       setSaveStatus('saving');
       clearTimeout(saveTimer.current);
