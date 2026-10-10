@@ -15,7 +15,9 @@ const COLS = 'id_interno,nombre,direccion,localidad,estado,fecha_estado,cadete,r
 // palabra clave ("Orden 91709", "pedido #1234"); así la altura o el CP de una dirección no se confunden.
 export function desglosar(texto) {
   const t = String(texto || '');
-  const conClave = [...t.matchAll(/(?:orden|pedido|venta|env[ií]o|tracking|seguimiento|n[°ºro.]*|#)\s*[:#n°º.]*\s*(\d{3,})/gi)].map((m) => m[1]);
+  // La palabra clave tiene que ser una palabra entera: antes "n" suelto matcheaba el final de
+  // "San Martín 487" y la altura de la calle se buscaba como número de pedido.
+  const conClave = [...t.matchAll(/(?:\b(?:orden|pedido|venta|env[ií]o|tracking|seguimiento|nro|n[°º.])|#)\s*[:#n°º.]*\s*(\d{3,})/gi)].map((m) => m[1]);
   const largos = numerosDelTexto(t); // 6+ dígitos (envío ML, tracking, ID)
   const numeros = [...new Set([...conClave, ...largos])].slice(0, 8);
   const low = t.toLowerCase();
@@ -43,15 +45,47 @@ export function desglosar(texto) {
   return { numeros, pedido, direccion, cp };
 }
 
+// Palabras de relleno que aparecen en los mensajes y no sirven para buscar por nombre/dirección.
+const RELLENO = new Set(('envio envío prioritario domicilio direccion dirección calle casa depto dpto piso referencia referencias aparece gps poniendo '
+  + 'entre esquina continuacion continuación altura barrio localidad hola buenas buen dia día tardes noches por favor pedido orden cliente '
+  + 'nombre entregar entrega hoy urgente gracias').split(' '));
+
+// "San Martín 487", "Av. Rivadavia 14048" → [{ calle: 'martin', altura: '487' }]: la última palabra
+// antes de un número de 1 a 5 cifras. Sirve para buscar por dirección cuando no hay número de envío.
+export function callesConAltura(texto) {
+  const t = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const out = [];
+  for (const m of t.matchAll(/([a-zñ]{3,})\.?\s+(\d{1,5})\b/gi)) {
+    const calle = m[1].toLowerCase();
+    if (RELLENO.has(calle) || /^(cp|nro|numero|orden|pedido|venta|envio|tracking)$/.test(calle)) continue;
+    out.push({ calle, altura: m[2] });
+  }
+  return out.slice(0, 4);
+}
+
 async function buscar(texto) {
-  const nums = desglosar(texto).numeros;
+  const d = desglosar(texto);
+  const nums = d.numeros;
   if (nums.length) {
     const list = nums.join(',');
     const rows = await sb(`envios_busqueda?or=(id_venta_ml.in.(${list}),id_interno.in.(${list}),tracking.in.(${list}))&select=${COLS}&limit=10`);
     if (rows && rows.length) return rows;
   }
-  // sin números (o no matchearon): por nombre / dirección, todas las palabras
-  const pal = String(texto || '').toLowerCase().replace(/[^a-záéíóúñü0-9 ]/gi, ' ').split(/\s+/).filter((p) => p.length >= 3).slice(0, 4);
+  // Calle + altura ("San Martín 487"): primero con el CP si vino en el mensaje, después sin él.
+  const calles = callesConAltura(texto);
+  if (calles.length) {
+    // Vocales como comodín de una letra: así "martin" también encuentra "Martín" en la base.
+    const or = calles.map(({ calle, altura }) => `direccion.ilike.*${encodeURIComponent(calle.replace(/[aeiou]/g, '_'))}*${altura}*`).join(',');
+    const base = `envios_busqueda?or=(${or})&select=${COLS}&order=actualizado_at.desc&limit=10`;
+    if (d.cp) {
+      const conCp = await sb(`${base}&cp=eq.${encodeURIComponent(d.cp)}`);
+      if (conCp && conCp.length) return conCp;
+    }
+    const rows = await sb(base);
+    if (rows && rows.length) return rows;
+  }
+  // sin números (o no matchearon): por nombre / dirección, todas las palabras (sin las de relleno)
+  const pal = String(texto || '').toLowerCase().replace(/[^a-záéíóúñü0-9 ]/gi, ' ').split(/\s+/).filter((p) => p.length >= 3 && !RELLENO.has(p)).slice(0, 4);
   if (!pal.length) return [];
   const filtros = pal.map((p) => `or(nombre.ilike.*${encodeURIComponent(p)}*,direccion.ilike.*${encodeURIComponent(p)}*)`).join(',');
   return (await sb(`envios_busqueda?and=(${filtros})&select=${COLS}&order=actualizado_at.desc&limit=10`)) || [];
