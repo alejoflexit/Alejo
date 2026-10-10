@@ -679,6 +679,8 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   );
 
   // ════════════════ ESCRITORIO ════════════════
+  // El menú queda pegado a la izquierda y el contenido se centra en el espacio que sobra
+  // (tope 1320 px): en pantallas anchas no queda todo amontonado a la izquierda.
   const navItem = (activo) => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", borderRadius: 10, border: "none", background: activo ? "rgba(46,230,182,0.10)" : "transparent", color: activo ? C.ink : C.ink2, fontSize: 13.5, fontWeight: activo ? 600 : 500, cursor: activo ? "default" : "pointer", textAlign: "left", transition: "background .15s ease, color .15s ease" });
   return (
     <div style={{ minHeight: "calc(100vh - 3rem)", display: "flex", alignItems: "flex-start", gap: 28 }}>
@@ -718,7 +720,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
       </nav>
 
       {/* Contenido */}
-      <main style={{ flex: 1, minWidth: 0, maxWidth: 1180, position: "relative", zIndex: 1, fontFamily: fuente, color: C.ink, display: "flex", flexDirection: "column", gap: 18, paddingTop: 4 }}>
+      <main style={{ flex: 1, minWidth: 0, maxWidth: 1320, margin: "0 auto", position: "relative", zIndex: 1, fontFamily: fuente, color: C.ink, display: "flex", flexDirection: "column", gap: 18, paddingTop: 4 }}>
         <header style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           {saludoEl}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
