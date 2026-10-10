@@ -987,12 +987,16 @@ function ColectasInner({ soloArribos = false, irA }) {
     ];
     const zonaSab = c => (c.seccion === 'SABADOS' ? c.zona_sabado : c.seccion) || 'SIN';
     // Tabla agrupada por chofer (se reutiliza por zona en la pestaña Sábados)
-    const tablaDe = (groups, order) => (
+    const tablaDe = (groups, order) => {
+      // La columna Vehículo solo aparece si alguna colecta de esta tabla tiene vehículo cargado.
+      const conVehiculo = order.some(ch => (groups[ch] || []).some(c => VEHICULOS[c.vehiculo]));
+      const nCols = conVehiculo ? 8 : 7;
+      return (
         <div style={{ overflowX:'auto', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'rgba(255,255,255,0.025)' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', minWidth:580, pointerEvents: soloLectura ? 'none' : undefined }}>
             <thead>
               <tr style={{ background:'rgba(255,255,255,0.045)' }}>
-                {['','Cliente','Chofer(es)','Dirección','Zona','Vehículo','Hora','$$$'].map((h,i) => (
+                {['','Cliente','Chofer(es)','Dirección','Zona', ...(conVehiculo ? ['Vehículo'] : []),'Hora','Monto'].map((h,i) => (
                   <th key={i} style={{ ...thSt, width:i===0?36:undefined }}>{h}</th>
                 ))}
               </tr>
@@ -1021,14 +1025,15 @@ function ColectasInner({ soloArribos = false, irA }) {
                     {/* Group header */}
                     <tr onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
                       style={{ background: isActive ? 'rgba(58,143,212,0.14)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
-                      <td colSpan={8} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#4A9EFF'}` }}>
+                      <td colSpan={nCols} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#4A9EFF'}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
                             <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#FBBF24':'rgba(255,255,255,0.85)' }}>
                               {isWarn && <i className="ti ti-alert-triangle" aria-hidden="true" style={{ marginRight:4, verticalAlign:'-2px' }} />}{chofer}
                             </span>
                             <span style={{ fontSize:12, color:isWarn?'rgba(251,191,36,0.7)':BRAND.teal, marginLeft:6 }}>
-                              {rows.length}
+                              {/* Solo las activas: las "sin envíos" se cuentan aparte en su pliegue (así coincide con "N sin asignar") */}
+                              {rows.filter(c => estEf(c) !== 'rojo').length}
                             </span>
                           </span>
                           {!isWarn && (
@@ -1198,14 +1203,14 @@ function ColectasInner({ soloArribos = false, irA }) {
                           {/* Vehículo — columna propia entre Zona y Hora. Antes era un emoji de color
                               pegado al nombre y competía con lo que uno busca al barrer la lista. Va en
                               gris: es un dato secundario, no una alerta. */}
-                          <td style={{ padding:'8px 8px', whiteSpace:'nowrap' }}>
+                          {conVehiculo && <td style={{ padding:'8px 8px', whiteSpace:'nowrap' }}>
                             {VEHICULOS[c.vehiculo]
                               ? <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`}
                                   style={{ fontSize:10.5, padding:'2px 8px', borderRadius:20, border:'1px solid rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.55)' }}>
                                   {VEHICULOS[c.vehiculo].label.toLowerCase()}
                                 </span>
                               : <span style={{ fontSize:12, color:'rgba(255,255,255,0.18)' }}>—</span>}
-                          </td>
+                          </td>}
 
                           {/* Hora — horario configurado del cliente (se edita en Clientes) */}
                           <td style={{ padding:'8px 8px', whiteSpace:'nowrap', fontSize:12, color:(c.horario || c.hora_habitual) ? 'rgba(255,255,255,0.75)' : BRAND.muted }}>
@@ -1236,7 +1241,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                         {activasRows.map(renderRow)}
                         {compactar && rojas.length > 0 && (
                           <tr onClick={() => setRojasOpen(p => ({ ...p, [chofer]: !p[chofer] }))} style={{ cursor:'pointer' }}>
-                            <td colSpan={8} style={{ padding:'7px 14px 7px 44px', fontSize:11.5, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
+                            <td colSpan={nCols} style={{ padding:'7px 14px 7px 44px', fontSize:11.5, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
                               <span style={{ color:'#E24B4A', opacity:0.75, marginRight:7, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
                               {rojas.length} sin envíos
                             </td>
@@ -1251,7 +1256,8 @@ function ColectasInner({ soloArribos = false, irA }) {
             </tbody>
           </table>
         </div>
-    );
+      );
+    };
 
     return (
       <>
