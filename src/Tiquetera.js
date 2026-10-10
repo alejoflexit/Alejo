@@ -54,7 +54,11 @@ function diagnosticoNumero(n) {
 // No hay campo en la base para esto — si algún día el agente lo guarda, se reemplaza por ese dato.
 function comoEncontro(caso, envio) {
   if (!envio) return null;
-  const nums = new Set(numerosDelTexto([caso.cita, caso.mensaje].filter(Boolean).join(" ")));
+  // Todos los números de 3+ cifras (y trackings alfanuméricos): la comparación es exacta contra el
+  // envío, así que no hay falsos positivos. Antes miraba solo los de 6+ cifras y un pedido corto de
+  // Tienda Nube ("91855") quedaba rotulado "por dirección o nombre".
+  const txt = [caso.cita, caso.mensaje].filter(Boolean).join(" ").replace(/@[0-9]+/g, " ");
+  const nums = new Set([...(txt.match(/[0-9]{3,}/g) || []), ...(txt.match(/\b[A-Za-z]{1,3}[0-9]{6,}\b/g) || [])]);
   if (envio.id_venta_ml && nums.has(String(envio.id_venta_ml)))
     return { nivel: "ok", txt: "Encontrado por venta de Mercado Libre", det: "El número del mensaje coincide exacto con el del envío." };
   if (envio.tracking && nums.has(String(envio.tracking)))

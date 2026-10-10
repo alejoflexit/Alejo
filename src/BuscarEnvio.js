@@ -8,7 +8,7 @@ import { getSession } from './auth';
 import { LoginFlexit } from './colectasShared';
 import { PanelEnvio, sbTiquetera as sb, numerosDelTexto } from './Tiquetera';
 
-const COLS = 'id_interno,nombre,direccion,localidad,estado,fecha_estado,cadete,razon_social,fecha_flexit';
+const COLS = 'id_interno,nombre,direccion,cp,localidad,estado,fecha_estado,cadete,razon_social,fecha_flexit';
 
 // "Desglosa" el mensaje del cliente: qué pide, el número de orden/envío y la dirección nueva.
 // Los números cortos (pedidos de Tienda Nube/Shopify, 3-6 dígitos) solo cuentan si vienen con una
@@ -46,16 +46,27 @@ export function desglosar(texto) {
 }
 
 // Palabras de relleno que aparecen en los mensajes y no sirven para buscar por nombre/dirección.
-const RELLENO = new Set(('envio envío prioritario domicilio direccion dirección calle casa depto dpto piso referencia referencias aparece gps poniendo '
-  + 'entre esquina continuacion continuación altura barrio localidad hola buenas buen dia día tardes noches por favor pedido orden cliente '
-  + 'nombre entregar entrega hoy urgente gracias').split(' '));
+const RELLENO = new Set(('envio envío prioritario express domicilio direccion dirección calle casa depto dpto piso referencia referencias aparece gps poniendo '
+  + 'entre esquina continuacion continuación altura barrio localidad hola buenas buen dia día dias días tardes noches por favor pedido orden cliente clienta '
+  + 'nombre entregar entrega entreguen hoy mañana urgente gracias las los del hasta desde antes despues después horas hora compra despachado despachada '
+  + 'fecha venta ventas recibe datos transportista cambio comprador reprogramada reprogramado figura consulta consultar llamar numero número '
+  + 'entregado entregada recibido recibio recibió llego llegó paso pasó dice info novedad estado '
+  + 'ene feb mar abr may jun jul ago sep set oct nov dic lunes martes miercoles miércoles jueves viernes sabado sábado domingo').split(' '));
+
+const sinTildes = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+// Vocales como comodín de una letra en un ilike: "martin" también encuentra "Martín" en la base.
+const comodin = (s) => encodeURIComponent(sinTildes(s).toLowerCase().replace(/[aeiou]/g, '_'));
 
 // "San Martín 487", "Av. Rivadavia 14048" → [{ calle: 'martin', altura: '487' }]: la última palabra
-// antes de un número de 1 a 5 cifras. Sirve para buscar por dirección cuando no hay número de envío.
+// antes de un número de 1 a 5 cifras. También las calles numeradas de La Plata ("Calle 50 2309").
+// Se descartan horarios ("hasta las 18", "a las 17:30", "18 hs") y fechas.
 export function callesConAltura(texto) {
-  const t = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const t = sinTildes(texto);
   const out = [];
-  for (const m of t.matchAll(/([a-zñ]{3,})\.?\s+(\d{1,5})\b/gi)) {
+  for (const m of t.matchAll(/\b(?:calle|diagonal|diag\.?)\s+(\d{1,3})\s+(?:n[°º.]?\s*)?(\d{2,5})\b/gi)) {
+    out.push({ calle: m[1], altura: m[2] });
+  }
+  for (const m of t.matchAll(/([a-zñ]{3,})\.?\s+(\d{1,5})\b(?!\s*(?::|\/|hs\b|h\b|horas\b|hrs\b))/gi)) {
     const calle = m[1].toLowerCase();
     if (RELLENO.has(calle) || /^(cp|nro|numero|orden|pedido|venta|envio|tracking)$/.test(calle)) continue;
     out.push({ calle, altura: m[2] });
@@ -63,32 +74,110 @@ export function callesConAltura(texto) {
   return out.slice(0, 4);
 }
 
+// "Recibe: Karen Vera" (el bloque "Datos del envío" que copian de Mercado Libre). Los nombres
+// enmascarados ("L ***** s") no sirven.
+export function recibeDe(texto) {
+  const m = String(texto || '').match(/recibe\s*:\s*\**\s*([^\n*\[]{3,60})/i);
+  if (!m) return '';
+  const n = m[1].replace(/\s+/g, ' ').trim();
+  return /\*/.test(n) || n.split(' ').filter((w) => w.length >= 2).length < 2 ? '' : n;
+}
+
+// Números sueltos de 3 a 6 cifras que no son altura, CP, hora ni fecha: pueden ser un pedido de
+// Tienda Nube/Shopify ("14262 figura entregado"). Son débiles: un mismo número de pedido se repite
+// entre clientes (medido: ~8% de los pedidos cortos), así que nunca se abren solos.
+export function numerosSueltos(texto, d, calles) {
+  const usados = new Set([...d.numeros, d.cp, ...calles.map((c) => c.altura)].filter(Boolean));
+  const t = String(texto || '').replace(/@\d+/g, ' ').replace(/\b\d{2,5}-\d{3,5}\b/g, ' ').replace(/\b\d{1,2}[/:.-]\d{1,2}([/:.-]\d{2,4})?\b/g, ' ');
+  const out = [];
+  for (const m of t.matchAll(/(?:^|[^\d\w])(\d{3,6})(?!\d)(?!\s*(?:hs\b|h\b|horas\b|hrs\b|pulgadas|mm\b|km\b|kg\b|w\b))/gi)) {
+    if (!usados.has(m[1])) out.push(m[1]);
+  }
+  return [...new Set(out)].slice(0, 5);
+}
+
+// Ordena los resultados por las pistas del mensaje (CP, calle + altura, nombre de quien recibe) y,
+// a igualdad, el envío más nuevo primero. Devuelve también si el primero gana claramente.
+function ordenar(rows, pistas) {
+  const nombreTok = sinTildes(pistas.recibe).toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+  const puntaje = (r) => {
+    let p = 0;
+    if (pistas.cp && String(r.cp || '') === pistas.cp) p += 3;
+    const dir = sinTildes(r.direccion).toLowerCase();
+    if (pistas.calles.some(({ calle, altura }) => dir.includes(calle) && new RegExp(`(^|\\D)${altura}(\\D|$)`).test(dir))) p += 3;
+    const nom = sinTildes(r.nombre).toLowerCase();
+    if (nombreTok.length && nombreTok.every((w) => nom.includes(w))) p += 3;
+    return p;
+  };
+  const conP = rows.map((r) => ({ r, p: puntaje(r), id: Number(r.id_interno) || 0 }));
+  conP.sort((a, b) => b.p - a.p || b.id - a.id);
+  const claro = conP.length === 1 || (conP.length > 1 && conP[0].p >= 3 && conP[0].p > conP[1].p);
+  return { rows: conP.map((x) => x.r), claro };
+}
+
+// Devuelve { rows, via, abrir }: `abrir` = se puede abrir solo el primero (match fuerte o pista clara).
 async function buscar(texto) {
   const d = desglosar(texto);
-  const nums = d.numeros;
-  if (nums.length) {
+  const calles = callesConAltura(texto);
+  const recibe = recibeDe(texto);
+  const pistas = { cp: d.cp, calles, recibe };
+  const res = (rows, via, fuerte) => {
+    const o = ordenar(rows, pistas);
+    return { rows: o.rows, via, abrir: fuerte ? o.claro : o.claro && o.rows.length === 1 };
+  };
+  // Si escribieron solo un número ("91855", "#1234"), es a propósito: se busca tal cual.
+  const solo = String(texto || '').trim().match(/^#?\s*(\d{3,})$/);
+  const nums = solo ? [solo[1]] : d.numeros;
+  // Tracking alfanumérico ("R207603841").
+  const alfa = [...new Set((String(texto || '').match(/\b[A-Z]{1,3}\d{6,}\b/g) || []))].slice(0, 3);
+  if (nums.length || alfa.length) {
     const list = nums.join(',');
-    const rows = await sb(`envios_busqueda?or=(id_venta_ml.in.(${list}),id_interno.in.(${list}),tracking.in.(${list}))&select=${COLS}&limit=10`);
-    if (rows && rows.length) return rows;
+    const conds = [
+      ...(nums.length ? [`id_venta_ml.in.(${list})`, `id_interno.in.(${list})`, `tracking.in.(${list})`] : []),
+      ...(alfa.length ? [`tracking.in.(${alfa.join(',')})`] : []),
+    ];
+    const rows = await sb(`envios_busqueda?or=(${conds.join(',')})&select=${COLS}&limit=20`);
+    if (rows && rows.length) return res(rows, 'numero', true);
+  }
+  // Nombre de quien recibe (bloque de ML), con el CP si vino.
+  if (recibe) {
+    const pal = sinTildes(recibe).toLowerCase().split(/\s+/).filter((w) => w.length >= 3).slice(0, 3);
+    if (pal.length) {
+      const base = `envios_busqueda?and=(${pal.map((w) => `nombre.ilike.*${comodin(w)}*`).join(',')})&select=${COLS}&limit=20`;
+      const rows = (d.cp && (await sb(`${base}&cp=eq.${encodeURIComponent(d.cp)}`))) || [];
+      const todos = rows.length ? rows : (await sb(base)) || [];
+      if (todos.length) return res(todos, 'nombre', !!d.cp && rows.length > 0);
+    }
   }
   // Calle + altura ("San Martín 487"): primero con el CP si vino en el mensaje, después sin él.
-  const calles = callesConAltura(texto);
   if (calles.length) {
-    // Vocales como comodín de una letra: así "martin" también encuentra "Martín" en la base.
-    const or = calles.map(({ calle, altura }) => `direccion.ilike.*${encodeURIComponent(calle.replace(/[aeiou]/g, '_'))}*${altura}*`).join(',');
-    const base = `envios_busqueda?or=(${or})&select=${COLS}&order=actualizado_at.desc&limit=10`;
+    // Regex (imatch) y no ilike: la altura tiene que ser un número entero ("Catalina 5" no puede
+    // traer "Catalina 1500"), y entre la calle y la altura no puede haber otros números.
+    const or = calles.map(({ calle, altura }) => {
+      const nombre = /^\d+$/.test(calle) ? `\\y${calle}` : sinTildes(calle).toLowerCase().replace(/[aeiou]/g, '.');
+      return `direccion.imatch.${encodeURIComponent(`${nombre}[^0-9]*\\y${altura}\\y`)}`;
+    }).join(',');
+    const base = `envios_busqueda?or=(${or})&select=${COLS}&limit=20`;
     if (d.cp) {
       const conCp = await sb(`${base}&cp=eq.${encodeURIComponent(d.cp)}`);
-      if (conCp && conCp.length) return conCp;
+      if (conCp && conCp.length) return res(conCp, 'direccion', true);
     }
     const rows = await sb(base);
-    if (rows && rows.length) return rows;
+    if (rows && rows.length) return res(rows, 'direccion', false);
   }
-  // sin números (o no matchearon): por nombre / dirección, todas las palabras (sin las de relleno)
-  const pal = String(texto || '').toLowerCase().replace(/[^a-záéíóúñü0-9 ]/gi, ' ').split(/\s+/).filter((p) => p.length >= 3 && !RELLENO.has(p)).slice(0, 4);
-  if (!pal.length) return [];
-  const filtros = pal.map((p) => `or(nombre.ilike.*${encodeURIComponent(p)}*,direccion.ilike.*${encodeURIComponent(p)}*)`).join(',');
-  return (await sb(`envios_busqueda?and=(${filtros})&select=${COLS}&order=actualizado_at.desc&limit=10`)) || [];
+  // Números sueltos (posible pedido): nunca se abren solos.
+  const sueltos = numerosSueltos(texto, { ...d, numeros: nums }, calles);
+  if (sueltos.length) {
+    const list = sueltos.join(',');
+    const rows = await sb(`envios_busqueda?or=(id_venta_ml.in.(${list}),tracking.in.(${list}))&select=${COLS}&limit=20`);
+    if (rows && rows.length) return { ...res(rows, 'suelto', false), abrir: false, sueltos };
+  }
+  // Por nombre / dirección, todas las palabras (sin las de relleno).
+  const pal = sinTildes(texto).toLowerCase().replace(/[^a-zñ0-9 ]/gi, ' ').split(/\s+/).filter((p) => p.length >= 3 && !RELLENO.has(p) && p !== d.cp).slice(0, 4);
+  if (!pal.length) return { rows: [], via: 'nada', abrir: false };
+  const filtros = pal.map((p) => `or(nombre.ilike.*${comodin(p)}*,direccion.ilike.*${comodin(p)}*)`).join(',');
+  const rows = (await sb(`envios_busqueda?and=(${filtros})&select=${COLS}&limit=20`)) || [];
+  return res(rows, 'palabras', false);
 }
 
 export default function BuscarEnvio({ inicial = '' }) {
@@ -98,15 +187,16 @@ export default function BuscarEnvio({ inicial = '' }) {
   const [elegido, setElegido] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [via, setVia] = useState(null); // cómo se encontró: { via, abrir, sueltos }
 
   const correr = async (t) => {
     const q = String(t ?? texto).trim();
     if (!q) return;
     setBusy(true); setErr(''); setElegido(null);
     try {
-      const rows = await buscar(q);
-      setRes(rows);
-      if (rows.length === 1) setElegido(rows[0].id_interno);
+      const r = await buscar(q);
+      setRes(r.rows); setVia(r);
+      if (r.rows.length && r.abrir) setElegido(r.rows[0].id_interno);
     } catch (e) { setErr('No se pudo buscar: ' + e.message); setRes(null); }
     setBusy(false);
   };
@@ -166,9 +256,13 @@ export default function BuscarEnvio({ inicial = '' }) {
         </div>
       )}
 
-      {res && res.length > 1 && !elegido && (
+      {res && res.length > 0 && !elegido && (
         <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>Encontré {res.length}. ¿Cuál es?</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>
+            {via && via.via === 'suelto'
+              ? <>No había número de envío. Busqué {via.sueltos.length === 1 ? 'el número suelto' : 'los números sueltos'} <b style={{ color: '#FFB020' }}>{via.sueltos.join(', ')}</b> como pedido: confirmá cuál es (los números de pedido se repiten entre clientes).</>
+              : res.length === 1 ? 'Encontré 1, pero no estoy seguro. ¿Es este?' : `Encontré ${res.length}. ¿Cuál es?`}
+          </div>
           {res.map((r) => (
             <button key={r.id_interno} onClick={() => setElegido(r.id_interno)}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', marginBottom: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.03)', color: '#fff', cursor: 'pointer' }}>
@@ -181,8 +275,8 @@ export default function BuscarEnvio({ inicial = '' }) {
 
       {elegido && (
         <div style={{ marginTop: 18, padding: 16, borderRadius: 14, border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.03)' }}>
-          {res && res.length > 1 && (
-            <button onClick={() => setElegido(null)} style={{ background: 'none', border: 'none', color: '#4A9EFF', cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 10 }}>← Ver los {res.length} resultados</button>
+          {res && (res.length > 1 || (via && !via.abrir)) && (
+            <button onClick={() => setElegido(null)} style={{ background: 'none', border: 'none', color: '#4A9EFF', cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 10 }}>{res.length === 1 ? '← Volver' : `← Ver los ${res.length} resultados`}</button>
           )}
           <PanelEnvio caso={{ envio_id: elegido, mensaje: texto }} />
         </div>
