@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { puedeVer, esAdmin } from "./permisos";
 import { slaMeli } from "./slaShared";
-import { useClima, textoNivel, iconoNivel, Lluvia } from "./Clima";
+import { useClima, textoNivel, Lluvia } from "./Clima";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
 } from "./colectasShared";
 
-// ── Home = Centro de operaciones (spec-home-centro-operaciones, diseño flexit-design "premium").
+// ── Home = Centro de operaciones (spec-home-centro-operaciones, diseño flexit-design "premium"; rediseño 10/10:
+// en escritorio menú lateral + fila de indicadores; en el celular indicadores 2×2 y accesos 3×3 abajo).
 // El home responde "¿qué requiere mi atención?" y cambia según la franja horaria del día real de
 // Alejo: a la mañana el arranque (quién estuvo mal ayer → grupo), al mediodía colectas, los lunes
 // la liquidación. La pizarra (notas del equipo) está siempre, con buzón en el header.
@@ -112,7 +113,7 @@ function Buzon({ notas, onIr, onResolver }) {
               <div key={nt.id} style={{ display: "flex", gap: 11, padding: "11px 16px", borderTop: `1px solid ${C.line}` }}>
                 <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.grotesk, fontWeight: 600, fontSize: 12, color: col, background: col + "26" }}>{(nt.autor || "?")[0].toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>{nt.autor || "—"} <span style={{ color: C.ink3, fontWeight: 400 }}>· {t.emoji} {t.label}</span></div>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>{nt.autor || "—"} <span style={{ color: C.ink3, fontWeight: 400 }}>· {t.label}</span></div>
                   <div style={{ fontSize: 12.5, color: C.ink2, lineHeight: 1.4, marginTop: 2 }}>{textoNota(nt)}</div>
                   {nt.tipo === "ausencia" && nt.cubre && <div style={{ fontSize: 11, color: C.teal, marginTop: 2 }}>cubre {nt.cubre}</div>}
                 </div>
@@ -126,37 +127,9 @@ function Buzon({ notas, onIr, onResolver }) {
   );
 }
 
-// ── Stat card glass ──
-// Una tarjeta con `onClick` es un acceso a su sección: se marca con un chevron tenue a la
-// derecha del encabezado y el borde se enciende al pasar el mouse. Solo cambia color —
-// nada que altere el alto, para no empujar las tarjetas de abajo.
-function Stat({ cap, capId, live, children, span2, onClick, orden, irA }) {
-  return (
-    <div onClick={onClick}
-      onMouseEnter={onClick ? (e) => { e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; } : undefined}
-      onMouseLeave={onClick ? (e) => { e.currentTarget.style.borderColor = C.line; } : undefined}
-      title={onClick && irA ? `Ir a ${irA}` : undefined}
-      style={{ ...cardBase, padding: "18px 18px", gridColumn: span2 ? "span 2" : "auto", order: orden || 0, cursor: onClick ? "pointer" : "default", transition: "border-color .18s ease" }}>
-      <span style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.10),transparent)" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: C.ink2 }}>
-        {capId && <Icon id={capId} size={15} color={C.ink3} />} {cap}
-        {live && <span style={{ marginLeft: "auto", fontSize: 10.5, color: C.teal, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal, boxShadow: `0 0 7px ${C.teal}` }} />EN VIVO</span>}
-        {onClick && <span style={{ marginLeft: live ? 8 : "auto", color: C.ink3, fontSize: 13, lineHeight: 1 }}>→</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-const Barra = ({ pct, color }) => (
-  <div style={{ height: 6, borderRadius: 4, background: "rgba(255,255,255,0.08)", marginTop: 12, overflow: "hidden" }}>
-    <div style={{ height: "100%", borderRadius: 4, width: `${Math.max(0, Math.min(100, pct))}%`, background: color, transition: "width .4s ease" }} />
-  </div>
-);
-const bigNum = (mobile) => ({ fontFamily: C.grotesk, fontWeight: 600, letterSpacing: "-1px", fontSize: mobile ? 24 : 28, marginTop: 10 });
-const ctaSt = { display: "inline-flex", alignItems: "center", gap: 8, marginTop: 16, background: "linear-gradient(135deg,#2ee6b6,#22c39a)", color: "#04150f", fontWeight: 700, fontSize: 13.5, border: "none", borderRadius: 13, padding: "12px 18px", cursor: "pointer", boxShadow: "0 8px 22px rgba(46,230,182,0.25)" };
+
 const mini = { border: "1px solid rgba(255,255,255,0.09)", background: "rgba(255,255,255,0.05)", color: "#fff", borderRadius: 9, padding: "7px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", minHeight: 34, whiteSpace: "nowrap" };
 const miniOk = { ...mini, border: "1px solid rgba(46,230,182,0.4)", color: "#2ee6b6", background: "rgba(46,230,182,0.1)" };
-const secSt = { fontSize: 12, fontWeight: 600, color: C.ink3, margin: "22px 6px 12px" };
 
 // ── Easter egg: Paco, la mascota secreta de Flexit ──
 // Doble clic en el logo del header del Home abre este modal para llevarse el widget de escritorio
@@ -216,6 +189,67 @@ function PacoEgg({ onClose }) {
   );
 }
 
+// ── Piezas visuales del Home (rediseño 10/10: escritorio con menú lateral + fila de indicadores) ──
+const tileSt = { ...cardBase, borderRadius: 16, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 9, textAlign: "left", color: C.ink, font: "inherit", minWidth: 0 };
+const tileCap = { fontSize: 12, fontWeight: 600, color: C.ink3, display: "flex", alignItems: "center", gap: 6 };
+const tileNum = (mobile) => ({ fontFamily: C.grotesk, fontWeight: 600, fontSize: mobile ? 26 : 32, letterSpacing: "-0.8px", lineHeight: 1, fontVariantNumeric: "tabular-nums" });
+const tileSub = { fontSize: 12, color: C.ink3, lineHeight: 1.35 };
+const cardTitle = { fontSize: 13, fontWeight: 600, color: C.ink2, margin: 0 };
+
+// Tarjeta-indicador. Si tiene onClick es un botón (acceso a su sección); el hover solo cambia el
+// color del borde — nada que altere el alto (ver feedback-hover-sin-reflujo).
+function Tile({ cap, onClick, irA, children, style }) {
+  const props = onClick ? {
+    onClick, type: "button", title: irA ? `Ir a ${irA}` : undefined,
+    onMouseEnter: (e) => { e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; },
+    onMouseLeave: (e) => { e.currentTarget.style.borderColor = C.line; },
+  } : {};
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag {...props} style={{ ...tileSt, cursor: onClick ? "pointer" : "default", transition: "border-color .18s ease", ...style }}>
+      <span style={tileCap}>{cap}{onClick && <span style={{ marginLeft: "auto", fontSize: 13, lineHeight: 1 }}>→</span>}</span>
+      {children}
+    </Tag>
+  );
+}
+
+const MiniBarra = ({ pct, color }) => (
+  <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+    <div style={{ height: "100%", borderRadius: 2, width: `${Math.max(0, Math.min(100, pct))}%`, background: color, transition: "width .4s ease" }} />
+  </div>
+);
+
+// Línea de tendencia chiquita (SLA de los últimos días). Escala propia por serie.
+function Sparkline({ valores, color, w = 84, h = 28 }) {
+  const v = (valores || []).filter((x) => x != null);
+  if (v.length < 2) return null;
+  const min = Math.min(...v), max = Math.max(...v), rango = max - min || 1;
+  const pts = v.map((x, i) => [2 + (i * (w - 4)) / (v.length - 1), h - 3 - ((x - min) / rango) * (h - 6)]);
+  const ult = pts[pts.length - 1];
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" role="img" aria-label="Tendencia del SLA de los últimos días">
+      <polyline points={pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" ")} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={ult[0]} cy={ult[1]} r="2.5" fill={color} />
+    </svg>
+  );
+}
+
+// Ícono del clima según el nivel (reemplaza los emojis ☀️🌦️🌧️⛈️).
+function IconoClima({ nivel, size = 26 }) {
+  const lluvia = nivel !== "seco";
+  const color = nivel === "fuerte" ? C.rojo : lluvia ? C.azul : C.ambar;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {!lluvia && (<><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>)}
+      {lluvia && <path d="M20 15.5A4.5 4.5 0 0 0 17.5 7a6 6 0 0 0-11.4 1.8A4 4 0 0 0 6 16.5h13" />}
+      {lluvia && nivel !== "fuerte" && <path d="M8 19v2M12 19v2M16 19v2" />}
+      {nivel === "fuerte" && <path d="m13 16-2.5 4h3L11 24" />}
+    </svg>
+  );
+}
+
+const ddmm = (iso) => { const f = new Date(iso + "T12:00:00"); return `${f.getDate()}/${f.getMonth() + 1}`; };
+
 export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout, comBadge = 0 }) {
   const clima = useClima(); // pronóstico de lluvia en horario de reparto (Open-Meteo)
   const [eggPaco, setEggPaco] = useState(false); // easter egg: 5 clics seguidos en el logo del header
@@ -230,13 +264,14 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   const hoy = todayStr();
   const ahora = useMemo(() => new Date(Date.now() - 3 * 3600 * 1000), []);
   const diaSemana = new Date(hoy + "T12:00:00").getDay();
-  const franja = minutosAR() < 690 ? "manana" : "dia";
   const minsAhora = minutosAR();
+  const franja = minsAhora < 690 ? "manana" : "dia";
   const ventanaArribos = minsAhora >= 780 && minsAhora <= 930; // 13:00–15:30: lo que más se usa (llegan los choferes)
   const esLunMar = diaSemana === 1 || diaSemana === 2;
   const isAdmin = !!(session && session.email === "admin@flexit.app");
   const horaTxt = `${String(ahora.getUTCHours()).padStart(2, "0")}:${String(ahora.getUTCMinutes()).padStart(2, "0")}`;
   const usuario = (session || {}).nombre || "";
+  const saludo = minsAhora < 720 ? "Buen día" : minsAhora < 1200 ? "Buenas tardes" : "Buenas noches";
 
   const [ayer, setAyer] = useState(null);
   const [col, setCol] = useState(null);
@@ -244,16 +279,27 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   const [liq, setLiq] = useState(null);
   const [copiado, setCopiado] = useState(false);
 
-  // Datos de ayer (semanas, lectura pública)
+  // Datos de ayer (semanas, lectura pública). Se traen ~2 semanas para la tendencia del SLA.
   useEffect(() => {
-    sbFetch("semanas?select=cadete,fecha,cantidad,demorados,dem21,post21,envios_ml&order=fecha.desc&limit=300")
+    sbFetch("semanas?select=cadete,fecha,cantidad,demorados,dem21,post21,envios_ml&order=fecha.desc&limit=1200")
       .then((rows) => {
         if (!Array.isArray(rows) || !rows.length) return;
-        const maxFecha = rows.reduce((m, r) => (r.fecha > m ? r.fecha : m), rows[0].fecha);
-        const dia = rows.filter((r) => r.fecha === maxFecha);
-        let ml = 0, dem = 0, d21 = 0, env = 0; const cad = [];
-        dia.forEach((r) => {
-          ml += r.envios_ml || 0; dem += r.demorados || 0; d21 += r.dem21 || 0; env += r.cantidad || 0;
+        const porFecha = {};
+        rows.forEach((r) => { (porFecha[r.fecha] = porFecha[r.fecha] || []).push(r); });
+        const fechas = Object.keys(porFecha).sort(); // asc
+        const slaDe = (f) => {
+          let ml = 0, dem = 0, d21 = 0;
+          porFecha[f].forEach((r) => { ml += r.envios_ml || 0; dem += r.demorados || 0; d21 += r.dem21 || 0; });
+          return slaMeli(ml, dem, d21);
+        };
+        const maxFecha = fechas[fechas.length - 1];
+        // La fecha más vieja puede venir cortada por el limit: se descarta de la serie.
+        const serieFechas = fechas.slice(fechas.length > 8 ? -8 : 1).slice(-7);
+        const serie = serieFechas.map(slaDe);
+        const prevFecha = fechas.length > 1 ? fechas[fechas.length - 2] : null;
+        let env = 0; const cad = [];
+        porFecha[maxFecha].forEach((r) => {
+          env += r.cantidad || 0;
           const s = slaMeli(r.envios_ml, r.demorados, r.dem21);
           if (s != null && (r.envios_ml || 0) >= 10 && s < 98) {
             const mot = [];
@@ -263,7 +309,9 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           }
         });
         cad.sort((a, b) => a.sla - b.sla);
-        setAyer({ fecha: maxFecha, envios: env, sla: slaMeli(ml, dem, d21), cadetes: cad });
+        const sla = slaDe(maxFecha);
+        const slaPrev = prevFecha ? slaDe(prevFecha) : null;
+        setAyer({ fecha: maxFecha, envios: env, sla, cadetes: cad, serie, prevFecha, delta: sla != null && slaPrev != null ? sla - slaPrev : null });
       })
       .catch(() => {});
   }, []);
@@ -303,8 +351,8 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         });
       });
       const llegadosSet = new Set((arr || []).filter((a) => a.llego_at).map((a) => a.cadete));
-      const llegaron = [...roster].filter((ch) => llegadosSet.has(ch)).length;
-      setCol({ sinChofer, confirmadas, totalCol: conColecta, llegaron, totalArr: roster.size });
+      const faltan = [...roster].filter((ch) => !llegadosSet.has(ch)).sort((a, b) => a.localeCompare(b, "es"));
+      setCol({ sinChofer, confirmadas, totalCol: conColecta, llegaron: roster.size - faltan.length, totalArr: roster.size, faltan });
     }).catch(() => {});
     return () => { vivo = false; };
   }, [session, hoy]);
@@ -368,226 +416,327 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   })();
   const colCompleto = !!(col && col.totalCol > 0 && col.sinChofer === 0 && col.confirmadas === col.totalCol);
 
-  const dock = [
+  const modulos = [
     { id: "metricas", label: "Métricas" }, { id: "colectas", label: "Colectas" }, { id: "arribos", label: "Arribos" }, { id: "monitoreo", label: "Monitoreo" },
     { id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }, { id: "pagos", label: "Pagos" }, { id: "pendientes", label: "Históricos" },
   ].filter((d) => puedeVer(d.id))
     .concat(session && esAdmin() ? [{ id: "usuarios", label: "Usuarios" }] : []); // solo el admin
 
-  const bg = {
-    minHeight: "78vh", padding: isMobile ? "6px 2px 30px" : "8px 4px 40px",
-  };
-  const focoTitulo = { fontFamily: C.grotesk, fontSize: isMobile ? 20 : 26, fontWeight: 600, letterSpacing: "-0.6px", margin: "11px 0 6px", lineHeight: 1.15 };
-  const focoBajada = { fontSize: isMobile ? 13 : 14, color: C.ink2, lineHeight: 1.5 };
+  // ── Foco de hoy: franja fina si está todo bien; tarjeta protagonista (ámbar) si hay algo que hacer ──
+  const focoTitulo = { fontFamily: C.grotesk, fontSize: isMobile ? 20 : 23, fontWeight: 600, letterSpacing: "-0.5px", margin: "6px 0 4px", lineHeight: 1.2 };
+  const focoBajada = { fontSize: 13.5, color: C.ink2, lineHeight: 1.5 };
+  const ctaAmbar = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.ambar, color: "#1a1406", fontWeight: 700, fontSize: 13.5, border: "none", borderRadius: 12, padding: "0 18px", minHeight: 44, cursor: "pointer", whiteSpace: "nowrap", width: isMobile ? "100%" : "auto" };
+  const focoAccion = (() => {
+    if (foco === "colectas") return { titulo: `${col.sinChofer} colecta${col.sinChofer === 1 ? "" : "s"} sin chofer`, bajada: <>Asignalas <b style={{ color: C.ambar }}>antes de las 14:00</b> para evitar demoras en el reparto.</>, cta: "Abrir colectas", go: () => onNav("colectas") };
+    if (foco === "arribos") return { titulo: `Van llegando: ${col.llegaron} de ${col.totalArr} cadetes`, bajada: <>{col.totalArr - col.llegaron === 1 ? "Falta" : "Faltan"} <b style={{ color: C.ambar }}>{col.totalArr - col.llegaron}</b> por llegar al depósito. Marcá a cada uno cuando entra.</>, cta: "Abrir arribos", go: () => onNav("arribos") };
+    if (foco === "arranque") return { titulo: `${ayer.cadetes.length} cadete${ayer.cadetes.length === 1 ? "" : "s"} para revisar de ayer`, bajada: `SLA general ${ayer.sla != null ? ayer.sla.toFixed(1) + "%" : "—"}. Copiá el resumen y mandalo al grupo.`, cta: copiado ? "Copiado" : "Copiar resumen para el grupo", go: copiarResumen, sinFlecha: true };
+    if (foco === "liq") return { titulo: `Liquidación ${liq.label}`, bajada: liq.confirmados === 0 ? "Todavía no confirmaste ningún cadete. Ahí arranca." : `${liq.confirmados} confirmados · ${liq.pagados} pagados${liq.confirmados > liq.pagados ? ` · faltan ${liq.confirmados - liq.pagados} por pagar` : ""}.`, cta: "Ir a liquidaciones", go: () => onNav("pagos") };
+    return null;
+  })();
+  const focoEl = focoAccion ? (
+    <section aria-label="Foco de hoy" style={{ ...cardBase, borderRadius: 18, padding: isMobile ? "18px" : "20px 24px", borderColor: "rgba(245,192,68,0.35)", background: "linear-gradient(100deg, rgba(245,192,68,0.12), transparent 60%), " + C.glass, display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center", justifyContent: "space-between", gap: isMobile ? 14 : 20 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, minWidth: 0 }}>
+        {!isMobile && (
+          <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 12, background: "rgba(245,192,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.ambar} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
+          </span>
+        )}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: C.grotesk, fontSize: 11, fontWeight: 700, letterSpacing: "1.3px", textTransform: "uppercase", color: C.ambar }}>Foco de hoy</div>
+          <div style={focoTitulo}>{focoAccion.titulo}</div>
+          <div style={focoBajada}>{focoAccion.bajada}</div>
+        </div>
+      </div>
+      <button type="button" onClick={focoAccion.go} style={ctaAmbar}>{focoAccion.cta}{!focoAccion.sinFlecha && <Icon id="arrow" size={15} color="#1a1406" />}</button>
+    </section>
+  ) : (
+    <section aria-label="Foco de hoy" style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 14, background: "rgba(46,230,182,0.06)", border: "1px solid rgba(46,230,182,0.18)" }}>
+      <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: "50%", background: "rgba(46,230,182,0.16)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon id="check" size={14} color={C.teal} w={3} /></span>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 10, rowGap: 2, minWidth: 0 }}>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>Todo bajo control</span>
+        <span style={{ color: C.ink3, fontSize: 13 }}>Sin urgencias ahora.{!session ? " Ingresá para ver colectas y notas del equipo." : ""}</span>
+      </div>
+    </section>
+  );
 
-  return (
-    <div style={bg}>
-      {/* Profundidad: los degradés van en una capa FIJA de pantalla completa (position:fixed) —
-          así no dibujan un rectángulo tintado dentro del padding de la app (eso se veía como un
-          "borde" alrededor del header). El contenido va por encima. */}
-      <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "radial-gradient(1100px 600px at 12% -4%, rgba(0,255,180,0.05), transparent 60%), radial-gradient(1000px 640px at 92% 106%, rgba(0,180,255,0.04), transparent 60%)" }} />
+  // ── Aviso de lluvia: solo cuando el pronóstico complica el reparto (hoy o mañana) ──
+  const lluviaEl = clima && (() => {
+    const hoyMal = clima.hoy.nivel === "fuerte" || clima.hoy.nivel === "lluvia";
+    const mananaMal = clima.manana && clima.manana.nivel === "fuerte";
+    if (!hoyMal && !mananaMal) return null;
+    const r = hoyMal ? clima.hoy : clima.manana;
+    const fuerte = r.nivel === "fuerte";
+    const color = fuerte ? C.rojo : C.ambar;
+    return (
+      <div style={{ ...cardBase, borderRadius: 16, padding: isMobile ? "14px 16px" : "14px 20px", borderColor: fuerte ? "rgba(232,97,95,0.45)" : "rgba(245,192,68,0.4)", background: `linear-gradient(135deg, ${fuerte ? "rgba(232,97,95,0.10)" : "rgba(245,192,68,0.08)"}, transparent 70%), ${C.glass}` }}>
+        {hoyMal && <Lluvia intensidad={clima.ahora || r.nivel} />}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <IconoClima nivel={r.nivel} size={28} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: 15, color }}>{hoyMal ? "Hoy" : "Mañana"}: {textoNivel(r)}</div>
+            <div style={{ fontSize: 12, color: C.ink2, marginTop: 3, lineHeight: 1.5 }}>
+              {fuerte ? "Va a complicar el reparto: avisá a los cadetes, sacá primero las zonas lejanas y prevé bolsas para los paquetes." : "Puede demorar el reparto: avisá a los cadetes y prevé bolsas para los paquetes."}
+              {hoyMal && mananaMal ? " Mañana también llueve fuerte." : ""}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  })();
+
+  // ── Indicadores: SLA · Envíos · Colectas · Clima (2×2 en el celular, una fila en escritorio) ──
+  const slaColor = (s) => (s >= 98 ? C.teal : s >= 95 ? C.ambar : C.rojo);
+  const climaTexto = (r) => !r ? "" : r.nivel === "fuerte" ? "Lluvia fuerte" : r.nivel === "lluvia" ? "Lluvia" : r.nivel === "puede" ? "Puede llover" : "Sin lluvia";
+  const climaValor = (r) => !r ? "—" : (r.nivel === "fuerte" || r.nivel === "lluvia") ? `${String(r.mm).replace(".", ",")} mm` : r.nivel === "puede" ? `${r.prob}%` : "Seco";
+  const tiles = [];
+  if (ayer && ayer.sla != null) tiles.push(
+    <Tile key="sla" cap="SLA de ayer" onClick={() => onNav("metricas")} irA="Métricas">
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ ...tileNum(isMobile), color: slaColor(ayer.sla) }}>{ayer.sla.toFixed(1).replace(".", ",")}%</span>
+        {!isMobile && <Sparkline valores={ayer.serie} color={slaColor(ayer.sla)} />}
+      </div>
+      {ayer.delta != null ? (
+        <span style={tileSub}><b style={{ color: ayer.delta >= 0 ? C.teal : C.rojo, fontWeight: 600 }}>{ayer.delta >= 0 ? "▲" : "▼"} {Math.abs(ayer.delta).toFixed(1).replace(".", ",")} pts</b> vs. {ddmm(ayer.prevFecha)}</span>
+      ) : <span style={tileSub}>{ddmm(ayer.fecha)}</span>}
+    </Tile>
+  );
+  if (ayer) tiles.push(
+    <Tile key="env" cap="Envíos de ayer" onClick={() => onNav("metricas")} irA="Métricas">
+      <span style={tileNum(isMobile)}>{fmt(ayer.envios)}</span>
+      <span style={tileSub}>{ayer.cadetes.length > 0 ? <b style={{ color: C.ambar, fontWeight: 600 }}>{ayer.cadetes.length} en alerta</b> : "Nadie en alerta"}</span>
+    </Tile>
+  );
+  if (session && col) tiles.push(
+    <Tile key="col" cap="Colectas" onClick={() => onNav("colectas")} irA="Colectas">
+      <span style={tileNum(isMobile)}>{col.confirmadas}<span style={{ fontSize: isMobile ? 15 : 17, color: C.ink3, fontWeight: 500 }}> / {col.totalCol}</span></span>
+      <MiniBarra pct={col.totalCol ? (col.confirmadas / col.totalCol) * 100 : 0} color={colCompleto ? C.teal : col.sinChofer > 0 ? C.ambar : C.lila} />
+      <span style={tileSub}>{colCompleto ? "Todas confirmadas" : col.sinChofer > 0 ? <b style={{ color: C.ambar, fontWeight: 600 }}>{col.sinChofer} sin chofer</b> : `${col.totalCol - col.confirmadas} por confirmar`}</span>
+    </Tile>
+  );
+  if (clima) {
+    const llueveHoy = clima.ahora || clima.hoy.nivel === "fuerte" || clima.hoy.nivel === "lluvia";
+    tiles.push(
+      <Tile key="clima" cap={isMobile ? "Clima hoy" : "Clima en reparto"}>
+        {llueveHoy && <Lluvia intensidad={clima.ahora || clima.hoy.nivel} />}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <IconoClima nivel={clima.hoy.nivel} size={isMobile ? 24 : 28} />
+          <span style={{ ...tileNum(isMobile), fontSize: clima.hoy.nivel === "seco" ? (isMobile ? 22 : 26) : tileNum(isMobile).fontSize }}>{climaValor(clima.hoy)}</span>
+        </div>
+        <span style={tileSub}>{climaTexto(clima.hoy)}{clima.manana ? ` · mañana ${climaTexto(clima.manana).toLowerCase()}` : ""}</span>
+      </Tile>
+    );
+  }
+
+  // ── Arribos: cuántos llegaron y QUIÉN falta ──
+  const arribosEl = session && col && col.totalArr > 0 && (
+    <article style={{ ...cardBase, borderRadius: 16, padding: isMobile ? 16 : "20px 22px", display: "flex", flexDirection: "column", gap: 12, flex: isMobile ? "none" : "3 1 380px", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2 style={cardTitle}>Arribos</h2>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", color: C.teal }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal }} />EN VIVO</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ ...tileNum(isMobile), fontSize: isMobile ? 34 : 42 }}>{col.llegaron}</span>
+        <span style={{ fontFamily: C.grotesk, fontSize: isMobile ? 16 : 19, color: C.ink3 }}>/ {col.totalArr} llegaron</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+        <div style={{ height: "100%", borderRadius: 3, width: `${(col.llegaron / col.totalArr) * 100}%`, background: C.teal, transition: "width .4s ease" }} />
+      </div>
+      {col.faltan.length === 0 ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.ink2 }}><Icon id="check" size={15} color={C.teal} w={2.6} /> Llegaron todos</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span style={{ fontSize: 12, color: C.ink3 }}>{col.faltan.length === 1 ? "Falta 1" : `Faltan ${col.faltan.length}`}</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {col.faltan.slice(0, 6).map((n) => (
+              <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 6px", borderRadius: 20, background: "rgba(245,192,68,0.08)", border: "1px solid rgba(245,192,68,0.25)", fontSize: 13, fontWeight: 600 }}>
+                <span style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(245,192,68,0.18)", color: C.ambar, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{(n || "?")[0].toUpperCase()}</span>
+                {n}
+              </span>
+            ))}
+            {col.faltan.length > 6 && <span style={{ alignSelf: "center", fontSize: 12, color: C.ink3 }}>y {col.faltan.length - 6} más</span>}
+          </div>
+        </div>
+      )}
+      <button type="button" onClick={() => onNav("arribos")} style={{ alignSelf: isMobile ? "stretch" : "flex-start", minHeight: 40, padding: "0 16px", borderRadius: 10, border: `1px solid rgba(255,255,255,0.1)`, background: "transparent", color: C.ink2, fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 2 }}>Abrir arribos</button>
+    </article>
+  );
+
+  // ── Notas del equipo ──
+  const notasEl = session && (
+    <article style={{ ...cardBase, borderRadius: 16, padding: isMobile ? "14px 16px" : "20px 22px", display: "flex", flexDirection: "column", gap: 6, flex: isMobile ? "none" : "2 1 300px", minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h2 style={cardTitle}>Notas del equipo</h2>
+        <button type="button" onClick={() => onNav("pizarra")} style={{ background: "none", border: "none", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 12.5, padding: "6px 0" }}>+ Nueva</button>
+      </div>
+      {notasHoy.length === 0 ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "row" : "column", alignItems: "center", justifyContent: "center", gap: 10, padding: isMobile ? "4px 0" : "14px 0", textAlign: isMobile ? "left" : "center", fontSize: 13, color: C.ink2 }}>
+          <span style={{ width: isMobile ? 26 : 36, height: isMobile ? 26 : 36, flexShrink: 0, borderRadius: "50%", background: "rgba(46,230,182,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon id="check" size={isMobile ? 13 : 17} color={C.teal} w={2.6} /></span>
+          <span>
+            Sin notas pendientes para hoy.{pendientesFuturas > 0 ? ` Hay ${pendientesFuturas} para los próximos días.` : ""}{" "}
+            <span onClick={() => onNav("pizarra")} style={{ color: C.teal, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{pendientesFuturas > 0 ? "Verlas" : "Abrir la pizarra"} →</span>
+          </span>
+        </div>
+      ) : (
+        <div>
+          {notasHoy.slice(0, isMobile ? 2 : 4).map((n) => {
+            const t = NOTA_TIPOS[n.tipo] || {};
+            const col2 = n.tipo === "ausencia" ? C.rojo : C.lila;
+            const urg = n.prioridad === "ahora"; const hora = n.prioridad === "hora" && n.hora_limite;
+            return (
+              <div key={n.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 0", borderTop: `1px solid ${C.line}`, flexWrap: "wrap" }}>
+                <div title={t.label} style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.grotesk, fontWeight: 600, fontSize: 12, color: col2, background: col2 + "22" }}>{(n.autor || "?")[0].toUpperCase()}</div>
+                <div style={{ flex: 1, minWidth: 150, fontSize: 13 }}>
+                  {urg && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: C.rojo, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>AHORA</span>}
+                  {hora && <span style={{ fontSize: 10, fontWeight: 800, color: "#1a1500", background: C.ambar, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>{n.hora_limite}</span>}
+                  {textoNota(n)}
+                  {n.tipo === "ausencia" && n.cubre && <span style={{ color: C.teal, fontWeight: 600 }}> · cubre {n.cubre}</span>}
+                  <span style={{ display: "block", fontSize: 11, color: C.ink3, marginTop: 1 }}>{n.autor}{t.label ? ` · ${t.label}` : ""}</span>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => resolverLocal(n)} style={miniOk}>✓ Hecho</button>
+                  {n.tipo !== "ausencia" && <button onClick={() => moverLocal(n)} style={mini}>→ Mañana</button>}
+                </div>
+              </div>
+            );
+          })}
+          {notasHoy.length > (isMobile ? 2 : 4) && (
+            <div onClick={() => onNav("pizarra")} style={{ textAlign: "center", fontSize: 12, color: C.teal, fontWeight: 600, padding: "11px 0 2px", borderTop: `1px solid ${C.line}`, cursor: "pointer" }}>Ver las {notasHoy.length} en la pizarra →</div>
+          )}
+        </div>
+      )}
+    </article>
+  );
+
+  const sinSesionEl = !session && (
+    <div style={{ ...cardBase, borderRadius: 16, padding: "16px 18px", fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
+      Ingresá arriba a la derecha para ver colectas, arribos y las notas del equipo en vivo.
+    </div>
+  );
+
+  const buscarBtn = session && puedeVer("envio") && (
+    <button type="button" onClick={() => onNav("envio")} aria-label="Buscar envío"
+      style={{ display: "flex", alignItems: "center", gap: 10, height: isMobile ? 46 : 42, width: isMobile ? "100%" : 280, boxSizing: "border-box", padding: "0 14px", borderRadius: 12, border: `1px solid rgba(255,255,255,0.08)`, background: C.glassSoft, color: C.ink3, cursor: "pointer", fontSize: isMobile ? 15 : 13, textAlign: "left" }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      Buscar envío
+    </button>
+  );
+
+  const metaTxt = `${session ? "En vivo" : "Panel"} · ${isMobile ? `${DIAS[diaSemana].slice(0, 3)} ${ahora.getUTCDate()}/${ahora.getUTCMonth() + 1} · ${horaTxt}` : `${DIAS[diaSemana]} ${ahora.getUTCDate()} de ${MESES[ahora.getUTCMonth()]} · ${horaTxt}`}`;
+  const saludoEl = (
+    <div style={{ minWidth: 0, flex: 1 }}>
+      <h1 style={{ margin: 0, fontFamily: C.grotesk, fontSize: isMobile ? 19 : 25, fontWeight: 600, letterSpacing: "-0.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {saludo}{usuario && !isMobile ? `, ${usuario.split(" ")[0]}` : ""}
+      </h1>
+      <div style={{ fontSize: isMobile ? 11.5 : 13, color: C.ink3, marginTop: 3, display: "flex", alignItems: "center", gap: 7, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.teal, boxShadow: "0 0 0 3px rgba(46,230,182,0.16)", flexShrink: 0 }} />
+        {metaTxt}
+      </div>
+    </div>
+  );
+  const logoEl = (size) => (
+    <div onClick={clickLogoEgg} style={{ width: size, height: size, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)", userSelect: "none" }}>
+      <img src={logo} alt="Flexit" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+    </div>
+  );
+
+  const fondo = <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "radial-gradient(1100px 600px at 12% -4%, rgba(0,255,180,0.05), transparent 60%), radial-gradient(1000px 640px at 92% 106%, rgba(0,180,255,0.04), transparent 60%)" }} />;
+  const fuente = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+  // ════════════════ CELULAR ════════════════
+  if (isMobile) return (
+    <div style={{ minHeight: "78vh", padding: "6px 2px 30px" }}>
+      {fondo}
       {eggPaco && <PacoEgg onClose={() => setEggPaco(false)} />}
-      <div style={{ maxWidth: 820, margin: "0 auto", position: "relative", zIndex: 1, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: C.ink }}>
-
-        {/* Header — logo + saludo a la izquierda, acciones a la derecha. Sin wrap: el saludo se
-            trunca antes de chocar con los botones, y la meta es corta en mobile. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-          <div onClick={clickLogoEgg} style={{ width: isMobile ? 40 : 44, height: isMobile ? 40 : 44, borderRadius: 13, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)", userSelect: "none" }}>
-            <img src={logo} alt="Flexit" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          </div>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontFamily: C.grotesk, fontSize: isMobile ? 17 : 21, fontWeight: 600, letterSpacing: "-0.4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {franja === "manana" ? "Buen día" : "Hola"}{usuario ? `, ${usuario.split(" ")[0]}` : ""}
-            </div>
-            <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 1, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal, boxShadow: `0 0 6px ${C.teal}`, flexShrink: 0 }} />
-              {session ? "En vivo" : "Panel"} · {isMobile ? `${horaTxt}` : `${DIAS[diaSemana]} ${ahora.getUTCDate()} de ${MESES[ahora.getUTCMonth()]} · ${horaTxt}`}
-            </div>
-          </div>
+      <div style={{ position: "relative", zIndex: 1, fontFamily: fuente, color: C.ink, display: "flex", flexDirection: "column", gap: 12 }}>
+        <header style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {logoEl(40)}
+          {saludoEl}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {session && puedeVer("envio") && (
-              <button onClick={() => onNav("envio")} title="Buscar envío" aria-label="Buscar envío"
-                style={{ height: 38, padding: "0 12px", borderRadius: 12, border: "1px solid rgba(46,230,182,0.35)", background: "rgba(46,230,182,0.10)", color: C.teal, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 13 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-                {!isMobile && "Buscar envío"}
-              </button>
-            )}
             {session && <Buzon notas={notas} onIr={onNav} onResolver={resolverLocal} />}
             {onLogin && <LoginWidget session={session} onLogin={onLogin} onLogout={onLogout} />}
           </div>
-        </div>
-
-        {/* PROTAGONISTA — Foco de hoy */}
-        <div style={{ ...cardBase, padding: isMobile ? "18px 18px" : "22px 24px", marginBottom: 14, borderColor: "rgba(46,230,182,0.3)", boxShadow: `0 0 35px rgba(0,255,180,0.12), ${C.shadow}`, background: "radial-gradient(120% 130% at 100% 0%, rgba(0,255,180,0.10), transparent 55%), " + C.glass }}>
-          <span style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)" }} />
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: C.grotesk, fontSize: 11, fontWeight: 600, letterSpacing: "1.3px", textTransform: "uppercase", color: C.teal }}>🎯 Foco de hoy</div>
-          {foco === "colectas" && (<>
-            <div style={focoTitulo}>{col.sinChofer} colecta{col.sinChofer === 1 ? "" : "s"} sin chofer</div>
-            <div style={focoBajada}>Asignalas <b style={{ color: C.ambar }}>antes de las 14:00</b> para evitar demoras en el reparto.</div>
-            <button onClick={() => onNav("colectas")} style={ctaSt}>Abrir colectas <Icon id="arrow" size={15} color="#04150f" /></button>
-          </>)}
-          {foco === "arribos" && (<>
-            <div style={focoTitulo}>Van llegando: {col.llegaron} de {col.totalArr} cadetes</div>
-            <div style={focoBajada}>Faltan <b style={{ color: C.ambar }}>{col.totalArr - col.llegaron}</b> por llegar al depósito. Marcá a cada uno cuando entra.</div>
-            <button onClick={() => onNav("arribos")} style={ctaSt}>Abrir arribos <Icon id="arrow" size={15} color="#04150f" /></button>
-          </>)}
-          {foco === "arranque" && (<>
-            <div style={focoTitulo}>{ayer.cadetes.length} cadete{ayer.cadetes.length === 1 ? "" : "s"} para revisar de ayer</div>
-            <div style={focoBajada}>SLA general {ayer.sla != null ? ayer.sla.toFixed(1) + "%" : "—"}. Copiá el resumen y mandalo al grupo.</div>
-            <button onClick={copiarResumen} style={ctaSt}>{copiado ? "✓ Copiado" : "📋 Copiar resumen para el grupo"}</button>
-          </>)}
-          {foco === "liq" && (<>
-            <div style={focoTitulo}>Liquidación {liq.label}</div>
-            <div style={focoBajada}>
-              {liq.confirmados === 0
-                ? "Todavía no confirmaste ningún cadete. Ahí arranca."
-                : `${liq.confirmados} confirmados · ${liq.pagados} pagados${liq.confirmados > liq.pagados ? ` · faltan ${liq.confirmados - liq.pagados} por pagar` : ""}.`}
-            </div>
-            <button onClick={() => onNav("pagos")} style={ctaSt}>Ir a liquidaciones <Icon id="arrow" size={15} color="#04150f" /></button>
-          </>)}
-          {foco === "ok" && (<>
-            <div style={focoTitulo}>✅ Todo bajo control</div>
-            <div style={focoBajada}>Sin urgencias ahora.{ayer && ayer.sla != null ? ` SLA de ayer: ${ayer.sla.toFixed(1)}%.` : ""}{!session ? " Ingresá para ver colectas y notas del equipo." : ""}</div>
-          </>)}
-        </div>
-
-        {/* LLUVIA — solo aparece cuando el pronóstico complica el reparto (hoy o mañana) */}
-        {clima && (() => {
-          const hoyMal = clima.hoy.nivel === 'fuerte' || clima.hoy.nivel === 'lluvia';
-          const mananaMal = clima.manana && clima.manana.nivel === 'fuerte';
-          if (!hoyMal && !mananaMal) return null;
-          const r = hoyMal ? clima.hoy : clima.manana;
-          const fuerte = r.nivel === 'fuerte';
-          const color = fuerte ? C.rojo : C.ambar;
-          return (
-            <div style={{ ...cardBase, padding: isMobile ? '14px 16px' : '16px 20px', marginTop: 14, borderColor: fuerte ? 'rgba(232,97,95,0.45)' : 'rgba(245,192,68,0.4)', background: `linear-gradient(135deg, ${fuerte ? 'rgba(232,97,95,0.10)' : 'rgba(245,192,68,0.08)'}, transparent 70%), ${C.glass}` }}>
-              {hoyMal && <Lluvia intensidad={clima.ahora || r.nivel} />}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 28, lineHeight: 1 }}>{iconoNivel(r)}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: isMobile ? 15 : 17, color }}>{hoyMal ? 'Hoy' : 'Mañana'}: {textoNivel(r)}</div>
-                  <div style={{ fontSize: 12, color: C.ink2, marginTop: 3, lineHeight: 1.5 }}>
-                    {fuerte ? 'Va a complicar el reparto: avisá a los cadetes, sacá primero las zonas lejanas y prevé bolsas para los paquetes.' : 'Puede demorar el reparto: avisá a los cadetes y prevé bolsas para los paquetes.'}
-                    {hoyMal && mananaMal ? ' Mañana también llueve fuerte.' : ''}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* AHORA — widgets. En la ventana de arribos (13–15:30) Arribos va primero. */}
-        <div style={secSt}>Ahora</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: isMobile ? 11 : 14 }}>
-          {/* Colectas: cuando está completo se muestra como "listo" (no una barra llena a medias) */}
-          {session && col && (colCompleto ? (
-            <Stat cap="Colectas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1} onClick={() => onNav("colectas")} irA="Colectas">
-              <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 10 }}>
-                <span style={{ fontSize: 26 }}>✅</span>
-                <div>
-                  <div style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: isMobile ? 18 : 20, color: C.teal, letterSpacing: "-0.5px" }}>Todas confirmadas</div>
-                  <div style={{ fontSize: 11, color: C.ink3, marginTop: 2 }}>{col.totalCol} colectas · sin pendientes</div>
-                </div>
-              </div>
-            </Stat>
-          ) : (
-            <Stat cap="Colectas confirmadas" capId="check" span2={!isMobile} orden={ventanaArribos ? 2 : 1} onClick={() => onNav("colectas")} irA="Colectas">
-              <div style={bigNum(isMobile)}>{col.confirmadas} <small style={{ fontSize: 14, color: C.ink3, fontWeight: 500 }}>/ {col.totalCol}</small></div>
-              <Barra pct={col.totalCol ? col.confirmadas / col.totalCol * 100 : 0} color={C.lila} />
-              <div style={{ fontSize: 11, color: C.ink3, marginTop: 7 }}>{col.sinChofer} sin chofer</div>
-            </Stat>
-          ))}
-          {session && col && col.totalArr > 0 && (
-            <Stat cap="Arribos" capId="arribos" live span2={!isMobile} orden={ventanaArribos ? 1 : 2} onClick={() => onNav("arribos")} irA="Arribos">
-              <div style={bigNum(isMobile)}>{col.llegaron} <small style={{ fontSize: 14, color: C.ink3, fontWeight: 500 }}>/ {col.totalArr}</small></div>
-              <Barra pct={col.totalArr ? col.llegaron / col.totalArr * 100 : 0} color={C.teal} />
-              <div style={{ fontSize: 11, color: C.ink3, marginTop: 7 }}>{col.llegaron === col.totalArr ? "llegaron todos ✓" : `faltan ${col.totalArr - col.llegaron}`}</div>
-            </Stat>
-          )}
-          {ayer && ayer.sla != null && (
-            <Stat cap="SLA de ayer" capId="chart" span2={!isMobile} orden={3} onClick={() => onNav("metricas")} irA="Métricas">
-              <div style={{ ...bigNum(isMobile), color: ayer.sla >= 98 ? C.teal : ayer.sla >= 95 ? C.ambar : C.rojo }}>{ayer.sla.toFixed(1)}%</div>
-              <div style={{ fontSize: 11, color: C.ink3, marginTop: 10 }}>{fmt(ayer.envios)} envíos · {ayer.cadetes.length} en alerta</div>
-            </Stat>
-          )}
-          {clima && (
-            <Stat cap="Clima en horario de reparto" span2 orden={4}>
-              {(clima.ahora || clima.hoy.nivel === 'fuerte' || clima.hoy.nivel === 'lluvia') && <Lluvia intensidad={clima.ahora || clima.hoy.nivel} />}
-              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-                {[['Hoy', clima.hoy], ['Mañana', clima.manana]].filter(([, r]) => r).map(([k, r]) => (
-                  <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                    <span style={{ fontSize: 20, width: 26, textAlign: 'center' }}>{iconoNivel(r)}</span>
-                    <span style={{ width: 58, color: C.ink3, fontSize: 12 }}>{k}</span>
-                    <span style={{ color: r.nivel === 'fuerte' ? C.rojo : r.nivel === 'lluvia' ? C.ambar : C.ink, fontWeight: r.nivel === 'seco' ? 400 : 600 }}>{textoNivel(r)}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 10.5, color: C.ink3, marginTop: 9 }}>CABA · 10 a 23 hs · Open-Meteo</div>
-            </Stat>
-          )}
-          {!session && (
-            <Stat cap="Equipo" span2>
-              <div style={{ fontSize: 13, color: C.ink2, marginTop: 8, lineHeight: 1.5 }}>Ingresá arriba a la derecha para ver colectas, arribos y las notas del equipo en vivo.</div>
-            </Stat>
-          )}
-        </div>
-
-        {/* NOTAS DEL EQUIPO — siempre visible con sesión; estado vacío si no hay pendientes de hoy */}
-        {session && (<>
-          <div style={{ ...secSt, display: "flex", alignItems: "center" }}>
-            Notas del equipo
-            <span onClick={() => onNav("pizarra")} style={{ marginLeft: "auto", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 11.5 }}>+ Nueva</span>
-          </div>
-          {notasHoy.length === 0 ? (
-            <div style={{ ...cardBase, padding: "18px", fontSize: 13, color: C.ink2, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 16 }}>✅</span>
-              <span>Sin notas pendientes para hoy.{pendientesFuturas > 0 ? ` Hay ${pendientesFuturas} para los próximos días — ` : " "}</span>
-              <span onClick={() => onNav("pizarra")} style={{ color: C.teal, fontWeight: 600, cursor: "pointer" }}>{pendientesFuturas > 0 ? "verlas" : "abrir la pizarra"} →</span>
-            </div>
-          ) : (
-          <div style={{ ...cardBase, padding: "6px 18px" }}>
-            {notasHoy.slice(0, isMobile ? 2 : 4).map((n) => {
-              const t = NOTA_TIPOS[n.tipo] || {};
-              const col2 = n.tipo === "ausencia" ? C.rojo : C.lila;
-              const urg = n.prioridad === "ahora"; const hora = n.prioridad === "hora" && n.hora_limite;
-              return (
-                <div key={n.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "13px 0", borderTop: `1px solid ${C.line}`, flexWrap: "wrap" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, background: col2 + "22" }}>{t.emoji}</div>
-                  <div style={{ flex: 1, minWidth: 150, fontSize: 13 }}>
-                    {urg && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: C.rojo, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>⚡ AHORA</span>}
-                    {hora && <span style={{ fontSize: 10, fontWeight: 800, color: "#1a1500", background: C.ambar, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>⏰ {n.hora_limite}</span>}
-                    {textoNota(n)}
-                    {n.tipo === "ausencia" && n.cubre && <span style={{ color: C.teal, fontWeight: 600 }}> · cubre {n.cubre}</span>}
-                    <span style={{ display: "block", fontSize: 11, color: C.ink3, marginTop: 1 }}>{n.autor}</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => resolverLocal(n)} style={miniOk}>✓ Hecho</button>
-                    {n.tipo !== "ausencia" && <button onClick={() => moverLocal(n)} style={mini}>→ Mañana</button>}
-                  </div>
-                </div>
-              );
-            })}
-            {notasHoy.length > (isMobile ? 2 : 4) && (
-              <div onClick={() => onNav("pizarra")} style={{ textAlign: "center", fontSize: 12, color: C.teal, fontWeight: 600, padding: "11px 0", borderTop: `1px solid ${C.line}`, cursor: "pointer" }}>Ver las {notasHoy.length} en la pizarra →</div>
-            )}
-          </div>
-          )}
-        </>)}
-
-        {/* DOCK */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3,1fr)" : `repeat(${Math.max(dock.length, 1)},1fr)`, gap: isMobile ? 10 : 12, marginTop: 24 }}>
-          {dock.map((d) => (
-            <button key={d.id} onClick={() => onNav(d.id)} style={{ ...cardBase, padding: "14px 6px", textAlign: "center", cursor: "pointer", color: C.ink2, transition: "transform .18s ease, border-color .18s ease" }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; e.currentTarget.style.color = C.ink; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.borderColor = C.line; e.currentTarget.style.color = C.ink2; }}>
+        </header>
+        {buscarBtn}
+        {focoEl}
+        {lluviaEl}
+        {tiles.length > 0 && <section aria-label="Indicadores" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>{tiles}</section>}
+        {arribosEl}
+        {notasEl}
+        {sinSesionEl}
+        <nav aria-label="Módulos" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 8 }}>
+          {modulos.map((d) => (
+            <button key={d.id} type="button" onClick={() => onNav(d.id)} style={{ ...cardBase, borderRadius: 14, padding: "14px 6px", minHeight: 78, textAlign: "center", cursor: "pointer", color: C.ink2 }}>
               {d.id === "pizarra" && comBadge > 0 && <span style={{ position: "absolute", top: 8, right: 10, minWidth: 18, height: 18, borderRadius: 9, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
-              <div style={{ color: C.teal, marginBottom: 7, display: "flex", justifyContent: "center" }}><Icon id={d.id} size={24} /></div>
-              <div style={{ fontSize: 11, fontWeight: 600, fontFamily: C.grotesk }}>{d.label}</div>
+              <div style={{ color: C.teal, marginBottom: 7, display: "flex", justifyContent: "center" }}><Icon id={d.id} size={22} /></div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, fontFamily: C.grotesk }}>{d.label}</div>
             </button>
           ))}
-        </div>
-
+        </nav>
       </div>
+    </div>
+  );
+
+  // ════════════════ ESCRITORIO ════════════════
+  const navItem = (activo) => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", borderRadius: 10, border: "none", background: activo ? "rgba(46,230,182,0.10)" : "transparent", color: activo ? C.ink : C.ink2, fontSize: 13.5, fontWeight: activo ? 600 : 500, cursor: activo ? "default" : "pointer", textAlign: "left", transition: "background .15s ease, color .15s ease" });
+  return (
+    <div style={{ minHeight: "calc(100vh - 3rem)", display: "flex", alignItems: "flex-start", gap: 28 }}>
+      {fondo}
+      {eggPaco && <PacoEgg onClose={() => setEggPaco(false)} />}
+
+      {/* Menú lateral — reemplaza la fila de accesos de abajo */}
+      <nav aria-label="Módulos" style={{ position: "sticky", top: 24, zIndex: 2, width: 216, flexShrink: 0, height: "calc(100vh - 48px)", boxSizing: "border-box", padding: "18px 12px", borderRadius: 18, background: "rgba(15,15,27,0.55)", border: `1px solid ${C.line}`, display: "flex", flexDirection: "column", gap: 3, fontFamily: fuente }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px 18px" }}>
+          {logoEl(36)}
+          <span style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 17, color: C.ink }}>Flexit</span>
+        </div>
+        <button type="button" aria-current="page" style={navItem(true)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.teal} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z" /></svg>
+          Inicio
+        </button>
+        {modulos.map((d) => (
+          <button key={d.id} type="button" onClick={() => onNav(d.id)} style={navItem(false)}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = C.ink; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.ink2; }}>
+            <Icon id={d.id} size={18} />
+            {d.label}
+            {d.id === "pizarra" && comBadge > 0 && <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
+          </button>
+        ))}
+        <div style={{ flex: 1, minHeight: 16 }} />
+        {session && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 6px 2px", borderTop: `1px solid ${C.line}` }}>
+            <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.grotesk, fontWeight: 600, fontSize: 13, color: C.ink, flexShrink: 0 }}>{(usuario || session.email || "?")[0].toUpperCase()}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{usuario || "Equipo"}</div>
+              <div style={{ fontSize: 11.5, color: C.ink3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.email}</div>
+            </div>
+            {onLogout && <button type="button" onClick={onLogout} style={{ background: "none", border: "none", color: C.ink3, fontSize: 12, cursor: "pointer", padding: 6, flexShrink: 0 }}>Salir</button>}
+          </div>
+        )}
+      </nav>
+
+      {/* Contenido */}
+      <main style={{ flex: 1, minWidth: 0, maxWidth: 1180, position: "relative", zIndex: 1, fontFamily: fuente, color: C.ink, display: "flex", flexDirection: "column", gap: 18, paddingTop: 4 }}>
+        <header style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          {saludoEl}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            {buscarBtn}
+            {session && <Buzon notas={notas} onIr={onNav} onResolver={resolverLocal} />}
+            {onLogin && !session && <LoginWidget session={session} onLogin={onLogin} onLogout={onLogout} />}
+          </div>
+        </header>
+        {focoEl}
+        {lluviaEl}
+        {tiles.length > 0 && (<>
+          {/* Una sola fila con todos los indicadores; en pantallas angostas pasan a 2×2 (nunca 3 + 1 suelto) */}
+          <style>{`@media (max-width: 980px) { .fx-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }`}</style>
+          <section aria-label="Indicadores" className="fx-kpis" style={{ display: "grid", gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))`, gap: 14 }}>{tiles}</section>
+        </>)}
+        {(arribosEl || notasEl) && <section style={{ display: "flex", flexWrap: "wrap", gap: 14, alignItems: "stretch" }}>{arribosEl}{notasEl}</section>}
+        {sinSesionEl}
+      </main>
     </div>
   );
 }
