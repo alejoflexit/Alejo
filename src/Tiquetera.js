@@ -114,6 +114,13 @@ function PanelEnvio({ caso }) {
     try {
       const rows = await sb(`envios_busqueda?id_interno=eq.${encodeURIComponent(envioId)}&limit=1`);
       out.envio = rows && rows[0] ? rows[0] : null;
+      // Zona por CP (tabla zonas_cp, la misma que usa la extensión de LightData).
+      if (out.envio && out.envio.cp) {
+        try {
+          const z = await sb(`zonas_cp?cp=eq.${encodeURIComponent(out.envio.cp)}&select=zona&limit=1`);
+          if (z && z[0] && z[0].zona) out.envio = { ...out.envio, zona: String(z[0].zona).trim() };
+        } catch (err) { /* sin zona: no es crítico */ }
+      }
       if (!out.envio) {
         out.error = "El envío ya no está en la caché de búsqueda (guarda ~6 días).";
       } else {
@@ -185,6 +192,7 @@ function PanelEnvio({ caso }) {
           <Fila k="Vendedor" v={[e.razon_social, e.cod_cliente].filter(Boolean).join(" · ")} />
           <Fila k="Destinatario" v={e.nombre} />
           <Fila k="Dirección" v={[e.direccion, e.localidad, e.cp ? `CP ${e.cp}` : ""].filter(Boolean).join(", ")} />
+          {e.zona ? <Fila k="Zona" v={e.zona} /> : null}
           <Fila k="Venta ML" v={e.id_venta_ml} mono />
           <Fila k="Tracking" v={e.tracking} mono />
           {/* Teléfono del destinatario (lo tienen sobre todo los particulares / Tienda Nube): tocar = llamar */}
@@ -194,7 +202,17 @@ function PanelEnvio({ caso }) {
               <button onClick={() => { try { navigator.clipboard.writeText(String(e.telefono)); } catch (err) { /* sin portapapeles */ } }}
                 style={{ background: "none", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)", borderRadius: 7, fontSize: 11, padding: "2px 8px", cursor: "pointer" }}>Copiar</button>
             </span>) : <span style={{ color: "rgba(255,255,255,0.34)" }}>No informado</span>} />
-          {e.recibido_por ? <Fila k="Recibido por" v={e.recibido_por} /> : null}
+          {(() => {
+            // "Juan Pérez DNI: 30123456" → quién recibió y DNI por separado (mismo criterio que la extensión).
+            const raw = String(e.recibido_por || "").trim();
+            if (!raw) return null;
+            const doc = raw.match(/\b(?:DNI|DOCUMENTO)\s*:?\s*([\d.\s-]{3,})/i);
+            const quien = raw.replace(/\b(?:DNI|DOCUMENTO)\s*:?\s*[\d.\s-]{3,}.*$/i, "").replace(/^recibid[oa]\s+por\s*:?\s*/i, "").trim();
+            return (<>
+              <Fila k="Recibido por" v={quien || "No informado"} />
+              {doc && doc[1].replace(/\D/g, "") ? <Fila k="DNI" v={`…${doc[1].replace(/\D/g, "")} (últimos dígitos)`} mono /> : null}
+            </>);
+          })()}
         </dl>
       </>) : (
         <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
