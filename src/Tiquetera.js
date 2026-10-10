@@ -159,17 +159,25 @@ function PanelEnvio({ caso }) {
       {match && <ChipMatch nivel={match.nivel} txt={match.txt} det={match.det} />}
       {!match && data && <ChipMatch nivel="medio" txt="Envío guardado en el caso" det="Ya no está en la caché: se muestra lo que quedó registrado." />}
 
-      <div style={S_SEC}>Envío {envioId}</div>
+      <div style={S_SEC}>Envío {envioId}{e && e.origen ? <span style={{ marginLeft: 8, padding: "1px 7px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.6)", textTransform: "none", letterSpacing: 0 }}>{e.origen}</span> : null}</div>
       {e ? (<>
         <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.3px", color: colorEstado(e.estado) }}>{e.estado || "Sin estado"}</div>
         {e.fecha_estado && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.34)", marginBottom: 13 }}>{e.fecha_estado}</div>}
         <dl style={{ display: "grid", gridTemplateColumns: "88px 1fr", gap: "6px 10px", fontSize: 12.5, alignItems: "baseline", margin: 0 }}>
           <Fila k="Cadete" v={e.cadete ? <b style={{ color: "#fff" }}>🛵 {e.cadete}</b> : <span style={{ color: "#FFB020" }}>sin asignar</span>} />
+          <Fila k="Vendedor" v={[e.razon_social, e.cod_cliente].filter(Boolean).join(" · ")} />
           <Fila k="Destinatario" v={e.nombre} />
           <Fila k="Dirección" v={[e.direccion, e.localidad, e.cp ? `CP ${e.cp}` : ""].filter(Boolean).join(", ")} />
           <Fila k="Venta ML" v={e.id_venta_ml} mono />
           <Fila k="Tracking" v={e.tracking} mono />
-          <Fila k="Cliente" v={[e.razon_social, e.cod_cliente].filter(Boolean).join(" · ")} />
+          {/* Teléfono del destinatario (lo tienen sobre todo los particulares / Tienda Nube): tocar = llamar */}
+          <Fila k="Teléfono" v={e.telefono ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <a href={`tel:${String(e.telefono).replace(/[^\d+]/g, "")}`} style={{ color: "#fff", fontWeight: 600, textDecoration: "none" }}>{e.telefono}</a>
+              <button onClick={() => { try { navigator.clipboard.writeText(String(e.telefono)); } catch (err) { /* sin portapapeles */ } }}
+                style={{ background: "none", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)", borderRadius: 7, fontSize: 11, padding: "2px 8px", cursor: "pointer" }}>Copiar</button>
+            </span>) : <span style={{ color: "rgba(255,255,255,0.34)" }}>No informado</span>} />
+          {e.recibido_por ? <Fila k="Recibido por" v={e.recibido_por} /> : null}
         </dl>
       </>) : (
         <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
