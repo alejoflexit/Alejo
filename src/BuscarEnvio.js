@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { getSession } from './auth';
 import { LoginFlexit } from './colectasShared';
-import { PanelEnvio, sbTiquetera as sb, numerosDelTexto } from './Tiquetera';
+import { PanelEnvio, sbTiquetera as sb, numerosDelTexto, colorEstado } from './Tiquetera';
 
 const COLS = 'id_interno,nombre,direccion,cp,localidad,estado,fecha_estado,cadete,razon_social,fecha_flexit';
 
@@ -180,6 +180,31 @@ async function buscar(texto) {
   return res(rows, 'palabras', false);
 }
 
+// "10/10/2026 13:08" (Fecha Flexit de LightData) → { key: '2026-10-10', titulo: 'sáb 10/10 · ayer' }.
+// En los envíos de ML es el día que se retiró el paquete; agrupa la lista de resultados por día.
+const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+function diaDe(f) {
+  const m = String(f || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!m) return { key: '', titulo: 'Sin fecha' };
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  const hoy = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+  hoy.setHours(0, 0, 0, 0);
+  const dif = Math.round((hoy - d) / 86400000);
+  const rel = dif === 0 ? ' · hoy' : dif === 1 ? ' · ayer' : '';
+  return { key: `${m[3]}-${m[2]}-${m[1]}`, titulo: `${DIAS[d.getDay()]} ${m[1]}/${m[2]}${rel}` };
+}
+// Agrupa filas consecutivas del mismo día (el orden de `ordenar` se respeta: mejor match primero
+// y, a igualdad, el más nuevo).
+function porDia(rows) {
+  const grupos = [];
+  for (const r of rows) {
+    const d = diaDe(r.fecha_flexit);
+    const g = grupos[grupos.length - 1];
+    if (g && g.key === d.key) g.rows.push(r); else grupos.push({ ...d, rows: [r] });
+  }
+  return grupos;
+}
+
 export default function BuscarEnvio({ inicial = '' }) {
   const [sesion, setSesion] = useState(() => getSession());
   const [texto, setTexto] = useState(inicial);
@@ -261,15 +286,33 @@ export default function BuscarEnvio({ inicial = '' }) {
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>
             {via && via.via === 'suelto'
               ? <>No había número de envío. Busqué {via.sueltos.length === 1 ? 'el número suelto' : 'los números sueltos'} <b style={{ color: '#FFB020' }}>{via.sueltos.join(', ')}</b> como pedido: confirmá cuál es (los números de pedido se repiten entre clientes).</>
-              : res.length === 1 ? 'Encontré 1, pero no estoy seguro. ¿Es este?' : `Encontré ${res.length}. ¿Cuál es?`}
+              : res.length === 1 ? 'Encontré 1, pero no estoy seguro. ¿Es este?' : (() => { const ds = new Set(res.map((r) => [r.direccion, r.localidad].filter(Boolean).join(', ').toLowerCase())); return ds.size === 1 ? `Encontré ${res.length} en ${[res[0].direccion, res[0].localidad].filter(Boolean).join(', ')}. ¿Cuál es?` : `Encontré ${res.length}. ¿Cuál es?`; })()}
           </div>
-          {res.map((r) => (
-            <button key={r.id_interno} onClick={() => setElegido(r.id_interno)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', marginBottom: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.03)', color: '#fff', cursor: 'pointer' }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{r.nombre || '—'} <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>#{r.id_interno}</span></div>
-              <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{[r.direccion, r.localidad].filter(Boolean).join(', ')} · {r.estado || 'sin estado'} · {r.razon_social || ''}</div>
-            </button>
-          ))}
+          {(() => {
+            // Si todos comparten la dirección (búsqueda por calle), no se repite en cada tarjeta.
+            const dirs = new Set(res.map((r) => [r.direccion, r.localidad].filter(Boolean).join(', ').toLowerCase()));
+            const mismaDir = res.length > 1 && dirs.size === 1;
+            return porDia(res).map((g) => (
+              <div key={g.key + g.rows[0].id_interno}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', margin: '14px 2px 6px' }}>
+                  <span>{g.titulo}</span><span>{g.rows.length}</span>
+                </div>
+                {g.rows.map((r) => (
+                  <button key={r.id_interno} onClick={() => setElegido(r.id_interno)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', marginBottom: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.03)', color: '#fff', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14.5, minWidth: 0 }}>{r.razon_social || 'Cliente sin nombre'}</span>
+                      <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: colorEstado(r.estado) }}>● {r.estado || 'sin estado'}</span>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                      {r.nombre || '—'} <span style={{ color: 'rgba(255,255,255,0.4)' }}>· #{r.id_interno}</span>
+                      {!mismaDir && [r.direccion, r.localidad].some(Boolean) ? <> · {[r.direccion, r.localidad].filter(Boolean).join(', ')}</> : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ));
+          })()}
         </div>
       )}
 

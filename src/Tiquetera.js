@@ -19,6 +19,8 @@ async function sb(path, options = {}) {
 }
 
 // LightData API externa (mismo mecanismo que la verificación de demorados en App.js)
+const BRIDGE_QR_URL = "https://srv1801226.hstgr.cloud/bridge/envio-qr";
+const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // misma key que Arribos/Zonas/Monitoreo
 const TOKEN_EMPRESA = "ldae_125_6e2c8f1d4a9b3d7c5f0a2e8b1c4d7a96";
 const ID_EMPRESA = 125;
 
@@ -164,18 +166,30 @@ function PanelEnvio({ caso }) {
   const e = data && data.envio;
   const match = comoEncontro(caso, e);
 
-  // QR de seguimiento: el mismo que muestra el add-on de LightData (codifica url_tracking).
-  // Sirve cuando el chofer tiene la etiqueta rota: se lo muestra en pantalla y lo escanea.
-  const urlQr = e && e.url_tracking;
+  // QR de la etiqueta (el mismo que muestra el ícono QR del listado de LightData): para un envío
+  // de ML es el QR de Mercado Libre (id + sender_id + hash_code); para el resto, el QR propio de
+  // LightData. Lo trae el bridge del VPS (/envio-qr), que tiene sesión en LightData. Sirve cuando el
+  // chofer tiene la etiqueta rota: se lo muestra en pantalla y lo escanea. Si el bridge no lo da,
+  // no se muestra QR (nunca un QR que no escanea, como el link de seguimiento de antes).
   const [qrImg, setQrImg] = useState("");
+  const [qrTipo, setQrTipo] = useState("");
   const [qrAbierto, setQrAbierto] = useState(false);
   useEffect(() => {
-    setQrImg(""); setQrAbierto(false);
-    if (!urlQr) return;
+    setQrImg(""); setQrTipo(""); setQrAbierto(false);
+    if (!envioId) return;
     let vivo = true;
-    import("qrcode").then((m) => m.toDataURL(urlQr, { width: 360, margin: 2 })).then((u) => { if (vivo) setQrImg(u); }).catch(() => {});
+    (async () => {
+      try {
+        const r = await fetch(`${BRIDGE_QR_URL}?did=${encodeURIComponent(envioId)}`, { headers: { "x-bridge-key": BRIDGE_KEY }, cache: "no-store" });
+        const j = r.ok ? await r.json() : null;
+        if (!j || !j.qr) return;
+        const m = await import("qrcode");
+        const u = await m.toDataURL(j.qr, { width: 360, margin: 2, errorCorrectionLevel: "M" });
+        if (vivo) { setQrImg(u); setQrTipo(j.tipo === "ml" ? "Mercado Libre" : "LightData"); }
+      } catch (e) { /* sin QR: no es crítico */ }
+    })();
     return () => { vivo = false; };
-  }, [urlQr]);
+  }, [envioId]);
 
   return (
     <div>
@@ -240,21 +254,21 @@ function PanelEnvio({ caso }) {
       {data && data.error && e && <div style={{ color: "#FFB020", fontSize: 12, marginTop: 10 }}>⚠ {data.error}</div>}
 
       {qrAbierto && qrImg && (
-        <div onClick={() => setQrAbierto(false)} role="dialog" aria-label="QR de seguimiento"
+        <div onClick={() => setQrAbierto(false)} role="dialog" aria-label="QR de la etiqueta"
           style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(6,8,20,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, cursor: "pointer" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
             <div style={{ background: "#fff", borderRadius: 16, padding: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
-              <img src={qrImg} alt={`QR de seguimiento del envío ${envioId}`} style={{ width: "min(78vw, 320px)", height: "auto", display: "block" }} />
+              <img src={qrImg} alt={`QR de la etiqueta del envío ${envioId}`} style={{ width: "min(78vw, 320px)", height: "auto", display: "block" }} />
             </div>
             <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>Envío {envioId}</div>
-            <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12.5 }}>QR de seguimiento · tocá en cualquier lado para cerrar</div>
+            <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12.5 }}>QR de la etiqueta{qrTipo ? ` (${qrTipo})` : ""} · tocá en cualquier lado para cerrar</div>
           </div>
         </div>
       )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         {qrImg && (
-          <button onClick={() => setQrAbierto(true)} title="Mostrar el QR de seguimiento" aria-label="Mostrar el QR de seguimiento"
+          <button onClick={() => setQrAbierto(true)} title="Mostrar el QR de la etiqueta" aria-label="Mostrar el QR de la etiqueta"
             style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 10px 4px 4px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.8)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
             <img src={qrImg} alt="" style={{ width: 28, height: 28, borderRadius: 4, background: "#fff", display: "block" }} />
             QR
@@ -1095,4 +1109,4 @@ export default function Tiquetera() {
 }
 
 // Para "Buscar envío" (BuscarEnvio.js): mismo panel y misma búsqueda que la Tiquetera.
-export { PanelEnvio, numerosDelTexto, sb as sbTiquetera };
+export { PanelEnvio, numerosDelTexto, colorEstado, sb as sbTiquetera };
