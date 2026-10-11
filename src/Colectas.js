@@ -1564,9 +1564,13 @@ function ColectasInner({ soloArribos = false, irA }) {
                 </div>
               ))}
               <div>
+                {/* Sábados es un día, no una zona: acá solo se eligen zonas. Una ficha "Solo opera sábados"
+                    se guarda como seccion='SABADOS' y su zona va en zona_sabado (la que usa Arribos). */}
                 <div style={lblSt}>Sección</div>
-                <select value={clienteForm.seccion} onChange={e => setClienteForm(p => ({...p,seccion:e.target.value}))} style={ctlSt}>
-                  {SECCIONES.map(s => <option key={s} value={s}>{s}</option>)}
+                <select value={clienteForm.seccion === 'SABADOS' ? (clienteForm.zona_sabado || '') : clienteForm.seccion}
+                  onChange={e => { const v = e.target.value; setClienteForm(p => p.seccion === 'SABADOS' ? { ...p, zona_sabado: v } : { ...p, seccion: v }); }} style={ctlSt}>
+                  {clienteForm.seccion === 'SABADOS' && !clienteForm.zona_sabado && <option value="">— Sin definir —</option>}
+                  {SECCIONES.filter(s => s !== 'SABADOS').map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
@@ -1579,25 +1583,24 @@ function ColectasInner({ soloArribos = false, irA }) {
               </div>
               <div>
                 <div style={lblSt}>Sábados</div>
-                <label style={{ ...ctlSt, display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
-                  <input type="checkbox" checked={!!clienteForm.opera_sabados}
-                    onChange={e => setClienteForm(p => ({...p, opera_sabados: e.target.checked}))}
-                    style={{ width:16, height:16, margin:0, accentColor:'#2ECFAA', cursor:'pointer' }} />
-                  <span style={{ fontSize:13, color: clienteForm.opera_sabados ? BRAND.white : BRAND.muted }}>Opera sábados</span>
-                </label>
+                <div style={{ ...ctlSt, display:'flex', flexDirection:'column', gap:8 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+                    <input type="checkbox" checked={!!clienteForm.opera_sabados && clienteForm.seccion !== 'SABADOS'}
+                      onChange={e => { const on = e.target.checked; setClienteForm(p => ({ ...p, opera_sabados: on, ...(on && p.seccion === 'SABADOS' ? { seccion: p.zona_sabado || 'CABA' } : {}) })); }}
+                      style={{ width:16, height:16, margin:0, accentColor:'#2ECFAA', cursor:'pointer' }} />
+                    <span style={{ fontSize:13, color: clienteForm.opera_sabados && clienteForm.seccion !== 'SABADOS' ? BRAND.white : BRAND.muted }}>Opera sábados</span>
+                  </label>
+                  {/* Solo sábados: nunca aparece entre semana, solo en la solapa Sábados. */}
+                  <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+                    <input type="checkbox" checked={clienteForm.seccion === 'SABADOS'}
+                      onChange={e => { const on = e.target.checked; setClienteForm(p => on
+                        ? { ...p, seccion: 'SABADOS', zona_sabado: p.seccion !== 'SABADOS' ? p.seccion : p.zona_sabado, opera_sabados: false }
+                        : { ...p, seccion: p.zona_sabado || 'CABA' }); }}
+                      style={{ width:16, height:16, margin:0, accentColor:'#FFB020', cursor:'pointer' }} />
+                    <span style={{ fontSize:13, color: clienteForm.seccion === 'SABADOS' ? BRAND.white : BRAND.muted }}>Solo opera sábados</span>
+                  </label>
+                </div>
               </div>
-              {clienteForm.seccion === 'SABADOS' && (
-              <div>
-                <div style={lblSt}>Zona (para Arribos)</div>
-                <select value={clienteForm.zona_sabado} onChange={e => setClienteForm(p => ({...p, zona_sabado:e.target.value}))}
-                  title="Sábados es un día, no una zona: elegí dónde queda este cliente" style={ctlSt}>
-                  <option value="">— Sin definir —</option>
-                  <option value="CABA">CABA</option>
-                  <option value="SUR">Sur</option>
-                  <option value="NOROESTE">Noroeste</option>
-                </select>
-              </div>
-              )}
             </div>
 
             {/* Ubicación en el mapa */}
@@ -1654,7 +1657,9 @@ function ColectasInner({ soloArribos = false, irA }) {
                     <div style={{ fontSize:11, color:BRAND.muted, marginTop:2 }}>{c.direccion}{c.horario ? ` · 🕐 ${c.horario}` : ''}</div>
                   </td>
                   <td style={{ padding:'8px 12px' }}>
-                    <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(74,158,255,0.15)', color:'#4A9EFF' }}>{c.seccion}</span>
+                    {c.seccion === 'SABADOS'
+                      ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(255,176,32,0.15)', color:'#FFB020' }}>Solo sábados{c.zona_sabado ? ` · ${c.zona_sabado}` : ''}</span>
+                      : <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(74,158,255,0.15)', color:'#4A9EFF' }}>{c.seccion}</span>}
                     {c.opera_sabados && <span style={{ marginLeft:4, fontSize:10, padding:'2px 6px', borderRadius:20, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>🗓️ Sáb</span>}
                     {VEHICULOS[c.vehiculo] && (
                       <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`}
