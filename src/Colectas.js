@@ -1585,37 +1585,32 @@ function ColectasInner({ soloArribos = false, irA }) {
               </div>
               <div>
                 <div style={lblSt}>Sábados</div>
-                <div style={{ ...ctlSt, display:'flex', flexDirection:'column', gap:8 }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
-                    <input type="checkbox" checked={!!clienteForm.opera_sabados && clienteForm.seccion !== 'SABADOS'}
-                      onChange={e => { const on = e.target.checked; setClienteForm(p => ({ ...p, opera_sabados: on, ...(on && p.seccion === 'SABADOS' ? { seccion: p.zona_sabado || 'CABA' } : {}) })); }}
-                      style={{ width:16, height:16, margin:0, accentColor:'#2ECFAA', cursor:'pointer' }} />
-                    <span style={{ fontSize:13, color: clienteForm.opera_sabados && clienteForm.seccion !== 'SABADOS' ? BRAND.white : BRAND.muted }}>Opera sábados</span>
-                  </label>
-                  {/* Solo sábados: nunca aparece entre semana, solo en la solapa Sábados. */}
-                  <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
-                    <input type="checkbox" checked={clienteForm.seccion === 'SABADOS' || confirmarSoloSab}
-                      onChange={e => {
-                        if (e.target.checked) { setConfirmarSoloSab(true); return; } // primero el aviso
-                        setConfirmarSoloSab(false);
-                        setClienteForm(p => p.seccion === 'SABADOS' ? { ...p, seccion: p.zona_sabado || 'CABA' } : p);
-                      }}
-                      style={{ width:16, height:16, margin:0, accentColor:'#FFB020', cursor:'pointer' }} />
-                    <span style={{ fontSize:13, color: clienteForm.seccion === 'SABADOS' ? BRAND.white : BRAND.muted }}>Solo opera sábados</span>
-                  </label>
-                  {confirmarSoloSab && clienteForm.seccion !== 'SABADOS' && (
-                    <div style={{ padding:'8px 10px', borderRadius:8, background:'rgba(255,176,32,0.10)', border:'1px solid rgba(255,176,32,0.35)', fontSize:12.5, color:'#FFB020', lineHeight:1.45 }}>
-                      ⚠ Con esto el cliente <b>solo va a aparecer los sábados</b> (solapa Sábados). Deja de aparecer de lunes a viernes.
-                      <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                        <button type="button" onClick={() => { setConfirmarSoloSab(false); setClienteForm(p => ({ ...p, seccion: 'SABADOS', zona_sabado: p.seccion !== 'SABADOS' ? p.seccion : p.zona_sabado, opera_sabados: false })); }}
-                          style={{ padding:'6px 12px', borderRadius:7, border:'none', background:'#FFB020', color:'#1a1200', fontWeight:700, fontSize:12.5, cursor:'pointer' }}>Sí, solo sábados</button>
-                        <button type="button" onClick={() => setConfirmarSoloSab(false)}
-                          style={{ padding:'6px 12px', borderRadius:7, border:'1px solid rgba(255,255,255,0.18)', background:'transparent', color:'rgba(255,255,255,0.75)', fontSize:12.5, cursor:'pointer' }}>Cancelar</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Un solo control del mismo alto que el resto de la ficha. "Solo opera sábados" = la ficha
+                    aparece únicamente en la solapa Sábados; pide confirmación (aviso abajo, a lo ancho). */}
+                <select value={confirmarSoloSab || clienteForm.seccion === 'SABADOS' ? 'solo' : clienteForm.opera_sabados ? 'si' : 'no'}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v === 'solo') { if (clienteForm.seccion !== 'SABADOS') setConfirmarSoloSab(true); return; }
+                    setConfirmarSoloSab(false);
+                    setClienteForm(p => ({ ...p, opera_sabados: v === 'si', ...(p.seccion === 'SABADOS' ? { seccion: p.zona_sabado || 'CABA' } : {}) }));
+                  }}
+                  style={{ ...ctlSt, color: (confirmarSoloSab || clienteForm.seccion === 'SABADOS') ? '#FFB020' : ctlSt.color }}>
+                  <option value="no">No opera sábados</option>
+                  <option value="si">Opera sábados</option>
+                  <option value="solo">Solo opera sábados</option>
+                </select>
               </div>
+              {confirmarSoloSab && clienteForm.seccion !== 'SABADOS' && (
+                <div style={{ gridColumn:'1 / -1', padding:'10px 12px', borderRadius:8, background:'rgba(255,176,32,0.10)', border:'1px solid rgba(255,176,32,0.35)', fontSize:13, color:'#FFB020', lineHeight:1.45, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                  <span style={{ flex:'1 1 260px' }}>⚠ Con esto el cliente <b>solo va a aparecer los sábados</b> (solapa Sábados). Deja de aparecer de lunes a viernes.</span>
+                  <span style={{ display:'flex', gap:8 }}>
+                    <button type="button" onClick={() => { setConfirmarSoloSab(false); setClienteForm(p => ({ ...p, seccion: 'SABADOS', zona_sabado: p.seccion !== 'SABADOS' ? p.seccion : p.zona_sabado, opera_sabados: false })); }}
+                      style={{ padding:'6px 12px', borderRadius:7, border:'none', background:'#FFB020', color:'#1a1200', fontWeight:700, fontSize:12.5, cursor:'pointer' }}>Sí, solo sábados</button>
+                    <button type="button" onClick={() => setConfirmarSoloSab(false)}
+                      style={{ padding:'6px 12px', borderRadius:7, border:'1px solid rgba(255,255,255,0.18)', background:'transparent', color:'rgba(255,255,255,0.75)', fontSize:12.5, cursor:'pointer' }}>Cancelar</button>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Ubicación en el mapa */}
