@@ -230,6 +230,51 @@ function BloqueObjetivos({ usuario, esMovil }) {
   );
 }
 
+// ── Zona (Noroeste / CABA / Sur) de cada backup ─────────────────────────────────────────────
+// El texto es libre ("Flores, Floresta y Caballito", "San fer / san isidro"), así que la zona se
+// deduce buscando barrios/partidos de la tabla zonas_regiones (la del SLA jerárquico: Norte y
+// Oeste = Noroeste) + los barrios porteños que no están ahí. Si no se reconoce nada, va a
+// "Sin zona" y se elige a mano (se guarda en backups_equipo.region, que manda sobre lo deducido).
+const BK_REGIONES = [['NOROESTE', 'Noroeste', '#bd8ed8'], ['CABA', 'CABA', '#5BA8E8'], ['SUR', 'Sur', '#2ECFAA']]; // de norte a sur, como Colectas
+const BK_EXTRA = {
+  CABA: ['caba', 'capital', 'balvanera', 'monserrat', 'montserrat', 'san cristobal', 'san nicolas', 'once', 'abasto', 'nueva pompeya', 'congreso', 'parque centenario', 'villa riachuelo', 'centro'],
+  NOROESTE: ['san fer', 'ituzaingo', 'matanza norte', 'pacheco', 'jose c paz'],
+  SUR: ['lomas', 'lanus', 'varela', 'berazategui', 'echeverria', 'adrogue', 'burzaco'],
+};
+const bkNorm = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+let bkClaves = null; // [{ k, region }] más largas primero
+function armarClavesBk(filas) {
+  const mapa = new Map();
+  const sumar = (k, region) => {
+    if (!k || k.length < 4) return;
+    if (mapa.has(k) && mapa.get(k) !== region) mapa.set(k, null); // ambigua (ej. "avellaneda" CABA/Sur): no sirve sola
+    else if (!mapa.has(k)) mapa.set(k, region);
+  };
+  (filas || []).forEach(({ zona, region }) => {
+    const r = region === 'CABA' ? 'CABA' : region === 'Sur' ? 'SUR' : (region === 'Norte' || region === 'Oeste') ? 'NOROESTE' : null;
+    if (!r) return;
+    const z = bkNorm(zona);
+    sumar(z, r);
+    const corto = z.replace(/^(villa|parque|pque|ciudad|gral|general)\s+/, ''); // "Villa Devoto" → "devoto"
+    if (corto !== z && corto.length >= 5) sumar(corto, r);
+  });
+  Object.entries(BK_EXTRA).forEach(([r, ks]) => ks.forEach((k) => { if (!mapa.has(k)) mapa.set(k, r); }));
+  // "avellaneda" quedó ambigua por Parque Avellaneda, pero sola casi siempre es el partido (Sur).
+  if (mapa.get('avellaneda') === null) mapa.set('avellaneda', 'SUR');
+  bkClaves = [...mapa.entries()].filter(([, r]) => r).map(([k, region]) => ({ k, region, re: new RegExp(`(^|[^a-z])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z]|$)`) }))
+    .sort((a, b) => b.k.length - a.k.length);
+}
+function regionDeTexto(texto) {
+  if (!bkClaves) return null;
+  const t = bkNorm(texto);
+  let mejor = null;
+  for (const c of bkClaves) {
+    const m = c.re.exec(t);
+    if (m && (!mejor || m.index < mejor.i)) mejor = { i: m.index, region: c.region }; // la primera que aparece en el texto
+  }
+  return mejor ? mejor.region : null;
+}
+
 // Backups del equipo: refuerzos que se organizan (típico los lunes, día pico). Cada uno tiene una
 // zona a cubrir, quién la cubre y si está confirmado. Persistente y plegado; no se borra solo.
 // Ícono del bloque — se cambia acá en un solo lugar.
@@ -244,6 +289,12 @@ function BloqueBackups({ usuario, esMovil }) {
   const [editZona, setEditZona] = useState(null);
   const [zonaDraft, setZonaDraft] = useState('');
 
+  const [, setClavesListas] = useState(!!bkClaves);
+  useEffect(() => {
+    if (bkClaves) return;
+    sbFetch('zonas_regiones?select=zona,region').then((r) => { armarClavesBk(Array.isArray(r) ? r : []); setClavesListas(true); })
+      .catch(() => { armarClavesBk([]); setClavesListas(true); });
+  }, []);
   const recargar = useCallback(() => {
     cargarBackups().then(r => setBackups(Array.isArray(r) ? r : [])).catch(() => {});
   }, []);
@@ -277,6 +328,11 @@ function BloqueBackups({ usuario, esMovil }) {
     setEditCubre(null); setCubreDraft('');
     patchBackup(b.id, { cubre: t || null }).catch(e => { setError('No se pudo guardar: ' + e.message); recargar(); });
   };
+  const elegirRegion = (b, region) => {
+    setBackups(prev => prev.map(x => x.id === b.id ? { ...x, region } : x));
+    patchBackup(b.id, { region }).catch(e => { setError('No se pudo guardar: ' + e.message); recargar(); });
+  };
+  const regionDe = (b) => b.region || regionDeTexto(b.zona) || 'SIN';
   const abrirZona = (b) => { setEditZona(b.id); setZonaDraft(b.zona || ''); };
   const guardarZona = (b) => {
     const t = zonaDraft.trim();
@@ -305,6 +361,17 @@ function BloqueBackups({ usuario, esMovil }) {
               style={cellInput} />
           ) : (
             <span onClick={() => abrirZona(b)} style={{ ...cellTxt, flex: 1, cursor: 'text', fontWeight: 600, color: ok ? BRAND.muted : BRAND.white, textDecoration: ok ? 'line-through' : 'none' }}>{b.zona}</span>
+          )}
+          {(editZona === b.id || regionDe(b) === 'SIN') && (
+            <span style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: editZona === b.id ? 0 : 'auto' }}>
+              {BK_REGIONES.map(([r, lbl, color]) => (
+                <button key={r} type="button" title={`Pasar a ${lbl}`}
+                  onMouseDown={e => e.preventDefault()} onClick={() => elegirRegion(b, r)}
+                  style={{ fontSize: 10.5, padding: '2px 7px', borderRadius: 10, cursor: 'pointer', touchAction: 'manipulation',
+                    border: `1px solid ${b.region === r ? color : 'rgba(255,255,255,0.2)'}`, background: b.region === r ? `${color}22` : 'transparent',
+                    color: b.region === r ? color : 'rgba(255,255,255,0.7)' }}>{lbl}</button>
+              ))}
+            </span>
           )}
         </div>
         <div style={{ flex: '1 1 44%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 10px' }}>
@@ -345,7 +412,24 @@ function BloqueBackups({ usuario, esMovil }) {
               <div style={{ flex: '1 1 56%', padding: '6px 10px', borderRight: bLine }}>Necesita backup</div>
               <div style={{ flex: '1 1 44%', padding: '6px 10px' }}>Lo cubre</div>
             </div>
-            {backups.map(fila)}
+            {/* Agrupado por zona (Noroeste · CABA · Sur · Sin zona), cada una con su pendiente. */}
+            {[...BK_REGIONES, ['SIN', 'Sin zona', AMBAR]].map(([r, lbl, color]) => {
+              const rows = backups.filter(b => regionDe(b) === r);
+              if (!rows.length) return null;
+              const p = rows.filter(b => b.estado !== 'ok').length;
+              return (
+                <React.Fragment key={r}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderTop: bLine, background: 'rgba(255,255,255,0.03)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    {lbl}
+                    <span style={{ marginLeft: 'auto', textTransform: 'none', letterSpacing: 0, fontSize: 11, color: p ? AMBAR : 'rgba(255,255,255,0.4)' }}>
+                      {r === 'SIN' ? 'elegí la zona' : p ? `${p} sin confirmar` : `${rows.length} ✓`}
+                    </span>
+                  </div>
+                  {rows.map(fila)}
+                </React.Fragment>
+              );
+            })}
             {/* Fila de alta: escribí en la celda izquierda, Enter para sumar. */}
             <div style={{ display: 'flex', borderTop: bLine }}>
               <div style={{ flex: '1 1 56%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRight: bLine }}>
