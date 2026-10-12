@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { puedeVer, esAdmin } from "./permisos";
 import { slaMeli } from "./slaShared";
-import { useClima, textoNivel, Lluvia } from "./Clima";
+import { useClima, textoNivel, Lluvia, CieloFX } from "./Clima";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -231,6 +231,45 @@ function Sparkline({ valores, color, w = 84, h = 28 }) {
       <polyline points={pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" ")} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={ult[0]} cy={ult[1]} r="2.5" fill={color} />
     </svg>
+  );
+}
+
+// Ícono del cielo de AHORA (código WMO ya traducido a cond): sol, luna, nube, llovizna, lluvia, tormenta.
+function IconoCielo({ cond, size = 26 }) {
+  const llueve = ["llovizna", "lluvia", "fuerte", "tormenta"].includes(cond);
+  const color = cond === "tormenta" || cond === "fuerte" ? C.rojo : llueve ? C.azul : cond === "despejado" ? C.ambar : cond === "noche" ? C.lila : C.ink2;
+  const nube = "M20 15.5A4.5 4.5 0 0 0 17.5 7a6 6 0 0 0-11.4 1.8A4 4 0 0 0 6 16.5h13";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {cond === "despejado" && (<><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>)}
+      {cond === "noche" && <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />}
+      {cond !== "despejado" && cond !== "noche" && <path d={nube} />}
+      {cond === "llovizna" && <path d="M8 19.5h.01M12 20.5h.01M16 19.5h.01" strokeWidth="2.6" />}
+      {(cond === "lluvia" || cond === "fuerte") && <path d="M8 19l-.6 2.2M12 19l-.6 2.2M16 19l-.6 2.2" />}
+      {cond === "fuerte" && <path d="M10 19l-.6 2.2M14 19l-.6 2.2" />}
+      {cond === "tormenta" && <path d="m13 16-2.5 4h3L11 24" />}
+    </svg>
+  );
+}
+
+// Tira hora por hora del reparto de hoy (10 a 23 hs): alto = probabilidad, color = cuánta agua.
+// Las horas que ya pasaron quedan tenues y la hora actual lleva un borde.
+function TiraHoras({ horas }) {
+  if (!horas || !horas.length) return null;
+  const colorMm = (mm, prob) => mm >= 4 ? C.rojo : mm >= 1 ? "#4A9EFF" : mm >= 0.2 ? C.azul : prob >= 30 ? "rgba(91,168,232,0.55)" : "rgba(255,255,255,0.14)";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }} role="img"
+      aria-label={"Lluvia por hora: " + horas.map((h) => `${h.hora} hs ${h.prob}%${h.mm ? `, ${h.mm} mm` : ""}`).join("; ")}>
+      <span style={{ fontSize: 10, color: C.ink3, fontVariantNumeric: "tabular-nums" }}>{horas[0].hora}</span>
+      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 2, height: 16 }}>
+        {horas.map((h) => (
+          <div key={h.hora} title={`${h.hora} hs · ${h.prob}%${h.mm ? ` · ${String(h.mm).replace(".", ",")} mm` : ""}`}
+            style={{ flex: 1, height: `${Math.max(14, h.prob)}%`, borderRadius: 2, background: colorMm(h.mm || 0, h.prob || 0),
+              opacity: h.pasada ? 0.35 : 1, boxShadow: h.actual ? "0 0 0 1px rgba(255,255,255,0.75)" : "none" }} />
+        ))}
+      </div>
+      <span style={{ fontSize: 10, color: C.ink3, fontVariantNumeric: "tabular-nums" }}>{horas[horas.length - 1].hora + 1}</span>
+    </div>
   );
 }
 
@@ -469,7 +508,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     const color = fuerte ? C.rojo : C.ambar;
     return (
       <div style={{ ...cardBase, borderRadius: 16, padding: isMobile ? "14px 16px" : "14px 20px", borderColor: fuerte ? "rgba(232,97,95,0.45)" : "rgba(245,192,68,0.4)", background: `linear-gradient(135deg, ${fuerte ? "rgba(232,97,95,0.10)" : "rgba(245,192,68,0.08)"}, transparent 70%), ${C.glass}` }}>
-        {hoyMal && <Lluvia intensidad={clima.ahora || r.nivel} />}
+        {hoyMal && <Lluvia intensidad={clima.ahora || r.nivel} rafagas={clima.actual ? clima.actual.rafagas : 0} />}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <IconoClima nivel={r.nivel} size={28} />
           <div style={{ minWidth: 0 }}>
@@ -487,7 +526,6 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   // ── Indicadores: SLA · Envíos · Colectas · Clima (2×2 en el celular, una fila en escritorio) ──
   const slaColor = (s) => (s >= 98 ? C.teal : s >= 95 ? C.ambar : C.rojo);
   const climaTexto = (r) => !r ? "" : r.nivel === "fuerte" ? "Lluvia fuerte" : r.nivel === "lluvia" ? "Lluvia" : r.nivel === "puede" ? "Puede llover" : "Sin lluvia";
-  const climaValor = (r) => !r ? "—" : (r.nivel === "fuerte" || r.nivel === "lluvia") ? `${String(r.mm).replace(".", ",")} mm` : r.nivel === "puede" ? `${r.prob}%` : "Seco";
   const tiles = [];
   if (ayer && ayer.sla != null) tiles.push(
     <Tile key="sla" cap="SLA de ayer" onClick={() => onNav("metricas")} irA="Métricas">
@@ -514,15 +552,20 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     </Tile>
   );
   if (clima) {
-    const llueveHoy = clima.ahora || clima.hoy.nivel === "fuerte" || clima.hoy.nivel === "lluvia";
+    // Lo que pasa AHORA (estado real del cielo, temperatura, viento) + cuándo para/empieza a llover
+    // + la tira hora por hora. Antes mostraba la probabilidad máxima del día, que no decía nada.
+    const a = clima.actual;
+    const manTxt = clima.manana ? `mañana ${climaTexto(clima.manana).toLowerCase()}` : "";
     tiles.push(
-      <Tile key="clima" cap={isMobile ? "Clima hoy" : "Clima en reparto"}>
-        {llueveHoy && <Lluvia intensidad={clima.ahora || clima.hoy.nivel} />}
+      <Tile key="clima" cap={<>{isMobile ? "Clima ahora" : "Clima en reparto"}{a && a.rafagas >= 40 ? <span style={{ marginLeft: "auto", color: C.ambar, fontWeight: 600 }}>ráfagas {a.rafagas} km/h</span> : null}</>}>
+        <CieloFX cond={a ? a.cond : (clima.ahora || "nublado")} rafagas={a ? a.rafagas : 0} />
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <IconoClima nivel={clima.hoy.nivel} size={isMobile ? 24 : 28} />
-          <span style={{ ...tileNum(isMobile), fontSize: clima.hoy.nivel === "seco" ? (isMobile ? 22 : 26) : tileNum(isMobile).fontSize }}>{climaValor(clima.hoy)}</span>
+          <IconoCielo cond={a ? a.cond : "nublado"} size={isMobile ? 24 : 28} />
+          <span style={tileNum(isMobile)}>{a && a.temp != null ? `${a.temp}°` : "—"}</span>
+          {a && <span style={{ fontSize: isMobile ? 13 : 14, fontWeight: 600, color: clima.ahora ? C.azul : C.ink2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.estado}</span>}
         </div>
-        <span style={tileSub}>{climaTexto(clima.hoy)}{clima.manana ? ` · mañana ${climaTexto(clima.manana).toLowerCase()}` : ""}</span>
+        <TiraHoras horas={clima.horasHoy} />
+        <span style={tileSub}>{[clima.cuando && clima.cuando[0].toUpperCase() + clima.cuando.slice(1), manTxt].filter(Boolean).join(" · ")}</span>
       </Tile>
     );
   }
