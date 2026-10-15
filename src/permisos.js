@@ -12,6 +12,8 @@ const LS = "fx_permisos";
 export const ADMIN_EMAIL = "admin@flexit.app";
 
 // Catálogo de secciones que se pueden habilitar/quitar (orden = orden en pantalla)
+// OJO: al agregar una sección acá, sumarla también a SECCIONES de la edge function `admin-usuarios`
+// (Supabase). Si no está allá, el permiso se descarta en silencio al guardar (pasó con Monitoreo).
 export const SECCIONES = [
   { id: "metricas",   label: "Métricas",    icon: "ti ti-chart-bar" },
   { id: "colectas",   label: "Colectas",    icon: "ti ti-package" },
