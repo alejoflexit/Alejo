@@ -1,5 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { createPortal } from "react-dom";
 import { sbFetch, todayStr } from "./colectasShared";
+
+// El mapa (Leaflet) se carga recién cuando alguien lo abre, para no engordar el Home.
+const TransitoMapa = React.lazy(() => import("./TransitoMapa"));
 
 // ── Alertas de tránsito (chip en el header del Home) ──
 // Datos: tabla alertas_transito (lectura pública). Las automáticas las escribe la función
@@ -44,7 +48,7 @@ export function useTransito() {
   const [alertas, setAlertas] = useState(null);
   const [estado, setEstado] = useState({ total: 0, actualizado: null });
   const recargar = useCallback(() => {
-    sbFetch("alertas_transito?select=id,fuente,corredor_id,tipo,gravedad,radar_base,titulo,detalle,sugerencia,cadetes,creada_por,desde,vence,fuentes,fecha_evento,hora_evento&activa=eq.true")
+    sbFetch("alertas_transito?select=id,fuente,corredor_id,tipo,gravedad,radar_base,titulo,detalle,sugerencia,cadetes,creada_por,desde,vence,fuentes,fecha_evento,hora_evento,datos&activa=eq.true")
       .then((rows) => {
         const ahora = Date.now();
         setAlertas(ordenar((rows || []).filter((a) => !a.vence || new Date(a.vence).getTime() > ahora)));
@@ -156,6 +160,7 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [mapa, setMapa] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return;
@@ -253,12 +258,20 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
           {form && session ? (
             <FormCorte usuario={usuario} onCancelar={() => setForm(false)} onListo={() => { setForm(false); recargar(); }} />
           ) : (
-            <div style={{ display: "flex", gap: 16, padding: "12px 16px 14px", borderTop: `1px solid ${C.line}` }}>
-              {n > 0 && <button type="button" onClick={copiar} style={{ background: "none", border: "none", padding: 0, color: C.teal, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{copiado ? "✓ Copiado" : "Copiar aviso para el grupo"}</button>}
-              {session && <button type="button" onClick={() => setForm(true)} style={{ background: "none", border: "none", padding: 0, color: n > 0 ? C.ink2 : C.teal, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Cargar corte</button>}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 16px", padding: "12px 16px 14px", borderTop: `1px solid ${C.line}` }}>
+              <button type="button" onClick={() => { setOpen(false); setMapa(true); }} style={{ background: "none", border: "none", padding: 0, color: C.teal, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Ver mapa</button>
+              {n > 0 && <button type="button" onClick={copiar} style={{ background: "none", border: "none", padding: 0, color: C.ink2, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{copiado ? "✓ Copiado" : "Copiar aviso para el grupo"}</button>}
+              {session && <button type="button" onClick={() => setForm(true)} style={{ background: "none", border: "none", padding: 0, color: C.ink2, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Cargar corte</button>}
             </div>
           )}
         </div>
+      )}
+
+      {mapa && createPortal(
+        <Suspense fallback={<div style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(8,8,24,0.62)", display: "flex", alignItems: "center", justifyContent: "center", color: C.ink2, fontSize: 13 }}>Cargando mapa…</div>}>
+          <TransitoMapa alertas={alertas} onCerrar={() => setMapa(false)} isMobile={isMobile} />
+        </Suspense>,
+        document.body
       )}
     </div>
   );
