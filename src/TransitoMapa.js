@@ -44,16 +44,25 @@ export default function TransitoMapa({ alertas, onCerrar, isMobile }) {
     L.tileLayer(`${TILES}/incidentes/{z}/{x}/{y}.png`, { maxZoom: 17, minZoom: 11, zIndex: 4 }).addTo(map);
     capaRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    const t = setTimeout(() => map.invalidateSize(), 80);
+    // El modal termina de tomar su tamaño después del primer render (sobre todo en el celular):
+    // se recalcula y se vuelve a encuadrar, si no queda una franja sin tiles.
+    const reencuadrar = () => {
+      map.invalidateSize();
+      if (boundsRef.current) map.fitBounds(boundsRef.current, { padding: [30, 30], maxZoom: 15 });
+      else map.setView(BASE, 14);
+    };
+    const t = setTimeout(reencuadrar, 120);
+    const t2 = setTimeout(reencuadrar, 450);
     const obs = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => map.invalidateSize()) : null;
     obs?.observe(contRef.current);
-    return () => { clearTimeout(t); obs?.disconnect(); map.remove(); mapRef.current = null; };
+    return () => { clearTimeout(t); clearTimeout(t2); obs?.disconnect(); map.remove(); mapRef.current = null; };
   }, [isMobile]);
 
   // Nuestras alertas encima
   useEffect(() => {
     const map = mapRef.current, capa = capaRef.current;
     if (!map || !capa || estado === null) return;
+    map.invalidateSize();
     capa.clearLayers();
     const puntos = [BASE];
 
