@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { sbFetch } from "./colectasShared";
+import { sbFetch, todayStr } from "./colectasShared";
 
 // ── Alertas de tránsito (chip en el header del Home) ──
 // Datos: tabla alertas_transito (lectura pública). Las automáticas las escribe la función
@@ -9,6 +9,9 @@ import { sbFetch } from "./colectasShared";
 //   · radar de la base: calles cerradas alrededor de Venezuela 1370 que arrancaron en las últimas 12 hs
 //     (marchas en Congreso / Plaza de Mayo). Las obras viejas quedan afuera.
 // Las manuales las carga el equipo desde el popover y vencen solas.
+// Noticias: public.transito_noticias_sync() cada 15 min lee los RSS de La Nación, Infobae, TN, Clarín,
+// Perfil y Ámbito, prefiltra por palabras clave y Claude Haiku arma los eventos (hoy / mañana, dónde,
+// a qué hora). Así una marcha anunciada aparece ANTES de que TomTom vea las calles cortadas.
 
 const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
@@ -30,14 +33,16 @@ const VENCE = [
   { id: "24h", label: "En 24 horas", calc: () => new Date(Date.now() + 24 * 3600e3) },
 ];
 
+// Un evento anunciado para un día futuro (noticias) no es "ahora": va al final y no escala al Foco.
+export const esFuturo = (a) => !!a.fecha_evento && a.fecha_evento > todayStr();
 const ordenar = (as) => [...as].sort((a, b) =>
-  (b.radar_base - a.radar_base) || ((b.gravedad === "roja") - (a.gravedad === "roja")) || ((b.cadetes || 0) - (a.cadetes || 0)));
+  (esFuturo(a) - esFuturo(b)) || (b.radar_base - a.radar_base) || ((b.gravedad === "roja") - (a.gravedad === "roja")) || ((b.cadetes || 0) - (a.cadetes || 0)));
 
 export function useTransito() {
   const [alertas, setAlertas] = useState(null);
   const [estado, setEstado] = useState({ total: 0, actualizado: null });
   const recargar = useCallback(() => {
-    sbFetch("alertas_transito?select=id,fuente,corredor_id,tipo,gravedad,radar_base,titulo,detalle,sugerencia,cadetes,creada_por,desde,vence&activa=eq.true")
+    sbFetch("alertas_transito?select=id,fuente,corredor_id,tipo,gravedad,radar_base,titulo,detalle,sugerencia,cadetes,creada_por,desde,vence,fuentes,fecha_evento,hora_evento&activa=eq.true")
       .then((rows) => {
         const ahora = Date.now();
         setAlertas(ordenar((rows || []).filter((a) => !a.vence || new Date(a.vence).getTime() > ahora)));
@@ -63,7 +68,8 @@ export function textoAviso(alertas) {
   if (!alertas.length) return "🚦 Tránsito: todo normal en los corredores y alrededor de la base.";
   const lineas = alertas.map((a) => {
     const det = a.radar_base && a.detalle ? a.detalle.replace(/^\d+ cortes: /, "") : a.detalle;
-    return `• ${a.titulo}${det ? `: ${det}` : ""}${a.sugerencia ? ` → ${a.sugerencia}` : ""}`;
+    const cuando = esFuturo(a) ? `MAÑANA${a.hora_evento ? ` ${a.hora_evento} hs` : ""} — ` : a.hora_evento ? `Desde las ${a.hora_evento} — ` : "";
+    return `• ${cuando}${a.titulo}${det ? `: ${det}` : ""}${a.sugerencia ? ` → ${a.sugerencia}` : ""}`;
   });
   return `🚦 Tránsito ahora\n${lineas.join("\n")}`;
 }
@@ -158,8 +164,8 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
   if (!cargado) return null;
 
   const n = alertas.length;
-  const hayRoja = alertas.some((a) => a.gravedad === "roja");
-  const baseRoja = alertas.some((a) => a.radar_base && a.gravedad === "roja");
+  const hayRoja = alertas.some((a) => a.gravedad === "roja" && !esFuturo(a));
+  const baseRoja = alertas.some((a) => a.radar_base && a.gravedad === "roja" && !esFuturo(a));
   const color = n === 0 ? C.ink3 : hayRoja ? C.rojo : C.ambar;
   const borde = n === 0 ? C.line : hayRoja ? "rgba(232,97,95,0.45)" : "rgba(245,192,68,0.4)";
 
@@ -215,11 +221,22 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35 }}>
                     {a.titulo}
+                    {esFuturo(a) && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: C.ink2, background: "rgba(255,255,255,0.08)", borderRadius: 5, padding: "1px 6px", verticalAlign: 1 }}>MAÑANA</span>}
                     {a.radar_base && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: col, background: col + "22", borderRadius: 5, padding: "1px 6px", verticalAlign: 1 }}>BASE</span>}
                   </div>
+                  {a.hora_evento && <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.45, marginTop: 2 }}>Desde las {a.hora_evento} hs</div>}
                   {a.detalle && <div style={{ fontSize: 12, color: C.ink2, lineHeight: 1.45, marginTop: 2 }}>{a.detalle}</div>}
                   {a.sugerencia && <div style={{ fontSize: 12, color: C.teal, lineHeight: 1.45, marginTop: 2 }}>→ {a.sugerencia}</div>}
                   {a.fuente === "manual" && <div style={{ fontSize: 11, color: C.ink3, marginTop: 3 }}>Cargado{a.creada_por ? ` por ${a.creada_por}` : ""}</div>}
+                  {a.fuente === "noticias" && Array.isArray(a.fuentes) && a.fuentes.length > 0 && (
+                    <div style={{ fontSize: 11, color: C.ink3, marginTop: 3 }}>
+                      Noticias ·{" "}
+                      {[...new Map(a.fuentes.map((f) => [f.medio, f])).values()].slice(0, 3).map((f, i) => (
+                        <React.Fragment key={f.url}>{i > 0 && ", "}<a href={f.url} target="_blank" rel="noopener noreferrer" title={f.titulo} style={{ color: C.ink2, textDecoration: "underline", textUnderlineOffset: 2 }}>{f.medio}</a></React.Fragment>
+                      ))}
+                    </div>
+                  )}
+                  {a.fuente === "tomtom" && <div style={{ fontSize: 11, color: C.ink3, marginTop: 3 }}>TomTom</div>}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                   {a.cadetes > 0 && <span style={{ fontSize: 11.5, color: C.ink3, whiteSpace: "nowrap" }}>{a.cadetes} cad.</span>}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { puedeVer, esAdmin } from "./permisos";
 import { slaMeli } from "./slaShared";
 import { useClima, textoNivel, Lluvia, CieloFX } from "./Clima";
-import { useTransito, TransitoChip, textoAviso } from "./Transito";
+import { useTransito, TransitoChip, textoAviso, esFuturo } from "./Transito";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -444,7 +444,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     navigator.clipboard.writeText(txt).then(() => { setCopiado(true); setTimeout(() => setCopiado(false), 1800); }).catch(() => {});
   };
 
-  const transitoBase = transito.alertas.find((a) => a.radar_base && a.gravedad === "roja");
+  const transitoBase = transito.alertas.find((a) => a.radar_base && a.gravedad === "roja" && !esFuturo(a));
   const [avisoCopiado, setAvisoCopiado] = useState(false);
   const copiarAvisoTransito = () => {
     navigator.clipboard.writeText(textoAviso(transito.alertas)).then(() => { setAvisoCopiado(true); setTimeout(() => setAvisoCopiado(false), 1800); }).catch(() => {});
