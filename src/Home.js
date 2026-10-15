@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { puedeVer, esAdmin } from "./permisos";
 import { slaMeli } from "./slaShared";
 import { useClima, textoNivel, Lluvia, CieloFX } from "./Clima";
+import { useTransito, TransitoChip, textoAviso } from "./Transito";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -291,6 +292,7 @@ const ddmm = (iso) => { const f = new Date(iso + "T12:00:00"); return `${f.getDa
 
 export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout, comBadge = 0 }) {
   const clima = useClima(); // pronóstico de lluvia en horario de reparto (Open-Meteo)
+  const transito = useTransito(); // alertas de tránsito (TomTom + cargadas por el equipo) — ver Transito.js
   const [eggPaco, setEggPaco] = useState(false); // easter egg: 5 clics seguidos en el logo del header
   const eggClicks = useRef({ n: 0, t: 0 });
   const clickLogoEgg = () => {
@@ -442,6 +444,12 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     navigator.clipboard.writeText(txt).then(() => { setCopiado(true); setTimeout(() => setCopiado(false), 1800); }).catch(() => {});
   };
 
+  const transitoBase = transito.alertas.find((a) => a.radar_base && a.gravedad === "roja");
+  const [avisoCopiado, setAvisoCopiado] = useState(false);
+  const copiarAvisoTransito = () => {
+    navigator.clipboard.writeText(textoAviso(transito.alertas)).then(() => { setAvisoCopiado(true); setTimeout(() => setAvisoCopiado(false), 1800); }).catch(() => {});
+  };
+
   // Foco del día (el protagonista)
   const foco = (() => {
     // La liquidación es el foco mientras quede algo por hacer: o no confirmaste ninguno,
@@ -450,6 +458,8 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     if (session && franja === "dia" && col && col.sinChofer > 0) return "colectas";
     // 13:00–15:30 el protagonista es Arribos (llegan los choferes) mientras falte alguno
     if (session && ventanaArribos && col && col.totalArr > 0 && col.llegaron < col.totalArr) return "arribos";
+    // Corte rojo alrededor de la base (marcha en Congreso, etc.): afecta la salida de todos
+    if (transitoBase) return "transito";
     if (franja === "manana" && ayer && ayer.cadetes.length > 0) return "arranque";
     return "ok";
   })();
@@ -469,6 +479,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     if (foco === "colectas") return { titulo: `${col.sinChofer} colecta${col.sinChofer === 1 ? "" : "s"} sin chofer`, bajada: <>Asignalas <b style={{ color: C.ambar }}>antes de las 14:00</b> para evitar demoras en el reparto.</>, cta: "Abrir colectas", go: () => onNav("colectas") };
     if (foco === "arribos") return { titulo: `Van llegando: ${col.llegaron} de ${col.totalArr} cadetes`, bajada: <>{col.totalArr - col.llegaron === 1 ? "Falta" : "Faltan"} <b style={{ color: C.ambar }}>{col.totalArr - col.llegaron}</b> por llegar al depósito. Marcá a cada uno cuando entra.</>, cta: "Abrir arribos", go: () => onNav("arribos") };
     if (foco === "arranque") return { titulo: `${ayer.cadetes.length} cadete${ayer.cadetes.length === 1 ? "" : "s"} para revisar de ayer`, bajada: `SLA general ${ayer.sla != null ? ayer.sla.toFixed(1) + "%" : "—"}. Copiá el resumen y mandalo al grupo.`, cta: copiado ? "Copiado" : "Copiar resumen para el grupo", go: copiarResumen, sinFlecha: true };
+    if (foco === "transito") return { titulo: transitoBase.titulo, bajada: <>{transitoBase.detalle ? transitoBase.detalle.replace(/^\d+ cortes: /, "Cortes en ") + ". " : ""}{transitoBase.sugerencia ? <b style={{ color: C.ambar }}>{transitoBase.sugerencia}. </b> : ""}Avisá a los cadetes antes de que salgan.</>, cta: avisoCopiado ? "Copiado" : "Copiar aviso para el grupo", go: copiarAvisoTransito, sinFlecha: true };
     if (foco === "liq") return { titulo: `Liquidación ${liq.label}`, bajada: liq.confirmados === 0 ? "Todavía no confirmaste ningún cadete. Ahí arranca." : `${liq.confirmados} confirmados · ${liq.pagados} pagados${liq.confirmados > liq.pagados ? ` · faltan ${liq.confirmados - liq.pagados} por pagar` : ""}.`, cta: "Ir a liquidaciones", go: () => onNav("pagos") };
     return null;
   })();
@@ -697,6 +708,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           {logoEl(40)}
           {saludoEl}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <TransitoChip transito={transito} session={session} usuario={usuario} isMobile />
             {session && <Buzon notas={notas} onIr={onNav} onResolver={resolverLocal} />}
             {onLogin && <LoginWidget session={session} onLogin={onLogin} onLogout={onLogout} />}
           </div>
@@ -768,6 +780,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           {saludoEl}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             {buscarBtn}
+            <TransitoChip transito={transito} session={session} usuario={usuario} />
             {session && <Buzon notas={notas} onIr={onNav} onResolver={resolverLocal} />}
             {onLogin && !session && <LoginWidget session={session} onLogin={onLogin} onLogout={onLogout} />}
           </div>
