@@ -36,7 +36,9 @@ const VENCE = [
 // Un evento anunciado para un día futuro (noticias) no es "ahora": va al final y no escala al Foco.
 export const esFuturo = (a) => !!a.fecha_evento && a.fecha_evento > todayStr();
 const ordenar = (as) => [...as].sort((a, b) =>
-  (esFuturo(a) - esFuturo(b)) || (b.radar_base - a.radar_base) || ((b.gravedad === "roja") - (a.gravedad === "roja")) || ((b.cadetes || 0) - (a.cadetes || 0)));
+  (esFuturo(a) - esFuturo(b)) || (b.radar_base - a.radar_base) || ((b.gravedad === "roja") - (a.gravedad === "roja"))
+  || ((b.fuente === "noticias") - (a.fuente === "noticias")) // la noticia explica el porqué y el horario; TomTom va debajo con las calles
+  || ((b.cadetes || 0) - (a.cadetes || 0)));
 
 export function useTransito() {
   const [alertas, setAlertas] = useState(null);
