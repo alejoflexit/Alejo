@@ -68,3 +68,31 @@ test("un intento temprano de otro día no altera el dem21 del día procesado", (
   ];
   assert.equal(historialExcluyeDem21(historial, "2026-09-11"), false);
 });
+
+test("estado 31 (reprogramado por meli de LightData) antes de las 21 excusa la demora", async () => {
+  // Envío 1041101, 16/10/2026: A planta 14:55, 31 por Sistema 15:13, En camino 15:14.
+  const excluye = historialExcluyeDemora([
+    { estado: "0", fecha: "16/10/2026 13:19" },
+    { estado: "1", fecha: "16/10/2026 14:55" },
+    { estado: "31", fecha: "16/10/2026 15:13" },
+    { estado: "2", fecha: "16/10/2026 15:14" },
+  ], new Set(["2026-10-16", "2026-10-15"]));
+  assert.equal(excluye, true);
+});
+
+test("estado 31 después de las 21 no excusa la demora", async () => {
+  const excluye = historialExcluyeDemora([
+    { estado: "2", fecha: "16/10/2026 17:45" },
+    { estado: "31", fecha: "16/10/2026 23:14" },
+  ], new Set(["2026-10-16", "2026-10-15"]));
+  assert.equal(excluye, false);
+});
+
+test("dem21: un 31 antes de las 21 cuenta como intento previo", async () => {
+  const excluye = historialExcluyeDem21([
+    { estado: "31", fecha: "16/10/2026 15:13" },
+    { estado: "2", fecha: "16/10/2026 15:14" },
+    { estado: "31", fecha: "16/10/2026 23:10" },
+  ], "2026-10-16");
+  assert.equal(excluye, true);
+});
