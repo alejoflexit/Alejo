@@ -90,9 +90,30 @@ test("estado 31 después de las 21 no excusa la demora", async () => {
 
 test("dem21: un 31 antes de las 21 cuenta como intento previo", async () => {
   const excluye = historialExcluyeDem21([
+    { estado: "1", fecha: "16/10/2026 14:55" },
     { estado: "31", fecha: "16/10/2026 15:13" },
     { estado: "2", fecha: "16/10/2026 15:14" },
     { estado: "31", fecha: "16/10/2026 23:10" },
   ], "2026-10-16");
   assert.equal(excluye, true);
+});
+
+test("31 pegado al En camino automatico (ruido de sep-2026) no excusa", async () => {
+  const excluye = historialExcluyeDemora([
+    { estado: "0", fecha: "01/09/2026 13:38" },
+    { estado: "1", fecha: "01/09/2026 14:36" },
+    { estado: "2", fecha: "01/09/2026 14:56" },
+    { estado: "31", fecha: "01/09/2026 14:56" },
+  ], new Set(["2026-09-01", "2026-08-31"]));
+  assert.equal(excluye, false);
+});
+
+test("31 antes de que el paquete llegue a planta no excusa", async () => {
+  // Envío 1042532, 16/10/2026: 31 a las 14:02, A planta 14:55, sale 15:16 y no se entrega.
+  const excluye = historialExcluyeDemora([
+    { estado: "31", fecha: "16/10/2026 14:02" },
+    { estado: "1", fecha: "16/10/2026 14:55" },
+    { estado: "2", fecha: "16/10/2026 15:16" },
+  ], new Set(["2026-10-16", "2026-10-15"]));
+  assert.equal(excluye, false);
 });
