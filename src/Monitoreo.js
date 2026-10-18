@@ -461,7 +461,7 @@ function Incorporaciones({ hist, hoy, cadetesHoy }) {
                     })}
                   </div>
                 )}
-                {enPrueba && sla !== null && sla < 95 && (
+                {enPrueba && sla !== null && sla < 95 && fallas >= 2 && ( /* con 1 sola falla en pocos envíos es ruido */
                   <div style={{ fontSize: 12, color: C.rojo, marginTop: 6 }}>Arrancó flojo: conviene hablarle antes de la próxima salida o bajarle la carga.</div>
                 )}
               </div>
