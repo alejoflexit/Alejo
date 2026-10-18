@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { armarCadetes, resumen, enMano, quedaronPlanta, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE } from "./monitoreoShared";
+import { armarCadetes, resumen, enMano, quedaronPlanta, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE,
+  indexarHistorial, antiguedadDe, textoAntiguedad, nuevosRecientes, normNombre, RECIENTES_DIAS, NUEVO_JORNADAS } from "./monitoreoShared";
 import { slaMeli } from "./slaShared";
+import { sbFetch, todayStr } from "./colectasShared";
 
 // Monitoreo — avance del reparto POR CADETE, en vivo, + detector de caída de datos.
 // Fuente: bridge del VPS GET /reparto (Excel A planta = hoy, obs=2, cache 3 min). El bridge clasifica
@@ -27,7 +29,12 @@ function minutosDe(iso) {
 }
 const tonoEstado = (e) => (e.clave === "termino" ? "ok" : e.atencion || e.clave === "no_salio" ? "atencion" : "neutro");
 
-const FILTROS = [["atencion", "Para mirar"], ["en_ruta", "En ruta"], ["termino", "Terminaron"], ["todos", "Todos"]];
+const FILTROS = [["atencion", "Para mirar"], ["nuevos", "Nuevos"], ["en_ruta", "En ruta"], ["termino", "Terminaron"], ["todos", "Todos"]];
+const slaColor = (s) => (s === null ? C.ink3 : s >= 98 ? C.teal : s >= 95 ? C.ambar : C.rojo);
+const fmtSla = (s) => (s === null ? "—" : `${s.toFixed(1).replace(".", ",")}%`);
+const ddmm = (iso) => (iso ? `${+iso.slice(8, 10)}/${+iso.slice(5, 7)}` : "—");
+// "18/10/2026" (bridge) → "2026-10-18"
+const isoDe = (f) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(f || ""); return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : todayStr(); };
 const esAtencion = (c) => c.estado.atencion || c.estado.clave === "no_salio";
 
 export default function Monitoreo() {
@@ -39,6 +46,7 @@ export default function Monitoreo() {
   const [busca, setBusca] = useState("");
   const [abierto, setAbierto] = useState(null);
   const [, setTick] = useState(0);
+  const [hist, setHist] = useState(null); // historial por cadete (vista cadetes_antiguedad) para detectar nuevos
   const enCurso = useRef(false);
 
   const cargar = useCallback(async () => {
@@ -55,6 +63,17 @@ export default function Monitoreo() {
     } finally { enCurso.current = false; setCargando(false); }
   }, []);
 
+  // Historial de Métricas: cambia una vez por día (la carga nocturna), alcanza con traerlo cada 30'
+  useEffect(() => {
+    let vivo = true;
+    const traer = () => sbFetch("cadetes_antiguedad?select=*")
+      .then((rows) => { if (vivo && Array.isArray(rows)) setHist(rows); })
+      .catch(() => {});
+    traer();
+    const t = setInterval(traer, 30 * 60 * 1000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
+
   useEffect(() => {
     cargar();
     const t = setInterval(cargar, REFRESH_MS);
@@ -66,23 +85,29 @@ export default function Monitoreo() {
 
   const ahoraDato = datos ? minutosDe(datos.actualizado) : null;
   const ahoraReal = minutosDe();
-  const cadetes = useMemo(() => (datos ? armarCadetes(datos.porCadete, ahoraDato) : []), [datos, ahoraDato]);
+  const hoyISO = isoDe(datos && datos.fecha);
+  const idxHist = useMemo(() => (hist ? indexarHistorial(hist) : null), [hist]);
+  const cadetes = useMemo(() => (datos ? armarCadetes(datos.porCadete, ahoraDato) : [])
+    .map((c) => ({ ...c, antig: antiguedadDe(idxHist, c.nombre, hoyISO) })), [datos, ahoraDato, idxHist, hoyISO]);
+  const nuevosHoy = useMemo(() => cadetes.filter((c) => c.antig), [cadetes]);
   const res = useMemo(() => resumen(cadetes, datos), [cadetes, datos]);
   const salud = useMemo(() => saludDatos(datos, ahoraReal), [datos, ahoraReal]);
   const conReglas = cadetes.some((c) => c.flexRiesgo !== undefined);
 
   const cuenta = useMemo(() => ({
     atencion: cadetes.filter(esAtencion).length,
+    nuevos: nuevosHoy.length,
     en_ruta: cadetes.filter((c) => c.estado.clave !== "termino" && !esAtencion(c)).length,
     termino: cadetes.filter((c) => c.estado.clave === "termino").length,
     todos: cadetes.length,
-  }), [cadetes]);
+  }), [cadetes, nuevosHoy]);
 
   const visibles = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return cadetes.filter((c) => {
       if (q) return c.nombre.toLowerCase().includes(q);
       if (filtro === "atencion") return esAtencion(c);
+      if (filtro === "nuevos") return !!c.antig;
       if (filtro === "en_ruta") return c.estado.clave !== "termino" && !esAtencion(c);
       if (filtro === "termino") return c.estado.clave === "termino";
       return true;
@@ -107,6 +132,7 @@ export default function Monitoreo() {
   return (
     <div style={{ color: C.ink }}>
       <SaludBanner salud={salud} error={error} datos={datos} ahoraReal={ahoraReal} ahoraDato={ahoraDato} />
+      {nuevosHoy.length > 0 && filtro !== "nuevos" && <AvisoNuevos nuevos={nuevosHoy} onVer={() => { setFiltro("nuevos"); setBusca(""); }} />}
 
       {!datos && !error && <div style={{ color: C.ink2, fontSize: 14, padding: "30px 4px" }}>Bajando el reparto de hoy desde LightData… (puede tardar un minuto)</div>}
 
@@ -146,7 +172,8 @@ export default function Monitoreo() {
 
         {visibles.length === 0 ? (
           <div style={{ ...card, padding: 22, color: C.ink2, fontSize: 14 }}>
-            {filtro === "atencion" && !busca ? "Nadie para mirar: todos los cadetes con carga vienen avanzando." : "No hay cadetes para mostrar."}
+            {filtro === "atencion" && !busca ? "Nadie para mirar: todos los cadetes con carga vienen avanzando."
+              : filtro === "nuevos" && !busca ? "Hoy no salió ningún cadete nuevo." : "No hay cadetes para mostrar."}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -155,10 +182,12 @@ export default function Monitoreo() {
             ))}
           </div>
         )}
+        {filtro === "nuevos" && !busca && <Incorporaciones hist={hist} hoy={hoyISO} cadetesHoy={cadetes} />}
         <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 14, lineHeight: 1.6 }}>
           Mismas reglas que Métricas. Flex en riesgo = en camino, en planta o sin estado sin un Nadie/reprogramado antes de las 21 (historial de hoy o ayer): sería demorado si el día cerrara ahora.
           Repro 21hs = Nadie o reprogramado a las 21:00 o después sin intento previo. Particulares sin visita = en camino, en planta o sin estado.
-          Frenado = lleva envíos sin intento y no entrega hace 60' o más. Se actualiza cada 3 minutos.
+          Frenado = lleva envíos sin intento y no entrega hace 60' o más. Nuevo = está en sus primeras {NUEVO_JORNADAS} jornadas según Métricas;
+          vuelve = hacía 45 días o más que no salía. Se actualiza cada 3 minutos.
         </div>
       </>)}
     </div>
@@ -275,6 +304,7 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
       <button onClick={onToggle} aria-expanded={abierto} style={{ all: "unset", display: "block", width: "100%", cursor: "pointer" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 14.5 }}>{c.nombre}</span>
+          {c.antig && <EtiquetaNuevo a={c.antig} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink2 }}>
             <Punto tono={tonoEstado(c.estado)} />{c.estado.label}
           </span>
@@ -353,6 +383,92 @@ function DetalleEnvios({ detalle, nombre }) {
         style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 9, color: copiado ? C.teal : C.ink2, padding: "6px 12px", fontSize: 12.5, cursor: "pointer" }}>
         {copiado ? "Copiado" : "Copiar envíos"}
       </button>
+    </div>
+  );
+}
+
+// ── Nuevos ──
+function EtiquetaNuevo({ a }) {
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, color: C.ambar, background: "rgba(245,192,68,0.12)", border: "1px solid rgba(245,192,68,0.28)", borderRadius: 6, padding: "1px 7px", whiteSpace: "nowrap" }}>
+      {textoAntiguedad(a)}
+    </span>
+  );
+}
+
+// Aviso chico arriba: quién es nuevo hoy, con un toque lleva a la solapa.
+function AvisoNuevos({ nuevos, onVer }) {
+  const nombres = nuevos.slice(0, 3).map((c) => `${c.nombre} (${textoAntiguedad(c.antig).replace("Nuevo · ", "")})`).join(", ");
+  const resto = nuevos.length > 3 ? ` y ${nuevos.length - 3} más` : "";
+  return (
+    <button type="button" onClick={onVer}
+      style={{ ...card, display: "flex", gap: 10, alignItems: "baseline", width: "100%", boxSizing: "border-box", marginTop: 8, padding: "10px 14px", textAlign: "left", cursor: "pointer",
+        background: "rgba(245,192,68,0.06)", border: "1px solid rgba(245,192,68,0.22)", borderRadius: 16, color: C.ink, font: "inherit" }}>
+      <Punto tono="atencion" />
+      <span style={{ flex: 1, minWidth: 0, fontSize: 13.5 }}>
+        <b style={{ fontWeight: 600 }}>{nuevos.length === 1 ? "1 cadete nuevo hoy" : `${nuevos.length} cadetes nuevos hoy`}</b>
+        <span style={{ color: C.ink2 }}> · {nombres}{resto}</span>
+      </span>
+      <span style={{ fontSize: 12.5, color: C.ambar, fontWeight: 600, whiteSpace: "nowrap" }}>Ver nuevos →</span>
+    </button>
+  );
+}
+
+// Los que arrancaron en el último mes, con cómo les fue jornada por jornada (datos de Métricas, hasta ayer).
+function Incorporaciones({ hist, hoy, cadetesHoy }) {
+  const lista = useMemo(() => nuevosRecientes(hist, hoy), [hist, hoy]);
+  const enVivo = useMemo(() => new Map(cadetesHoy.map((c) => [normNombre(c.nombre), c])), [cadetesHoy]);
+  if (!hist) return <div style={{ color: C.ink3, fontSize: 13, marginTop: 16 }}>Cargando el historial de cadetes…</div>;
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "0 2px 8px" }}>
+        <span style={{ fontWeight: 600, fontSize: 14.5 }}>Incorporaciones del último mes</span>
+        <span style={{ fontSize: 12, color: C.ink3 }}>{lista.length} cadete{lista.length === 1 ? "" : "s"} · datos de Métricas hasta ayer</span>
+      </div>
+      {lista.length === 0 ? (
+        <div style={{ ...card, padding: 18, color: C.ink2, fontSize: 13.5 }}>No entró nadie nuevo en los últimos {RECIENTES_DIAS} días.</div>
+      ) : (
+        <div style={{ ...card, padding: "4px 14px" }}>
+          {lista.map((f, i) => {
+            const sla = slaMeli(f.envios_ml, f.demorados, f.dem21);
+            const fallas = (f.demorados || 0) + (f.dem21 || 0);
+            const hoyC = enVivo.get(normNombre(f.cadete));
+            const enPrueba = f.jornadas < NUEVO_JORNADAS;
+            return (
+              <div key={f.cadete} style={{ padding: "11px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{f.cadete}</span>
+                  <span style={{ fontSize: 12, color: C.ink3 }}>
+                    empezó {ddmm(f.primer_dia)} · {f.jornadas} jornada{f.jornadas === 1 ? "" : "s"}{f.ultimo_dia !== f.primer_dia ? ` · última ${ddmm(f.ultimo_dia)}` : ""}
+                  </span>
+                  {hoyC && <span style={{ fontSize: 12, color: C.teal }}>hoy en la calle · {hoyC.e}/{hoyC.t}</span>}
+                  <span style={{ marginLeft: "auto", textAlign: "right", whiteSpace: "nowrap" }}>
+                    <span style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: 15, color: slaColor(sla) }}>{fmtSla(sla)}</span>
+                    <span style={{ fontSize: 12, color: C.ink3 }}> SLA · {fallas} falla{fallas === 1 ? "" : "s"}</span>
+                  </span>
+                </div>
+                {Array.isArray(f.dias) && f.dias.length > 0 && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+                    {f.dias.map((d) => {
+                      const s = slaMeli(d.ml, d.dem, d.d21);
+                      const fl = (d.dem || 0) + (d.d21 || 0);
+                      return (
+                        <span key={d.f} title={`${ddmm(d.f)}: ${d.n} envíos · ${d.ml} Flex · ${d.dem} demorados · ${d.d21} post-21${d.fin ? ` · terminó ${d.fin}` : ""}`}
+                          style={{ background: C.soft, border: `1px solid ${fl ? "rgba(232,97,95,0.25)" : C.line}`, borderRadius: 7, padding: "3px 8px", fontSize: 11.5, color: C.ink2, whiteSpace: "nowrap" }}>
+                          {ddmm(d.f)} · {d.n} env · <span style={{ color: slaColor(s), fontWeight: 600 }}>{fmtSla(s)}</span>{d.fin ? <span style={{ color: C.ink3 }}> · fin {d.fin}</span> : null}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {enPrueba && sla !== null && sla < 95 && (
+                  <div style={{ fontSize: 12, color: C.rojo, marginTop: 6 }}>Arrancó flojo: conviene hablarle antes de la próxima salida o bajarle la carga.</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

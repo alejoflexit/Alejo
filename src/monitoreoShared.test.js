@@ -83,3 +83,34 @@ test("salud: caída si hay gente en la calle y 45' sin movimientos en horario", 
   expect(saludDatos({ ...d, ultimoEvento: H(22, 50) }, H(23, 40)).nivel).toBe("ok");
   expect(saludDatos({ ...d, porCadete: { A: cad({ camino: 0, pend: 0 }) } }, H(18, 50)).nivel).toBe("ok");
 });
+
+import { antiguedadDe, indexarHistorial, nuevosRecientes, normNombre, textoAntiguedad } from "./monitoreoShared";
+
+test("nuevos: normaliza nombres (tildes, mayúsculas, espacios dobles)", () => {
+  expect(normNombre("  Martín  Acuña ")).toBe(normNombre("martin acuña"));
+});
+
+test("nuevos: primer día, jornadas, vuelve y de la casa", () => {
+  const idx = indexarHistorial([
+    { cadete: "Joel Ariza", primer_dia: "2026-10-17", ultimo_dia: "2026-10-17", jornadas: 1 },
+    { cadete: "Yamila Segovia", primer_dia: "2026-05-21", ultimo_dia: "2026-10-17", jornadas: 120 },
+    { cadete: "Edgar Bastidas", primer_dia: "2026-06-01", ultimo_dia: "2026-08-20", jornadas: 30 },
+    { cadete: "Hoy Ya Cargado", primer_dia: "2026-10-14", ultimo_dia: "2026-10-19", jornadas: 5 },
+  ]);
+  const hoy = "2026-10-19";
+  expect(antiguedadDe(idx, "Alguien Nuevo", hoy)).toEqual({ tipo: "primer", jornada: 1 });
+  expect(antiguedadDe(idx, "joel  ariza", hoy)).toMatchObject({ tipo: "nuevo", jornada: 2 });
+  expect(antiguedadDe(idx, "Yamila Segovia", hoy)).toBeNull();
+  expect(antiguedadDe(idx, "Edgar Bastidas", hoy)).toMatchObject({ tipo: "vuelve", dias: 60 });
+  // si Métricas ya tiene la fila de hoy, no la cuenta dos veces: 4 previas + hoy = 5.ª
+  expect(antiguedadDe(idx, "Hoy Ya Cargado", hoy)).toMatchObject({ tipo: "nuevo", jornada: 5 });
+  expect(antiguedadDe(null, "x", hoy)).toBeNull();
+  expect(textoAntiguedad({ tipo: "nuevo", jornada: 3 })).toBe("Nuevo · 3.ª jornada");
+});
+
+test("nuevos recientes: últimos 30 días, el más nuevo primero", () => {
+  const r = nuevosRecientes([
+    { cadete: "B", primer_dia: "2026-10-13" }, { cadete: "A", primer_dia: "2026-10-17" }, { cadete: "Viejo", primer_dia: "2026-08-01" },
+  ], "2026-10-19");
+  expect(r.map((x) => x.cadete)).toEqual(["A", "B"]);
+});

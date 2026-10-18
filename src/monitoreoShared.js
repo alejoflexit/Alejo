@@ -141,3 +141,55 @@ export function resumen(cadetes, d) {
   r.internos = Object.values((d && d.internos) || {}).reduce((s, n) => s + n, 0);
   return r;
 }
+
+// ── Cadetes nuevos ──
+// El historial sale de la vista cadetes_antiguedad (Supabase, sobre `semanas` de Métricas: una fila por
+// cadete con primer día, jornadas y SLA). El vivo y Métricas toman el nombre de la misma columna "Cadete"
+// de LightData, pero el bridge junta espacios dobles y a veces cambian mayúsculas: se comparan normalizados.
+export const NUEVO_JORNADAS = 5;   // es "nuevo" durante sus primeras 5 jornadas (contando la de hoy)
+export const VUELVE_DIAS = 45;     // si no trabajaba hace 45 días o más, se marca "vuelve"
+export const RECIENTES_DIAS = 30;  // la solapa Nuevos lista a los que arrancaron en los últimos 30 días
+
+export const normNombre = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+  .toLowerCase().replace(/\s+/g, " ").trim();
+
+const diasEntre = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);
+
+export function indexarHistorial(filas) {
+  const m = new Map();
+  for (const f of filas || []) {
+    const k = normNombre(f.cadete);
+    const prev = m.get(k);
+    // dos variantes del mismo nombre: se queda con la más antigua y suma jornadas
+    if (prev) m.set(k, { ...prev, primer_dia: f.primer_dia < prev.primer_dia ? f.primer_dia : prev.primer_dia,
+      ultimo_dia: f.ultimo_dia > prev.ultimo_dia ? f.ultimo_dia : prev.ultimo_dia, jornadas: prev.jornadas + f.jornadas });
+    else m.set(k, f);
+  }
+  return m;
+}
+
+// ¿Qué tan nuevo es este cadete HOY? null = ya es de la casa.
+//   primer → no aparece nunca en Métricas: hoy es su primer día
+//   nuevo  → está dentro de sus primeras NUEVO_JORNADAS (jornada = la de hoy, 1-based)
+//   vuelve → ya trabajó, pero hacía VUELVE_DIAS o más que no salía
+export function antiguedadDe(idx, nombre, hoy) {
+  if (!idx) return null;
+  const h = idx.get(normNombre(nombre));
+  if (!h) return { tipo: "primer", jornada: 1 };
+  const previas = h.jornadas - (h.ultimo_dia >= hoy ? 1 : 0); // Métricas puede tener ya la fila de hoy
+  const jornada = previas + 1;
+  if (jornada <= NUEVO_JORNADAS) return { tipo: "nuevo", jornada, primer: h.primer_dia };
+  const ultimaAntes = h.ultimo_dia >= hoy ? null : h.ultimo_dia;
+  if (ultimaAntes && diasEntre(ultimaAntes, hoy) >= VUELVE_DIAS) return { tipo: "vuelve", jornada, dias: diasEntre(ultimaAntes, hoy) };
+  return null;
+}
+
+export const textoAntiguedad = (a) => !a ? "" : a.tipo === "primer" ? "1.er día"
+  : a.tipo === "nuevo" ? `Nuevo · ${a.jornada}.ª jornada` : `Vuelve tras ${a.dias} días`;
+
+// Los que arrancaron en los últimos RECIENTES_DIAS, el más nuevo primero.
+export function nuevosRecientes(filas, hoy) {
+  return (filas || [])
+    .filter((f) => f.primer_dia && diasEntre(f.primer_dia, hoy) <= RECIENTES_DIAS)
+    .sort((a, b) => (b.primer_dia || "").localeCompare(a.primer_dia || "") || a.cadete.localeCompare(b.cadete));
+}
