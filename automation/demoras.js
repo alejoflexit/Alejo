@@ -12,16 +12,17 @@ function minutoDe(fecha) {
 }
 
 // El 31 ("reprogramado por meli" como lo registra hoy LightData, autor Sistema)
-// solo es una reprogramacion real si: (a) el paquete ya estaba en planta
-// (hay un estado 1 anterior) y (b) no cae en el mismo minuto que un 2/22.
-// En sep-2026 LightData metia un 31 pegado a cada "En camino" automatico: eso
-// es ruido de sincronizacion y no excusa nada. Caso real 16/10/2026: 11 falsos
-// demorados con 31 aislado y posterior a planta.
+// es una reprogramacion real si el paquete ya estaba en planta (hay un estado 1
+// anterior). Antes de planta no excusa (caso Ariel Ferrero 16/10: 31 a las 14:02,
+// planta 14:55, salio y no se entrego).
+// 18/10/2026: se saco la condicion "no pegado a un En camino (2/22) del mismo
+// minuto". Se habia tomado como ruido de sep-2026, pero una muestra de envios
+// comunes de sep y oct no trae ningun 31: no es algo que LightData le pegue a
+// cada En camino. Y los envios con 31 pegado (1042915, 1043073, 1042810 del
+// 17/10) no tuvieron ningun intento: Meli los paso de dia. Ver wiki
+// analisis/auditoria-demorados-estado31-2026-10-16.
 function es31Valido(h, historial) {
   const idx = historial.indexOf(h);
-  const minuto = minutoDe(h.fecha);
-  const pegado = historial.some(x => x !== h && ["2", "22"].includes(String(x.estado)) && minutoDe(x.fecha) === minuto);
-  if (pegado) return false;
   return historial.slice(0, idx).some(x => String(x.estado) === "1");
 }
 

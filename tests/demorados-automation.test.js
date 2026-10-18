@@ -98,14 +98,27 @@ test("dem21: un 31 antes de las 21 cuenta como intento previo", async () => {
   assert.equal(excluye, true);
 });
 
-test("31 pegado al En camino automatico (ruido de sep-2026) no excusa", async () => {
+test("31 en el mismo minuto que el En camino excusa igual (reprogramación real de Meli)", async () => {
+  // Envío 1043073, 17/10/2026: A planta 13:43, 31 por Sistema 14:12, En camino 14:12 (comenzar ruta), sin intento.
   const excluye = historialExcluyeDemora([
-    { estado: "0", fecha: "01/09/2026 13:38" },
-    { estado: "1", fecha: "01/09/2026 14:36" },
-    { estado: "2", fecha: "01/09/2026 14:56" },
-    { estado: "31", fecha: "01/09/2026 14:56" },
-  ], new Set(["2026-09-01", "2026-08-31"]));
-  assert.equal(excluye, false);
+    { estado: "0", fecha: "17/10/2026 12:26" },
+    { estado: "1", fecha: "17/10/2026 13:43" },
+    { estado: "31", fecha: "17/10/2026 14:12" },
+    { estado: "2", fecha: "17/10/2026 14:12" },
+  ], new Set(["2026-10-17", "2026-10-16"]));
+  assert.equal(excluye, true);
+});
+
+test("31 pegado a un En camino automático también excusa", async () => {
+  // Envío 1042915, 17/10/2026: planta 13:46, En camino (Sistema) 14:05 + 31 14:05, En camino del cadete 14:43.
+  const excluye = historialExcluyeDemora([
+    { estado: "0", fecha: "17/10/2026 12:15" },
+    { estado: "1", fecha: "17/10/2026 13:46" },
+    { estado: "2", fecha: "17/10/2026 14:05" },
+    { estado: "31", fecha: "17/10/2026 14:05" },
+    { estado: "2", fecha: "17/10/2026 14:43" },
+  ], new Set(["2026-10-17", "2026-10-16"]));
+  assert.equal(excluye, true);
 });
 
 test("31 antes de que el paquete llegue a planta no excusa", async () => {
