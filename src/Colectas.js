@@ -773,7 +773,10 @@ function ColectasInner({ soloArribos = false, irA }) {
     await sbFetch(`colectas_clientes?id=eq.${c.id}`, {
       method:'PATCH', headers:{'Prefer':'return=minimal'}, body: JSON.stringify({ fija: !c.fija }),
     });
-    setClientes(prev => prev.map(x => x.id === c.id ? { ...x, fija: !x.fija } : x));
+    // La ficha de sábado vinculada (ficha_semana_id) la sigue: lo hace el trigger colectas_fija_a_sabado
+    // en la base; acá solo se refleja en pantalla sin recargar.
+    const nueva = !c.fija;
+    setClientes(prev => prev.map(x => (x.id === c.id || (c.seccion !== 'SABADOS' && x.ficha_semana_id === c.id)) ? { ...x, fija: nueva } : x));
   };
 
   const toggleActivo = async c => {
@@ -1687,7 +1690,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                   </td>
                   <td style={{ padding:'8px 12px' }}>
                     <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => toggleFija(c)} title="Colecta fija: arranca todos los días en naranja (Con envíos)"
+                      <button onClick={() => toggleFija(c)} title={c.seccion === 'SABADOS' ? "Colecta fija: arranca todos los sábados en naranja (Con envíos)" : "Colecta fija: arranca todos los días en naranja (Con envíos), sábados incluidos si tiene ficha de sábado"}
                         style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${c.fija?'#FBBF24':'rgba(255,255,255,0.15)'}`, background:c.fija?'rgba(251,191,36,0.12)':'none', color:c.fija?'#FBBF24':BRAND.muted, fontSize:11, cursor:'pointer', fontWeight:c.fija?700:400 }}>
                         {c.fija ? '📌 Fija' : '📌 Fijar'}
                       </button>
