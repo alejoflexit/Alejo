@@ -430,6 +430,39 @@ async function idsConIntentoAntes21(rows, fecha, ldCookies) {
   return excluidos;
 }
 
+// Re-auditoría de demorados ya cargados: los que el historial de LightData hoy excusa (con las
+// reglas vigentes de demoras.js) salen de la lista y de los contadores del cadete y de su zona.
+// Solo saca, nunca agrega. Motivo (18/10/2026): el 31 pegado a un En camino pasó a excusar.
+async function reauditarDemorados(fecha, rows, ldCookies) {
+  const filas = await supabaseGet("semanas", `select=cadete,demorados_detalle&fecha=eq.${fecha}&demorados=gt.0`);
+  const zonaDe = {};
+  for (const r of rows) {
+    const id = String(r["ID (Interno)"] || "").trim();
+    if (id) zonaDe[id] = normLoc(String(r["Localidad"] || "").trim());
+  }
+  const ayer = new Date(fecha + "T12:00:00Z"); ayer.setUTCDate(ayer.getUTCDate() - 1);
+  const fechasOk = new Set([fecha, ayer.toISOString().slice(0, 10)]);
+  const items = [];
+  let revisados = 0;
+  for (const f of (Array.isArray(filas) ? filas : [])) {
+    for (const d of (f.demorados_detalle || [])) {
+      if (!d || !d.id) continue;
+      revisados++;
+      const historial = await getLDHistorial(d.id, ldCookies);
+      if (historial.length && historialExcluyeDemora(historial, fechasOk)) items.push({ id: String(d.id), cadete: f.cadete, zona: zonaDe[String(d.id)] || "" });
+    }
+  }
+  if (!items.length) return { revisados, quitados: 0, ids: [] };
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/quitar_demorados_excusados`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_fecha: fecha, p_items: items }),
+  });
+  if (!res.ok) throw new Error(`quitar_demorados_excusados ${res.status}: ${await res.text()}`);
+  const out = await res.json();
+  return { revisados, ...out, ids: items.map((x) => x.id) };
+}
+
 async function backfillHoras(desde, hasta) {
   const fechas = [];
   for (let d = new Date(desde + "T12:00:00"); d <= new Date(hasta + "T12:00:00"); d.setDate(d.getDate() + 1)) {
@@ -469,6 +502,8 @@ async function backfillHoras(desde, hasta) {
       const resD = await rpcAplicarDem21(fecha, dem21, dem21Zonas).catch((e) => { console.error(`  ⚠️ dem21_detalle: ${e.message}`); throw e; });
       const resC = await rpcCorregirDem21(fecha, solapCad, solapZona, solapIds).catch((e) => { console.error(`  ⚠️ correccion dem21: ${e.message}`); return { semanas: 0, zonas: 0 }; });
       const nSolap = Object.values(solapCad).reduce((a, b) => a + b, 0);
+      const resR = await reauditarDemorados(fecha, rows, ldCookies).catch((e) => { console.error(`  ⚠️ re-auditoría demorados: ${e.message}`); return { revisados: 0, quitados: 0, ids: [] }; });
+      console.log(`  Re-auditoría demorados: ${resR.revisados} revisados, ${resR.quitados} quitados${resR.ids.length ? ` (${resR.ids.join(", ")})` : ""}${resR.sin_zona ? `, ${resR.sin_zona} sin zona` : ""}`);
       console.log(`✓ ${fecha}: ${rows.length} filas → semanas ${res.semanas}, zonas ${res.zonas}, repro21 ${resD.semanas}, doble conteo corregido ${nSolap} en ${resC.semanas} filas (${resC.detalles_limpiados || 0} listas limpiadas)`);
       ok++;
     } catch (e) {
