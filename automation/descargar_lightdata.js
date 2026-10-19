@@ -430,37 +430,91 @@ async function idsConIntentoAntes21(rows, fecha, ldCookies) {
   return excluidos;
 }
 
-// Re-auditoría de demorados ya cargados: los que el historial de LightData hoy excusa (con las
-// reglas vigentes de demoras.js) salen de la lista y de los contadores del cadete y de su zona.
-// Solo saca, nunca agrega. Motivo (18/10/2026): el 31 pegado a un En camino pasó a excusar.
-async function reauditarDemorados(fecha, rows, ldCookies) {
-  const filas = await supabaseGet("semanas", `select=cadete,demorados_detalle&fecha=eq.${fecha}&demorados=gt.0`);
-  const zonaDe = {};
-  for (const r of rows) {
-    const id = String(r["ID (Interno)"] || "").trim();
-    if (id) zonaDe[id] = normLoc(String(r["Localidad"] || "").trim());
-  }
-  const ayer = new Date(fecha + "T12:00:00Z"); ayer.setUTCDate(ayer.getUTCDate() - 1);
-  const fechasOk = new Set([fecha, ayer.toISOString().slice(0, 10)]);
-  const items = [];
-  let revisados = 0;
-  for (const f of (Array.isArray(filas) ? filas : [])) {
-    for (const d of (f.demorados_detalle || [])) {
-      if (!d || !d.id) continue;
-      revisados++;
-      const historial = await getLDHistorial(d.id, ldCookies);
-      if (historial.length && historialExcluyeDemora(historial, fechasOk)) items.push({ id: String(d.id), cadete: f.cadete, zona: zonaDe[String(d.id)] || "" });
-    }
-  }
-  if (!items.length) return { revisados, quitados: 0, ids: [] };
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/quitar_demorados_excusados`, {
+// ─────────────────────────────────────────────────────────────────────────────
+// RE-AUDITORÍA de días ya cargados (18/10/2026). Se dispara con BACKFILL_DESDE="reauditar:YYYY-MM-DD"
+// y BACKFILL_HASTA="YYYY-MM-DD". Toma las listas guardadas de demorados y repro 21hs (no las
+// reconstruye del Excel) y consulta el historial de cada envío: los que demoras.js HOY excusa salen de
+// la lista y de los contadores del cadete y de su zona. Solo saca, nunca agrega. Idempotente.
+// Del Excel usa solo la Localidad de cada envío, para descontar en la zona correcta.
+// OJO: NO usar el backfill común (BACKFILL_DESDE sin prefijo) para días viejos: reconstruye repro
+// 21hs desde el Excel ACTUAL, donde los envíos ya entregados después no aparecen como repro, y se
+// pierden repro reales (visto el 18/10 con el 01/09: 4 → 0, restaurado del respaldo).
+// ─────────────────────────────────────────────────────────────────────────────
+async function rpcQuitar(nombre, fecha, items) {
+  if (!items.length) return { quitados: 0, zonas: 0, sin_zona: 0 };
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${nombre}`, {
     method: "POST",
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ p_fecha: fecha, p_items: items }),
   });
-  if (!res.ok) throw new Error(`quitar_demorados_excusados ${res.status}: ${await res.text()}`);
-  const out = await res.json();
-  return { revisados, ...out, ids: items.map((x) => x.id) };
+  if (!res.ok) throw new Error(`${nombre} ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function reauditarDia(fecha, zonaDe, ldCookies) {
+  const filas = await supabaseGet("semanas", `select=cadete,demorados_detalle,dem21_detalle&fecha=eq.${fecha}`);
+  const ayer = new Date(fecha + "T12:00:00Z"); ayer.setUTCDate(ayer.getUTCDate() - 1);
+  const fechasOk = new Set([fecha, ayer.toISOString().slice(0, 10)]);
+  const cache = {};
+  const hist = async (id) => (cache[id] || (cache[id] = await getLDHistorial(id, ldCookies)));
+  const dem = [], d21 = [];
+  let revDem = 0, revD21 = 0;
+  for (const f of (Array.isArray(filas) ? filas : [])) {
+    for (const d of (f.demorados_detalle || [])) {
+      if (!d || !d.id) continue; revDem++;
+      const h = await hist(String(d.id));
+      if (h.length && historialExcluyeDemora(h, fechasOk)) dem.push({ id: String(d.id), cadete: f.cadete, zona: zonaDe[String(d.id)] || "" });
+    }
+    for (const d of (f.dem21_detalle || [])) {
+      if (!d || !d.id) continue; revD21++;
+      const h = await hist(String(d.id));
+      if (h.length && historialExcluyeDem21(h, fecha)) d21.push({ id: String(d.id), cadete: f.cadete, zona: zonaDe[String(d.id)] || "" });
+    }
+  }
+  const rDem = await rpcQuitar("quitar_demorados_excusados", fecha, dem);
+  const rD21 = await rpcQuitar("quitar_dem21_excusados", fecha, d21);
+  return { revDem, revD21, dem, d21, rDem, rD21 };
+}
+
+async function reauditarRango(desde, hasta) {
+  const fechas = [];
+  for (let d = new Date(desde + "T12:00:00"); d <= new Date(hasta + "T12:00:00"); d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 0) continue;
+    fechas.push(d.toISOString().slice(0, 10));
+  }
+  console.log(`Re-auditoría: ${fechas.length} días (${desde} → ${hasta})`);
+  const browser = await puppeteer.launch({ args: chromium.args, defaultViewport: chromium.defaultViewport, executablePath: await chromium.executablePath(), headless: chromium.headless });
+  const page = await browser.newPage();
+  await page.goto("https://flexit.lightdata.app", { waitUntil: "networkidle2", timeout: 30000 });
+  await page.waitForSelector("input", { timeout: 15000 });
+  const inputs = await page.$$("input");
+  await inputs[0].type(LD_USER);
+  await inputs[1].type(LD_PASS);
+  await page.keyboard.press("Enter");
+  await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30000 });
+  const ldCookies = (await page.cookies()).map(c => `${c.name}=${c.value}`).join('; ');
+  let tDem = 0, tD21 = 0, fallos = 0;
+  for (const fecha of fechas) {
+    try {
+      const zonaDe = {};
+      const r = await page.evaluate(async (url) => {
+        try { const res = await fetch(url, { credentials: "include" }); const b = await res.arrayBuffer(); return { ok: true, status: res.status, data: Array.from(new Uint8Array(b)) }; }
+        catch (e) { return { ok: false, error: String(e) }; }
+      }, excelUrlDe(fecha));
+      if (r.ok && r.status === 200 && r.data.length >= 1000) {
+        for (const row of filasDeExcel(Buffer.from(r.data))) {
+          const id = String(row["ID (Interno)"] || "").trim();
+          if (id) zonaDe[id] = normLoc(String(row["Localidad"] || "").trim());
+        }
+      }
+      const x = await reauditarDia(fecha, zonaDe, ldCookies);
+      tDem += x.rDem.quitados; tD21 += x.rD21.quitados;
+      console.log(`✓ ${fecha}: demorados ${x.revDem} revisados → ${x.rDem.quitados} quitados${x.dem.length ? ` [${x.dem.map(i => i.id).join(",")}]` : ""}${x.rDem.sin_zona ? ` (${x.rDem.sin_zona} sin zona)` : ""} · repro21 ${x.revD21} revisados → ${x.rD21.quitados} quitados${x.d21.length ? ` [${x.d21.map(i => i.id).join(",")}]` : ""}${x.rD21.sin_zona ? ` (${x.rD21.sin_zona} sin zona)` : ""}`);
+    } catch (e) { console.error(`✗ ${fecha}: ${e.message}`); fallos++; }
+  }
+  await browser.close();
+  console.log(`Re-auditoría terminada — ${tDem} demorados y ${tD21} repro 21hs quitados, ${fallos} días con error`);
+  if (fallos === fechas.length) process.exit(1);
 }
 
 async function backfillHoras(desde, hasta) {
@@ -502,8 +556,6 @@ async function backfillHoras(desde, hasta) {
       const resD = await rpcAplicarDem21(fecha, dem21, dem21Zonas).catch((e) => { console.error(`  ⚠️ dem21_detalle: ${e.message}`); throw e; });
       const resC = await rpcCorregirDem21(fecha, solapCad, solapZona, solapIds).catch((e) => { console.error(`  ⚠️ correccion dem21: ${e.message}`); return { semanas: 0, zonas: 0 }; });
       const nSolap = Object.values(solapCad).reduce((a, b) => a + b, 0);
-      const resR = await reauditarDemorados(fecha, rows, ldCookies).catch((e) => { console.error(`  ⚠️ re-auditoría demorados: ${e.message}`); return { revisados: 0, quitados: 0, ids: [] }; });
-      console.log(`  Re-auditoría demorados: ${resR.revisados} revisados, ${resR.quitados} quitados${resR.ids.length ? ` (${resR.ids.join(", ")})` : ""}${resR.sin_zona ? `, ${resR.sin_zona} sin zona` : ""}`);
       console.log(`✓ ${fecha}: ${rows.length} filas → semanas ${res.semanas}, zonas ${res.zonas}, repro21 ${resD.semanas}, doble conteo corregido ${nSolap} en ${resC.semanas} filas (${resC.detalles_limpiados || 0} listas limpiadas)`);
       ok++;
     } catch (e) {
@@ -733,5 +785,7 @@ async function main() {
 
 // Modo backfill (workflow_dispatch con fechas) vs corrida diaria normal.
 const BF_DESDE = process.env.BACKFILL_DESDE, BF_HASTA = process.env.BACKFILL_HASTA;
-const arranque = (BF_DESDE && BF_HASTA) ? backfillHoras(BF_DESDE, BF_HASTA) : main();
+const arranque = (BF_DESDE && BF_HASTA)
+  ? (BF_DESDE.startsWith("reauditar:") ? reauditarRango(BF_DESDE.slice("reauditar:".length), BF_HASTA) : backfillHoras(BF_DESDE, BF_HASTA))
+  : main();
 arranque.catch(e => { console.error(e); process.exit(1); });
