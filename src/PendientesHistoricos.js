@@ -471,8 +471,8 @@ export default function PendientesHistoricos() {
     })).sort((a, b) => b.total - a.total || b.flex48 - a.flex48 || a.cadete.localeCompare(b.cadete));
   }, [rows, rangoCad]);
   const enviosReclamo = c => tipoReclamo === "Todos" ? c.envios : c.envios.filter(r => r.service === tipoReclamo);
-  const verCadete = nombre => { setDay(""); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier(nombre); setQuery(""); };
-  const verSinAsignar = dia => { setDay(dia); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier("Sin asignar"); setQuery(""); };
+  const verCadete = nombre => { setVerCadetes(false); setDay(""); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier(nombre); setQuery(""); };
+  const verSinAsignar = dia => { setVerCadetes(false); setDay(dia); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier("Sin asignar"); setQuery(""); };
 
   const mesDe = clave => clave.slice(0, 7);
   const moverMes = paso => { const [a, m] = mesAbierto.split("-").map(Number); const d = new Date(a, m - 1 + paso, 1); setMesAbierto(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
@@ -502,7 +502,7 @@ export default function PendientesHistoricos() {
     : errorInicial ? <div role="alert" style={errorCard}><b style={{ fontSize:15 }}>Error al consultar los envíos.</b><div style={{ marginTop:6, color:"#ffadb4", fontSize:13 }}>{error}</div><button onClick={load} style={{ ...button, marginTop:14 }}>Reintentar</button></div>
     : <>
     <div style={heroes}>
-    <div style={{ ...urgentHero, margin:0 }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><b>Flex abiertos con más de 48 horas</b></div><button onClick={() => { setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
+    <div style={{ ...urgentHero, margin:0 }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><b>Flex abiertos con más de 48 horas</b></div><button onClick={() => { setVerCadetes(false); setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
     {sinAsignar.total > 0 && <div style={unassignedHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{sinAsignar.total}</strong><b>Abiertos sin asignar</b></div><button onClick={() => verSinAsignar("")} style={unassignedButton}>Ver sin asignar →</button></div>}
     {hayCadetes && <button onClick={() => setVerCadetes(v => !v)} aria-expanded={verCadetes} style={{ ...cadetesHero, ...(verCadetes ? cadetesHeroAbierto : {}) }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{porCadete.length}</strong><b>Pendientes por cadete</b></div><span style={cadetesBoton}>{verCadetes ? "Cerrar ▲" : "Ver ▼"}</span></button>}</div>
     {verCadetes && <div style={rankingCaja}>
