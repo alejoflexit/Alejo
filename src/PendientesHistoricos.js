@@ -150,6 +150,8 @@ export default function PendientesHistoricos() {
   const [orden, setOrden] = useState(null);
   // Panel "Por cadete": cerrado por defecto; muestra 5 y despliega el resto.
   const [verCadetes, setVerCadetes] = useState(false), [cadetesTodos, setCadetesTodos] = useState(false);
+  // Ranking por cadete: semana movil (7 dias hasta hoy, igual que el calendario) y que tipo de envio se reclama.
+  const [semanaCad, setSemanaCad] = useState(0), [tipoReclamo, setTipoReclamo] = useState("Flex");
   const [dataAt, setDataAt] = useState(null);
   const [sinc, setSinc] = useState(null);
   const sincRef = useRef(false);
@@ -444,21 +446,31 @@ export default function PendientesHistoricos() {
     return { total: rs.length, viejo };
   }, [rows]);
   // Ranking de cadetes: de mas abiertos a menos; a igual cantidad, mas Flex +48 h primero.
+  const rangoCad = useMemo(() => {
+    const base = parseDate(argentinaToday()) || new Date();
+    const ini = new Date(base); ini.setDate(ini.getDate() - 6 + semanaCad * 7);
+    const fin = new Date(ini); fin.setDate(ini.getDate() + 6);
+    const corto = d => d.toLocaleDateString("es-AR", { day:"numeric", month:"short" }).replace(".", "");
+    return { desde: ini.toISOString().slice(0, 10), hasta: fin.toISOString().slice(0, 10), titulo: `${ini.getDate()} al ${corto(fin)}`, sub: semanaCad === 0 ? "esta semana" : semanaCad === -1 ? "hace 1 semana" : `hace ${-semanaCad} semanas` };
+  }, [semanaCad]);
+  const hayCadetes = useMemo(() => rows.some(r => isOpenShipment(r) && !sinCadete(r)), [rows]);
   const porCadete = useMemo(() => {
     const grupos = new Map();
     for (const r of rows) {
-      if (!isOpenShipment(r) || sinCadete(r)) continue;
+      if (!isOpenShipment(r) || sinCadete(r) || !r.origin || r.origin < rangoCad.desde || r.origin > rangoCad.hasta) continue;
       const nombre = String(r.cadete).trim();
       if (!grupos.has(nombre)) grupos.set(nombre, []);
       grupos.get(nombre).push(r);
     }
     return [...grupos].map(([cadete, envios]) => ({
       cadete, envios, total: envios.length,
+      flex: envios.filter(r => r.service === "Flex").length,
       flex48: envios.filter(r => pendingPriority(r).rank === 3).length,
       viejo: envios.reduce((min, r) => (r.origin && (!min || r.origin < min) ? r.origin : min), ""),
       quietos: envios.filter(r => { const n = diasDesde(r.fecha_estado); return n !== null && n >= QUIETO_DIAS; }).length,
     })).sort((a, b) => b.total - a.total || b.flex48 - a.flex48 || a.cadete.localeCompare(b.cadete));
-  }, [rows]);
+  }, [rows, rangoCad]);
+  const enviosReclamo = c => tipoReclamo === "Todos" ? c.envios : c.envios.filter(r => r.service === tipoReclamo);
   const verCadete = nombre => { setDay(""); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier(nombre); setQuery(""); };
   const verSinAsignar = dia => { setDay(dia); setMesAbierto(null); setCriticalOnly(false); setService("Todos"); setState([...OPEN_STATES]); setCourier("Sin asignar"); setQuery(""); };
 
@@ -492,19 +504,34 @@ export default function PendientesHistoricos() {
     <div style={heroes}>
     <div style={{ ...urgentHero, margin:0 }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><b>Flex abiertos con más de 48 horas</b></div><button onClick={() => { setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
     {sinAsignar.total > 0 && <div style={unassignedHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{sinAsignar.total}</strong><b>Abiertos sin asignar</b></div><button onClick={() => verSinAsignar("")} style={unassignedButton}>Ver sin asignar →</button></div>}
-    {porCadete.length > 0 && <button onClick={() => setVerCadetes(v => !v)} aria-expanded={verCadetes} style={{ ...cadetesHero, ...(verCadetes ? cadetesHeroAbierto : {}) }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{porCadete.length}</strong><b>Pendientes por cadete</b></div><span style={cadetesBoton}>{verCadetes ? "Cerrar ▲" : "Ver ▼"}</span></button>}</div>
+    {hayCadetes && <button onClick={() => setVerCadetes(v => !v)} aria-expanded={verCadetes} style={{ ...cadetesHero, ...(verCadetes ? cadetesHeroAbierto : {}) }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{porCadete.length}</strong><b>Pendientes por cadete</b></div><span style={cadetesBoton}>{verCadetes ? "Cerrar ▲" : "Ver ▼"}</span></button>}</div>
     {verCadetes && <div style={rankingCaja}>
-      <div style={{ ...rankingFila, ...rankingCabeza }}><span>Cadete</span><span>Abiertos</span><span>Flex +48 h</span><span>El más viejo</span><span>Sin movimiento</span><span /></div>
-      {(cadetesTodos ? porCadete : porCadete.slice(0, 5)).map(c => <div key={c.cadete} style={rankingFila}>
+      <div style={rankingBarra}>
+        <div style={rankingCajita}>
+          <button onClick={() => setSemanaCad(v => v - 1)} aria-label="Semana anterior" title="Semana anterior" style={rankingFlecha}>‹</button>
+          <div style={{ padding:"0 10px", minWidth:150, textAlign:"center", whiteSpace:"nowrap" }}><b style={{ fontWeight:600 }}>{rangoCad.titulo}</b><span style={{ ...muted, display:"inline", marginLeft:6 }}>{rangoCad.sub}</span></div>
+          <button onClick={() => setSemanaCad(v => Math.min(0, v + 1))} aria-label="Semana siguiente" title="Semana siguiente" style={{ ...rankingFlecha, opacity: semanaCad === 0 ? .3 : 1, cursor: semanaCad === 0 ? "default" : "pointer" }}>›</button>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ ...muted, display:"inline" }}>Reclamar</span>
+          <div role="radiogroup" aria-label="Qué envíos copiar en el reclamo" style={rankingCajita}>
+            {[["Flex","Flex"],["Particular","Particulares"],["Todos","Todos"]].map(([v, t]) => <button key={v} role="radio" aria-checked={tipoReclamo === v} onClick={() => setTipoReclamo(v)} style={{ ...rankingOpcion, ...(tipoReclamo === v ? rankingOpcionOn : {}) }}>{t}</button>)}
+          </div>
+        </div>
+      </div>
+      <div style={{ ...rankingFila, ...rankingCabeza }}><span>Cadete</span><span>Flex</span><span>Particulares</span><span>Flex +48 h</span><span>Sin movimiento</span><span /></div>
+      {porCadete.length === 0 && <div style={{ ...rankingFila, display:"block", color:"rgba(255,255,255,.55)" }}>No quedan pendientes de envíos que entraron esta semana.</div>}
+      {(cadetesTodos ? porCadete : porCadete.slice(0, 5)).map(c => { const lista = enviosReclamo(c); const ok = copiado === "cad:" + c.cadete; return <div key={c.cadete} style={rankingFila}>
         <button onClick={() => verCadete(c.cadete)} title={"Ver los pendientes de " + c.cadete} style={rankingNombre}>{c.cadete}</button>
-        <b>{c.total}</b>
-        <span>{c.flex48 ? <span style={rankingChipRojo}>{c.flex48}</span> : <span style={muted}>—</span>}</span>
-        <span>{haceDias(diasDesde(c.viejo)) || "—"}</span>
-        <span>{c.quietos ? <span style={{ color:CRITICO }}>{c.quietos} {c.quietos === 1 ? "envío" : "envíos"}</span> : <span style={muted}>todos se movieron</span>}</span>
-        <button onClick={() => copiarReclamo(c.cadete, c.envios)} style={{ ...copyButton, ...(copiado === "cad:" + c.cadete ? copyButtonOk : {}), margin:0, padding:"6px 10px", fontSize:11, whiteSpace:"nowrap" }}>{copiado === "cad:" + c.cadete ? "✓ Copiado" : "Copiar reclamo"}</button>
-      </div>)}
+        <span style={c.flex ? null : { color:"rgba(255,255,255,.4)" }}>{c.flex}</span>
+        <span style={c.total - c.flex ? null : { color:"rgba(255,255,255,.4)" }}>{c.total - c.flex}</span>
+        <span>{c.flex48 ? <span style={{ color:"#ff8a93", fontWeight:700 }}>{c.flex48}</span> : <span style={{ color:"rgba(255,255,255,.4)" }}>—</span>}</span>
+        <span style={{ color:"rgba(255,255,255,.55)" }}>{c.quietos ? `${c.quietos} sin moverse` : "todos se movieron"}</span>
+        {lista.length ? <button onClick={() => copiarReclamo(c.cadete, lista)} style={{ ...rankingCopiar, ...(ok ? rankingCopiarOk : {}) }}>{ok ? "✓ Copiado" : <>Copiar <span style={{ color:"rgba(255,255,255,.5)", marginLeft:4 }}>{lista.length}</span></>}</button>
+          : <span style={{ ...rankingCopiar, color:"rgba(255,255,255,.3)", borderColor:"rgba(255,255,255,.06)", cursor:"default" }}>Nada que copiar</span>}
+      </div>; })}
       {reclamoManual && <div style={{ padding:"10px 12px", borderTop:"1px solid rgba(255,255,255,.08)" }}><small style={muted}>No se pudo copiar solo. Seleccioná el texto y copialo a mano:</small><textarea readOnly value={reclamoManual.texto} onFocus={e => e.target.select()} ref={el => { if (el) { try { el.focus({ preventScroll:true }); el.select(); } catch {} } }} style={mensajeCampo} /></div>}
-      {porCadete.length > 5 && <button onClick={() => setCadetesTodos(v => !v)} style={rankingMas}>{cadetesTodos ? "Mostrar solo los 5 primeros ▲" : `Ver los ${porCadete.length} cadetes ▼`}</button>}
+      {porCadete.length > 5 && <button onClick={() => setCadetesTodos(v => !v)} style={rankingMas}>{cadetesTodos ? "Mostrar solo los 5 primeros ▲" : `Ver los ${porCadete.length} cadetes de la semana ▼`}</button>}
     </div>}
     {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
     <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button onClick={() => setSemana(v => v - 1)} title="Semana anterior" style={button}>←</button><button onClick={() => setSemana(0)} disabled={semana === 0} style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>Semana actual</button><button onClick={() => setSemana(v => Math.min(0, v + 1))} disabled={semana === 0} title="Semana siguiente" style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>→</button></div></div><div style={{ display:"flex", gap:8, width:"100%", alignItems:"stretch" }}><div style={{ ...daysGrid, flex:1, minWidth:0 }}>{calendarDays.map(({key,d,rs,flex,part,sa,crit}) => <div key={key} style={{ position:"relative" }}><button onClick={() => { setDay(key); setMesAbierto(null); }} style={{ ...dayCard, height:"100%", paddingBottom:38, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(crit ? { color:CRITICO } : {}), ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button>{sa > 0 && <button onClick={() => verSinAsignar(key)} title={"Ver los " + sa + " sin asignar de este día"} style={{ ...chipSinAsignar, position:"absolute", left:12, bottom:10 }}><IconoSinAsignar />{sa} sin asignar</button>}</div>)}</div>
@@ -627,10 +654,16 @@ const cadetesHero={display:"flex",justifyContent:"space-between",alignItems:"cen
 const cadetesHeroAbierto={borderColor:"rgba(255,255,255,.28)",background:"rgba(255,255,255,.07)"};
 const cadetesBoton={border:"1px solid rgba(255,255,255,.22)",borderRadius:7,padding:"10px 16px",color:"#dfe5ee",fontWeight:800,fontSize:13};
 const rankingCaja={margin:"-4px 0 14px",border:"1px solid rgba(255,255,255,.1)",borderRadius:9,background:"rgba(255,255,255,.03)",overflowX:"auto"};
-const rankingFila={display:"grid",gridTemplateColumns:"minmax(150px,1.6fr) 70px 80px minmax(90px,1fr) minmax(130px,1.2fr) 130px",gap:10,alignItems:"center",padding:"9px 14px",borderTop:"1px solid rgba(255,255,255,.06)",fontSize:12,minWidth:640};
+const rankingFila={display:"grid",gridTemplateColumns:"minmax(150px,1.6fr) 60px 90px 80px minmax(130px,1.2fr) 130px",gap:10,alignItems:"center",padding:"9px 14px",borderTop:"1px solid rgba(255,255,255,.06)",fontSize:12,minWidth:640};
 const rankingCabeza={borderTop:0,color:"rgba(255,255,255,.55)",fontSize:10,textTransform:"uppercase"};
 const rankingNombre={background:"none",border:0,padding:0,color:"#fff",font:"inherit",fontWeight:700,textAlign:"left",cursor:"pointer",textDecoration:"underline",textDecorationColor:"rgba(255,255,255,.25)",textUnderlineOffset:3};
-const rankingChipRojo={display:"inline-block",padding:"2px 9px",borderRadius:999,background:"rgba(255,104,116,.16)",color:"#ff8a93",fontWeight:700};
+const rankingBarra={display:"flex",flexWrap:"wrap",gap:12,alignItems:"center",justifyContent:"space-between",padding:"10px 14px",fontSize:12,minWidth:640};
+const rankingCajita={display:"inline-flex",alignItems:"center",gap:2,border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:3};
+const rankingFlecha={width:28,height:28,border:0,borderRadius:7,background:"transparent",color:"rgba(255,255,255,.6)",fontSize:17,lineHeight:1,cursor:"pointer",fontFamily:"inherit"};
+const rankingOpcion={border:0,borderRadius:7,background:"transparent",color:"rgba(255,255,255,.5)",padding:"6px 13px",fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"background .15s, color .15s"};
+const rankingOpcionOn={background:"rgba(255,255,255,.09)",color:"#fff"};
+const rankingCopiar={display:"inline-flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,.14)",borderRadius:8,background:"transparent",color:"#e6e9f0",padding:"5px 10px",fontSize:11.5,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"};
+const rankingCopiarOk={borderColor:"rgba(109,228,195,.5)",color:"#6de4c3"};
 const rankingMas={display:"block",width:"100%",padding:"9px 14px",background:"none",border:0,borderTop:"1px solid rgba(255,255,255,.06)",color:"#6de4c3",font:"inherit",fontSize:12,cursor:"pointer",textAlign:"left"};
 const unassignedHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,140,90,.35)",borderLeft:"6px solid #ff8c5a",borderRadius:9,background:"rgba(90,40,25,.28)"};
 const unassignedButton={border:"1px solid rgba(255,140,90,.6)",borderRadius:7,padding:"10px 16px",background:"transparent",color:"#ffab85",fontWeight:800,cursor:"pointer"};
