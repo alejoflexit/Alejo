@@ -12,30 +12,21 @@ function minutoDe(fecha) {
 }
 
 // El 31 ("reprogramado por meli" como lo registra hoy LightData, autor Sistema)
-// es una reprogramacion real si el paquete ya estaba en planta (hay un estado 1
-// anterior). Antes de planta no excusa (caso Ariel Ferrero 16/10: 31 a las 14:02,
-// planta 14:55, salio y no se entrego).
-// 18/10/2026: se saco la condicion "no pegado a un En camino (2/22) del mismo
-// minuto". Se habia tomado como ruido de sep-2026, pero una muestra de envios
-// comunes de sep y oct no trae ningun 31: no es algo que LightData le pegue a
-// cada En camino. Y los envios con 31 pegado (1042915, 1043073, 1042810 del
-// 17/10) no tuvieron ningun intento: Meli los paso de dia. Ver wiki
-// analisis/auditoria-demorados-estado31-2026-10-16.
-function es31Valido(h, historial) {
-  const idx = historial.indexOf(h);
-  return historial.slice(0, idx).some(x => String(x.estado) === "1");
-}
-
+// es una reprogramacion real de Meli: antes de las 21 excusa igual que el 11.
+// 20/10/2026 (confirmado por Alejo): tambien excusa si cae ANTES de que el
+// paquete entre a planta. Caso 1045928 (Barracas, 19/10): Retirado 13:28,
+// En camino + 31 a las 13:40, planta 14:24 -> Meli lo reprogramo, no es demora.
+// Se saca la condicion "posterior a planta" del 18/10 (caso Ariel Ferrero
+// 16/10, que era un supuesto, no algo confirmado).
 function historialExcluyeDemora(historial, fechasOkISO) {
   // 5=Entregado y 8=Cancelado son terminales: el historial manda aunque el
   // Excel exportado haya quedado atrasado y todavia diga En camino/En planta.
   // 31 = "reprogramado por meli" tal como lo registra hoy LightData (lo pone
-  // "Sistema"); se trata igual que el 11 si pasa es31Valido.
+  // "Sistema"); se trata igual que el 11.
   const ESTADOS_NO_DEMORA = new Set(["5", "6", "8", "11", "12", "31"]);
   return historial.some(h => {
     const codigoEstado = String(h.estado);
     if (!ESTADOS_NO_DEMORA.has(codigoEstado)) return false;
-    if (codigoEstado === "31" && !es31Valido(h, historial)) return false;
     const diaH = fechaEstadoADia(h.fecha);
     if (fechasOkISO && diaH && !fechasOkISO.has(diaH)) return false;
     if (codigoEstado === "5" || codigoEstado === "8") return true;
@@ -54,7 +45,6 @@ function historialExcluyeDem21(historial, fechaISO) {
   const ESTADOS_INTENTO = new Set(["6", "11", "12", "31"]);
   return historial.some(h => {
     if (!ESTADOS_INTENTO.has(String(h.estado))) return false;
-    if (String(h.estado) === "31" && !es31Valido(h, historial)) return false;
     if (fechaEstadoADia(h.fecha) !== fechaISO) return false;
     const partes = String(h.fecha || "").trim().split(" ");
     if (partes.length < 2) return false;
