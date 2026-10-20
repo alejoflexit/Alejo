@@ -342,7 +342,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         porFecha[maxFecha].forEach((r) => {
           env += r.cantidad || 0;
           const s = slaMeli(r.envios_ml, r.demorados, r.dem21);
-          if (s != null && (r.envios_ml || 0) >= 10 && s < 98) {
+          if (s != null && s < 98) { // mismo criterio que Métricas (críticos + en riesgo)
             const mot = [];
             if ((r.dem21 || 0) > 0) mot.push(`${r.dem21} post-21`);
             if ((r.demorados || 0) > 0) mot.push(`${r.demorados} dem.`);
@@ -552,7 +552,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   if (ayer) tiles.push(
     <Tile key="env" cap="Envíos de ayer" onClick={() => onNav("metricas")} irA="Métricas">
       <span style={tileNum(isMobile)}>{fmt(ayer.envios)}</span>
-      <span style={tileSub}>{ayer.cadetes.length > 0 ? <b style={{ color: C.ambar, fontWeight: 600 }}>{ayer.cadetes.length} en alerta</b> : "Nadie en alerta"}</span>
+      <span style={tileSub}>{ayer.cadetes.length > 0 ? <b style={{ color: C.ambar, fontWeight: 600 }}>{ayer.cadetes.length} cadete{ayer.cadetes.length === 1 ? "" : "s"} en alerta</b> : "Nadie en alerta"}</span>
     </Tile>
   );
   if (session && col) tiles.push(

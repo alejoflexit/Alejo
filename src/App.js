@@ -258,7 +258,7 @@ async function cargarDesdeSupabase() {
       const enriched = datos.map(m => {
         const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
         const sla = slaMeli(m.envios_ml, m.demorados, m.dem21);
-        return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: sla !== null ? +sla.toFixed(2) : null, evaluacion: evaluar(m.demorados + (m.dem21||0), sla) };
+        return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: sla, evaluacion: evaluar(m.demorados + (m.dem21||0), sla) };
       });
       return { fecha, datos: enriched };
     }).sort((a, b) => a.fecha.localeCompare(b.fecha)),
@@ -414,7 +414,7 @@ function calcularDia(rows, fecha, noEsDemora = new Set()) {
   return Object.values(map).map(m => {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
     const slaReal = slaMeli(m.envios_ml, m.demorados, m.dem21);
-    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal !== null ? +slaReal.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaReal, evaluacion: evaluar(m.demorados + m.dem21, slaReal), fecha, post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, envios_particular: m.envios_particular || 0, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   });
 }
 
@@ -520,7 +520,7 @@ function acumularSemana(dias) {
   return Object.values(map).map(m => {
     const pct = m.cantidad > 0 ? (m.cantidad - m.pendientes) / m.cantidad * 100 : 0;
     const slaRealAcum = slaMeli(m.envios_ml, m.demorados, m.dem21);
-    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaRealAcum !== null ? +slaRealAcum.toFixed(2) : null, evaluacion: evaluar(m.demorados + m.dem21, slaRealAcum), post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
+    return { ...m, pctEntrega: +pct.toFixed(2), slaMeli: slaRealAcum, evaluacion: evaluar(m.demorados + m.dem21, slaRealAcum), post21: m.post21 || 0, dem21: m.dem21 || 0, entregados: m.cantidad - m.pendientes, inicio_ruta: m.inicio_ruta || null, fin_ruta: m.fin_ruta || null, demoradosDetalle: m.demoradosDetalle || [], dem21Detalle: m.dem21Detalle || [], sinDatosDetalle: m.sinDatosDetalle || [] };
   }).sort((a, b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
 }
 
@@ -1010,7 +1010,7 @@ export default function App() {
   const totalDemDia    = acumulado.reduce((s,m) => s+m.demorados, 0);
   // SLA Meli headline: misma fórmula compartida que la tabla por cadete (slaShared).
   const slaPromedioRaw = slaMeli(totalMLDia, totalDemDia, totalDem21);
-  const slaPromedio    = slaPromedioRaw !== null ? +slaPromedioRaw.toFixed(2) : null;
+  const slaPromedio    = slaPromedioRaw; // sin pre-redondeo: redondear dos veces (2 y después 1 decimal) inflaba 98,946 → 99,0
 
   const tendencia   = cadeteSeleccionado ? tendenciaCadete(cadeteSeleccionado, semanas) : [];
 
@@ -1030,7 +1030,7 @@ export default function App() {
     }
     return Object.values(map).map(m => {
       const sla = slaMeli(m.envios_ml, m.demorados, m.dem21);
-      return { ...m, slaMeli: sla !== null ? +sla.toFixed(2) : null };
+      return { ...m, slaMeli: sla };
     }).sort((a,b) => (a.slaMeli ?? 101) - (b.slaMeli ?? 101));
   };
 
@@ -1052,7 +1052,7 @@ export default function App() {
   const totalDemMesSolo = mesData.reduce((s,m) => s+m.demorados, 0);
   const totalDem21Mes = mesData.reduce((s,m) => s+(m.dem21||0), 0);
   const slaPromedioMesRaw = slaMeli(totalMLMes, totalDemMesSolo, totalDem21Mes);
-  const slaPromedioMes = slaPromedioMesRaw !== null ? +slaPromedioMesRaw.toFixed(2) : null;
+  const slaPromedioMes = slaPromedioMesRaw;
   const criticosMes = mesData.filter(m => m.slaMeli !== null && m.slaMeli < 95);
   const okMes = mesData.filter(m => m.slaMeli !== null && m.slaMeli >= 98);
   const reincidentes = mesData.filter(m => m.dias_con_demora >= 3).sort((a,b) => b.dias_con_demora - a.dias_con_demora);
