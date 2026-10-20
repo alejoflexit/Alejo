@@ -3,10 +3,11 @@
 // Android (share_target del manifest) y el atajo de iPhone (abre /?text=...). En todos los casos el
 // texto del mensaje llega como `inicial`: se sacan los números (tracking, envío ML, ID) y se busca solo.
 // Reusa el panel de la Tiquetera (estado + cadete + historial en vivo de LightData).
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getSession } from './auth';
 import { LoginFlexit } from './colectasShared';
 import { PanelEnvio, sbTiquetera as sb, numerosDelTexto, colorEstado } from './Tiquetera';
+import { soportaDictado, escuchar } from './dictadoShared';
 
 const COLS = 'id_interno,nombre,direccion,cp,localidad,estado,fecha_estado,cadete,razon_social,fecha_flexit';
 
@@ -213,6 +214,9 @@ export default function BuscarEnvio({ inicial = '' }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [via, setVia] = useState(null); // cómo se encontró: { via, abrir, sueltos }
+  const [escuchando, setEscuchando] = useState(false);
+  const cortarDictado = useRef(null);
+  const puedeDictar = soportaDictado();
 
   const correr = async (t) => {
     const q = String(t ?? texto).trim();
@@ -234,6 +238,18 @@ export default function BuscarEnvio({ inicial = '' }) {
     catch { setErr('El navegador no dejó leer el portapapeles: pegalo a mano en el recuadro.'); }
   };
 
+  // Dictado: escribe en el recuadro mientras hablás y busca solo cuando terminás.
+  const dictar = () => {
+    if (escuchando) { cortarDictado.current && cortarDictado.current(); return; }
+    setErr(''); setEscuchando(true);
+    cortarDictado.current = escuchar({
+      onTexto: (t, final) => { setTexto(t); if (final && t) correr(t); },
+      onError: (m) => setErr(m),
+      onFin: () => { setEscuchando(false); cortarDictado.current = null; },
+    });
+  };
+  useEffect(() => () => cortarDictado.current && cortarDictado.current(), []);
+
   if (!sesion) return <LoginFlexit titulo="Buscar envío" icono="🔎" onOk={() => setSesion(getSession())} />;
 
   const boton = { padding: '10px 16px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer' };
@@ -246,6 +262,12 @@ export default function BuscarEnvio({ inicial = '' }) {
           style={{ flex: '1 1 260px', minWidth: 0, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, resize: 'vertical', fontFamily: 'inherit' }} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
           <button onClick={pegar} style={{ ...boton, background: 'rgba(255,255,255,0.08)', color: '#fff' }}>📋 Pegar</button>
+          {puedeDictar && (
+            <button onClick={dictar} title={escuchando ? 'Tocá para cortar' : 'Decí el número de envío, el tracking o la dirección'}
+              style={{ ...boton, background: escuchando ? 'rgba(46,207,170,0.18)' : 'rgba(255,255,255,0.08)', color: '#fff', border: escuchando ? '1px solid #2ECFAA' : 'none' }}>
+              {escuchando ? '● Escuchando…' : '🎤 Dictar'}
+            </button>
+          )}
           <button onClick={() => correr()} disabled={busy} style={{ ...boton, background: '#2ECFAA', color: '#04150f' }}>{busy ? 'Buscando…' : 'Buscar'}</button>
         </div>
       </div>
