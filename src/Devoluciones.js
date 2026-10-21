@@ -914,7 +914,7 @@ const CSS = `
 @media (hover:hover){.dv-pop>button:hover{background:rgba(255,255,255,.06)}}
 .dv-pop-rango{border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding:10px 8px 4px}
 .dv-pop-rango input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#f4f5fa;font:inherit;font-size:12px;padding:6px;color-scheme:dark}
-@container dv (max-width:980px){.dv-franja{border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(255,255,255,.025)}
+.dv-franja{border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(255,255,255,.025)}
 .dv-franja.ok{border-color:rgba(46,230,182,.3)}
 .dv-franja-linea{display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%;background:none;border:0;padding:10px 16px;color:#a7adc2;font:inherit;font-size:13px;cursor:pointer;text-align:left}
 .dv-fr-item{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}.dv-fr-item b{color:#f4f5fa}.dv-fr-item b.ok{color:#2ee6b6}
