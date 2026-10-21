@@ -510,15 +510,11 @@ function Llama({ on }) {
     </svg>
   );
 }
-function Sparkline({ valores }) {
-  if (valores.length < 2) return null;
-  const max = Math.max(...valores), min = Math.min(...valores), W = 220, H = 40;
-  const pts = valores.map((v, i) => `${(i / (valores.length - 1)) * W},${H - 4 - ((v - min) / (max - min || 1)) * (H - 8)}`).join(" ");
-  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 40, display: "block" }} aria-hidden="true"><polyline points={pts} fill="none" stroke={C.teal} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>;
-}
 const flecha = (a, b) => (a > b ? <span style={{ color: C.teal }}>↑ {num(a - b)}</span> : a < b ? <span style={{ color: C.ink3 }}>↓ {num(b - a)}</span> : <span style={{ color: C.ink3 }}>=</span>);
 
 function Progreso({ casos, r, diario, eventos, remitos, onReclamar, onDevolver }) {
+  const [abierto, setAbierto] = useState(() => { try { return localStorage.getItem("fx_dev_prog_abierto") === "1"; } catch { return false; } });
+  const alternar = () => setAbierto((v) => { try { localStorage.setItem("fx_dev_prog_abierto", v ? "0" : "1"); } catch {} return !v; });
   const p = progresoDelDia(casos);
   const filaHoy = diario.find((d) => String(d.fecha).slice(0, 10) === p.hoy);
   const meta = filaHoy && filaHoy.meta_devolver != null ? filaHoy.meta_devolver : metaDevolver(r.depositoVencidos);
@@ -526,13 +522,6 @@ function Progreso({ casos, r, diario, eventos, remitos, onReclamar, onDevolver }
   const dias = racha(diario, cumplida);
   const okReclamo = p.cadetesReclamados >= p.cadetesAReclamar;
   const okDevolver = p.devueltos >= meta;
-
-  // Termómetro: plata en depósito, día a día (hoy = dato en vivo)
-  const historia = [...diario].filter((d) => String(d.fecha).slice(0, 10) !== p.hoy && d.valor_deposito != null)
-    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).slice(-29);
-  const serie = [...historia.map((d) => Number(d.valor_deposito)), r.depositoValor];
-  const ayer = historia.length ? Number(historia[historia.length - 1].valor_deposito) : null;
-  const delta = ayer != null ? r.depositoValor - ayer : null;
 
   // Semana actual vs anterior
   const ini = inicioSemana(p.hoy);
@@ -546,56 +535,58 @@ function Progreso({ casos, r, diario, eventos, remitos, onReclamar, onDevolver }
   });
   const esta = sem(ini, null), ant = sem(iniAnt, ini);
   const recuperado = esta.devueltos.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+  const faltan = [!okReclamo && `faltan ${p.cadetesAReclamar - p.cadetesReclamados} cadete${p.cadetesAReclamar - p.cadetesReclamados > 1 ? "s" : ""} por reclamar`,
+    !okDevolver && `faltan ${meta - p.devueltos} envío${meta - p.devueltos > 1 ? "s" : ""} por devolver`].filter(Boolean).join(" · ");
 
   return (
-    <div className="dv-prog">
-      <div style={{ ...card, padding: "14px 16px" }} className={cumplida ? "dv-prog-ok" : ""}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>Meta de hoy</span>
-          <Info texto={`Dos cosas por día: reclamarle a cada cadete que tiene paquetes con más de ${LIMITE_CALLE} días en la calle, y devolver al cliente ${meta} envíos (la meta sale de lo vencido en depósito y queda fija en el día). Cumplir las dos suma un día a la racha. Los domingos no cuentan.`} />
-          <span style={{ flex: 1 }} />
-          <span className="dv-racha" title="Días seguidos cumpliendo la meta"><Llama on={dias > 0} /> {dias > 0 ? `${dias} día${dias > 1 ? "s" : ""} de racha` : "Arrancá la racha hoy"}</span>
-        </div>
-        <button className="dv-meta" onClick={onReclamar}>
-          <div className="dv-meta-t"><span>Reclamar a cadetes con +{LIMITE_CALLE} días</span><b>{p.cadetesAReclamar ? `${p.cadetesReclamados}/${p.cadetesAReclamar}` : "—"}</b></div>
-          <Barra n={p.cadetesReclamados} de={p.cadetesAReclamar} ok={okReclamo} />
-        </button>
-        <button className="dv-meta" onClick={onDevolver}>
-          <div className="dv-meta-t"><span>Devolver al cliente</span><b>{p.devueltos}/{meta}</b></div>
-          <Barra n={p.devueltos} de={meta} ok={okDevolver} />
-        </button>
-        <div style={{ fontSize: 12, marginTop: 8, color: cumplida ? C.teal : C.ink3 }}>
-          {cumplida ? "¡Meta cumplida! Mañana sigue la racha."
-            : [!okReclamo && `faltan ${p.cadetesAReclamar - p.cadetesReclamados} cadete${p.cadetesAReclamar - p.cadetesReclamados > 1 ? "s" : ""} por reclamar`,
-               !okDevolver && `faltan ${meta - p.devueltos} envío${meta - p.devueltos > 1 ? "s" : ""} por devolver`].filter(Boolean).join(" · ").replace(/^./, (x) => x.toUpperCase())}
-        </div>
-      </div>
+    <div className={"dv-franja" + (cumplida ? " ok" : "")}>
+      <button className="dv-franja-linea" onClick={alternar} aria-expanded={abierto}>
+        <b style={{ color: C.ink }}>Meta de hoy</b>
+        <span className="dv-fr-item">Reclamos <b className={okReclamo ? "ok" : ""}>{p.cadetesAReclamar ? `${p.cadetesReclamados}/${p.cadetesAReclamar}` : "—"}{okReclamo ? " ✓" : ""}</b>
+          <span className="dv-mini"><span style={{ width: `${p.cadetesAReclamar ? Math.min(100, (p.cadetesReclamados / p.cadetesAReclamar) * 100) : 100}%` }} /></span></span>
+        <span className="dv-fr-item">Devolver al cliente <b className={okDevolver ? "ok" : ""}>{okDevolver ? `${p.devueltos} ✓` : `${p.devueltos}/${meta}`}</b>{okDevolver && <span style={{ color: C.ink3 }}>(meta {meta})</span>}</span>
+        <span className="dv-fr-sep">·</span>
+        <span className="dv-fr-item"><Llama on={dias > 0} /> Racha <b>{dias} día{dias !== 1 ? "s" : ""}</b></span>
+        <span className="dv-fr-sep dv-fr-semana">·</span>
+        <span className="dv-fr-item dv-fr-semana">Semana: <b>{num(esta.devueltos.length)} devueltos</b> {flecha(esta.devueltos.length, ant.devueltos.length)}</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ color: C.teal, whiteSpace: "nowrap" }}>{abierto ? "Ocultar ▴" : "Ver detalle ▾"}</span>
+      </button>
 
-      <div style={{ ...card, padding: "14px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>Plata parada en depósito</span>
-          <Info texto="Valor declarado de todo lo que está en el depósito esperando volver al cliente. Cada remito firmado la hace bajar. El objetivo es llevarla a cero." />
+      {abierto && (
+        <div className="dv-franja-det">
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 13.5 }}>Meta de hoy</span>
+              <Info texto={`Dos cosas por día: reclamarle a cada cadete que tiene paquetes con más de ${LIMITE_CALLE} días en la calle, y devolver al cliente ${meta} envíos (la meta sale de lo vencido en depósito y queda fija en el día). Cumplir las dos suma un día a la racha. Los domingos no cuentan.`} />
+            </div>
+            <button className="dv-meta" onClick={onReclamar}>
+              <div className="dv-meta-t"><span>Reclamar a cadetes con +{LIMITE_CALLE} días</span><b>{p.cadetesAReclamar ? `${p.cadetesReclamados}/${p.cadetesAReclamar}` : "—"}</b></div>
+              <Barra n={p.cadetesReclamados} de={p.cadetesAReclamar} ok={okReclamo} />
+            </button>
+            <button className="dv-meta" onClick={onDevolver}>
+              <div className="dv-meta-t"><span>Devolver al cliente</span><b>{okDevolver ? `${p.devueltos} ✓ (meta ${meta})` : `${p.devueltos}/${meta}`}</b></div>
+              <Barra n={p.devueltos} de={meta} ok={okDevolver} />
+            </button>
+            <div style={{ fontSize: 12, marginTop: 8, color: cumplida ? C.teal : C.ink3 }}>
+              {cumplida ? "¡Meta cumplida! Mañana sigue la racha." : faltan.replace(/^./, (x) => x.toUpperCase())}
+            </div>
+          </div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 13.5 }}>Esta semana</span>
+              <Info texto="Lo que se hizo de lunes a hoy, comparado con la semana pasada completa." />
+            </div>
+            <div className="dv-sem">
+              <div><span>Devueltos al cliente</span><b>{num(esta.devueltos.length)}</b>{flecha(esta.devueltos.length, ant.devueltos.length)}</div>
+              <div><span>Plata recuperada</span><b>{millones(recuperado)}</b><span /></div>
+              <div><span>Remitos firmados</span><b>{num(esta.remitos)}</b>{flecha(esta.remitos, ant.remitos)}</div>
+              <div><span>Cambios ingresados</span><b>{num(esta.ingresos)}</b>{flecha(esta.ingresos, ant.ingresos)}</div>
+              <div><span>Reclamos enviados</span><b>{num(esta.reclamos)}</b>{flecha(esta.reclamos, ant.reclamos)}</div>
+            </div>
+          </div>
         </div>
-        <div style={{ fontFamily: C.grotesk, fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6 }}>{millones(r.depositoValor)}</div>
-        <div style={{ fontSize: 12, marginTop: 2, color: delta != null && delta < 0 ? C.teal : C.ink3 }}>
-          {delta == null ? "Se mide desde hoy: mañana vas a ver cuánto bajó" : delta < 0 ? `↓ ${millones(-delta)} desde ayer` : delta > 0 ? `↑ ${millones(delta)} desde ayer` : "Igual que ayer"}
-        </div>
-        <div style={{ marginTop: 8 }}><Sparkline valores={serie} /></div>
-      </div>
-
-      <div style={{ ...card, padding: "14px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>Esta semana</span>
-          <Info texto="Lo que se hizo de lunes a hoy, comparado con la semana pasada completa." />
-        </div>
-        <div className="dv-sem">
-          <div><span>Devueltos al cliente</span><b>{num(esta.devueltos.length)}</b>{flecha(esta.devueltos.length, ant.devueltos.length)}</div>
-          <div><span>Plata recuperada</span><b>{millones(recuperado)}</b><span /></div>
-          <div><span>Remitos firmados</span><b>{num(esta.remitos)}</b>{flecha(esta.remitos, ant.remitos)}</div>
-          <div><span>Cambios ingresados</span><b>{num(esta.ingresos)}</b>{flecha(esta.ingresos, ant.ingresos)}</div>
-          <div><span>Reclamos enviados</span><b>{num(esta.reclamos)}</b>{flecha(esta.reclamos, ant.reclamos)}</div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -923,10 +914,14 @@ const CSS = `
 @media (hover:hover){.dv-pop>button:hover{background:rgba(255,255,255,.06)}}
 .dv-pop-rango{border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding:10px 8px 4px}
 .dv-pop-rango input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#f4f5fa;font:inherit;font-size:12px;padding:6px;color-scheme:dark}
-.dv-prog{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
-@container dv (max-width:980px){.dv-prog{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dv-prog>:first-child{grid-column:1/-1}}
-@container dv (max-width:560px){.dv-prog{grid-template-columns:minmax(0,1fr)}}
-.dv-prog-ok{border-color:rgba(46,230,182,.4)!important;box-shadow:0 0 35px rgba(0,255,180,.08)}
+@container dv (max-width:980px){.dv-franja{border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(255,255,255,.025)}
+.dv-franja.ok{border-color:rgba(46,230,182,.3)}
+.dv-franja-linea{display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%;background:none;border:0;padding:10px 16px;color:#a7adc2;font:inherit;font-size:13px;cursor:pointer;text-align:left}
+.dv-fr-item{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}.dv-fr-item b{color:#f4f5fa}.dv-fr-item b.ok{color:#2ee6b6}
+.dv-fr-sep{color:#71768e}
+.dv-mini{display:inline-block;width:110px;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.dv-mini>span{display:block;height:100%;background:#2ee6b6;border-radius:99px}
+.dv-franja-det{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:28px;padding:4px 16px 16px;border-top:1px solid rgba(255,255,255,.05);margin-top:2px;padding-top:14px}
+@container dv (max-width:820px){.dv-franja-det{grid-template-columns:minmax(0,1fr)}.dv-fr-semana{display:none}}
 .dv-racha{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#a7adc2;white-space:nowrap}
 .dv-meta{display:block;width:100%;background:none;border:0;padding:0;margin-top:12px;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .dv-meta-t{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#a7adc2;margin-bottom:6px}.dv-meta-t b{color:#f4f5fa;font-variant-numeric:tabular-nums}
