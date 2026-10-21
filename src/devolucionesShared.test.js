@@ -48,8 +48,9 @@ test("reclamos: agrupa por cadete, saca choferes ficticios y arma el mensaje", (
   const g = reclamosPorCadete(casos);
   expect(g.map((x) => [x.cadete, x.casos.length])).toEqual([["Juan Perez", 2], ["", 1]]);
   const m = mensajeReclamo("Juan Perez", g[0].casos);
-  expect(m.startsWith("Hola Juan!")).toBe(true);
-  expect(m.includes("Tenés 2 paquetes")).toBe(true);
+  expect(m.startsWith("Hola Juan 👋")).toBe(true);
+  expect(m.includes("Tenés *2 paquetes*")).toBe(true);
+  expect(m.includes("🔴 *Atrasados")).toBe(true);
   expect(m.includes("Bustamante 1987, Hurlingham")).toBe(true);
 });
 

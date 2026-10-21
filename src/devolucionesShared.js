@@ -106,18 +106,26 @@ export function reclamosPorCadete(casos) {
   })).sort((a, b) => (a.cadete ? 0 : 1) - (b.cadete ? 0 : 1) || b.casos.length - a.casos.length);
 }
 
+// Formato elegido por Alejo (21/10): por urgencia, una línea por paquete, con dirección. Negrita de WhatsApp = *texto*.
 export function mensajeReclamo(cadete, casos) {
   const nombre = String(cadete || "").trim().split(/\s+/)[0] || "";
   const n = casos.length;
-  const lineas = casos.map((c, i) => {
-    const tipo = c.tipo === "CAMBIO" ? "CAMBIO" : "CANCELADO";
+  const ordenados = [...casos].sort((a, b) => (b.dias || 0) - (a.dias || 0));
+  const atrasados = ordenados.filter((c) => c.vencido), recientes = ordenados.filter((c) => !c.vencido);
+  const dias = (d) => (d == null ? "?" : d === 0 ? "hoy" : d === 1 ? "1 día" : `${d} días`);
+  let k = 0;
+  const linea = (c) => {
+    k++;
     const dir = [c.direccion, c.localidad].filter(Boolean).join(", ") || `CP ${c.cp || "?"}`;
-    let l = `${i + 1}) ${tipo} — ${dir} — lo tenés desde el ${ddmm(c.desde)} (${c.dias ?? "?"} días)`;
-    if (c.ml_venta_id || c.tracking) l += `\n   Venta/tracking: ${c.ml_venta_id || c.tracking}`;
+    const nro = c.ml_venta_id || c.tracking;
+    let l = `${k}. ${c.tipo === "CAMBIO" ? "CAMBIO · " : ""}${dir} · ${dias(c.dias)}${nro ? ` · #${nro}` : ""}`;
     if (c.tipo === "CAMBIO" && c.li_texto) l += `\n   ↳ ${c.li_texto}`;
     return l;
-  });
-  return `Hola${nombre ? " " + nombre : ""}! Control de devoluciones de Flexit.\nTenés ${n} paquete${n > 1 ? "s" : ""} para devolver al depósito:\n\n${lineas.join("\n")}\n\nTraelo${n > 1 ? "s" : ""} en tu próxima carga, por favor. ¡Gracias!`;
+  };
+  const bloques = [];
+  if (atrasados.length) bloques.push(`🔴 *Atrasados (más de ${LIMITE_CALLE} días)*\n${atrasados.map(linea).join("\n")}`);
+  if (recientes.length) bloques.push(`${atrasados.length ? "🟡 *Recientes*\n" : ""}${recientes.map(linea).join("\n")}`);
+  return `Hola${nombre ? " " + nombre : ""} 👋 Devoluciones Flexit\n\nTenés *${n} paquete${n > 1 ? "s" : ""}* para traer al depósito.\n\n${bloques.join("\n\n")}\n\nTraelo${n > 1 ? "s" : ""} en tu próxima carga 🙏`;
 }
 
 // QR del remito: solo el código; la lista de envíos se busca en la base (no se puede falsificar desde el papel)
