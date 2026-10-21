@@ -272,13 +272,7 @@ export default function Devoluciones() {
               {TIPOS.map(([id, lbl]) => <button key={id} className={tipo === id ? "on" : ""} onClick={() => setTipo(id)}>{lbl}</button>)}
             </div>
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder="Buscar cliente, venta, tracking o cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
-            <div className="dv-fechas" title={`Filtra por la columna Fecha. ${COL_FECHA[etapa]}`}>
-              <span>Fecha</span>
-              <input type="date" value={fDesde} max={fHasta || undefined} onChange={(e) => setFDesde(e.target.value)} aria-label="Desde" />
-              <span>a</span>
-              <input type="date" value={fHasta} min={fDesde || undefined} onChange={(e) => setFHasta(e.target.value)} aria-label="Hasta" />
-              {(fDesde || fHasta) && <button onClick={() => { setFDesde(""); setFHasta(""); }} aria-label="Quitar filtro de fecha">✕</button>}
-            </div>
+            <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
 
@@ -321,6 +315,61 @@ export default function Devoluciones() {
 
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
+    </div>
+  );
+}
+
+const hoyAR = () => new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+const sumarDias = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+const ddmmDe = (d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+function rangosRapidos() {
+  const h = hoyAR(), mes = h.slice(0, 8) + "01";
+  const finMesPasado = sumarDias(mes, -1), iniMesPasado = finMesPasado.slice(0, 8) + "01";
+  return [
+    ["Hoy", h, h], ["Últimos 7 días", sumarDias(h, -6), h], ["Últimos 15 días", sumarDias(h, -14), h],
+    ["Este mes", mes, h], ["Mes pasado", iniMesPasado, finMesPasado],
+  ];
+}
+
+// Un solo botón; las opciones se abren al tocarlo (nada de campos de fecha sueltos en la barra)
+function FiltroFecha({ desde, hasta, onCambiar, ayuda }) {
+  const [abierto, setAbierto] = useState(false);
+  const [d, setD] = useState(desde), [h, setH] = useState(hasta);
+  const ref = useRef();
+  useEffect(() => {
+    if (!abierto) return;
+    setD(desde); setH(hasta);
+    const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener("mousedown", fuera);
+    return () => document.removeEventListener("mousedown", fuera);
+  }, [abierto, desde, hasta]);
+  const rapidos = rangosRapidos();
+  const elegido = rapidos.find(([, a, b]) => a === desde && b === hasta);
+  const etiqueta = !desde && !hasta ? "Todas" : elegido ? elegido[0] : `${desde ? ddmmDe(desde) : "…"} – ${hasta ? ddmmDe(hasta) : "hoy"}`;
+  const activo = !!(desde || hasta);
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button className={"dv-btn" + (activo ? " on" : "")} onClick={() => setAbierto(!abierto)} style={activo ? { borderColor: "rgba(46,230,182,.35)", color: C.teal } : null}>
+        Fecha: {etiqueta} <span style={{ opacity: .6, marginLeft: 2 }}>▾</span>
+      </button>
+      {abierto && (
+        <div className="dv-pop">
+          <div style={{ fontSize: 11.5, color: C.ink3, padding: "4px 8px 8px", lineHeight: 1.4 }}>{ayuda}</div>
+          <button className={!activo ? "on" : ""} onClick={() => { onCambiar("", ""); setAbierto(false); }}>Todas las fechas</button>
+          {rapidos.map(([lbl, a, b]) => (
+            <button key={lbl} className={elegido && elegido[0] === lbl ? "on" : ""} onClick={() => { onCambiar(a, b); setAbierto(false); }}>{lbl}</button>
+          ))}
+          <div className="dv-pop-rango">
+            <div style={{ fontSize: 11.5, color: C.ink3, marginBottom: 6 }}>Personalizado</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input type="date" value={d} max={h || undefined} onChange={(e) => setD(e.target.value)} aria-label="Desde" />
+              <span style={{ color: C.ink3, fontSize: 12 }}>a</span>
+              <input type="date" value={h} min={d || undefined} onChange={(e) => setH(e.target.value)} aria-label="Hasta" />
+            </div>
+            <button className="dv-btn pri" style={{ marginTop: 8, width: "100%" }} disabled={!d && !h} onClick={() => { onCambiar(d, h); setAbierto(false); }}>Aplicar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -714,6 +763,12 @@ const CSS = `
 .dv-info.abajo .dv-tip{bottom:auto;top:calc(100% + 8px);text-transform:none;letter-spacing:normal}
 .dv-info:hover .dv-tip,.dv-info:focus .dv-tip{opacity:1;visibility:visible}
 .dv-otros .dv-tip{left:auto;right:-10px;transform:none}
+.dv-pop{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:260px;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:6px;display:flex;flex-direction:column;box-shadow:0 16px 44px rgba(0,0,0,.45)}
+.dv-pop>button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:8px;cursor:pointer}
+.dv-pop>button.on{background:rgba(46,230,182,.1);color:#2ee6b6}
+@media (hover:hover){.dv-pop>button:hover{background:rgba(255,255,255,.06)}}
+.dv-pop-rango{border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding:10px 8px 4px}
+.dv-pop-rango input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#f4f5fa;font:inherit;font-size:12px;padding:6px;color-scheme:dark}
 .dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dv-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}
@@ -731,9 +786,6 @@ const CSS = `
 .dv-r{text-align:right}
 .dv-ord{background:none;border:0;padding:0;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;text-align:left}
 .dv-ord.dv-r{text-align:right}.dv-ord.on{color:#f4f5fa}
-.dv-fechas{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#71768e;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:3px 8px}
-.dv-fechas input{background:transparent;border:0;color:#f4f5fa;font:inherit;font-size:12.5px;color-scheme:dark;outline:none;padding:3px 0}
-.dv-fechas button{background:none;border:0;color:#a7adc2;cursor:pointer;font-size:12px;padding:2px 4px}
 .dv-fila{border-bottom:1px solid rgba(255,255,255,.05)}.dv-fila:last-child{border-bottom:0}
 .dv-linea{cursor:pointer}.dv-fila.ab{background:rgba(255,255,255,.025)}
 .dv-cb{display:flex;align-items:center;justify-content:center;cursor:pointer}.dv-cb input{width:16px;height:16px;accent-color:#2ee6b6;cursor:pointer}
