@@ -242,7 +242,7 @@ async function main() {
   const { browser, page } = await login();
   let detalle = '';
   try {
-    try { const n = await importarSanti(); if (n) detalle += `importados de Santi ${n}; `; } catch (e) { console.error(e.message); }
+    try { const n = await importarSanti(); if (n) detalle += `importados de Santi ${n}; `; } catch (e) { console.error(e.message); detalle += `importación Santi falló: ${String(e.message).slice(0, 120)}; `; }
     if (ACCION !== 'sync') { const n = await procesarRemitos(page); detalle += `remitos ${n}; `; }
     if (ACCION !== 'procesar') { const s = await sync(page); detalle += `devoluciones ${s.total}, fichas ${s.fichas}`; }
     await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultima_at: new Date().toISOString(), ok: true, detalle }) });
