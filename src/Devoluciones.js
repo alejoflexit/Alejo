@@ -247,8 +247,7 @@ export default function Devoluciones() {
         <>
           <div className="dv-barra-filtros">
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em" }}>Viendo</div>
-              <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>
                 {NOMBRE_ETAPA[etapa]}{soloVencidos && (etapa === "calle" || etapa === "deposito") ? ` · más de ${etapa === "calle" ? LIMITE_CALLE : LIMITE_DEPOSITO} días` : ""}
                 {tipo !== "todos" ? ` · ${tipo === "CAMBIO" ? "solo cambios" : "solo cancelados"}` : ""}
                 <span style={{ color: C.ink3, fontWeight: 400 }}> — {num(lista.length)} envío{lista.length !== 1 ? "s" : ""}</span>
@@ -318,7 +317,6 @@ function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, 
         <span style={{ fontSize: 13, color: activo ? C.ink : C.ink2, fontWeight: 600 }}>{titulo}</span>
         <Info texto={ayuda} />
         <span style={{ flex: 1 }} />
-        {activo && <span className="dv-viendo">Viendo</span>}
       </div>
       <div style={{ fontFamily: C.grotesk, fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6, lineHeight: 1 }}>{num(valor)}</div>
       <div style={{ fontSize: 12, color: C.ink3, marginTop: 6 }}>{sub}</div>
@@ -665,7 +663,6 @@ const CSS = `
 .dv-etapa{padding:16px 18px 14px;cursor:pointer;transition:border-color .12s,background-color .12s;outline:none}
 .dv-etapa.on{border-color:rgba(46,230,182,.45)!important;background:linear-gradient(180deg,rgba(46,230,182,.07),rgba(27,28,46,.72) 70%)!important;box-shadow:0 0 0 1px rgba(46,230,182,.12),0 0 35px rgba(0,255,180,.06)}
 .dv-etapa:focus-visible{border-color:rgba(46,230,182,.45)!important}
-.dv-viendo{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2ee6b6;background:rgba(46,230,182,.1);border:1px solid rgba(46,230,182,.3);border-radius:999px;padding:2px 8px}
 .dv-etapa-sub{display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap}
 .dv-etapa-sub button{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#a7adc2;font:inherit;font-size:12.5px;padding:5px 10px;border-radius:8px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .dv-etapa-sub button b{color:#f4f5fa;font-weight:600}
