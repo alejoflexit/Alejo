@@ -32,6 +32,8 @@ const hace = (iso) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
   return m < 1 ? "recién" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
 };
+const diaAR = (iso) => (iso ? new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10) : null);
+const fechaCorta = (iso) => { const d = diaAR(iso); return d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : "—"; };
 const yo = () => { const s = getSession(); return (s && (s.nombre || s.email)) || "equipo"; };
 
 async function traerTodo(path) {
@@ -58,6 +60,7 @@ const AYUDA = {
   devuelto: "Ya figuran “Devuelto al cliente” en LightData (por remito firmado o cargado a mano). Caso cerrado.",
   marcados: "Tienen etiqueta: reclamado al cadete, extraviado o descartado. Extraviados y descartados no suman en los totales.",
 };
+const COL_FECHA = { calle: "Cancelado / retiro", deposito: "Ingresó", retiro: "Cargado", devuelto: "Devuelto", marcados: "Fecha" };
 const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados" };
 const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
 
@@ -69,6 +72,9 @@ export default function Devoluciones() {
   const [tipo, setTipo] = useState("todos");
   const [soloVencidos, setSoloVencidos] = useState(false);
   const [busca, setBusca] = useState("");
+  const [fDesde, setFDesde] = useState("");
+  const [fHasta, setFHasta] = useState("");
+  const [orden, setOrden] = useState({ col: "auto", dir: -1 });
   const [abierto, setAbierto] = useState(null);
   const [sel, setSel] = useState(() => new Set());
   const [aviso, setAviso] = useState(null);
@@ -123,10 +129,18 @@ export default function Devoluciones() {
       if (etapa === "marcados" ? !c.marca : c.etapa !== etapa || (c.cerrado && etapa !== "devuelto")) return false;
       if (tipo !== "todos" && c.tipo !== tipo) return false;
       if (soloVencidos && !c.vencido) return false;
+      if (fDesde || fHasta) {
+        const d = diaAR(c.desde);
+        if (!d || (fDesde && d < fDesde) || (fHasta && d > fHasta)) return false;
+      }
       if (!q) return true;
       return [c.cliente, c.ml_venta_id, c.tracking, c.cadete, String(c.did), c.li_texto].some((v) => String(v || "").toLowerCase().includes(q));
-    }).sort(ordenar);
-  }, [casos, etapa, tipo, soloVencidos, busca]);
+    }).sort(orden.col === "auto" ? ordenar : (a, b) => {
+      const k = { fecha: (x) => x.desde || "", valor: (x) => Number(x.valor) || 0, dias: (x) => x.dias ?? -1, cliente: (x) => (x.cliente || "").toLowerCase(), cadete: (x) => (x.cadete || "").toLowerCase() }[orden.col];
+      const va = k(a), vb = k(b);
+      return (va < vb ? -1 : va > vb ? 1 : 0) * orden.dir;
+    });
+  }, [casos, etapa, tipo, soloVencidos, busca, fDesde, fHasta, orden]);
 
   useEffect(() => { setSel(new Set()); setAbierto(null); }, [etapa, tipo, soloVencidos, tab]);
   const toast = (t) => { setAviso(t); setTimeout(() => setAviso((a) => (a === t ? null : a)), 4500); };
@@ -258,13 +272,24 @@ export default function Devoluciones() {
               {TIPOS.map(([id, lbl]) => <button key={id} className={tipo === id ? "on" : ""} onClick={() => setTipo(id)}>{lbl}</button>)}
             </div>
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder="Buscar cliente, venta, tracking o cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <div className="dv-fechas" title={`Filtra por la columna ${COL_FECHA[etapa] || "Fecha"}`}>
+              <span>{COL_FECHA[etapa] || "Fecha"}</span>
+              <input type="date" value={fDesde} max={fHasta || undefined} onChange={(e) => setFDesde(e.target.value)} aria-label="Desde" />
+              <span>a</span>
+              <input type="date" value={fHasta} min={fDesde || undefined} onChange={(e) => setFHasta(e.target.value)} aria-label="Hasta" />
+              {(fDesde || fHasta) && <button onClick={() => { setFDesde(""); setFHasta(""); }} aria-label="Quitar filtro de fecha">✕</button>}
+            </div>
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
 
           <div style={{ ...card, overflow: "hidden" }}>
             <div className="dv-head">
               <label className="dv-cb"><input type="checkbox" checked={lista.length > 0 && lista.every((c) => sel.has(c.did))} onChange={(e) => setSel(e.target.checked ? new Set(lista.map((c) => c.did)) : new Set())} /></label>
-              <span>Envío</span><span className="dv-hide-m">Cadete</span><span className="dv-r">Valor</span><span className="dv-r">Días</span>
+              <Orden col="cliente" orden={orden} set={setOrden}>Envío</Orden>
+              <Orden col="cadete" orden={orden} set={setOrden} className="dv-hide-m">Cadete</Orden>
+              <Orden col="fecha" orden={orden} set={setOrden} className="dv-hide-m">{COL_FECHA[etapa] || "Fecha"}</Orden>
+              <Orden col="valor" orden={orden} set={setOrden} className="dv-r">Valor</Orden>
+              <Orden col="dias" orden={orden} set={setOrden} className="dv-r">Días</Orden>
             </div>
             {lista.length === 0 && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
             {lista.slice(0, 400).map((c) => (
@@ -297,6 +322,16 @@ export default function Devoluciones() {
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
     </div>
+  );
+}
+
+function Orden({ col, orden, set, className = "", children }) {
+  const on = orden.col === col;
+  return (
+    <button className={"dv-ord " + className + (on ? " on" : "")} title="Ordenar"
+      onClick={() => set(on ? (orden.dir === -1 ? { col, dir: 1 } : { col: "auto", dir: -1 }) : { col, dir: col === "cliente" || col === "cadete" ? 1 : -1 })}>
+      {children}{on ? (orden.dir === 1 ? " ↑" : " ↓") : ""}
+    </button>
   );
 }
 
@@ -350,6 +385,7 @@ function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqu
           </div>
         </div>
         <span className="dv-hide-m" style={{ fontSize: 13, color: C.ink2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.cadete || "—"}</span>
+        <span className="dv-hide-m" style={{ fontSize: 13, color: C.ink2, fontVariantNumeric: "tabular-nums" }}>{fechaCorta(c.desde)}</span>
         <span className="dv-r" style={{ fontSize: 13, color: C.ink2 }}>{plata(c.valor)}</span>
         <span className="dv-r" style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 15, color: c.vencido ? C.ambar : C.ink }}>{c.dias ?? "—"}</span>
       </div>
@@ -689,9 +725,14 @@ const CSS = `
 .dv-btn:disabled{opacity:.5;cursor:default}
 .dv-input{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:9px;min-width:0;flex:1 1 220px;outline:none}
 .dv-input:focus{border-color:rgba(46,230,182,.35)}
-.dv-head,.dv-linea{display:grid;grid-template-columns:28px minmax(0,1fr) 170px 100px 56px;gap:12px;align-items:center;padding:10px 16px}
+.dv-head,.dv-linea{display:grid;grid-template-columns:28px minmax(0,1fr) 170px 120px 100px 56px;gap:12px;align-items:center;padding:10px 16px}
 .dv-head{font-size:11px;color:#71768e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.06)}
 .dv-r{text-align:right}
+.dv-ord{background:none;border:0;padding:0;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;text-align:left}
+.dv-ord.dv-r{text-align:right}.dv-ord.on{color:#f4f5fa}
+.dv-fechas{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#71768e;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:3px 8px}
+.dv-fechas input{background:transparent;border:0;color:#f4f5fa;font:inherit;font-size:12.5px;color-scheme:dark;outline:none;padding:3px 0}
+.dv-fechas button{background:none;border:0;color:#a7adc2;cursor:pointer;font-size:12px;padding:2px 4px}
 .dv-fila{border-bottom:1px solid rgba(255,255,255,.05)}.dv-fila:last-child{border-bottom:0}
 .dv-linea{cursor:pointer}.dv-fila.ab{background:rgba(255,255,255,.025)}
 .dv-cb{display:flex;align-items:center;justify-content:center;cursor:pointer}.dv-cb input{width:16px;height:16px;accent-color:#2ee6b6;cursor:pointer}
