@@ -287,7 +287,7 @@ export default function Devoluciones() {
               <label className="dv-cb"><input type="checkbox" checked={lista.length > 0 && lista.every((c) => sel.has(c.did))} onChange={(e) => setSel(e.target.checked ? new Set(lista.map((c) => c.did)) : new Set())} /></label>
               <Orden col="cliente" orden={orden} set={setOrden}>Envío</Orden>
               <Orden col="cadete" orden={orden} set={setOrden} className="dv-hide-m">Cadete</Orden>
-              <span className="dv-hide-m" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Orden col="fecha" orden={orden} set={setOrden}>Fecha</Orden><Info texto={COL_FECHA[etapa]} /></span>
+              <span className="dv-hide-m" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Orden col="fecha" orden={orden} set={setOrden}>Fecha</Orden><Info texto={COL_FECHA[etapa]} abajo /></span>
               <Orden col="valor" orden={orden} set={setOrden} className="dv-r">Valor</Orden>
               <Orden col="dias" orden={orden} set={setOrden} className="dv-r">Días</Orden>
             </div>
@@ -335,10 +335,10 @@ function Orden({ col, orden, set, className = "", children }) {
   );
 }
 
-function Info({ texto }) {
+function Info({ texto, abajo = false }) {
   // Ayuda al pasar el mouse o al tocar: flota encima, no mueve nada de lugar
   return (
-    <span className="dv-info" tabIndex={0} role="note" aria-label={texto} onClick={(e) => e.stopPropagation()}>
+    <span className={"dv-info" + (abajo ? " abajo" : "")} tabIndex={0} role="note" aria-label={texto} onClick={(e) => e.stopPropagation()}>
       i<span className="dv-tip">{texto}</span>
     </span>
   );
@@ -709,8 +709,9 @@ const CSS = `
 .dv-otro b{color:#f4f5fa;font-weight:600}
 .dv-otro.on{background:rgba(46,230,182,.08);border-color:rgba(46,230,182,.3);color:#f4f5fa}
 @media (hover:hover){.dv-otro:hover{background:rgba(255,255,255,.04)}}
-.dv-info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.2);color:#a7adc2;font-size:10px;font-weight:700;font-style:italic;font-family:Georgia,serif;cursor:help;flex-shrink:0;outline:none}
+.dv-info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.2);color:#a7adc2;font-size:10px;font-weight:700;font-style:italic;font-family:Georgia,serif;cursor:default;flex-shrink:0;outline:none}
 .dv-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:max-content;max-width:280px;background:#0d0e1c;border:1px solid rgba(255,255,255,.12);color:#e6e8f2;font:400 12.5px/1.45 -apple-system,'Segoe UI',sans-serif;font-style:normal;padding:9px 11px;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.45);opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none;z-index:80;text-align:left;white-space:normal}
+.dv-info.abajo .dv-tip{bottom:auto;top:calc(100% + 8px);text-transform:none;letter-spacing:normal}
 .dv-info:hover .dv-tip,.dv-info:focus .dv-tip{opacity:1;visibility:visible}
 .dv-otros .dv-tip{left:auto;right:-10px;transform:none}
 .dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
