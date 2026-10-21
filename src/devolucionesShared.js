@@ -87,7 +87,7 @@ export function ordenar(a, b) {
 
 // ---- Reclamos por WhatsApp al cadete (idea tomada de la página de Santi) ----
 // Choferes que no son personas: no se les reclama
-export const CHOFER_FICTICIO = /devuelto|dep[oó]sito|repro\s*gramar|lightdata|^\s*$/i;
+export const CHOFER_FICTICIO = /devuelto|dep[oó]sito|repro\s*gramar|desasignado|lightdata|^\s*$/i;
 const ddmm = (iso) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit" }) : "?"; };
 
 export function reclamosPorCadete(casos) {
