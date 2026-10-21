@@ -816,6 +816,9 @@ export default function App() {
     return () => window.removeEventListener('resize', handler);
   }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Pantalla dividida Devoluciones | Arribos (la usa el depósito mientras van llegando los cadetes)
+  const [dividida, setDividida] = useState(() => { try { return localStorage.getItem("fx_dividida_dev_arr") === "1"; } catch { return false; } });
+  const cambiarDividida = (v) => { setDividida(v); try { localStorage.setItem("fx_dividida_dev_arr", v ? "1" : "0"); } catch {} };
   // Texto compartido para "Buscar envío": Android (Compartir → Flexit, share_target) y el atajo de
   // iPhone abren /?text=… (o ?q=…). Se lee una vez y se limpia la URL.
   const [envioQ] = useState(() => {
@@ -846,6 +849,8 @@ export default function App() {
   }, [session]);
   usePermisos(session ? session.email : ""); // re-renderiza cuando llegan los permisos del usuario
   const vista = puedeVer(seccion) ? seccion : "sin-acceso";
+  const puedeDividir = !isMobile && (vista === "devoluciones" || vista === "arribos") && puedeVer("devoluciones") && puedeVer("arribos");
+  const enDividida = puedeDividir && dividida;
   const fileRef = useRef();
 
   // ── Comentarios nuevos de la pizarra → badge en la pestaña y en el acceso "Pizarra" ──
@@ -1141,12 +1146,19 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "devoluciones" ? "Cancelados y cambios · calle, depósito y cliente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{enDividida ? "Devoluciones · Arribos" : seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{enDividida ? "Las dos pantallas a la vez · cada lado se mueve por separado" : seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "devoluciones" ? "Cancelados y cambios · calle, depósito y cliente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          {puedeDividir && (
+            <button onClick={() => cambiarDividida(!dividida)} title={dividida ? "Volver a una sola pantalla" : "Ver Devoluciones y Arribos lado a lado"}
+              style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 14px", borderRadius:10, border:`1px solid ${dividida ? "rgba(46,207,170,0.35)" : "rgba(255,255,255,0.12)"}`, background: dividida ? "rgba(46,207,170,0.1)" : "rgba(255,255,255,0.05)", color: dividida ? "#2ECFAA" : "#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              <i className={dividida ? "ti ti-square" : "ti ti-layout-columns"} style={{ fontSize:16 }} />
+              {dividida ? "Una sola pantalla" : vista === "devoluciones" ? "Dividir con Arribos" : "Dividir con Devoluciones"}
+            </button>
+          )}
           {!isMobile && vista === "metricas" && (<>
           <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){setPendingFile(f);setShowDateModal(true);}}} onDragOver={e=>e.preventDefault()} onClick={()=>xlsxReady&&!loading&&setShowDateModal(true)}
             style={{ border:"1px solid #2ECFAA", borderRadius:8, padding:"6px 16px", cursor:xlsxReady&&!loading?"pointer":"wait", fontSize:12, color:"#2ECFAA", background:"rgba(46,207,170,0.08)", whiteSpace:"nowrap" }}>
@@ -1169,7 +1181,17 @@ export default function App() {
 
       {vista === "colectas" && <Suspense fallback={<VistaSkeleton />}><Colectas irA={setSeccion} /></Suspense>}
 
-      {vista === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>}
+      {enDividida && (
+        <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:16, alignItems:"start" }}>
+          <div style={{ position:"sticky", top:12, height:"calc(100vh - 130px)", overflowY:"auto", overflowX:"hidden", paddingRight:4, minWidth:0 }}>
+            <Suspense fallback={<VistaSkeleton />}><Devoluciones /></Suspense>
+          </div>
+          <div style={{ position:"sticky", top:12, height:"calc(100vh - 130px)", overflowY:"auto", overflowX:"hidden", paddingRight:4, minWidth:0 }}>
+            <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>
+          </div>
+        </div>
+      )}
+      {!enDividida && vista === "arribos" && <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>}
 
       {vista === "zonas" && <Suspense fallback={<VistaSkeleton />}><Zonas /></Suspense>}
       {vista === "monitoreo" && <Suspense fallback={<VistaSkeleton />}><Monitoreo /></Suspense>}
@@ -1180,7 +1202,7 @@ export default function App() {
       {vista === "envio" && <Suspense fallback={<VistaSkeleton />}><BuscarEnvio inicial={envioQ} /></Suspense>}
 
       {vista === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
-      {vista === "devoluciones" && <Suspense fallback={<VistaSkeleton />}><Devoluciones /></Suspense>}
+      {!enDividida && vista === "devoluciones" && <Suspense fallback={<VistaSkeleton />}><Devoluciones /></Suspense>}
 
       {vista === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
 

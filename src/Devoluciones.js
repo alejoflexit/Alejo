@@ -202,7 +202,7 @@ export default function Devoluciones() {
 
   const sync = datos.sync || {};
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, color: C.ink, paddingBottom: 90 }}>
+    <div className="dv-raiz" style={{ display: "flex", flexDirection: "column", gap: 16, color: C.ink, paddingBottom: 24 }}>
       <style>{CSS}</style>
 
       {/* Totales */}
@@ -628,8 +628,9 @@ async function imprimirRemitos(remitos, ventana) {
 }
 
 const CSS = `
+.dv-raiz{container:dv / inline-size}
 .dv-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-@media (max-width:820px){.dv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container dv (max-width:820px){.dv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .dv-kpi{text-align:left;padding:16px 18px;cursor:pointer;color:inherit;font-family:inherit;transition:border-color .12s}
 .dv-kpi.on{border-color:rgba(46,230,182,.35)!important}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
@@ -659,8 +660,8 @@ const CSS = `
 .dv-det{padding:4px 16px 16px 56px}
 .dv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 16px}
 .dv-show-m{display:none}
-@media (max-width:700px){.dv-head,.dv-linea{grid-template-columns:24px minmax(0,1fr) 80px 36px;gap:8px;padding:10px 12px}.dv-hide-m{display:none}.dv-show-m{display:inline}.dv-det{padding:4px 12px 14px 12px}}
-.dv-barra{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:50;display:flex;gap:8px;align-items:center;background:rgba(22,23,38,.96);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(720px,calc(100vw - 32px));flex-wrap:wrap;color:#f4f5fa;font-size:13px}
+@container dv (max-width:700px){.dv-head,.dv-linea{grid-template-columns:24px minmax(0,1fr) 80px 36px;gap:8px;padding:10px 12px}.dv-hide-m{display:none}.dv-show-m{display:inline}.dv-det{padding:4px 12px 14px 12px}}
+.dv-barra{position:sticky;bottom:12px;margin:0 auto;z-index:50;display:flex;gap:8px;align-items:center;background:rgba(22,23,38,.96);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(720px,100%);flex-wrap:wrap;color:#f4f5fa;font-size:13px}
 .dv-menu{position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:190px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
 .dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:7px;cursor:pointer}
 @media (hover:hover){.dv-menu button:hover{background:rgba(255,255,255,.06)}}
