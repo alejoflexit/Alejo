@@ -267,6 +267,43 @@ function porDia(rows) {
   return grupos;
 }
 
+// ── Caja de búsqueda: misma estética que Home/Devoluciones (vidrio, grises, un solo acento teal) ──
+const CSS_BUSCADOR = `
+.be-caja{background:rgba(27,28,46,0.72);border:1px solid rgba(255,255,255,0.08);border-radius:16px;
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 20px 60px rgba(0,0,0,0.28);
+  transition:border-color .2s,box-shadow .2s}
+.be-caja:focus-within{border-color:rgba(46,230,182,0.35)}
+.be-caja.be-oyendo{border-color:rgba(46,230,182,0.6);box-shadow:0 0 0 3px rgba(46,230,182,0.12),0 20px 60px rgba(0,0,0,0.28)}
+.be-texto{display:block;width:100%;box-sizing:border-box;min-height:64px;padding:14px 16px 6px;border:none;outline:none;
+  background:transparent;color:#f4f5fa;font-size:15px;line-height:1.45;resize:vertical;font-family:inherit}
+.be-texto::placeholder{color:#71768e}
+.be-barra{display:flex;gap:8px;align-items:center;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,0.06)}
+.be-sec,.be-pri{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 14px;
+  border-radius:11px;font:600 14px/1 'Space Grotesk',-apple-system,'Segoe UI',sans-serif;letter-spacing:.1px;cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s;-webkit-tap-highlight-color:transparent;white-space:nowrap}
+.be-sec{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#a7adc2}
+.be-sec:hover{background:rgba(255,255,255,0.09);color:#f4f5fa}
+.be-sec:active{background:rgba(255,255,255,0.12)}
+.be-sec-on{background:rgba(46,230,182,0.12);border-color:rgba(46,230,182,0.45);color:#2ee6b6}
+.be-sec-on:hover{background:rgba(46,230,182,0.16);color:#2ee6b6}
+.be-pri{margin-left:auto;background:#2ee6b6;border:1px solid #2ee6b6;color:#06231b;padding:0 18px}
+.be-pri:hover{background:#4beec4}
+.be-pri:disabled{opacity:.6;cursor:default}
+.be-sec svg,.be-pri svg{flex:none}
+.be-onda{display:inline-flex;align-items:center;gap:2px;height:16px;width:16px;justify-content:center}
+.be-onda i{display:block;width:3px;height:6px;border-radius:2px;background:currentColor;animation:be-onda 0.9s ease-in-out infinite}
+.be-onda i:nth-child(2){animation-delay:.15s}.be-onda i:nth-child(3){animation-delay:.3s}
+@keyframes be-onda{0%,100%{height:5px}50%{height:15px}}
+.be-sec{min-width:128px}
+@media (max-width:480px){.be-sec,.be-pri{flex:1 1 0;min-width:0;padding:0 8px}.be-pri{margin-left:0}}
+@media (prefers-reduced-motion:reduce){.be-onda i{animation:none;height:10px}}
+`;
+const svgProps = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true };
+const IconoPegar = () => (<svg {...svgProps}><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></svg>);
+const IconoMic = () => (<svg {...svgProps}><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M19 10a7 7 0 0 1-14 0" /><path d="M12 17v5" /></svg>);
+const IconoLupa = () => (<svg {...svgProps}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>);
+const Onda = () => (<span className="be-onda" aria-hidden="true"><i /><i /><i /></span>);
+
 export default function BuscarEnvio({ inicial = '', verDevolucion = null }) {
   const [sesion, setSesion] = useState(() => getSession());
   const [texto, setTexto] = useState(inicial);
@@ -315,23 +352,26 @@ export default function BuscarEnvio({ inicial = '', verDevolucion = null }) {
 
   if (!sesion) return <LoginFlexit titulo="Buscar envío" icono="🔎" onOk={() => setSesion(getSession())} />;
 
-  const boton = { padding: '10px 16px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer' };
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '8px 0 40px' }}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={2}
+      <style>{CSS_BUSCADOR}</style>
+      <div className={'be-caja' + (escuchando ? ' be-oyendo' : '')}>
+        <textarea className="be-texto" value={texto} onChange={(e) => setTexto(e.target.value)} rows={2}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); correr(); } }}
-          placeholder="Pegá el mensaje del cliente, el número de envío, el tracking o la dirección"
-          style={{ flex: '1 1 260px', minWidth: 0, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, resize: 'vertical', fontFamily: 'inherit' }} />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
-          <button onClick={pegar} style={{ ...boton, background: 'rgba(255,255,255,0.08)', color: '#fff' }}>📋 Pegar</button>
+          placeholder={escuchando ? 'Te escucho… decí el número de envío, el tracking o la dirección' : 'Pegá el mensaje del cliente, el número de envío, el tracking o la dirección'} />
+        <div className="be-barra">
+          <button type="button" className="be-sec" onClick={pegar} title="Pegar lo que copiaste y buscar">
+            <IconoPegar /><span>Pegar</span>
+          </button>
           {puedeDictar && (
-            <button onClick={dictar} title={escuchando ? 'Tocá para cortar' : 'Decí el número de envío, el tracking o la dirección'}
-              style={{ ...boton, background: escuchando ? 'rgba(46,207,170,0.18)' : 'rgba(255,255,255,0.08)', color: '#fff', border: escuchando ? '1px solid #2ECFAA' : 'none' }}>
-              {escuchando ? '● Escuchando…' : '🎤 Dictar'}
+            <button type="button" className={'be-sec' + (escuchando ? ' be-sec-on' : '')} onClick={dictar}
+              aria-pressed={escuchando} title={escuchando ? 'Tocá para cortar' : 'Decí el número de envío, el tracking o la dirección'}>
+              {escuchando ? <Onda /> : <IconoMic />}<span>{escuchando ? 'Escuchando' : 'Dictar'}</span>
             </button>
           )}
-          <button onClick={() => correr()} disabled={busy} style={{ ...boton, background: '#2ECFAA', color: '#04150f' }}>{busy ? 'Buscando…' : 'Buscar'}</button>
+          <button type="button" className="be-pri" onClick={() => correr()} disabled={busy}>
+            <IconoLupa /><span>{busy ? 'Buscando…' : 'Buscar'}</span>
+          </button>
         </div>
       </div>
       {err && <div style={{ color: '#FFB020', fontSize: 13, marginTop: 10 }}>{err}</div>}
