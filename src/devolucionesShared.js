@@ -48,7 +48,8 @@ export function armarCaso(d, g = {}, ahora = Date.now()) {
   const limite = etapa === "calle" ? LIMITE_CALLE : etapa === "deposito" ? LIMITE_DEPOSITO : null;
   const marca = g.marca || null;
   return {
-    ...d, tipo, etapa, desde, dias, marca, marca_nota: g.marca_nota || "", marca_por: g.marca_por || "",
+    ...d, tipo, etapa, desde, dias, marca, marca_nota: g.marca_nota || "", marca_por: g.marca_por || "", marca_at: g.marca_at || null,
+    reclamo_at: g.reclamo_at || null,
     ingreso_deposito_at: g.ingreso_deposito_at || null, ingreso_por: g.ingreso_por || "",
     vencido: limite !== null && dias !== null && dias > limite,
     cerrado: MARCAS_CIERRAN.includes(marca),
@@ -82,6 +83,40 @@ export function ordenar(a, b) {
   const v = (Number(b.valor) || 0) - (Number(a.valor) || 0);
   if (v) return v;
   return (b.dias || 0) - (a.dias || 0);
+}
+
+// ---- Reclamos por WhatsApp al cadete (idea tomada de la página de Santi) ----
+// Choferes que no son personas: no se les reclama
+export const CHOFER_FICTICIO = /devuelto|dep[oó]sito|repro\s*gramar|lightdata|^\s*$/i;
+const ddmm = (iso) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit" }) : "?"; };
+
+export function reclamosPorCadete(casos) {
+  const m = new Map();
+  for (const c of casos) {
+    if (c.etapa !== "calle" || c.cerrado) continue;
+    const k = CHOFER_FICTICIO.test(c.cadete || "") ? "" : c.cadete;
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(c);
+  }
+  return [...m.entries()].map(([cadete, lista]) => ({
+    cadete, casos: lista.sort((a, b) => (b.dias || 0) - (a.dias || 0)),
+    valor: lista.reduce((s, c) => s + (Number(c.valor) || 0), 0),
+    vencidos: lista.filter((c) => c.vencido).length,
+  })).sort((a, b) => (a.cadete ? 0 : 1) - (b.cadete ? 0 : 1) || b.casos.length - a.casos.length);
+}
+
+export function mensajeReclamo(cadete, casos) {
+  const nombre = String(cadete || "").trim().split(/\s+/)[0] || "";
+  const n = casos.length;
+  const lineas = casos.map((c, i) => {
+    const tipo = c.tipo === "CAMBIO" ? "CAMBIO" : "CANCELADO";
+    const dir = [c.direccion, c.localidad].filter(Boolean).join(", ") || `CP ${c.cp || "?"}`;
+    let l = `${i + 1}) ${tipo} — ${dir} — lo tenés desde el ${ddmm(c.desde)} (${c.dias ?? "?"} días)`;
+    if (c.ml_venta_id || c.tracking) l += `\n   Venta/tracking: ${c.ml_venta_id || c.tracking}`;
+    if (c.tipo === "CAMBIO" && c.li_texto) l += `\n   ↳ ${c.li_texto}`;
+    return l;
+  });
+  return `Hola${nombre ? " " + nombre : ""}! Control de devoluciones de Flexit.\nTenés ${n} paquete${n > 1 ? "s" : ""} para devolver al depósito:\n\n${lineas.join("\n")}\n\nTraelo${n > 1 ? "s" : ""} en tu próxima carga, por favor. ¡Gracias!`;
 }
 
 // QR del remito: solo el código; la lista de envíos se busca en la base (no se puede falsificar desde el papel)

@@ -1,4 +1,4 @@
-import { armarCaso, resumen, codigoDeQR, agruparParaRemitos, QR_PREFIJO } from "./devolucionesShared";
+import { armarCaso, resumen, codigoDeQR, agruparParaRemitos, QR_PREFIJO, reclamosPorCadete, mensajeReclamo } from "./devolucionesShared";
 
 const AHORA = Date.parse("2026-10-20T12:00:00-03:00");
 const base = { did: 1, cliente: "Ohpic", valor: 1000, fecha_alta: "2026-10-01T10:00:00-03:00" };
@@ -40,6 +40,17 @@ test("extraviado y descartado no cuentan en los totales; reclamado sí", () => {
 
 test("NO_ES saca el caso", () => {
   expect(armarCaso({ ...base, tipo: "CAMBIO", estado_ld: 5 }, { tipo_override: "NO_ES" }, AHORA)).toBeNull();
+});
+
+test("reclamos: agrupa por cadete, saca choferes ficticios y arma el mensaje", () => {
+  const d = { ...base, tipo: "CANCELADO", estado_ld: 8, fecha_cancelado: "2026-10-10T10:00:00-03:00", direccion: "Bustamante 1987", localidad: "Hurlingham", ml_venta_id: "2000" };
+  const casos = [armarCaso({ ...d, cadete: "Juan Perez" }, {}, AHORA), armarCaso({ ...d, cadete: "Juan Perez" }, {}, AHORA), armarCaso({ ...d, cadete: "Repro gramar" }, {}, AHORA)];
+  const g = reclamosPorCadete(casos);
+  expect(g.map((x) => [x.cadete, x.casos.length])).toEqual([["Juan Perez", 2], ["", 1]]);
+  const m = mensajeReclamo("Juan Perez", g[0].casos);
+  expect(m.startsWith("Hola Juan!")).toBe(true);
+  expect(m.includes("Tenés 2 paquetes")).toBe(true);
+  expect(m.includes("Bustamante 1987, Hurlingham")).toBe(true);
 });
 
 test("QR: lee el código y rechaza otra cosa", () => {

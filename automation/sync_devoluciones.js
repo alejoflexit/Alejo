@@ -75,7 +75,7 @@ async function fichas(page, dids) {
             const r = await fetch('/modules/envios/alta/controlador.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: `operador=get&did=${id}` });
             if (!r.ok) continue;
             const p = await r.json();
-            res[id] = { historial: p.historial || [], asignaciones: p.asignaciones || [], header: { valor_declarado: p.header && p.header.valor_declarado, estado_envio: p.header && p.header.estado_envio } };
+            res[id] = { historial: p.historial || [], asignaciones: p.asignaciones || [], header: { valor_declarado: p.header && p.header.valor_declarado, estado_envio: p.header && p.header.estado_envio, destination_shipping_address_line: p.header && p.header.destination_shipping_address_line, destination_city_name: p.header && p.header.destination_city_name } };
           } catch { /* una ficha suelta no corta la corrida */ }
         }
       };
@@ -170,11 +170,12 @@ async function sync(page) {
     });
   }
 
-  const previas = new Map((await sbTodo('devoluciones?select=did,estado_ld,en_deposito_ld,detalle_at')).map((r) => [Number(r.did), r]));
+  const previas = new Map((await sbTodo('devoluciones?select=did,estado_ld,en_deposito_ld,detalle_at,direccion')).map((r) => [Number(r.did), r]));
   const dia = 24 * 3600e3;
   const necesitan = filas.filter((f) => {
     const p = previas.get(f.did);
     if (!p || !p.detalle_at) return true;
+    if (!p.direccion && Date.parse(p.detalle_at) < Date.parse('2026-10-21T01:00:00Z')) return true; // backfill único de dirección
     if (p.estado_ld !== f.estado_ld || p.en_deposito_ld !== f.en_deposito_ld) return true;
     return f.estado_ld !== ESTADO.DEVUELTO_CLIENTE && Date.now() - Date.parse(p.detalle_at) > dia;
   }).map((f) => f.did);

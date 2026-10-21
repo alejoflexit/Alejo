@@ -5,7 +5,7 @@ import { authedFetch, getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
-  QR_PREFIJO, codigoDeQR, agruparParaRemitos,
+  QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -67,6 +67,7 @@ export default function Devoluciones() {
   const [sel, setSel] = useState(() => new Set());
   const [aviso, setAviso] = useState(null);
   const [ocupado, setOcupado] = useState(false);
+  const [verReclamos, setVerReclamos] = useState(false);
   const enCurso = useRef(false);
 
   const cargar = useCallback(async () => {
@@ -144,6 +145,21 @@ export default function Devoluciones() {
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
     setOcupado(false);
+  }
+  // Copia el mensaje para WhatsApp y deja registro: último reclamo + etiqueta "Reclamado" (si no tenía otra)
+  async function reclamar(cadete, cs) {
+    const texto = mensajeReclamo(cadete, cs);
+    try { await navigator.clipboard.writeText(texto); }
+    catch { const t = document.createElement("textarea"); t.value = texto; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    const ahora = new Date().toISOString();
+    try {
+      await guardarGestion(cs.map((c) => ({
+        did: c.did, reclamo_at: ahora, reclamo_por: yo(),
+        marca: c.marca || "reclamado", marca_por: c.marca ? c.marca_por || null : yo(), marca_at: c.marca ? c.marca_at : ahora, marca_nota: c.marca_nota || null,
+      })));
+      await cargar();
+    } catch { /* el mensaje ya se copió; el registro se reintenta la próxima vez */ }
+    toast(`Mensaje copiado. Pegalo en el WhatsApp de ${cadete.split(" ")[0]}.`);
   }
   async function armarRemitos(cs) {
     const libres = cs.filter((c) => !remitoDe.has(c.did));
@@ -227,6 +243,12 @@ export default function Devoluciones() {
             <input className="dv-input" placeholder="Buscar cliente, venta, tracking o cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
 
+          {etapa === "calle" && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13, color: C.ink3 }}>Mandale a cada cadete un solo mensaje con todo lo que tiene que traer.</span>
+              <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>
+            </div>
+          )}
           <div style={{ ...card, overflow: "hidden" }}>
             <div className="dv-head">
               <label className="dv-cb"><input type="checkbox" checked={lista.length > 0 && lista.every((c) => sel.has(c.did))} onChange={(e) => setSel(e.target.checked ? new Set(lista.map((c) => c.did)) : new Set())} /></label>
@@ -237,7 +259,8 @@ export default function Devoluciones() {
               <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
                 onSel={(v) => setSel((s) => { const n = new Set(s); v ? n.add(c.did) : n.delete(c.did); return n; })}
-                onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} ocupado={ocupado} />
+                onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} ocupado={ocupado}
+                onReclamar={() => reclamar(c.cadete, [c])} />
             ))}
             {lista.length > 400 && <div style={{ padding: 12, textAlign: "center", color: C.ink3, fontSize: 12 }}>Mostrando 400 de {num(lista.length)}. Usá el buscador para acotar.</div>}
           </div>
@@ -259,6 +282,7 @@ export default function Devoluciones() {
         <Remitos remitos={datos.rem} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
       )}
 
+      {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} onCopiar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
     </div>
   );
@@ -276,7 +300,7 @@ function Kpi({ titulo, valor, sub, alerta, onClick, activo }) {
   );
 }
 
-function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqueta, ocupado }) {
+function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqueta, onReclamar, ocupado }) {
   const [nota, setNota] = useState(c.marca_nota || "");
   useEffect(() => { setNota(c.marca_nota || ""); }, [c.marca_nota]);
   return (
@@ -301,16 +325,18 @@ function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqu
       {abierto && (
         <div className="dv-det">
           <div className="dv-grid">
-            <Dato k="Alta" v={fecha(c.fecha_alta)} />
+            <Dato k="Cargado en LightData" v={fecha(c.fecha_alta)} />
             {c.tipo === "CANCELADO" ? <Dato k="Cancelado" v={fecha(c.fecha_cancelado)} /> : <Dato k="Retirado al comprador" v={fecha(c.fecha_retiro)} />}
             <Dato k="Ingresó a depósito" v={c.ingreso_deposito_at ? `${fecha(c.ingreso_deposito_at)} · ${c.ingreso_por}` : fecha(c.fecha_deposito)} />
             <Dato k="Devuelto al cliente" v={fecha(c.fecha_devuelto_cliente || c.fecha_dev_ld)} />
             <Dato k="Tracking" v={c.tracking || "—"} />
-            <Dato k="CP / zona" v={`${c.cp || "—"} · ${c.zona || "—"}`} />
+            <Dato k="Dirección" v={[c.direccion, c.localidad].filter(Boolean).join(", ") || `CP ${c.cp || "—"}`} />
+            <Dato k="Último reclamo" v={c.reclamo_at ? fecha(c.reclamo_at) : "—"} />
           </div>
           {c.tipo === "CAMBIO" && c.li_texto && <div style={{ fontSize: 13, color: C.ink2, marginTop: 10 }}>Logística inversa: “{c.li_texto}”</div>}
           {c.marca && <div style={{ fontSize: 13, color: C.ink2, marginTop: 8 }}>Etiqueta: <b>{MARCAS[c.marca]}</b>{c.marca_por ? ` · ${c.marca_por}` : ""}{c.marca_nota ? ` — ${c.marca_nota}` : ""}</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
+            {c.etapa === "calle" && c.cadete && !CHOFER_FICTICIO.test(c.cadete) && <button className="dv-btn" disabled={ocupado} onClick={onReclamar}>Copiar reclamo</button>}
             {c.tipo === "CAMBIO" && c.etapa !== "devuelto" && (c.ingreso_deposito_at
               ? <button className="dv-btn" disabled={ocupado} onClick={() => onIngreso(true)}>Deshacer ingreso</button>
               : <button className="dv-btn pri" disabled={ocupado} onClick={() => onIngreso(false)}>Ingresó a depósito</button>)}
@@ -337,6 +363,36 @@ function EtiquetaMenu({ onElegir, disabled }) {
           <button onClick={() => { setAbierto(false); onElegir(null); }}>Quitar etiqueta</button>
         </div>
       )}
+    </div>
+  );
+}
+
+function ReclamosModal({ grupos, onCopiar, onCerrar }) {
+  const [copiados, setCopiados] = useState(() => new Set());
+  const reales = grupos.filter((g) => g.cadete);
+  const sinCadete = grupos.find((g) => !g.cadete);
+  return (
+    <div className="dv-modal-fondo" onClick={onCerrar}>
+      <div className="dv-modal" onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>Reclamar a cadetes</div>
+          <button className="dv-btn" onClick={onCerrar}>Cerrar</button>
+        </div>
+        <div style={{ fontSize: 13, color: C.ink3, marginBottom: 12 }}>“Copiar mensaje” lo deja listo para pegar en WhatsApp y marca esos envíos como reclamados.</div>
+        {reales.length === 0 && <div style={{ color: C.ink3, fontSize: 14, padding: 12 }}>No hay nada en la calle para reclamar.</div>}
+        {reales.map((g) => (
+          <div key={g.cadete} className="dv-rec">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>{g.cadete}</div>
+              <div style={{ fontSize: 12, color: C.ink3 }}>{g.casos.length} paquete{g.casos.length > 1 ? "s" : ""} · {plata(g.valor)}{g.vencidos ? ` · ${g.vencidos} con +${LIMITE_CALLE} días` : ""}</div>
+            </div>
+            <button className={"dv-btn" + (copiados.has(g.cadete) ? "" : " pri")} onClick={async () => { await onCopiar(g.cadete, g.casos); setCopiados((s) => new Set(s).add(g.cadete)); }}>
+              {copiados.has(g.cadete) ? "Copiado ✓" : "Copiar mensaje"}
+            </button>
+          </div>
+        ))}
+        {sinCadete && <div style={{ fontSize: 12, color: C.ink3, marginTop: 12 }}>{sinCadete.casos.length} envío(s) sin cadete real (sin asignar, “Repro gramar”, etc.): no se pueden reclamar. Revisalos en LightData.</div>}
+      </div>
     </div>
   );
 }
@@ -553,5 +609,8 @@ const CSS = `
 .dv-menu{position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:190px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
 .dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:7px;cursor:pointer}
 @media (hover:hover){.dv-menu button:hover{background:rgba(255,255,255,.06)}}
+.dv-modal-fondo{position:fixed;inset:0;z-index:70;background:rgba(5,6,14,.6);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px;overflow:auto}
+.dv-modal{background:#17182a;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:18px;width:min(560px,100%);color:#f4f5fa;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.dv-rec{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(255,255,255,.06)}
 .dv-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:60;background:#f4f5fa;color:#111;border-radius:10px;padding:10px 14px;font-size:13px;max-width:calc(100vw - 32px);box-shadow:0 12px 40px rgba(0,0,0,.35)}
 `;

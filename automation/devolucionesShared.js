@@ -54,6 +54,8 @@ function datosFicha(ficha) {
     fecha_deposito: ultimo((a) => CHOFER_DEPOSITO.test(a.operador || ''), asig),
     cadete: ultAsig ? String(ultAsig.operador || '').replace(/\s+/g, ' ').trim() : null,
     valor: Number.isFinite(valor) && valor > 0 ? valor : null,
+    direccion: String(header.destination_shipping_address_line || '').trim() || null,
+    localidad: String(header.destination_city_name || '').trim() || null,
   };
 }
 
