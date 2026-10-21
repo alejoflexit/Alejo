@@ -147,10 +147,13 @@ export default function Devoluciones() {
     setOcupado(false);
   }
   // Copia el mensaje para WhatsApp y deja registro: último reclamo + etiqueta "Reclamado" (si no tenía otra)
-  async function reclamar(cadete, cs) {
+  async function reclamar(cadete, cs, via = "copiar") {
     const texto = mensajeReclamo(cadete, cs);
-    try { await navigator.clipboard.writeText(texto); }
-    catch { const t = document.createElement("textarea"); t.value = texto; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    if (via === "wa") window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener"); // en el clic, si no el navegador la bloquea
+    else {
+      try { await navigator.clipboard.writeText(texto); }
+      catch { const t = document.createElement("textarea"); t.value = texto; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    }
     const ahora = new Date().toISOString();
     try {
       await guardarGestion(cs.map((c) => ({
@@ -159,7 +162,7 @@ export default function Devoluciones() {
       })));
       await cargar();
     } catch { /* el mensaje ya se copió; el registro se reintenta la próxima vez */ }
-    toast(`Mensaje copiado. Pegalo en el WhatsApp de ${cadete.split(" ")[0]}.`);
+    toast(via === "wa" ? `Reclamo a ${cadete.split(" ")[0]} registrado` : `Mensaje copiado. Pegalo en el WhatsApp de ${cadete.split(" ")[0]}.`);
   }
   async function armarRemitos(cs) {
     const libres = cs.filter((c) => !remitoDe.has(c.did));
@@ -282,7 +285,7 @@ export default function Devoluciones() {
         <Remitos remitos={datos.rem} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
       )}
 
-      {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} onCopiar={reclamar} onCerrar={() => setVerReclamos(false)} />}
+      {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
     </div>
   );
@@ -367,31 +370,84 @@ function EtiquetaMenu({ onElegir, disabled }) {
   );
 }
 
-function ReclamosModal({ grupos, onCopiar, onCerrar }) {
-  const [copiados, setCopiados] = useState(() => new Set());
-  const reales = grupos.filter((g) => g.cadete);
+function ReclamosModal({ grupos, onEnviar, onCerrar }) {
+  const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState("todos");
+  const [abierto, setAbierto] = useState(null);
+  const [enviados, setEnviados] = useState(() => new Map()); // cadete → hora
+  const hoyISO = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const reales = grupos.filter((g) => g.cadete).map((g) => {
+    const ult = g.casos.map((c) => c.reclamo_at).filter(Boolean).sort().pop() || null;
+    return { ...g, ultimo: ult, hoy: !!ult && new Date(Date.parse(ult) - 3 * 3600e3).toISOString().slice(0, 10) === hoyISO };
+  }).sort((a, b) => b.vencidos - a.vencidos || b.valor - a.valor);
   const sinCadete = grupos.find((g) => !g.cadete);
+  const q = busca.trim().toLowerCase();
+  const lista = reales.filter((g) => (!q || g.cadete.toLowerCase().includes(q))
+    && (filtro === "vencidos" ? g.vencidos > 0 : filtro === "pendientes" ? !g.hoy && !enviados.has(g.cadete) : true));
+  const tot = reales.reduce((a, g) => ({ p: a.p + g.casos.length, v: a.v + g.valor }), { p: 0, v: 0 });
+  const enviar = async (g, via) => { await onEnviar(g.cadete, g.casos, via); setEnviados((m) => new Map(m).set(g.cadete, new Date().toISOString())); };
+
+  useEffect(() => {
+    const esc = (e) => { if (e.key === "Escape") onCerrar(); };
+    document.addEventListener("keydown", esc);
+    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", esc); document.body.style.overflow = prev; };
+  }, [onCerrar]);
+
   return (
     <div className="dv-modal-fondo" onClick={onCerrar}>
-      <div className="dv-modal" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>Reclamar a cadetes</div>
-          <button className="dv-btn" onClick={onCerrar}>Cerrar</button>
-        </div>
-        <div style={{ fontSize: 13, color: C.ink3, marginBottom: 12 }}>“Copiar mensaje” lo deja listo para pegar en WhatsApp y marca esos envíos como reclamados.</div>
-        {reales.length === 0 && <div style={{ color: C.ink3, fontSize: 14, padding: 12 }}>No hay nada en la calle para reclamar.</div>}
-        {reales.map((g) => (
-          <div key={g.cadete} className="dv-rec">
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>{g.cadete}</div>
-              <div style={{ fontSize: 12, color: C.ink3 }}>{g.casos.length} paquete{g.casos.length > 1 ? "s" : ""} · {plata(g.valor)}{g.vencidos ? ` · ${g.vencidos} con +${LIMITE_CALLE} días` : ""}</div>
+      <div className="dv-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Reclamar a cadetes">
+        <div className="dv-modal-cab">
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.01em" }}>Reclamar a cadetes</div>
+              <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 3 }}>{reales.length} cadetes · {num(tot.p)} paquetes en la calle · {plata(tot.v)}</div>
             </div>
-            <button className={"dv-btn" + (copiados.has(g.cadete) ? "" : " pri")} onClick={async () => { await onCopiar(g.cadete, g.casos); setCopiados((s) => new Set(s).add(g.cadete)); }}>
-              {copiados.has(g.cadete) ? "Copiado ✓" : "Copiar mensaje"}
-            </button>
+            <button className="dv-x" onClick={onCerrar} aria-label="Cerrar">✕</button>
           </div>
-        ))}
-        {sinCadete && <div style={{ fontSize: 12, color: C.ink3, marginTop: 12 }}>{sinCadete.casos.length} envío(s) sin cadete real (sin asignar, “Repro gramar”, etc.): no se pueden reclamar. Revisalos en LightData.</div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+            <input className="dv-input" placeholder="Buscar cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <div className="dv-seg sm">
+              {[["todos", "Todos"], ["vencidos", `+${LIMITE_CALLE} días`], ["pendientes", "Sin reclamar hoy"]].map(([id, l]) => (
+                <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="dv-modal-cuerpo">
+          {lista.length === 0 && <div style={{ color: C.ink3, fontSize: 14, padding: "24px 4px", textAlign: "center" }}>{reales.length ? "Nadie en este filtro." : "No hay nada en la calle para reclamar."}</div>}
+          {lista.map((g) => {
+            const env = enviados.get(g.cadete);
+            const ab = abierto === g.cadete;
+            return (
+              <div key={g.cadete} className={"dv-rec" + (env ? " hecho" : "")}>
+                <div className="dv-rec-fila" onClick={() => setAbierto(ab ? null : g.cadete)}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{g.cadete}</span>
+                      {g.vencidos > 0 && <span className="dv-pill">{g.vencidos} con +{LIMITE_CALLE} d</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>
+                      {g.casos.length} paquete{g.casos.length > 1 ? "s" : ""} · {plata(g.valor)} · {env ? `enviado ${fecha(env).split(", ")[1] || ""}` : g.ultimo ? `último reclamo ${hace(g.ultimo)}` : "nunca reclamado"}
+                    </div>
+                  </div>
+                  <span className="dv-chev" style={{ transform: ab ? "rotate(180deg)" : "none" }}>⌄</span>
+                </div>
+                {ab && <pre className="dv-prev">{mensajeReclamo(g.cadete, g.casos)}</pre>}
+                <div className="dv-rec-acc">
+                  <button className="dv-btn wa" onClick={() => enviar(g, "wa")}>{env ? "Reenviar por WhatsApp" : "Enviar por WhatsApp"}</button>
+                  <button className="dv-btn" onClick={() => enviar(g, "copiar")}>Copiar</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="dv-modal-pie">
+          “Enviar por WhatsApp” abre WhatsApp con el mensaje escrito: elegís el chat del cadete y mandás. Al enviar, esos paquetes quedan como reclamados.
+          {sinCadete ? ` ${sinCadete.casos.length} paquete(s) sin cadete real (sin asignar, “Repro gramar”, “Desasignado”) no se pueden reclamar: revisalos en LightData.` : ""}
+        </div>
       </div>
     </div>
   );
@@ -609,8 +665,20 @@ const CSS = `
 .dv-menu{position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:190px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
 .dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:7px;cursor:pointer}
 @media (hover:hover){.dv-menu button:hover{background:rgba(255,255,255,.06)}}
-.dv-modal-fondo{position:fixed;inset:0;z-index:70;background:rgba(5,6,14,.6);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px;overflow:auto}
-.dv-modal{background:#17182a;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:18px;width:min(560px,100%);color:#f4f5fa;box-shadow:0 30px 80px rgba(0,0,0,.5)}
-.dv-rec{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(255,255,255,.06)}
+.dv-modal-fondo{position:fixed;inset:0;z-index:70;background:rgba(5,6,14,.66);display:flex;align-items:center;justify-content:center;padding:16px}
+.dv-modal{background:#16172a;border:1px solid rgba(255,255,255,.09);border-radius:18px;width:min(600px,100%);max-height:min(86vh,900px);display:flex;flex-direction:column;color:#f4f5fa;box-shadow:0 30px 90px rgba(0,0,0,.55);overflow:hidden}
+.dv-modal-cab{padding:18px 18px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+.dv-modal-cuerpo{overflow-y:auto;padding:4px 18px;flex:1;overscroll-behavior:contain}
+.dv-modal-pie{padding:12px 18px;border-top:1px solid rgba(255,255,255,.06);font-size:12px;color:#71768e;line-height:1.45}
+.dv-x{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#a7adc2;width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:13px}
+.dv-rec{padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}.dv-rec:last-child{border-bottom:0}
+.dv-rec.hecho{opacity:.55}
+.dv-rec-fila{display:flex;align-items:center;gap:10px;cursor:pointer}
+.dv-rec-acc{display:flex;gap:8px;margin-top:10px}
+.dv-chev{color:#71768e;font-size:16px;transition:transform .15s;line-height:1}
+.dv-pill{font-size:11px;color:#F5C044;background:rgba(245,192,68,.08);border:1px solid rgba(245,192,68,.25);border-radius:999px;padding:1px 8px}
+.dv-prev{white-space:pre-wrap;font-family:inherit;font-size:12.5px;line-height:1.5;color:#c9cde0;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px;margin:10px 0 0;max-height:240px;overflow:auto}
+.dv-btn.wa{background:rgba(37,211,102,.1);border-color:rgba(37,211,102,.28);color:#5be38f}
+@media (max-width:560px){.dv-modal-fondo{align-items:flex-end;padding:0}.dv-modal{border-radius:18px 18px 0 0;max-height:92vh}.dv-rec-acc .dv-btn{flex:1}}
 .dv-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:60;background:#f4f5fa;color:#111;border-radius:10px;padding:10px 14px;font-size:13px;max-width:calc(100vw - 32px);box-shadow:0 12px 40px rgba(0,0,0,.35)}
 `;
