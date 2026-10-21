@@ -821,7 +821,7 @@ export default function App() {
   const cambiarDividida = (v) => { setDividida(v); try { localStorage.setItem("fx_dividida_dev_arr", v ? "1" : "0"); } catch {} };
   // Texto compartido para "Buscar envío": Android (Compartir → Flexit, share_target) y el atajo de
   // iPhone abren /?text=… (o ?q=…). Se lee una vez y se limpia la URL.
-  const [envioQ] = useState(() => {
+  const [envioQ, setEnvioQ] = useState(() => {
     try {
       const p = new URLSearchParams(window.location.search);
       const t = [p.get("q"), p.get("title"), p.get("text"), p.get("url")].filter(Boolean).join(" ").trim();
@@ -849,6 +849,9 @@ export default function App() {
   }, [session]);
   usePermisos(session ? session.email : ""); // re-renderiza cuando llegan los permisos del usuario
   const vista = puedeVer(seccion) ? seccion : "sin-acceso";
+  // Conexión Buscar envío ↔ Devoluciones
+  const abrirEnvio = (id) => { setEnvioQ(String(id)); setSeccion("envio"); };
+  const verDevolucion = (did) => { try { sessionStorage.setItem("fx_dev_buscar", String(did)); } catch {} setSeccion("devoluciones"); };
   const puedeDividir = !isMobile && (vista === "devoluciones" || vista === "arribos") && puedeVer("devoluciones") && puedeVer("arribos");
   const enDividida = puedeDividir && dividida;
   const fileRef = useRef();
@@ -1184,7 +1187,7 @@ export default function App() {
       {enDividida && (
         <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:16, alignItems:"start" }}>
           <div style={{ position:"sticky", top:12, height:"calc(100vh - 130px)", overflowY:"auto", overflowX:"hidden", paddingRight:4, minWidth:0 }}>
-            <Suspense fallback={<VistaSkeleton />}><Devoluciones /></Suspense>
+            <Suspense fallback={<VistaSkeleton />}><Devoluciones abrirEnvio={puedeVer("envio") ? abrirEnvio : null} /></Suspense>
           </div>
           <div style={{ position:"sticky", top:12, height:"calc(100vh - 130px)", overflowY:"auto", overflowX:"hidden", paddingRight:4, minWidth:0 }}>
             <Suspense fallback={<VistaSkeleton />}><Colectas soloArribos irA={setSeccion} /></Suspense>
@@ -1199,10 +1202,10 @@ export default function App() {
       {vista === "pizarra" && <Suspense fallback={<VistaSkeleton />}><Pizarra /></Suspense>}
 
       {vista === "tiquetera" && <Suspense fallback={<VistaSkeleton />}><Tiquetera /></Suspense>}
-      {vista === "envio" && <Suspense fallback={<VistaSkeleton />}><BuscarEnvio inicial={envioQ} /></Suspense>}
+      {vista === "envio" && <Suspense fallback={<VistaSkeleton />}><BuscarEnvio inicial={envioQ} verDevolucion={puedeVer("devoluciones") ? verDevolucion : null} /></Suspense>}
 
       {vista === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
-      {!enDividida && vista === "devoluciones" && <Suspense fallback={<VistaSkeleton />}><Devoluciones /></Suspense>}
+      {!enDividida && vista === "devoluciones" && <Suspense fallback={<VistaSkeleton />}><Devoluciones abrirEnvio={puedeVer("envio") ? abrirEnvio : null} /></Suspense>}
 
       {vista === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
 

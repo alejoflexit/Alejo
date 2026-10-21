@@ -8,6 +8,67 @@ import { getSession } from './auth';
 import { LoginFlexit } from './colectasShared';
 import { PanelEnvio, sbTiquetera as sb, numerosDelTexto, colorEstado } from './Tiquetera';
 import { soportaDictado, escuchar } from './dictadoShared';
+import { sbFetch } from './colectasShared';
+import { armarCaso, quienTrajo, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO } from './devolucionesShared';
+
+// ---- Conexión con Devoluciones: si el envío es un cancelado o un cambio, se ve en qué etapa está ----
+const ETAPA_TXT = { calle: 'En la calle', deposito: 'En depósito', retiro: 'Cambio por retirar', devuelto: 'Devuelto al cliente' };
+const fechaCorta = (iso) => (iso ? new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)) : '—');
+async function devolucionesDe(ids) {
+  const lista = [...new Set(ids.map((x) => Number(x)).filter(Boolean))];
+  if (!lista.length) return new Map();
+  const [dev, gest] = await Promise.all([
+    sbFetch(`devoluciones?did=in.(${lista.join(',')})&select=*`),
+    sbFetch(`devoluciones_gestion?did=in.(${lista.join(',')})&select=*`),
+  ]);
+  const g = new Map(gest.map((x) => [Number(x.did), x]));
+  return new Map(dev.map((d) => [Number(d.did), armarCaso(d, g.get(Number(d.did)))]).filter(([, c]) => c));
+}
+function DevolucionInfo({ did, verDevolucion }) {
+  const [c, setC] = useState(undefined);
+  const [remito, setRemito] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    setC(undefined); setRemito(null);
+    devolucionesDe([did]).then((m) => { if (vivo) setC(m.get(Number(did)) || null); }).catch(() => vivo && setC(null));
+    sbFetch(`remitos_devolucion?dids=cs.{${Number(did)}}&estado=neq.anulado&select=codigo,estado,cliente,firmado_at&order=id.desc&limit=1`)
+      .then((r) => { if (vivo) setRemito(r[0] || null); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [did]);
+  if (!c) return null;
+  const color = c.etapa === 'devuelto' ? '#2ECFAA' : c.vencido ? '#FFB020' : '#9fb0ff';
+  const trajo = quienTrajo(c);
+  const filas = [
+    ['Tipo', c.tipo === 'CAMBIO' ? `Cambio${c.li_texto ? ` · “${c.li_texto}”` : ''}` : 'Cancelado'],
+    c.tipo === 'CANCELADO' ? ['Cancelado', fechaCorta(c.fecha_cancelado)] : ['Retirado al comprador', fechaCorta(c.fecha_retiro)],
+    ['Ingresó a depósito', c.ingreso_deposito_at ? `${fechaCorta(c.ingreso_deposito_at)} · ${c.ingreso_por}` : fechaCorta(c.fecha_deposito)],
+    trajo && ['Lo trajo', trajo],
+    ['Devuelto al cliente', fechaCorta(c.fecha_devuelto_cliente || c.fecha_dev_ld)],
+    remito && ['Remito', `${remito.codigo} · ${remito.estado === 'devuelto' ? 'firmado y procesado' : remito.estado === 'procesando' ? 'firmado, procesando' : remito.estado === 'error' ? 'con error' : 'esperando firma'}`],
+    c.marca && ['Etiqueta', `${MARCAS[c.marca]}${c.marca_nota ? ` — ${c.marca_nota}` : ''}`],
+    c.reclamo_at && ['Último reclamo al cadete', fechaCorta(c.reclamo_at)],
+  ].filter(Boolean);
+  const limite = c.etapa === 'calle' ? LIMITE_CALLE : c.etapa === 'deposito' ? LIMITE_DEPOSITO : null;
+  return (
+    <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: `1px solid ${color}55` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>Devolución</span>
+        <span style={{ fontWeight: 700, color }}>● {ETAPA_TXT[c.etapa]}</span>
+        {c.dias != null && c.etapa !== 'devuelto' && <span style={{ fontSize: 13, color: c.vencido ? '#FFB020' : 'rgba(255,255,255,0.6)' }}>hace {c.dias} día{c.dias !== 1 ? 's' : ''}{c.vencido && limite ? ` (más de ${limite})` : ''}</span>}
+        <span style={{ flex: 1 }} />
+        {verDevolucion && <button onClick={() => verDevolucion(c.did)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', borderRadius: 8, fontSize: 12.5, padding: '5px 10px', cursor: 'pointer' }}>Ver en Devoluciones →</button>}
+      </div>
+      <div style={{ marginTop: 8 }}>
+        {filas.map(([k, v]) => (
+          <div key={k} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 13.5 }}>
+            <span style={{ width: 170, flexShrink: 0, color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}>{k}</span>
+            <span style={{ flex: 1, color: '#fff', wordBreak: 'break-word' }}>{v}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const COLS = 'id_interno,nombre,direccion,cp,localidad,estado,fecha_estado,cadete,razon_social,fecha_flexit';
 
@@ -206,7 +267,7 @@ function porDia(rows) {
   return grupos;
 }
 
-export default function BuscarEnvio({ inicial = '' }) {
+export default function BuscarEnvio({ inicial = '', verDevolucion = null }) {
   const [sesion, setSesion] = useState(() => getSession());
   const [texto, setTexto] = useState(inicial);
   const [res, setRes] = useState(null);   // null = sin buscar; [] = sin resultados
@@ -215,6 +276,7 @@ export default function BuscarEnvio({ inicial = '' }) {
   const [err, setErr] = useState('');
   const [via, setVia] = useState(null); // cómo se encontró: { via, abrir, sueltos }
   const [escuchando, setEscuchando] = useState(false);
+  const [devs, setDevs] = useState(() => new Map()); // devoluciones de los resultados (para marcarlos en la lista)
   const cortarDictado = useRef(null);
   const puedeDictar = soportaDictado();
 
@@ -225,13 +287,14 @@ export default function BuscarEnvio({ inicial = '' }) {
     try {
       const r = await buscar(q);
       setRes(r.rows); setVia(r);
+      devolucionesDe(r.rows.map((x) => x.id_interno)).then(setDevs).catch(() => setDevs(new Map()));
       if (r.rows.length && r.abrir) setElegido(r.rows[0].id_interno);
     } catch (e) { setErr('No se pudo buscar: ' + e.message); setRes(null); }
     setBusy(false);
   };
 
   // si llegó texto (compartido desde WhatsApp o por link), buscar apenas haya sesión
-  useEffect(() => { if (sesion && inicial) correr(inicial); }, [sesion, inicial]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (sesion && inicial) { setTexto(inicial); correr(inicial); } }, [sesion, inicial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pegar = async () => {
     try { const t = await navigator.clipboard.readText(); if (t) { setTexto(t); correr(t); } }
@@ -330,6 +393,10 @@ export default function BuscarEnvio({ inicial = '' }) {
                       {r.nombre || '—'} <span style={{ color: 'rgba(255,255,255,0.4)' }}>· #{r.id_interno}</span>
                       {!mismaDir && [r.direccion, r.localidad].some(Boolean) ? <> · {[r.direccion, r.localidad].filter(Boolean).join(', ')}</> : null}
                     </div>
+                    {devs.get(Number(r.id_interno)) && (() => { const dv = devs.get(Number(r.id_interno)); return (
+                      <div style={{ fontSize: 12, marginTop: 3, color: dv.etapa === 'devuelto' ? '#2ECFAA' : dv.vencido ? '#FFB020' : '#9fb0ff' }}>
+                        ↩ {dv.tipo === 'CAMBIO' ? 'Cambio' : 'Cancelado'} · {ETAPA_TXT[dv.etapa]}{dv.etapa !== 'devuelto' && dv.dias != null ? ` hace ${dv.dias} d` : ''}
+                      </div>); })()}
                   </button>
                 ))}
               </div>
@@ -343,6 +410,7 @@ export default function BuscarEnvio({ inicial = '' }) {
           {res && (res.length > 1 || (via && !via.abrir)) && (
             <button onClick={() => setElegido(null)} style={{ background: 'none', border: 'none', color: '#4A9EFF', cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 10 }}>{res.length === 1 ? '← Volver' : `← Ver los ${res.length} resultados`}</button>
           )}
+          <DevolucionInfo did={elegido} verDevolucion={verDevolucion} />
           <PanelEnvio caso={{ envio_id: elegido, mensaje: texto }} />
         </div>
       )}

@@ -68,7 +68,7 @@ const COL_FECHA = { calle: "Cancelados: cuándo se cancelaron. Cambios: cuándo 
 const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados" };
 const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
 
-export default function Devoluciones() {
+export default function Devoluciones({ abrirEnvio = null }) {
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState("seguimiento");
@@ -149,7 +149,21 @@ export default function Devoluciones() {
     });
   }, [casos, etapa, tipo, soloVencidos, busca, fDesde, fHasta, orden]);
 
-  useEffect(() => { setSel(new Set()); setAbierto(null); }, [etapa, tipo, soloVencidos, tab]);
+  const abrirAlLlegar = useRef(null);
+  useEffect(() => { setSel(new Set()); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tipo, soloVencidos, tab]);
+
+  // Llegada desde Buscar envío: abrir ese envío en su etapa
+  useEffect(() => {
+    if (!casos.length) return;
+    let did = null;
+    try { did = sessionStorage.getItem("fx_dev_buscar"); sessionStorage.removeItem("fx_dev_buscar"); } catch {}
+    const c = did && casos.find((x) => String(x.did) === String(did));
+    if (!c) return;
+    setTab("seguimiento"); setTipo("todos"); setSoloVencidos(false); setFDesde(""); setFHasta("");
+    const nueva = c.cerrado && c.etapa !== "devuelto" ? "marcados" : c.etapa;
+    setBusca(String(c.did));
+    if (nueva === etapa) setAbierto(c.did); else { abrirAlLlegar.current = c.did; setEtapa(nueva); }
+  }, [casos]); // eslint-disable-line react-hooks/exhaustive-deps
   const toast = (t) => { setAviso(t); setTimeout(() => setAviso((a) => (a === t ? null : a)), 4500); };
 
   const irA = (e, vencidos = false) => { setTab("seguimiento"); setEtapa(e); setSoloVencidos(vencidos); };
@@ -305,7 +319,7 @@ export default function Devoluciones() {
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
                 onSel={(v) => setSel((s) => { const n = new Set(s); v ? n.add(c.did) : n.delete(c.did); return n; })}
                 onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} ocupado={ocupado}
-                onReclamar={() => reclamar(c.cadete, [c])} />
+                onReclamar={() => reclamar(c.cadete, [c])} onVerEnvio={abrirEnvio ? () => abrirEnvio(c.did) : null} />
             ))}
             {lista.length > 400 && <div style={{ padding: 12, textAlign: "center", color: C.ink3, fontSize: 12 }}>Mostrando 400 de {num(lista.length)}. Usá el buscador para acotar.</div>}
           </div>
@@ -429,7 +443,7 @@ function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, 
   );
 }
 
-function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqueta, onReclamar, ocupado }) {
+function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqueta, onReclamar, onVerEnvio, ocupado }) {
   const [nota, setNota] = useState(c.marca_nota || "");
   useEffect(() => { setNota(c.marca_nota || ""); }, [c.marca_nota]);
   return (
@@ -466,6 +480,7 @@ function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqu
           {c.tipo === "CAMBIO" && c.li_texto && <div style={{ fontSize: 13, color: C.ink2, marginTop: 10 }}>Logística inversa: “{c.li_texto}”</div>}
           {c.marca && <div style={{ fontSize: 13, color: C.ink2, marginTop: 8 }}>Etiqueta: <b>{MARCAS[c.marca]}</b>{c.marca_por ? ` · ${c.marca_por}` : ""}{c.marca_nota ? ` — ${c.marca_nota}` : ""}</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
+            {onVerEnvio && <button className="dv-btn" onClick={onVerEnvio}>Ver envío e historial</button>}
             {c.etapa === "calle" && c.cadete && !CHOFER_FICTICIO.test(c.cadete) && <button className="dv-btn" disabled={ocupado} onClick={onReclamar}>Copiar reclamo</button>}
             {c.tipo === "CAMBIO" && c.etapa !== "devuelto" && (c.ingreso_deposito_at
               ? <button className="dv-btn" disabled={ocupado} onClick={() => onIngreso(true)}>Deshacer ingreso</button>
