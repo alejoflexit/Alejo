@@ -141,3 +141,64 @@ export function agruparParaRemitos(casos) {
   }
   return out;
 }
+
+// ---------------- Progreso (meta del día, racha, termómetro, quién trajo) ----------------
+// Fecha calendario en Argentina (UTC-3, sin horario de verano)
+export const diaAR = (iso) => { const t = iso ? Date.parse(iso) : NaN; return Number.isFinite(t) ? new Date(t - 3 * 3600e3).toISOString().slice(0, 10) : null; };
+export const hoyAR = (ahora = Date.now()) => new Date(ahora - 3 * 3600e3).toISOString().slice(0, 10);
+
+// Meta diaria de devoluciones al cliente: proporcional a lo que hay vencido en depósito, entre 5 y 20
+export const metaDevolver = (depositoVencidos) => Math.max(5, Math.min(20, Math.ceil((depositoVencidos || 0) / 30)));
+
+// Quién devolvió el paquete al depósito: cancelado → el chofer anterior a "devuelto deposito";
+// cambio → el cadete que lo retiró (sigue asignado en LightData) si se marcó el ingreso.
+export function quienTrajo(c) {
+  if (c.etapa !== "deposito" && c.etapa !== "devuelto") return null;
+  const q = c.tipo === "CANCELADO" ? c.cadete_previo : (c.ingreso_deposito_at ? c.cadete : null);
+  return q && !CHOFER_FICTICIO.test(q) ? q : null;
+}
+export function trajoPorCadete(casos) {
+  const m = new Map();
+  for (const c of casos) { const q = quienTrajo(c); if (q) m.set(q, (m.get(q) || 0) + 1); }
+  return m;
+}
+
+export function progresoDelDia(casos, ahora = Date.now()) {
+  const hoy = hoyAR(ahora);
+  const aReclamar = new Set(), reclamados = new Set();
+  let devueltos = 0, valorDevuelto = 0, ingresos = 0;
+  for (const c of casos) {
+    const real = c.cadete && !CHOFER_FICTICIO.test(c.cadete);
+    if (c.etapa === "calle" && !c.cerrado && c.vencido && real) {
+      aReclamar.add(c.cadete);
+      if (diaAR(c.reclamo_at) === hoy) reclamados.add(c.cadete);
+    }
+    if (c.etapa === "devuelto" && diaAR(c.fecha_devuelto_cliente || c.fecha_dev_ld) === hoy) { devueltos++; valorDevuelto += Number(c.valor) || 0; }
+    if (c.tipo === "CAMBIO" && diaAR(c.ingreso_deposito_at) === hoy) ingresos++;
+  }
+  return { hoy, cadetesAReclamar: aReclamar.size, cadetesReclamados: reclamados.size, devueltos, valorDevuelto, ingresos };
+}
+export const metaCumplida = (p, meta) => p.cadetesReclamados >= p.cadetesAReclamar && p.devueltos >= meta;
+
+// Racha: días seguidos cumpliendo la meta. Los domingos no cuentan (ni suman ni cortan).
+// Hoy suma si ya se cumplió; si todavía no, la racha llega hasta ayer.
+export function racha(diario, cumplidaHoy, ahora = Date.now()) {
+  const porFecha = new Map((diario || []).map((d) => [String(d.fecha).slice(0, 10), d]));
+  let n = cumplidaHoy ? 1 : 0;
+  let t = Date.parse(hoyAR(ahora) + "T12:00:00Z");
+  for (let i = 0; i < 120; i++) {
+    t -= 864e5;
+    const f = new Date(t).toISOString().slice(0, 10);
+    if (new Date(t).getUTCDay() === 0) continue;
+    const d = porFecha.get(f);
+    if (!d || !d.cumplida) break;
+    n++;
+  }
+  return n;
+}
+
+// Semana (lunes a domingo) que contiene la fecha
+export function inicioSemana(fecha) {
+  const t = Date.parse(fecha + "T12:00:00Z"); const dow = (new Date(t).getUTCDay() + 6) % 7;
+  return new Date(t - dow * 864e5).toISOString().slice(0, 10);
+}

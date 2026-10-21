@@ -6,6 +6,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -32,7 +33,6 @@ const hace = (iso) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
   return m < 1 ? "recién" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`;
 };
-const diaAR = (iso) => (iso ? new Date(Date.parse(iso) - 3 * 3600e3).toISOString().slice(0, 10) : null);
 const fechaCorta = (iso) => { const d = diaAR(iso); return d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : "—"; };
 const yo = () => { const s = getSession(); return (s && (s.nombre || s.email)) || "equipo"; };
 
@@ -48,6 +48,10 @@ const guardarGestion = (filas) => sbFetch("devoluciones_gestion?on_conflict=did"
   method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
   body: JSON.stringify(filas.map((f) => ({ ...f, actualizado_at: new Date().toISOString() }))),
 });
+// Registro de acciones (quién hizo qué): alimenta el progreso y la semana. Si falla, no frena el trabajo.
+const registrar = (tipo, cantidad = 1, cadete = null, detalle = null) => sbFetch("devoluciones_eventos", {
+  method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ tipo, cantidad, cadete, por: yo(), detalle }),
+}).catch(() => {});
 const pedirAccion = (accion) => authedFetch(`${SUPABASE_URL}/functions/v1/devoluciones-accion`, { method: "POST", body: JSON.stringify({ accion }) })
   .then((r) => r.json()).catch(() => ({ ok: false, motivo: "red" }));
 
@@ -86,13 +90,16 @@ export default function Devoluciones() {
     if (enCurso.current) return;
     enCurso.current = true;
     try {
-      const [dev, gest, rem, sync] = await Promise.all([
+      const hace21 = new Date(Date.now() - 21 * 864e5).toISOString();
+      const [dev, gest, rem, sync, diario, eventos] = await Promise.all([
         traerTodo("devoluciones?select=*&order=did"),
         traerTodo("devoluciones_gestion?select=*"),
         sbFetch("remitos_devolucion?select=*&order=id.desc&limit=300"),
         sbFetch("devoluciones_sync?select=*&id=eq.1"),
+        sbFetch("devoluciones_diario?select=*&order=fecha.desc&limit=60").catch(() => []),
+        sbFetch(`devoluciones_eventos?select=*&at=gte.${hace21}&order=at.desc&limit=2000`).catch(() => []),
       ]);
-      setDatos({ dev, gest, rem, sync: sync[0] || null });
+      setDatos({ dev, gest, rem, sync: sync[0] || null, diario, eventos });
       setError(null);
     } catch (e) { setError(String(e.message || e).slice(0, 200)); }
     finally { enCurso.current = false; }
@@ -152,6 +159,7 @@ export default function Devoluciones() {
     setOcupado(true);
     try {
       await guardarGestion(cs.map((c) => ({ did: c.did, ingreso_deposito_at: deshacer ? null : new Date().toISOString(), ingreso_por: deshacer ? null : yo() })));
+      if (!deshacer) registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) });
       toast(deshacer ? "Ingreso deshecho" : `${cs.length} cambio${cs.length > 1 ? "s" : ""} en depósito`);
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
@@ -161,6 +169,7 @@ export default function Devoluciones() {
     setOcupado(true);
     try {
       await guardarGestion(cs.map((c) => ({ did: c.did, marca: marca || null, marca_nota: marca ? nota || null : null, marca_por: marca ? yo() : null, marca_at: marca ? new Date().toISOString() : null })));
+      if (marca) registrar("etiqueta", cs.length, null, { marca, dids: cs.map((c) => c.did) });
       toast(marca ? `Etiquetado: ${MARCAS[marca]}` : "Etiqueta quitada");
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
@@ -180,6 +189,7 @@ export default function Devoluciones() {
         did: c.did, reclamo_at: ahora, reclamo_por: yo(),
         marca: c.marca || "reclamado", marca_por: c.marca ? c.marca_por || null : yo(), marca_at: c.marca ? c.marca_at : ahora, marca_nota: c.marca_nota || null,
       })));
+      registrar("reclamo", cs.length, cadete, { dids: cs.map((c) => c.did) });
       await cargar();
     } catch { /* el mensaje ya se copió; el registro se reintenta la próxima vez */ }
     toast(via === "wa" ? `Reclamo a ${cadete.split(" ")[0]} registrado` : `Mensaje copiado. Pegalo en el WhatsApp de ${cadete.split(" ")[0]}.`);
@@ -204,6 +214,7 @@ export default function Devoluciones() {
         const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify({ cliente: g.cliente, dids: g.casos.map((c) => c.did), creado_por: yo() }) });
         creados.push({ ...row, casos: g.casos });
       }
+      registrar("remito_armado", creados.length, null, { codigos: creados.map((x) => x.codigo), envios: libres.length });
       await imprimirRemitos(creados, w);
       toast(`${creados.length} remito${creados.length > 1 ? "s" : ""} generado${creados.length > 1 ? "s" : ""} (uno por cliente). También quedan en la pestaña Remitos.`);
       setSel(new Set()); await cargar();
@@ -237,6 +248,9 @@ export default function Devoluciones() {
         </span>
         <button className="dv-btn" onClick={actualizar}>Pedir actualización</button>
       </div>
+
+      <Progreso casos={casos} r={r} diario={datos.diario || []} eventos={datos.eventos || []} remitos={datos.rem}
+        onReclamar={() => setVerReclamos(true)} onDevolver={() => irA("deposito", true)} />
 
       {/* Etapas: cada tarjeta es una vista; adentro se elige todos o solo vencidos */}
       <div className="dv-etapas">
@@ -313,7 +327,7 @@ export default function Devoluciones() {
         <Remitos remitos={datos.rem} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
       )}
 
-      {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
+      {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
     </div>
   );
@@ -483,22 +497,131 @@ function EtiquetaMenu({ onElegir, disabled }) {
   );
 }
 
-function ReclamosModal({ grupos, onEnviar, onCerrar }) {
+// ---------------- Progreso: meta de hoy + racha · plata parada · semana ----------------
+const millones = (n) => (n >= 1e6 ? `$${(n / 1e6).toFixed(1).replace(".", ",")} M` : plata(n));
+function Barra({ n, de, ok }) {
+  const pct = de > 0 ? Math.min(100, Math.round((n / de) * 100)) : 100;
+  return <div className="dv-bar"><div style={{ width: `${pct}%`, background: ok ? C.teal : "rgba(46,230,182,.55)" }} /></div>;
+}
+function Llama({ on }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={on ? C.ambar : C.ink3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+    </svg>
+  );
+}
+function Sparkline({ valores }) {
+  if (valores.length < 2) return null;
+  const max = Math.max(...valores), min = Math.min(...valores), W = 220, H = 40;
+  const pts = valores.map((v, i) => `${(i / (valores.length - 1)) * W},${H - 4 - ((v - min) / (max - min || 1)) * (H - 8)}`).join(" ");
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: "100%", height: 40, display: "block" }} aria-hidden="true"><polyline points={pts} fill="none" stroke={C.teal} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>;
+}
+const flecha = (a, b) => (a > b ? <span style={{ color: C.teal }}>↑ {num(a - b)}</span> : a < b ? <span style={{ color: C.ink3 }}>↓ {num(b - a)}</span> : <span style={{ color: C.ink3 }}>=</span>);
+
+function Progreso({ casos, r, diario, eventos, remitos, onReclamar, onDevolver }) {
+  const p = progresoDelDia(casos);
+  const filaHoy = diario.find((d) => String(d.fecha).slice(0, 10) === p.hoy);
+  const meta = filaHoy && filaHoy.meta_devolver != null ? filaHoy.meta_devolver : metaDevolver(r.depositoVencidos);
+  const cumplida = metaCumplida(p, meta);
+  const dias = racha(diario, cumplida);
+  const okReclamo = p.cadetesReclamados >= p.cadetesAReclamar;
+  const okDevolver = p.devueltos >= meta;
+
+  // Termómetro: plata en depósito, día a día (hoy = dato en vivo)
+  const historia = [...diario].filter((d) => String(d.fecha).slice(0, 10) !== p.hoy && d.valor_deposito != null)
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))).slice(-29);
+  const serie = [...historia.map((d) => Number(d.valor_deposito)), r.depositoValor];
+  const ayer = historia.length ? Number(historia[historia.length - 1].valor_deposito) : null;
+  const delta = ayer != null ? r.depositoValor - ayer : null;
+
+  // Semana actual vs anterior
+  const ini = inicioSemana(p.hoy);
+  const iniAnt = new Date(Date.parse(ini + "T12:00:00Z") - 7 * 864e5).toISOString().slice(0, 10);
+  const enSem = (f, a, b) => { const d = diaAR(f); return !!d && d >= a && (!b || d < b); };
+  const sem = (a, b) => ({
+    devueltos: casos.filter((c) => c.etapa === "devuelto" && enSem(c.fecha_devuelto_cliente || c.fecha_dev_ld, a, b)),
+    ingresos: casos.filter((c) => c.tipo === "CAMBIO" && enSem(c.ingreso_deposito_at, a, b)).length,
+    reclamos: eventos.filter((e) => e.tipo === "reclamo" && enSem(e.at, a, b)).length,
+    remitos: remitos.filter((x) => x.firmado_at && enSem(x.firmado_at, a, b)).length,
+  });
+  const esta = sem(ini, null), ant = sem(iniAnt, ini);
+  const recuperado = esta.devueltos.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+
+  return (
+    <div className="dv-prog">
+      <div style={{ ...card, padding: "14px 16px" }} className={cumplida ? "dv-prog-ok" : ""}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Meta de hoy</span>
+          <Info texto={`Dos cosas por día: reclamarle a cada cadete que tiene paquetes con más de ${LIMITE_CALLE} días en la calle, y devolver al cliente ${meta} envíos (la meta sale de lo vencido en depósito y queda fija en el día). Cumplir las dos suma un día a la racha. Los domingos no cuentan.`} />
+          <span style={{ flex: 1 }} />
+          <span className="dv-racha" title="Días seguidos cumpliendo la meta"><Llama on={dias > 0} /> {dias > 0 ? `${dias} día${dias > 1 ? "s" : ""} de racha` : "Arrancá la racha hoy"}</span>
+        </div>
+        <button className="dv-meta" onClick={onReclamar}>
+          <div className="dv-meta-t"><span>Reclamar a cadetes con +{LIMITE_CALLE} días</span><b>{p.cadetesAReclamar ? `${p.cadetesReclamados}/${p.cadetesAReclamar}` : "—"}</b></div>
+          <Barra n={p.cadetesReclamados} de={p.cadetesAReclamar} ok={okReclamo} />
+        </button>
+        <button className="dv-meta" onClick={onDevolver}>
+          <div className="dv-meta-t"><span>Devolver al cliente</span><b>{p.devueltos}/{meta}</b></div>
+          <Barra n={p.devueltos} de={meta} ok={okDevolver} />
+        </button>
+        <div style={{ fontSize: 12, marginTop: 8, color: cumplida ? C.teal : C.ink3 }}>
+          {cumplida ? "¡Meta cumplida! Mañana sigue la racha."
+            : [!okReclamo && `faltan ${p.cadetesAReclamar - p.cadetesReclamados} cadete${p.cadetesAReclamar - p.cadetesReclamados > 1 ? "s" : ""} por reclamar`,
+               !okDevolver && `faltan ${meta - p.devueltos} envío${meta - p.devueltos > 1 ? "s" : ""} por devolver`].filter(Boolean).join(" · ").replace(/^./, (x) => x.toUpperCase())}
+        </div>
+      </div>
+
+      <div style={{ ...card, padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Plata parada en depósito</span>
+          <Info texto="Valor declarado de todo lo que está en el depósito esperando volver al cliente. Cada remito firmado la hace bajar. El objetivo es llevarla a cero." />
+        </div>
+        <div style={{ fontFamily: C.grotesk, fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6 }}>{millones(r.depositoValor)}</div>
+        <div style={{ fontSize: 12, marginTop: 2, color: delta != null && delta < 0 ? C.teal : C.ink3 }}>
+          {delta == null ? "Se mide desde hoy: mañana vas a ver cuánto bajó" : delta < 0 ? `↓ ${millones(-delta)} desde ayer` : delta > 0 ? `↑ ${millones(delta)} desde ayer` : "Igual que ayer"}
+        </div>
+        <div style={{ marginTop: 8 }}><Sparkline valores={serie} /></div>
+      </div>
+
+      <div style={{ ...card, padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>Esta semana</span>
+          <Info texto="Lo que se hizo de lunes a hoy, comparado con la semana pasada completa." />
+        </div>
+        <div className="dv-sem">
+          <div><span>Devueltos al cliente</span><b>{num(esta.devueltos.length)}</b>{flecha(esta.devueltos.length, ant.devueltos.length)}</div>
+          <div><span>Plata recuperada</span><b>{millones(recuperado)}</b><span /></div>
+          <div><span>Remitos firmados</span><b>{num(esta.remitos)}</b>{flecha(esta.remitos, ant.remitos)}</div>
+          <div><span>Cambios ingresados</span><b>{num(esta.ingresos)}</b>{flecha(esta.ingresos, ant.ingresos)}</div>
+          <div><span>Reclamos enviados</span><b>{num(esta.reclamos)}</b>{flecha(esta.reclamos, ant.reclamos)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReclamosModal({ grupos, trajo, onEnviar, onCerrar }) {
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const [abierto, setAbierto] = useState(null);
-  const [enviados, setEnviados] = useState(() => new Map()); // cadete → hora
-  const hoyISO = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const [enviados, setEnviados] = useState(() => new Map());
+  const hoy = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
   const reales = grupos.filter((g) => g.cadete).map((g) => {
     const ult = g.casos.map((c) => c.reclamo_at).filter(Boolean).sort().pop() || null;
-    return { ...g, ultimo: ult, hoy: !!ult && new Date(Date.parse(ult) - 3 * 3600e3).toISOString().slice(0, 10) === hoyISO };
+    return {
+      ...g, ultimo: ult, hoy: diaAR(ult) === hoy,
+      canc: g.casos.filter((c) => c.tipo === "CANCELADO").length,
+      camb: g.casos.filter((c) => c.tipo === "CAMBIO").length,
+      recl: g.casos.filter((c) => c.reclamo_at || c.marca === "reclamado").length,
+      trajo: trajo.get(g.cadete) || 0,
+    };
   }).sort((a, b) => b.casos.length - a.casos.length || b.vencidos - a.vencidos || b.valor - a.valor);
   const sinCadete = grupos.find((g) => !g.cadete);
   const q = busca.trim().toLowerCase();
   const lista = reales.filter((g) => (!q || g.cadete.toLowerCase().includes(q))
     && (filtro === "vencidos" ? g.vencidos > 0 : filtro === "pendientes" ? !g.hoy && !enviados.has(g.cadete) : true));
   const tot = reales.reduce((a, g) => ({ p: a.p + g.casos.length, v: a.v + g.valor }), { p: 0, v: 0 });
-  const enviar = async (g, via) => { await onEnviar(g.cadete, g.casos, via); setEnviados((m) => new Map(m).set(g.cadete, new Date().toISOString())); };
+  const enviar = async (g) => { await onEnviar(g.cadete, g.casos, "copiar"); setEnviados((m) => new Map(m).set(g.cadete, new Date().toISOString())); };
 
   useEffect(() => {
     const esc = (e) => { if (e.key === "Escape") onCerrar(); };
@@ -507,9 +630,21 @@ function ReclamosModal({ grupos, onEnviar, onCerrar }) {
     return () => { document.removeEventListener("keydown", esc); document.body.style.overflow = prev; };
   }, [onCerrar]);
 
+  const Lista = ({ titulo, items }) => items.length ? (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>{titulo} · {items.length}</div>
+      {items.map((c) => (
+        <div key={c.did} className="dv-rec-item">
+          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.cliente} · {[c.direccion, c.localidad].filter(Boolean).join(", ") || `CP ${c.cp || "—"}`}</span>
+          <span style={{ color: c.vencido ? C.ambar : C.ink2, fontWeight: 600, whiteSpace: "nowrap" }}>{c.dias ?? "—"} d</span>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
   return (
     <div className="dv-modal-fondo" onClick={onCerrar}>
-      <div className="dv-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Reclamar a cadetes">
+      <div className="dv-modal ancho" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Reclamar a cadetes">
         <div className="dv-modal-cab">
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
             <div style={{ flex: 1 }}>
@@ -528,36 +663,54 @@ function ReclamosModal({ grupos, onEnviar, onCerrar }) {
           </div>
         </div>
 
-        <div className="dv-modal-cuerpo">
-          {lista.length === 0 && <div style={{ color: C.ink3, fontSize: 14, padding: "24px 4px", textAlign: "center" }}>{reales.length ? "Nadie en este filtro." : "No hay nada en la calle para reclamar."}</div>}
+        <div className="dv-rt dv-rt-head">
+          <span>Cadete</span>
+          <span className="n">Debe</span><span className="n">Canc.</span><span className="n">Camb.</span>
+          <span className="n dv-rt-x" title="Paquetes que ya se le reclamaron">Recl.</span>
+          <span className="n dv-rt-x" title="Paquetes que devolvió al depósito desde septiembre">Trajo</span>
+          <span className="n">$</span><span />
+        </div>
+        <div className="dv-modal-cuerpo" style={{ padding: 0 }}>
+          {lista.length === 0 && <div style={{ color: C.ink3, fontSize: 14, padding: "24px 18px", textAlign: "center" }}>{reales.length ? "Nadie en este filtro." : "No hay nada en la calle para reclamar."}</div>}
           {lista.map((g) => {
             const env = enviados.get(g.cadete);
             const ab = abierto === g.cadete;
             return (
-              <div key={g.cadete} className={"dv-rec" + (env ? " hecho" : "")}>
-                <div className="dv-rec-fila" onClick={() => setAbierto(ab ? null : g.cadete)}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 600, fontSize: 14 }}>{g.cadete}</span>
-                      {g.vencidos > 0 && <span className="dv-pill">{g.vencidos} con +{LIMITE_CALLE} d</span>}
-                    </div>
-                    <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>
-                      {g.casos.length} paquete{g.casos.length > 1 ? "s" : ""} · {plata(g.valor)} · {env ? `copiado ${fecha(env).split(", ")[1] || ""}` : g.ultimo ? `último reclamo ${hace(g.ultimo)}` : "nunca reclamado"}
-                    </div>
+              <div key={g.cadete} className={"dv-rt-fila" + (env ? " hecho" : "") + (ab ? " ab" : "")}>
+                <div className="dv-rt" onClick={() => setAbierto(ab ? null : g.cadete)}>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {g.vencidos > 0 && <span className="dv-dot" style={{ background: C.ambar, margin: 0 }} title={`${g.vencidos} con +${LIMITE_CALLE} días`} />}
+                      <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.cadete}</span>
+                    </span>
+                    <span style={{ display: "block", fontSize: 11.5, color: C.ink3, marginTop: 2 }}>
+                      {env ? "copiado recién" : g.ultimo ? `reclamado ${hace(g.ultimo)}` : "nunca reclamado"}{g.vencidos ? ` · ${g.vencidos} con +${LIMITE_CALLE} d` : ""}
+                    </span>
+                  </span>
+                  <b className="n" style={{ color: C.ambar }}>{g.casos.length}</b>
+                  <span className="n">{g.canc}</span>
+                  <span className="n">{g.camb}</span>
+                  <span className="n dv-rt-x">{g.recl}</span>
+                  <span className="n dv-rt-x" style={{ color: g.trajo ? C.teal : C.ink3 }}>{g.trajo}</span>
+                  <span className="n" style={{ color: C.ink2, fontSize: 12.5 }}>{millones(g.valor)}</span>
+                  <span className="n" onClick={(e) => e.stopPropagation()}>
+                    <button className={"dv-btn" + (env ? "" : " pri")} onClick={() => enviar(g)}>{env ? "Copiado ✓" : "Copiar"}</button>
+                  </span>
+                </div>
+                {ab && (
+                  <div style={{ padding: "0 18px 12px" }}>
+                    <Lista titulo="Cancelados" items={g.casos.filter((c) => c.tipo === "CANCELADO")} />
+                    <Lista titulo="Cambios" items={g.casos.filter((c) => c.tipo === "CAMBIO")} />
+                    <pre className="dv-prev">{mensajeReclamo(g.cadete, g.casos)}</pre>
                   </div>
-                  <span className="dv-chev" style={{ transform: ab ? "rotate(180deg)" : "none" }}>⌄</span>
-                </div>
-                {ab && <pre className="dv-prev">{mensajeReclamo(g.cadete, g.casos)}</pre>}
-                <div className="dv-rec-acc">
-                  <button className={"dv-btn" + (env ? "" : " pri")} onClick={() => enviar(g, "copiar")}>{env ? "Copiado ✓ · copiar de nuevo" : "Copiar mensaje"}</button>
-                </div>
+                )}
               </div>
             );
           })}
         </div>
 
         <div className="dv-modal-pie">
-          “Copiar mensaje” lo deja listo para pegar en el WhatsApp del cadete. Al copiarlo, esos paquetes quedan como reclamados.
+          “Copiar” deja el mensaje listo para pegar en el WhatsApp del cadete y marca esos paquetes como reclamados. Tocá un cadete para ver el detalle.
           {sinCadete ? ` ${sinCadete.casos.length} paquete(s) sin cadete real (sin asignar, “Repro gramar”, “Desasignado”) no se pueden reclamar: revisalos en LightData.` : ""}
         </div>
       </div>
@@ -596,6 +749,7 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
       const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
       if (!up.ok) throw new Error("No se pudo subir la foto (" + up.status + ")");
       await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ estado: "procesando", foto_path: path, firmado_por: yo(), firmado_at: new Date().toISOString(), error: null }) });
+      registrar("remito_firmado", (rem.dids || []).length, null, { codigo: rem.codigo, cliente: rem.cliente });
       const j = await pedirAccion("procesar");
       toast(j.ok ? `${rem.codigo} recibido. Se pasa a "Devuelto al cliente" en LightData en 1–2 minutos.` : `${rem.codigo} guardado, pero no se pudo avisar a LightData (${j.motivo}). Se procesa en la próxima corrida horaria.`);
       await recargar();
@@ -769,6 +923,24 @@ const CSS = `
 @media (hover:hover){.dv-pop>button:hover{background:rgba(255,255,255,.06)}}
 .dv-pop-rango{border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding:10px 8px 4px}
 .dv-pop-rango input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#f4f5fa;font:inherit;font-size:12px;padding:6px;color-scheme:dark}
+.dv-prog{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr);gap:12px}
+@container dv (max-width:980px){.dv-prog{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dv-prog>:first-child{grid-column:1/-1}}
+@container dv (max-width:560px){.dv-prog{grid-template-columns:minmax(0,1fr)}}
+.dv-prog-ok{border-color:rgba(46,230,182,.4)!important;box-shadow:0 0 35px rgba(0,255,180,.08)}
+.dv-racha{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#a7adc2;white-space:nowrap}
+.dv-meta{display:block;width:100%;background:none;border:0;padding:0;margin-top:12px;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.dv-meta-t{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#a7adc2;margin-bottom:6px}.dv-meta-t b{color:#f4f5fa;font-variant-numeric:tabular-nums}
+.dv-bar{height:8px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}.dv-bar>div{height:100%;border-radius:999px;transition:width .4s ease}
+.dv-sem{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.dv-sem>div{display:grid;grid-template-columns:1fr auto 56px;gap:8px;align-items:baseline;font-size:13px;color:#a7adc2}
+.dv-sem b{color:#f4f5fa;font-variant-numeric:tabular-nums;text-align:right}.dv-sem>div>span:last-child{font-size:12px;text-align:right}
+.dv-modal.ancho{width:min(860px,100%)}
+.dv-rt{display:grid;grid-template-columns:minmax(0,1fr) 52px 52px 52px 52px 52px 76px 92px;gap:8px;align-items:center;padding:10px 18px;font-size:13.5px}
+.dv-rt .n{text-align:right;font-variant-numeric:tabular-nums}
+.dv-rt-head{font-size:11px;color:#71768e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.06);padding-top:8px;padding-bottom:8px}
+.dv-rt-fila{border-bottom:1px solid rgba(255,255,255,.05)}.dv-rt-fila>.dv-rt{cursor:pointer}.dv-rt-fila.ab{background:rgba(255,255,255,.025)}.dv-rt-fila.hecho{opacity:.55}
+.dv-rec-item{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:#c9cde0;padding:3px 0}
+@media (max-width:640px){.dv-rt{grid-template-columns:minmax(0,1fr) 40px 40px 40px 70px;padding:10px 12px}.dv-rt-x,.dv-rt>span:nth-child(7){display:none}}
 .dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dv-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}

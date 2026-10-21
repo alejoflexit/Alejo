@@ -134,6 +134,28 @@ async function procesarRemitos(page) {
   return remitos.length;
 }
 
+// ---------- 3) FOTO DIARIA (meta del día, racha, termómetro) ----------
+// Usa las MISMAS reglas que la pantalla (src/devolucionesShared.js). La meta de devoluciones se fija
+// con la primera foto del día y no cambia durante el día.
+async function fotoDiaria() {
+  const S = await import('../src/devolucionesShared.js');
+  const [dev, gest] = await Promise.all([sbTodo('devoluciones?select=*'), sbTodo('devoluciones_gestion?select=*')]);
+  const casos = S.armarCasos(dev, gest);
+  const r = S.resumen(casos);
+  const p = S.progresoDelDia(casos);
+  const previa = (await sb(`devoluciones_diario?fecha=eq.${p.hoy}&select=meta_devolver`))[0];
+  const meta = previa && previa.meta_devolver != null ? previa.meta_devolver : S.metaDevolver(r.depositoVencidos);
+  const fila = {
+    fecha: p.hoy, n_calle: r.calle, valor_calle: r.calleValor, n_deposito: r.deposito, valor_deposito: r.depositoValor,
+    calle_vencidos: r.calleVencidos, deposito_vencidos: r.depositoVencidos, meta_devolver: meta,
+    devueltos: p.devueltos, valor_devuelto: p.valorDevuelto, cadetes_a_reclamar: p.cadetesAReclamar,
+    cadetes_reclamados: p.cadetesReclamados, ingresos_cambios: p.ingresos, cumplida: S.metaCumplida(p, meta),
+    actualizado_at: new Date().toISOString(),
+  };
+  await sb('devoluciones_diario?on_conflict=fecha', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([fila]) });
+  console.log(`Foto del día ${p.hoy}: meta ${meta}, devueltos ${p.devueltos}, reclamados ${p.cadetesReclamados}/${p.cadetesAReclamar}`);
+}
+
 // ---------- 2) SYNC ----------
 async function listado(page, extra = {}) {
   const campos = Object.entries({ operador: 0, fecha_desde: DESDE, fecha_hasta: hoyLD(), mlid: '', cliente: '', estado: '', zona: '', devuelto: '', chofer: '', direccion: '', logisticaInversa: '', tracking: '', ...extra });
@@ -175,7 +197,7 @@ async function sync(page) {
   const necesitan = filas.filter((f) => {
     const p = previas.get(f.did);
     if (!p || !p.detalle_at) return true;
-    if (!p.direccion && Date.parse(p.detalle_at) < Date.parse('2026-10-21T01:00:00Z')) return true; // backfill único de dirección
+    if (Date.parse(p.detalle_at) < Date.parse('2026-10-21T01:30:00Z')) return true; // backfill único: dirección + quién lo trajo
     if (p.estado_ld !== f.estado_ld || p.en_deposito_ld !== f.en_deposito_ld) return true;
     return f.estado_ld !== ESTADO.DEVUELTO_CLIENTE && Date.now() - Date.parse(p.detalle_at) > dia;
   }).map((f) => f.did);
@@ -195,6 +217,7 @@ async function sync(page) {
       await sb('devoluciones?on_conflict=did', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(grupo.slice(i, i + 500)) });
     }
   }
+  await fotoDiaria();
   return { total: filas.length, fichas: Object.keys(fx).length };
 }
 

@@ -63,3 +63,22 @@ test("remitos: uno por cliente, de a 25", () => {
   const g = agruparParaRemitos(casos);
   expect(g.map((x) => [x.cliente, x.casos.length])).toEqual([["A", 25], ["A", 2], ["B", 3]]);
 });
+
+test("progreso: meta del día, quién trajo y racha", () => {
+  const { progresoDelDia, metaCumplida, quienTrajo, racha, metaDevolver } = require("./devolucionesShared");
+  const hoy = "2026-10-20T15:00:00-03:00";
+  const casos = [
+    armarCaso({ ...base, tipo: "CANCELADO", estado_ld: 8, cadete: "Juan", fecha_cancelado: "2026-10-01T10:00:00-03:00" }, { reclamo_at: hoy }, AHORA),
+    armarCaso({ ...base, tipo: "CANCELADO", estado_ld: 8, cadete: "Ana", fecha_cancelado: "2026-10-01T10:00:00-03:00" }, {}, AHORA),
+    armarCaso({ ...base, tipo: "CANCELADO", estado_ld: 14, fecha_devuelto_cliente: hoy, valor: 500, cadete_previo: "Juan" }, {}, AHORA),
+  ];
+  const p = progresoDelDia(casos, AHORA);
+  expect([p.cadetesAReclamar, p.cadetesReclamados, p.devueltos]).toEqual([2, 1, 1]);
+  expect(metaCumplida(p, 1)).toBe(false);
+  expect(quienTrajo(casos[2])).toBe("Juan");
+  expect(metaDevolver(536)).toBe(18);
+  // 20/10/2026 es martes: lunes 19 cumplido, domingo 18 se saltea, sábado 17 cumplido, viernes 16 no
+  const diario = [{ fecha: "2026-10-19", cumplida: true }, { fecha: "2026-10-17", cumplida: true }, { fecha: "2026-10-16", cumplida: false }];
+  expect(racha(diario, false, AHORA)).toBe(2);
+  expect(racha(diario, true, AHORA)).toBe(3);
+});

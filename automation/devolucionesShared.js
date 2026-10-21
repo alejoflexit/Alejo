@@ -45,6 +45,16 @@ function datosFicha(ficha) {
   const asig = Array.isArray(ficha && ficha.asignaciones) ? ficha.asignaciones : [];
   const ultimo = (pred, arr) => arr.filter(pred).map((x) => fechaLD(x.fecha)).filter(Boolean).sort().pop() || null;
   const ultAsig = asig.length ? asig[asig.length - 1] : null;
+  // Quién lo devolvió: el último chofer "real" antes de la última asignación a "devuelto deposito"
+  let cadete_previo = null;
+  for (let i = asig.length - 1; i >= 0; i--) {
+    if (!CHOFER_DEPOSITO.test(asig[i].operador || '')) continue;
+    for (let k = i - 1; k >= 0; k--) {
+      const op = String(asig[k].operador || '').replace(/\s+/g, ' ').trim();
+      if (op && !/desasignado|devuelto|dep[oó]sito|repro\s*gramar|lightdata/i.test(op)) { cadete_previo = op; break; }
+    }
+    break;
+  }
   const header = (ficha && ficha.header) || {};
   const valor = Number(String(header.valor_declarado || '').replace(',', '.'));
   return {
@@ -56,6 +66,7 @@ function datosFicha(ficha) {
     valor: Number.isFinite(valor) && valor > 0 ? valor : null,
     direccion: String(header.destination_shipping_address_line || '').trim() || null,
     localidad: String(header.destination_city_name || '').trim() || null,
+    cadete_previo,
   };
 }
 
