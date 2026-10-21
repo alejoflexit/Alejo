@@ -35,7 +35,8 @@ export function armarCaso(d, g = {}, ahora = Date.now()) {
   if (d.estado_ld === 14) {
     etapa = "devuelto"; desde = d.fecha_devuelto_cliente || d.fecha_dev_ld;
   } else if (tipo === "CANCELADO") {
-    if (d.en_deposito_ld) { etapa = "deposito"; desde = d.fecha_deposito || d.fecha_cancelado || d.fecha_alta; }
+    // En depósito: asignado a "devuelto deposito" en LightData, o marcado "Ingresó a depósito" en la app
+    if (d.en_deposito_ld || g.ingreso_deposito_at) { etapa = "deposito"; desde = (d.en_deposito_ld && d.fecha_deposito) || g.ingreso_deposito_at || d.fecha_cancelado || d.fecha_alta; }
     else { etapa = "calle"; desde = d.fecha_cancelado || d.fecha_alta; }
   } else if (g.ingreso_deposito_at || d.en_deposito_ld) {
     etapa = "deposito"; desde = g.ingreso_deposito_at || d.fecha_deposito || d.fecha_retiro;
@@ -154,7 +155,8 @@ export const metaDevolver = (depositoVencidos) => Math.max(5, Math.min(20, Math.
 // cambio → el cadete que lo retiró (sigue asignado en LightData) si se marcó el ingreso.
 export function quienTrajo(c) {
   if (c.etapa !== "deposito" && c.etapa !== "devuelto") return null;
-  const q = c.tipo === "CANCELADO" ? c.cadete_previo : (c.ingreso_deposito_at ? c.cadete : null);
+  // marcado a mano en la app: lo trajo el cadete que lo tenía (sigue asignado en LightData)
+  const q = c.tipo === "CANCELADO" && c.en_deposito_ld ? c.cadete_previo : (c.ingreso_deposito_at ? c.cadete : null);
   return q && !CHOFER_FICTICIO.test(q) ? q : null;
 }
 export function trajoPorCadete(casos) {

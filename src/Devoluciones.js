@@ -57,7 +57,7 @@ const pedirAccion = (accion) => authedFetch(`${SUPABASE_URL}/functions/v1/devolu
 
 const AYUDA = {
   calle: "Todavía no volvieron al depósito. Cancelados: el cadete no los devolvió (no están asignados a “devuelto deposito” en LightData). Cambios: el cadete ya retiró el producto al comprador y no se marcó el ingreso. Los días cuentan desde la cancelación (cambios: desde el retiro).",
-  deposito: "Ya están en el depósito y falta devolvérselos al cliente. Cancelados: chofer “devuelto deposito” en LightData. Cambios: marcados “Ingresó a depósito” acá. Los días cuentan desde que ingresaron. Se cierran con un remito firmado.",
+  deposito: "Ya están en el depósito y falta devolvérselos al cliente. Cancelados: chofer “devuelto deposito” en LightData, o pasados a depósito acá. Cambios: pasados a depósito acá. Los días cuentan desde que ingresaron. Se cierran con un remito firmado.",
   calleVenc: `En la calle hace más de ${LIMITE_CALLE} días. Son los primeros a reclamar.`,
   depositoVenc: `En el depósito hace más de ${LIMITE_DEPOSITO} días sin devolverse al cliente.`,
   retiro: "Cambios que el cadete todavía no retiró al comprador. No suman en “En la calle” hasta que se retiran.",
@@ -79,6 +79,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [fDesde, setFDesde] = useState("");
   const [fHasta, setFHasta] = useState("");
   const [orden, setOrden] = useState({ col: "auto", dir: -1 });
+  const [soloSel, setSoloSel] = useState(false);
   const [abierto, setAbierto] = useState(null);
   const [sel, setSel] = useState(() => new Set());
   const [aviso, setAviso] = useState(null);
@@ -135,6 +136,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
     return casos.filter((c) => {
       if (etapa === "marcados" ? !c.marca : c.etapa !== etapa || (c.cerrado && etapa !== "devuelto")) return false;
       if (tipo !== "todos" && c.tipo !== tipo) return false;
+      if (soloSel) return sel.has(c.did);
       if (soloVencidos && !c.vencido) return false;
       if (fDesde || fHasta) {
         const d = diaAR(c.desde);
@@ -147,10 +149,10 @@ export default function Devoluciones({ abrirEnvio = null }) {
       const va = k(a), vb = k(b);
       return (va < vb ? -1 : va > vb ? 1 : 0) * orden.dir;
     });
-  }, [casos, etapa, tipo, soloVencidos, busca, fDesde, fHasta, orden]);
+  }, [casos, etapa, tipo, soloVencidos, busca, fDesde, fHasta, orden, soloSel, sel]);
 
   const abrirAlLlegar = useRef(null);
-  useEffect(() => { setSel(new Set()); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tipo, soloVencidos, tab]);
+  useEffect(() => { setSel(new Set()); setSoloSel(false); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tab]);
 
   // Llegada desde Buscar envío: abrir ese envío en su etapa
   useEffect(() => {
@@ -167,14 +169,15 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const toast = (t) => { setAviso(t); setTimeout(() => setAviso((a) => (a === t ? null : a)), 4500); };
 
   const irA = (e, vencidos = false) => { setTab("seguimiento"); setEtapa(e); setSoloVencidos(vencidos); };
-  const seleccionados = lista.filter((c) => sel.has(c.did));
+  // La selección sobrevive a la búsqueda: se arma el remito buscando envío por envío
+  const seleccionados = casos.filter((c) => sel.has(c.did));
 
   async function marcarIngreso(cs, deshacer = false) {
     setOcupado(true);
     try {
       await guardarGestion(cs.map((c) => ({ did: c.did, ingreso_deposito_at: deshacer ? null : new Date().toISOString(), ingreso_por: deshacer ? null : yo() })));
       if (!deshacer) registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) });
-      toast(deshacer ? "Ingreso deshecho" : `${cs.length} cambio${cs.length > 1 ? "s" : ""} en depósito`);
+      toast(deshacer ? "Volvió a “en la calle”" : `${cs.length} envío${cs.length > 1 ? "s" : ""} pasado${cs.length > 1 ? "s" : ""} a depósito`);
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
     setOcupado(false);
@@ -306,7 +309,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
 
           <div style={{ ...card, overflow: "hidden" }}>
             <div className="dv-head">
-              <label className="dv-cb"><input type="checkbox" checked={lista.length > 0 && lista.every((c) => sel.has(c.did))} onChange={(e) => setSel(e.target.checked ? new Set(lista.map((c) => c.did)) : new Set())} /></label>
+              <label className="dv-cb"><input type="checkbox" title="Seleccionar los que se ven" checked={lista.length > 0 && lista.every((c) => sel.has(c.did))} onChange={(e) => setSel((s0) => { const n = new Set(s0); lista.forEach((c) => (e.target.checked ? n.add(c.did) : n.delete(c.did))); return n; })} /></label>
               <Orden col="cliente" orden={orden} set={setOrden}>Envío</Orden>
               <Orden col="cadete" orden={orden} set={setOrden} className="dv-hide-m">Cadete</Orden>
               <span className="dv-hide-m" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Orden col="fecha" orden={orden} set={setOrden}>Fecha</Orden><Info texto={COL_FECHA[etapa]} abajo /></span>
@@ -327,13 +330,14 @@ export default function Devoluciones({ abrirEnvio = null }) {
           {seleccionados.length > 0 && (
             <div className="dv-barra">
               <span><b>{seleccionados.length}</b> seleccionado{seleccionados.length > 1 ? "s" : ""}</span>
+              <button className={"dv-btn" + (soloSel ? " on" : "")} onClick={() => setSoloSel(!soloSel)} title="Mostrar solo lo seleccionado">{soloSel ? "Ver todos" : "Ver seleccionados"}</button>
               <div style={{ flex: 1 }} />
-              {etapa === "deposito" && <button className="dv-btn pri" disabled={ocupado} onClick={() => armarRemitos(seleccionados)}>Armar remito</button>}
-              {etapa === "calle" && seleccionados.some((c) => c.tipo === "CAMBIO") && (
-                <button className="dv-btn pri" disabled={ocupado} onClick={() => marcarIngreso(seleccionados.filter((c) => c.tipo === "CAMBIO"))}>Ingresó a depósito</button>
+              {seleccionados.some((c) => c.etapa === "deposito") && <button className="dv-btn pri" disabled={ocupado} onClick={() => armarRemitos(seleccionados.filter((c) => c.etapa === "deposito"))}>Armar remito</button>}
+              {seleccionados.some((c) => (c.etapa === "calle" || c.etapa === "retiro") && !c.ingreso_deposito_at) && (
+                <button className="dv-btn pri" disabled={ocupado} onClick={() => marcarIngreso(seleccionados.filter((c) => (c.etapa === "calle" || c.etapa === "retiro") && !c.ingreso_deposito_at))}>Pasar a depósito</button>
               )}
               <EtiquetaMenu onElegir={(m) => etiquetar(seleccionados, m)} disabled={ocupado} />
-              <button className="dv-btn" onClick={() => setSel(new Set())}>Cancelar</button>
+              <button className="dv-btn" onClick={() => { setSel(new Set()); setSoloSel(false); }}>Cancelar</button>
             </div>
           )}
         </>
@@ -482,9 +486,8 @@ function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqu
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
             {onVerEnvio && <button className="dv-btn" onClick={onVerEnvio}>Ver envío e historial</button>}
             {c.etapa === "calle" && c.cadete && !CHOFER_FICTICIO.test(c.cadete) && <button className="dv-btn" disabled={ocupado} onClick={onReclamar}>Copiar reclamo</button>}
-            {c.tipo === "CAMBIO" && c.etapa !== "devuelto" && (c.ingreso_deposito_at
-              ? <button className="dv-btn" disabled={ocupado} onClick={() => onIngreso(true)}>Deshacer ingreso</button>
-              : <button className="dv-btn pri" disabled={ocupado} onClick={() => onIngreso(false)}>Ingresó a depósito</button>)}
+            {c.etapa === "deposito" && c.ingreso_deposito_at && !c.en_deposito_ld && <button className="dv-btn" disabled={ocupado} onClick={() => onIngreso(true)}>Volver a “en la calle”</button>}
+            {(c.etapa === "calle" || c.etapa === "retiro") && <button className="dv-btn pri" disabled={ocupado} onClick={() => onIngreso(false)}>Pasar a depósito</button>}
             <input className="dv-input" style={{ flex: "1 1 180px" }} placeholder="Nota (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} />
             {Object.entries(MARCAS).map(([k, lbl]) => (
               <button key={k} className={"dv-btn" + (c.marca === k ? " on" : "")} disabled={ocupado} onClick={() => onEtiqueta(c.marca === k ? null : k, nota)}>{c.marca === k ? `Quitar “${lbl}”` : lbl}</button>

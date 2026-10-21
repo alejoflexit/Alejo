@@ -82,3 +82,11 @@ test("progreso: meta del día, quién trajo y racha", () => {
   expect(racha(diario, false, AHORA)).toBe(2);
   expect(racha(diario, true, AHORA)).toBe(3);
 });
+
+test("cancelado en la calle marcado 'Ingresó a depósito' en la app pasa a depósito", () => {
+  const { quienTrajo } = require("./devolucionesShared");
+  const c = armarCaso({ ...base, tipo: "CANCELADO", estado_ld: 8, cadete: "Juan", fecha_cancelado: "2026-10-01T10:00:00-03:00" }, { ingreso_deposito_at: "2026-10-19T10:00:00-03:00" }, AHORA);
+  expect(c.etapa).toBe("deposito");
+  expect(c.dias).toBe(1);
+  expect(quienTrajo(c)).toBe("Juan");
+});
