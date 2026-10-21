@@ -60,7 +60,7 @@ const AYUDA = {
   devuelto: "Ya figuran “Devuelto al cliente” en LightData (por remito firmado o cargado a mano). Caso cerrado.",
   marcados: "Tienen etiqueta: reclamado al cadete, extraviado o descartado. Extraviados y descartados no suman en los totales.",
 };
-const COL_FECHA = { calle: "Cancelado / retiro", deposito: "Ingresó", retiro: "Cargado", devuelto: "Devuelto", marcados: "Fecha" };
+const COL_FECHA = { calle: "Cancelados: cuándo se cancelaron. Cambios: cuándo se retiró el producto al comprador.", deposito: "Cuándo ingresó al depósito.", retiro: "Cuándo se cargó el cambio en LightData.", devuelto: "Cuándo se devolvió al cliente.", marcados: "La fecha de la etapa en la que está cada envío." };
 const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados" };
 const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
 
@@ -272,8 +272,8 @@ export default function Devoluciones() {
               {TIPOS.map(([id, lbl]) => <button key={id} className={tipo === id ? "on" : ""} onClick={() => setTipo(id)}>{lbl}</button>)}
             </div>
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder="Buscar cliente, venta, tracking o cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
-            <div className="dv-fechas" title={`Filtra por la columna ${COL_FECHA[etapa] || "Fecha"}`}>
-              <span>{COL_FECHA[etapa] || "Fecha"}</span>
+            <div className="dv-fechas" title={`Filtra por la columna Fecha. ${COL_FECHA[etapa]}`}>
+              <span>Fecha</span>
               <input type="date" value={fDesde} max={fHasta || undefined} onChange={(e) => setFDesde(e.target.value)} aria-label="Desde" />
               <span>a</span>
               <input type="date" value={fHasta} min={fDesde || undefined} onChange={(e) => setFHasta(e.target.value)} aria-label="Hasta" />
@@ -287,7 +287,7 @@ export default function Devoluciones() {
               <label className="dv-cb"><input type="checkbox" checked={lista.length > 0 && lista.every((c) => sel.has(c.did))} onChange={(e) => setSel(e.target.checked ? new Set(lista.map((c) => c.did)) : new Set())} /></label>
               <Orden col="cliente" orden={orden} set={setOrden}>Envío</Orden>
               <Orden col="cadete" orden={orden} set={setOrden} className="dv-hide-m">Cadete</Orden>
-              <Orden col="fecha" orden={orden} set={setOrden} className="dv-hide-m">{COL_FECHA[etapa] || "Fecha"}</Orden>
+              <span className="dv-hide-m" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Orden col="fecha" orden={orden} set={setOrden}>Fecha</Orden><Info texto={COL_FECHA[etapa]} /></span>
               <Orden col="valor" orden={orden} set={setOrden} className="dv-r">Valor</Orden>
               <Orden col="dias" orden={orden} set={setOrden} className="dv-r">Días</Orden>
             </div>
