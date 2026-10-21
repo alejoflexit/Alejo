@@ -49,11 +49,17 @@ const guardarGestion = (filas) => sbFetch("devoluciones_gestion?on_conflict=did"
 const pedirAccion = (accion) => authedFetch(`${SUPABASE_URL}/functions/v1/devoluciones-accion`, { method: "POST", body: JSON.stringify({ accion }) })
   .then((r) => r.json()).catch(() => ({ ok: false, motivo: "red" }));
 
-const ETAPAS = [
-  ["calle", "En la calle"], ["deposito", "En depósito"], ["retiro", "Cambios por retirar"],
-  ["devuelto", "Devueltos al cliente"], ["marcados", "Etiquetados"],
-];
-const TIPOS = [["todos", "Todos"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
+const AYUDA = {
+  calle: "Todavía no volvieron al depósito. Cancelados: el cadete no los devolvió (no están asignados a “devuelto deposito” en LightData). Cambios: el cadete ya retiró el producto al comprador y no se marcó el ingreso. Los días cuentan desde la cancelación (cambios: desde el retiro).",
+  deposito: "Ya están en el depósito y falta devolvérselos al cliente. Cancelados: chofer “devuelto deposito” en LightData. Cambios: marcados “Ingresó a depósito” acá. Los días cuentan desde que ingresaron. Se cierran con un remito firmado.",
+  calleVenc: `En la calle hace más de ${LIMITE_CALLE} días. Son los primeros a reclamar.`,
+  depositoVenc: `En el depósito hace más de ${LIMITE_DEPOSITO} días sin devolverse al cliente.`,
+  retiro: "Cambios que el cadete todavía no retiró al comprador. No suman en “En la calle” hasta que se retiran.",
+  devuelto: "Ya figuran “Devuelto al cliente” en LightData (por remito firmado o cargado a mano). Caso cerrado.",
+  marcados: "Tienen etiqueta: reclamado al cadete, extraviado o descartado. Extraviados y descartados no suman en los totales.",
+};
+const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados" };
+const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
 
 export default function Devoluciones() {
   const [datos, setDatos] = useState(null);
@@ -125,7 +131,7 @@ export default function Devoluciones() {
   useEffect(() => { setSel(new Set()); setAbierto(null); }, [etapa, tipo, soloVencidos, tab]);
   const toast = (t) => { setAviso(t); setTimeout(() => setAviso((a) => (a === t ? null : a)), 4500); };
 
-  const irA = (e, vencidos = false) => { setTab("seguimiento"); setEtapa(e); setSoloVencidos(vencidos); setTipo("todos"); };
+  const irA = (e, vencidos = false) => { setTab("seguimiento"); setEtapa(e); setSoloVencidos(vencidos); };
   const seleccionados = lista.filter((c) => sel.has(c.did));
 
   async function marcarIngreso(cs, deshacer = false) {
@@ -205,14 +211,6 @@ export default function Devoluciones() {
     <div className="dv-raiz" style={{ display: "flex", flexDirection: "column", gap: 16, color: C.ink, paddingBottom: 24 }}>
       <style>{CSS}</style>
 
-      {/* Totales */}
-      <div className="dv-kpis">
-        <Kpi titulo="En la calle" valor={r.calle} sub={plata(r.calleValor) + " declarado"} onClick={() => irA("calle")} activo={tab === "seguimiento" && etapa === "calle" && !soloVencidos} />
-        <Kpi titulo="En depósito" valor={r.deposito} sub="falta devolver al cliente" onClick={() => irA("deposito")} activo={tab === "seguimiento" && etapa === "deposito" && !soloVencidos} />
-        <Kpi titulo={`En la calle +${LIMITE_CALLE} días`} valor={r.calleVencidos} sub="desde la cancelación" alerta={r.calleVencidos > 0} onClick={() => irA("calle", true)} activo={tab === "seguimiento" && etapa === "calle" && soloVencidos} />
-        <Kpi titulo={`En depósito +${LIMITE_DEPOSITO} días`} valor={r.depositoVencidos} sub="desde que ingresó" alerta={r.depositoVencidos > 0} onClick={() => irA("deposito", true)} activo={tab === "seguimiento" && etapa === "deposito" && soloVencidos} />
-      </div>
-
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div className="dv-seg">
           <button className={tab === "seguimiento" ? "on" : ""} onClick={() => setTab("seguimiento")}>Seguimiento</button>
@@ -226,32 +224,44 @@ export default function Devoluciones() {
         <button className="dv-btn" onClick={actualizar}>Pedir actualización</button>
       </div>
 
+      {/* Etapas: cada tarjeta es una vista; adentro se elige todos o solo vencidos */}
+      <div className="dv-etapas">
+        <EtapaCard titulo="En la calle" ayuda={AYUDA.calle} valor={r.calle} sub={`${plata(r.calleValor)} declarado`}
+          activo={tab === "seguimiento" && etapa === "calle"} venc={soloVencidos}
+          vencidos={r.calleVencidos} limite={LIMITE_CALLE} ayudaVenc={AYUDA.calleVenc}
+          onElegir={(v) => irA("calle", v)} />
+        <EtapaCard titulo="En depósito" ayuda={AYUDA.deposito} valor={r.deposito} sub={`${plata(r.depositoValor)} declarado · falta devolver al cliente`}
+          activo={tab === "seguimiento" && etapa === "deposito"} venc={soloVencidos}
+          vencidos={r.depositoVencidos} limite={LIMITE_DEPOSITO} ayudaVenc={AYUDA.depositoVenc}
+          onElegir={(v) => irA("deposito", v)} />
+        <div className="dv-otros" style={card}>
+          {[["retiro", r.retiro], ["devuelto", r.devueltos], ["marcados", r.marcados]].map(([id, n]) => (
+            <button key={id} className={"dv-otro" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
+              <span>{NOMBRE_ETAPA[id]}</span><Info texto={AYUDA[id]} /><span style={{ flex: 1 }} /><b>{num(n)}</b>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {tab === "seguimiento" ? (
         <>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <div className="dv-chips">
-              {ETAPAS.map(([id, lbl]) => {
-                const n = id === "marcados" ? r.marcados : id === "devuelto" ? r.devueltos : r[id];
-                return <button key={id} className={etapa === id ? "on" : ""} onClick={() => { setEtapa(id); setSoloVencidos(false); }}>{lbl} <b>{num(n)}</b></button>;
-              })}
+          <div className="dv-barra-filtros">
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em" }}>Viendo</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>
+                {NOMBRE_ETAPA[etapa]}{soloVencidos && (etapa === "calle" || etapa === "deposito") ? ` · más de ${etapa === "calle" ? LIMITE_CALLE : LIMITE_DEPOSITO} días` : ""}
+                {tipo !== "todos" ? ` · ${tipo === "CAMBIO" ? "solo cambios" : "solo cancelados"}` : ""}
+                <span style={{ color: C.ink3, fontWeight: 400 }}> — {num(lista.length)} envío{lista.length !== 1 ? "s" : ""}</span>
+              </div>
             </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <div className="dv-seg sm">
+            <div style={{ flex: 1 }} />
+            <div className="dv-seg sm" title="Tipo de devolución">
               {TIPOS.map(([id, lbl]) => <button key={id} className={tipo === id ? "on" : ""} onClick={() => setTipo(id)}>{lbl}</button>)}
             </div>
-            {(etapa === "calle" || etapa === "deposito") && (
-              <label className="dv-check"><input type="checkbox" checked={soloVencidos} onChange={(e) => setSoloVencidos(e.target.checked)} /> Solo +{etapa === "calle" ? LIMITE_CALLE : LIMITE_DEPOSITO} días</label>
-            )}
-            <input className="dv-input" placeholder="Buscar cliente, venta, tracking o cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder="Buscar cliente, venta, tracking o cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
 
-          {etapa === "calle" && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, color: C.ink3 }}>Mandale a cada cadete un solo mensaje con todo lo que tiene que traer.</span>
-              <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>
-            </div>
-          )}
           <div style={{ ...card, overflow: "hidden" }}>
             <div className="dv-head">
               <label className="dv-cb"><input type="checkbox" checked={lista.length > 0 && lista.every((c) => sel.has(c.did))} onChange={(e) => setSel(e.target.checked ? new Set(lista.map((c) => c.did)) : new Set())} /></label>
@@ -291,15 +301,35 @@ export default function Devoluciones() {
   );
 }
 
-function Kpi({ titulo, valor, sub, alerta, onClick, activo }) {
+function Info({ texto }) {
+  // Ayuda al pasar el mouse o al tocar: flota encima, no mueve nada de lugar
   return (
-    <button onClick={onClick} className={"dv-kpi" + (activo ? " on" : "")} style={card}>
-      <div style={{ fontSize: 12, color: C.ink3, display: "flex", alignItems: "center", gap: 6 }}>
-        {alerta && <span className="dv-dot" style={{ background: C.ambar, margin: 0 }} />}{titulo}
+    <span className="dv-info" tabIndex={0} role="note" aria-label={texto} onClick={(e) => e.stopPropagation()}>
+      i<span className="dv-tip">{texto}</span>
+    </span>
+  );
+}
+
+function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, ayudaVenc, onElegir }) {
+  return (
+    <div className={"dv-etapa" + (activo ? " on" : "")} style={card} role="button" tabIndex={0}
+      onClick={() => onElegir(false)} onKeyDown={(e) => { if (e.key === "Enter") onElegir(false); }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 13, color: activo ? C.ink : C.ink2, fontWeight: 600 }}>{titulo}</span>
+        <Info texto={ayuda} />
+        <span style={{ flex: 1 }} />
+        {activo && <span className="dv-viendo">Viendo</span>}
       </div>
-      <div style={{ fontFamily: C.grotesk, fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 4 }}>{num(valor)}</div>
-      <div style={{ fontSize: 12, color: C.ink3, marginTop: 2 }}>{sub}</div>
-    </button>
+      <div style={{ fontFamily: C.grotesk, fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6, lineHeight: 1 }}>{num(valor)}</div>
+      <div style={{ fontSize: 12, color: C.ink3, marginTop: 6 }}>{sub}</div>
+      <div className="dv-etapa-sub" onClick={(e) => e.stopPropagation()}>
+        <button className={activo && !venc ? "on" : ""} onClick={() => onElegir(false)}>Todos <b>{num(valor)}</b></button>
+        <button className={"v" + (activo && venc ? " on" : "")} onClick={() => onElegir(true)}>
+          {vencidos > 0 && <span className="dv-dot" style={{ background: C.ambar, margin: 0 }} />}Más de {limite} días <b>{num(vencidos)}</b>
+        </button>
+        <Info texto={ayudaVenc} />
+      </div>
+    </div>
   );
 }
 
@@ -629,26 +659,39 @@ async function imprimirRemitos(remitos, ventana) {
 
 const CSS = `
 .dv-raiz{container:dv / inline-size}
-.dv-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-@container dv (max-width:820px){.dv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.dv-kpi{text-align:left;padding:16px 18px;cursor:pointer;color:inherit;font-family:inherit;transition:border-color .12s}
-.dv-kpi.on{border-color:rgba(46,230,182,.35)!important}
+.dv-etapas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(220px,.75fr);gap:12px}
+@container dv (max-width:820px){.dv-etapas{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dv-otros{grid-column:1/-1;flex-direction:row!important;flex-wrap:wrap}.dv-otro{flex:1 1 180px}}
+@container dv (max-width:520px){.dv-etapas{grid-template-columns:minmax(0,1fr)}}
+.dv-etapa{padding:16px 18px 14px;cursor:pointer;transition:border-color .12s,background-color .12s;outline:none}
+.dv-etapa.on{border-color:rgba(46,230,182,.45)!important;background:linear-gradient(180deg,rgba(46,230,182,.07),rgba(27,28,46,.72) 70%)!important;box-shadow:0 0 0 1px rgba(46,230,182,.12),0 0 35px rgba(0,255,180,.06)}
+.dv-etapa:focus-visible{border-color:rgba(46,230,182,.45)!important}
+.dv-viendo{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2ee6b6;background:rgba(46,230,182,.1);border:1px solid rgba(46,230,182,.3);border-radius:999px;padding:2px 8px}
+.dv-etapa-sub{display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.dv-etapa-sub button{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#a7adc2;font:inherit;font-size:12.5px;padding:5px 10px;border-radius:8px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.dv-etapa-sub button b{color:#f4f5fa;font-weight:600}
+.dv-etapa-sub button.on{background:rgba(46,230,182,.12);border-color:rgba(46,230,182,.35);color:#f4f5fa}
+.dv-etapa-sub button.v.on{background:rgba(245,192,68,.1);border-color:rgba(245,192,68,.35)}
+.dv-otros{display:flex;flex-direction:column;padding:6px;gap:2px}
+.dv-otro{display:flex;align-items:center;gap:6px;background:none;border:1px solid transparent;color:#a7adc2;font:inherit;font-size:13px;padding:10px 12px;border-radius:10px;cursor:pointer;text-align:left}
+.dv-otro b{color:#f4f5fa;font-weight:600}
+.dv-otro.on{background:rgba(46,230,182,.08);border-color:rgba(46,230,182,.3);color:#f4f5fa}
+@media (hover:hover){.dv-otro:hover{background:rgba(255,255,255,.04)}}
+.dv-info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.2);color:#a7adc2;font-size:10px;font-weight:700;font-style:italic;font-family:Georgia,serif;cursor:help;flex-shrink:0;outline:none}
+.dv-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:max-content;max-width:280px;background:#0d0e1c;border:1px solid rgba(255,255,255,.12);color:#e6e8f2;font:400 12.5px/1.45 -apple-system,'Segoe UI',sans-serif;font-style:normal;padding:9px 11px;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.45);opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none;z-index:80;text-align:left;white-space:normal}
+.dv-info:hover .dv-tip,.dv-info:focus .dv-tip{opacity:1;visibility:visible}
+.dv-otros .dv-tip{left:auto;right:-10px;transform:none}
+.dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dv-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}
 .dv-seg button{background:none;border:0;color:#a7adc2;font:inherit;font-size:13px;padding:7px 14px;border-radius:8px;cursor:pointer}
 .dv-seg.sm button{padding:5px 11px;font-size:12px}
 .dv-seg button.on{background:rgba(255,255,255,.08);color:#f4f5fa}
-.dv-chips{display:flex;gap:6px;flex-wrap:wrap}
-.dv-chips button{background:transparent;border:1px solid rgba(255,255,255,.08);color:#a7adc2;font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;cursor:pointer}
-.dv-chips button b{color:#f4f5fa;font-weight:600;margin-left:4px}
-.dv-chips button.on{border-color:rgba(46,230,182,.35);color:#f4f5fa;background:rgba(46,230,182,.06)}
 .dv-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:9px;cursor:pointer;white-space:nowrap}
 .dv-btn.pri{background:rgba(46,230,182,.12);border-color:rgba(46,230,182,.3);color:#2ee6b6}
 .dv-btn.on{border-color:rgba(255,255,255,.25)}
 .dv-btn:disabled{opacity:.5;cursor:default}
 .dv-input{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:9px;min-width:0;flex:1 1 220px;outline:none}
 .dv-input:focus{border-color:rgba(46,230,182,.35)}
-.dv-check{font-size:13px;color:#a7adc2;display:flex;gap:6px;align-items:center;cursor:pointer}
 .dv-head,.dv-linea{display:grid;grid-template-columns:28px minmax(0,1fr) 170px 100px 56px;gap:12px;align-items:center;padding:10px 16px}
 .dv-head{font-size:11px;color:#71768e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.06)}
 .dv-r{text-align:right}
