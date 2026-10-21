@@ -148,6 +148,15 @@ export default function Devoluciones() {
   async function armarRemitos(cs) {
     const libres = cs.filter((c) => !remitoDe.has(c.did));
     if (!libres.length) { toast("Esos envíos ya están en un remito abierto"); return; }
+    const previa = agruparParaRemitos(libres);
+    const yaEnRemito = cs.length - libres.length;
+    const texto = previa.length === 1
+      ? `Se arma 1 remito para ${previa[0].cliente} con ${previa[0].casos.length} envío(s).`
+      : `Se arman ${previa.length} remitos, uno por cliente (cada cliente firma el suyo):\n\n${previa.map((g) => `• ${g.cliente}: ${g.casos.length} envío(s)`).join("\n")}`;
+    if (!window.confirm(texto + (yaEnRemito ? `\n\n${yaEnRemito} envío(s) ya estaban en otro remito y no se incluyen.` : "") + "\n\n¿Continuar?")) return;
+    // La ventana se abre YA, en el clic: si se abre después de guardar, el navegador la bloquea
+    const w = window.open("", "_blank");
+    if (w) w.document.write("<p style='font-family:sans-serif;padding:24px'>Armando remito…</p>");
     setOcupado(true);
     try {
       const grupos = agruparParaRemitos(libres);
@@ -156,10 +165,10 @@ export default function Devoluciones() {
         const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify({ cliente: g.cliente, dids: g.casos.map((c) => c.did), creado_por: yo() }) });
         creados.push({ ...row, casos: g.casos });
       }
-      await imprimirRemitos(creados);
-      toast(`${creados.length} remito${creados.length > 1 ? "s" : ""} generado${creados.length > 1 ? "s" : ""}`);
+      await imprimirRemitos(creados, w);
+      toast(`${creados.length} remito${creados.length > 1 ? "s" : ""} generado${creados.length > 1 ? "s" : ""} (uno por cliente). También quedan en la pestaña Remitos.`);
       setSel(new Set()); await cargar();
-    } catch (e) { toast("No se pudo armar el remito: " + String(e.message).slice(0, 100)); }
+    } catch (e) { if (w) w.close(); toast("No se pudo armar el remito: " + String(e.message).slice(0, 100)); }
     setOcupado(false);
   }
   const casosDeRemito = (rem) => { const m = new Map(casos.map((c) => [Number(c.did), c])); return (rem.dids || []).map((d) => m.get(Number(d)) || { did: d }); };
@@ -473,9 +482,10 @@ async function leerFoto(file) {
 
 // ---------------- Impresión del remito ----------------
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
-async function imprimirRemitos(remitos) {
-  const w = window.open("", "_blank");
-  if (!w) { alert("El navegador bloqueó la ventana del remito. Permití ventanas emergentes para este sitio."); return; } // eslint-disable-line no-alert
+async function imprimirRemitos(remitos, ventana) {
+  const w = ventana || window.open("", "_blank");
+  if (!w) { window.alert("El navegador bloqueó la ventana del remito. El remito quedó guardado: imprimilo desde la pestaña Remitos o permití ventanas emergentes para este sitio."); return; }
+  w.document.open();
   const hoy = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date());
   const hojas = [];
   for (const rem of remitos) {
