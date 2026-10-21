@@ -134,6 +134,26 @@ async function procesarRemitos(page) {
   return remitos.length;
 }
 
+// Dirección de respaldo: la del Excel de LightData (tabla envios_busqueda del buscador)
+async function completarDirecciones() {
+  const faltan = (await sbTodo('devoluciones?direccion=is.null&select=did,localidad')).map((r) => r);
+  let n = 0;
+  for (let i = 0; i < faltan.length; i += 200) {
+    const parte = faltan.slice(i, i + 200);
+    const rows = await sb(`envios_busqueda?id_interno=in.(${parte.map((r) => r.did).join(',')})&select=id_interno,direccion,localidad`);
+    const porId = new Map(rows.filter((r) => String(r.direccion || '').trim()).map((r) => [Number(r.id_interno), r]));
+    const cambios = parte.filter((r) => porId.has(Number(r.did)));
+    for (let k = 0; k < cambios.length; k += 10) {
+      await Promise.all(cambios.slice(k, k + 10).map((r) => {
+        const e = porId.get(Number(r.did));
+        return sb(`devoluciones?did=eq.${r.did}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ direccion: String(e.direccion).trim(), localidad: r.localidad || String(e.localidad || '').trim() || null }) });
+      }));
+      n += Math.min(10, cambios.length - k);
+    }
+  }
+  if (n) console.log(`Direcciones completadas desde el buscador: ${n}`);
+}
+
 // ---------- 3) FOTO DIARIA (meta del día, racha, termómetro) ----------
 // Usa las MISMAS reglas que la pantalla (src/devolucionesShared.js). La meta de devoluciones se fija
 // con la primera foto del día y no cambia durante el día.
@@ -192,7 +212,7 @@ async function sync(page) {
     });
   }
 
-  const previas = new Map((await sbTodo('devoluciones?select=did,estado_ld,en_deposito_ld,detalle_at,direccion')).map((r) => [Number(r.did), r]));
+  const previas = new Map((await sbTodo('devoluciones?select=did,estado_ld,en_deposito_ld,detalle_at,direccion,localidad')).map((r) => [Number(r.did), r]));
   const dia = 24 * 3600e3;
   const necesitan = filas.filter((f) => {
     const p = previas.get(f.did);
@@ -206,7 +226,13 @@ async function sync(page) {
   const ahora = new Date().toISOString();
   const completas = filas.map((f) => {
     const base = { ...f, actualizado_at: ahora };
-    if (fx[f.did]) Object.assign(base, datosFicha(fx[f.did]), { detalle_at: ahora });
+    if (fx[f.did]) {
+      const dfx = datosFicha(fx[f.did]);
+      const prev = previas.get(f.did) || {};
+      // Los envíos que no son de ML no traen dirección en la ficha: no pisar la que ya había
+      if (!dfx.direccion) { dfx.direccion = prev.direccion || null; dfx.localidad = dfx.localidad || prev.localidad || null; }
+      Object.assign(base, dfx, { detalle_at: ahora });
+    }
     return base;
   });
   // Las que no se consultaron hoy: no pisar sus fechas (upsert solo con las columnas del listado)
@@ -217,6 +243,7 @@ async function sync(page) {
       await sb('devoluciones?on_conflict=did', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(grupo.slice(i, i + 500)) });
     }
   }
+  await completarDirecciones();
   await fotoDiaria();
   return { total: filas.length, fichas: Object.keys(fx).length };
 }
