@@ -11,7 +11,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const SECCIONES = ["metricas", "colectas", "arribos", "zonas", "pizarra", "tiquetera", "pendientes", "choferes", "pagos"];
+// OJO: tiene que coincidir con SECCIONES de src/permisos.js. Lo que no esté acá se descarta en
+// silencio al guardar (así se perdía "monitoreo", agregado a la app después — fix 15/10/2026).
+const SECCIONES = ["metricas", "colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "pendientes", "devoluciones", "choferes", "pagos"];
 // Liquidaciones: las tablas de pagos tienen RLS fija a admin@flexit.app. Dar el permiso a otro
 // usuario mostraría una pantalla vacía, así que no se ofrece (el rótulo no puede prometer algo
 // que el sistema no hace).

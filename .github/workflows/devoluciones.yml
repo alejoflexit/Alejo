@@ -1,0 +1,42 @@
+name: Devoluciones (sync + remitos firmados)
+
+# Seguimiento de devoluciones: baja de LightData cancelados y cambios desde el 1/9 y procesa
+# los remitos firmados que el equipo sube en la app (los pasa a "Devuelto al cliente").
+# Lo dispara también la app (edge function devoluciones-accion) al subir un remito o tocar Actualizar.
+
+on:
+  schedule:
+    - cron: '20 10-23 * * *'   # 07:20 a 20:20 ART, cada hora
+    - cron: '20 0-2 * * *'     # 21:20 a 23:20 ART
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: 'todo | procesar | sync'
+        required: false
+        default: 'todo'
+        type: string
+
+concurrency:
+  group: devoluciones
+  cancel-in-progress: false
+
+jobs:
+  devoluciones:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias
+        run: cd automation && npm install
+      - name: Sync devoluciones
+        env:
+          TZ: America/Argentina/Buenos_Aires
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
+          LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
+          ACCION: ${{ inputs.accion || 'todo' }}
+        run: cd automation && node sync_devoluciones.js
+        timeout-minutes: 20

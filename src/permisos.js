@@ -23,6 +23,7 @@ export const SECCIONES = [
   { id: "pizarra",    label: "Pizarra",     icon: "ti ti-notes" },
   { id: "tiquetera",  label: "Tiquetera",   icon: "ti ti-ticket" },
   { id: "pendientes", label: "Pendientes históricos", icon: "ti ti-history" },
+  { id: "devoluciones", label: "Devoluciones", icon: "ti ti-arrow-back-up" },
   { id: "choferes",   label: "Alta de choferes", icon: "ti ti-user-plus" },
   { id: "pagos",      label: "Liquidaciones", icon: "ti ti-cash", soloAdmin: true },
 ];

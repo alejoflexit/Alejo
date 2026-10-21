@@ -1,0 +1,54 @@
+import { armarCaso, resumen, codigoDeQR, agruparParaRemitos, QR_PREFIJO } from "./devolucionesShared";
+
+const AHORA = Date.parse("2026-10-20T12:00:00-03:00");
+const base = { did: 1, cliente: "Ohpic", valor: 1000, fecha_alta: "2026-10-01T10:00:00-03:00" };
+
+test("cancelado sin chofer depósito está en la calle y cuenta desde la cancelación", () => {
+  const c = armarCaso({ ...base, tipo: "CANCELADO", estado_ld: 8, fecha_cancelado: "2026-10-10T10:00:00-03:00" }, {}, AHORA);
+  expect(c.etapa).toBe("calle");
+  expect(c.dias).toBe(10);
+  expect(c.vencido).toBe(true);
+});
+
+test("cancelado con chofer devuelto deposito está en depósito y cuenta desde el ingreso", () => {
+  const c = armarCaso({ ...base, tipo: "CANCELADO", estado_ld: 8, en_deposito_ld: true, fecha_deposito: "2026-10-15T10:00:00-03:00" }, {}, AHORA);
+  expect(c.etapa).toBe("deposito");
+  expect(c.dias).toBe(5);
+  expect(c.vencido).toBe(false);
+});
+
+test("estado 14 es devuelto aunque tenga chofer depósito", () => {
+  expect(armarCaso({ ...base, tipo: "CANCELADO", estado_ld: 14, en_deposito_ld: true }, {}, AHORA).etapa).toBe("devuelto");
+});
+
+test("cambio: sin retirar → retiro; retirado → calle; ingreso marcado → depósito", () => {
+  const d = { ...base, tipo: "CAMBIO", estado_ld: 7 };
+  expect(armarCaso(d, {}, AHORA).etapa).toBe("retiro");
+  expect(armarCaso({ ...d, estado_ld: 5, fecha_retiro: "2026-10-18T10:00:00-03:00" }, {}, AHORA).etapa).toBe("calle");
+  const dep = armarCaso({ ...d, estado_ld: 5 }, { ingreso_deposito_at: "2026-10-19T10:00:00-03:00" }, AHORA);
+  expect(dep.etapa).toBe("deposito");
+  expect(dep.dias).toBe(1);
+});
+
+test("extraviado y descartado no cuentan en los totales; reclamado sí", () => {
+  const d = { ...base, tipo: "CANCELADO", estado_ld: 8 };
+  const casos = [armarCaso(d, { marca: "extraviado" }, AHORA), armarCaso(d, { marca: "reclamado" }, AHORA), armarCaso(d, {}, AHORA)];
+  const r = resumen(casos);
+  expect(r.calle).toBe(2);
+  expect(r.marcados).toBe(2);
+});
+
+test("NO_ES saca el caso", () => {
+  expect(armarCaso({ ...base, tipo: "CAMBIO", estado_ld: 5 }, { tipo_override: "NO_ES" }, AHORA)).toBeNull();
+});
+
+test("QR: lee el código y rechaza otra cosa", () => {
+  expect(codigoDeQR(QR_PREFIJO + "RD-00012")).toBe("RD-00012");
+  expect(codigoDeQR("https://mercadolibre.com/123")).toBeNull();
+});
+
+test("remitos: uno por cliente, de a 25", () => {
+  const casos = Array.from({ length: 30 }, (_, i) => ({ did: i, cliente: i < 27 ? "A" : "B" }));
+  const g = agruparParaRemitos(casos);
+  expect(g.map((x) => [x.cliente, x.casos.length])).toEqual([["A", 25], ["A", 2], ["B", 3]]);
+});
