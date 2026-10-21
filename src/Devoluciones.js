@@ -379,7 +379,7 @@ function ReclamosModal({ grupos, onEnviar, onCerrar }) {
   const reales = grupos.filter((g) => g.cadete).map((g) => {
     const ult = g.casos.map((c) => c.reclamo_at).filter(Boolean).sort().pop() || null;
     return { ...g, ultimo: ult, hoy: !!ult && new Date(Date.parse(ult) - 3 * 3600e3).toISOString().slice(0, 10) === hoyISO };
-  }).sort((a, b) => b.vencidos - a.vencidos || b.valor - a.valor);
+  }).sort((a, b) => b.casos.length - a.casos.length || b.vencidos - a.vencidos || b.valor - a.valor);
   const sinCadete = grupos.find((g) => !g.cadete);
   const q = busca.trim().toLowerCase();
   const lista = reales.filter((g) => (!q || g.cadete.toLowerCase().includes(q))
@@ -429,15 +429,14 @@ function ReclamosModal({ grupos, onEnviar, onCerrar }) {
                       {g.vencidos > 0 && <span className="dv-pill">{g.vencidos} con +{LIMITE_CALLE} d</span>}
                     </div>
                     <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>
-                      {g.casos.length} paquete{g.casos.length > 1 ? "s" : ""} · {plata(g.valor)} · {env ? `enviado ${fecha(env).split(", ")[1] || ""}` : g.ultimo ? `último reclamo ${hace(g.ultimo)}` : "nunca reclamado"}
+                      {g.casos.length} paquete{g.casos.length > 1 ? "s" : ""} · {plata(g.valor)} · {env ? `copiado ${fecha(env).split(", ")[1] || ""}` : g.ultimo ? `último reclamo ${hace(g.ultimo)}` : "nunca reclamado"}
                     </div>
                   </div>
                   <span className="dv-chev" style={{ transform: ab ? "rotate(180deg)" : "none" }}>⌄</span>
                 </div>
                 {ab && <pre className="dv-prev">{mensajeReclamo(g.cadete, g.casos)}</pre>}
                 <div className="dv-rec-acc">
-                  <button className="dv-btn wa" onClick={() => enviar(g, "wa")}>{env ? "Reenviar por WhatsApp" : "Enviar por WhatsApp"}</button>
-                  <button className="dv-btn" onClick={() => enviar(g, "copiar")}>Copiar</button>
+                  <button className={"dv-btn" + (env ? "" : " pri")} onClick={() => enviar(g, "copiar")}>{env ? "Copiado ✓ · copiar de nuevo" : "Copiar mensaje"}</button>
                 </div>
               </div>
             );
@@ -445,7 +444,7 @@ function ReclamosModal({ grupos, onEnviar, onCerrar }) {
         </div>
 
         <div className="dv-modal-pie">
-          “Enviar por WhatsApp” abre WhatsApp con el mensaje escrito: elegís el chat del cadete y mandás. Al enviar, esos paquetes quedan como reclamados.
+          “Copiar mensaje” lo deja listo para pegar en el WhatsApp del cadete. Al copiarlo, esos paquetes quedan como reclamados.
           {sinCadete ? ` ${sinCadete.casos.length} paquete(s) sin cadete real (sin asignar, “Repro gramar”, “Desasignado”) no se pueden reclamar: revisalos en LightData.` : ""}
         </div>
       </div>
