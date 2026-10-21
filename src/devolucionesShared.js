@@ -156,7 +156,8 @@ export const metaDevolver = (depositoVencidos) => Math.max(5, Math.min(20, Math.
 export function quienTrajo(c) {
   if (c.etapa !== "deposito" && c.etapa !== "devuelto") return null;
   // marcado a mano en la app: lo trajo el cadete que lo tenía (sigue asignado en LightData)
-  const q = c.tipo === "CANCELADO" && c.en_deposito_ld ? c.cadete_previo : (c.ingreso_deposito_at ? c.cadete : null);
+  const aMano = c.ingreso_deposito_at && !c.en_deposito_ld;
+  const q = c.tipo === "CANCELADO" && !aMano ? c.cadete_previo : (c.ingreso_deposito_at ? c.cadete : null);
   return q && !CHOFER_FICTICIO.test(q) ? q : null;
 }
 export function trajoPorCadete(casos) {
