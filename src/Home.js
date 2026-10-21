@@ -24,6 +24,7 @@ const ICONS = {
   pagos: (<><rect width="20" height="12" x="2" y="6" rx="2" /><circle cx="12" cy="12" r="2" /><path d="M6 12h.01M18 12h.01" /></>),
   monitoreo: (<><path d="M3 12h4l3 8 4-16 3 8h4" /></>),
   pendientes: (<><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v6h6" /><path d="M12 7v5l3 2" /></>),
+  devoluciones: (<><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></>),
   bell: (<><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></>),
   arrow: (<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>),
   check: (<><path d="M20 6 9 17l-5-5" /></>),
@@ -468,6 +469,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   const modulos = [
     { id: "metricas", label: "Métricas" }, { id: "colectas", label: "Colectas" }, { id: "arribos", label: "Arribos" }, { id: "monitoreo", label: "Monitoreo" },
     { id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }, { id: "pagos", label: "Pagos" }, { id: "pendientes", label: "Históricos" },
+    { id: "devoluciones", label: "Devoluciones" },
   ].filter((d) => puedeVer(d.id))
     .concat(session && esAdmin() ? [{ id: "usuarios", label: "Usuarios" }] : []); // solo el admin
 
