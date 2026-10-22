@@ -239,3 +239,19 @@ export function calidadDeImagen(gray, w, h) {
   return { brillo: Math.round(brillo), nitidez: Math.round(nitidez), problemas };
 }
 export const textoCalidad = (cal) => (cal && cal.problemas && cal.problemas.length ? `Foto ${cal.problemas.join(" y ")}` : "");
+
+// ---- Búsqueda en la lista: varias palabras, TODAS tienen que coincidir (en cualquier campo) ----
+// "yamila arauz 200" → cadete Yamila + calle Arauz + altura 200–299 ("al 200"). Sin tildes ni mayúsculas.
+const normal = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+export function coincideBusqueda(c, q) {
+  const palabras = normal(q).split(/\s+/).filter((p) => p && p !== "al");
+  if (!palabras.length) return true;
+  const campos = [c.cliente, c.ml_venta_id, c.tracking, c.cadete, c.did, c.li_texto, c.direccion, c.localidad].map(normal);
+  const alturas = (normal(c.direccion).match(/\d+/g) || []).map(Number);
+  return palabras.every((p) => {
+    if (campos.some((f) => f.includes(p))) return true;
+    // "200" redondo = "al 200": cualquier altura de 200 a 299
+    if (/^\d{3,5}$/.test(p) && Number(p) % 100 === 0) return alturas.some((a) => Math.floor(a / 100) === Number(p) / 100);
+    return false;
+  });
+}

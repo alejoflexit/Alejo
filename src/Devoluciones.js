@@ -7,7 +7,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
-  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -77,6 +77,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [tipo, setTipo] = useState("todos");
   const [soloVencidos, setSoloVencidos] = useState(false);
   const [busca, setBusca] = useState("");
+  const [fCadete, setFCadete] = useState(null); // filtro por cadete (tocando su nombre en la lista); la búsqueda corre dentro
   const [fDesde, setFDesde] = useState("");
   const [fHasta, setFHasta] = useState("");
   const [orden, setOrden] = useState({ col: "auto", dir: -1 });
@@ -134,8 +135,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
   }, [datos]);
 
   const lista = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     return casos.filter((c) => {
+      if (fCadete && (c.cadete || "") !== fCadete) return false;
       if (etapa === "marcados" ? !c.marca : c.etapa !== etapa || (c.cerrado && etapa !== "devuelto")) return false;
       if (tipo !== "todos" && c.tipo !== tipo) return false;
       if (soloSel) return sel.has(c.did);
@@ -144,14 +146,13 @@ export default function Devoluciones({ abrirEnvio = null }) {
         const d = diaAR(c.desde);
         if (!d || (fDesde && d < fDesde) || (fHasta && d > fHasta)) return false;
       }
-      if (!q) return true;
-      return [c.cliente, c.ml_venta_id, c.tracking, c.cadete, String(c.did), c.li_texto].some((v) => String(v || "").toLowerCase().includes(q));
+      return !q || coincideBusqueda(c, q);
     }).sort(orden.col === "auto" ? ordenar : (a, b) => {
       const k = { fecha: (x) => x.desde || "", valor: (x) => Number(x.valor) || 0, dias: (x) => x.dias ?? -1, cliente: (x) => (x.cliente || "").toLowerCase(), cadete: (x) => (x.cadete || "").toLowerCase() }[orden.col];
       const va = k(a), vb = k(b);
       return (va < vb ? -1 : va > vb ? 1 : 0) * orden.dir;
     });
-  }, [casos, etapa, tipo, soloVencidos, busca, fDesde, fHasta, orden, soloSel, sel]);
+  }, [casos, etapa, tipo, soloVencidos, busca, fCadete, fDesde, fHasta, orden, soloSel, sel]);
 
   const abrirAlLlegar = useRef(null);
   useEffect(() => { setSel(new Set()); setSoloSel(false); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tab]);
@@ -304,7 +305,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
             <div className="dv-seg sm" title="Tipo de devolución">
               {TIPOS.map(([id, lbl]) => <button key={id} className={tipo === id ? "on" : ""} onClick={() => setTipo(id)}>{lbl}</button>)}
             </div>
-            <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder="Buscar cliente, venta, tracking o cadete" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            {fCadete && <button className="dv-chip-f" onClick={() => setFCadete(null)} title="Sacar el filtro de cadete">{fCadete} <span aria-hidden="true">✕</span></button>}
+            <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
             <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
@@ -323,7 +325,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
               <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
                 onSel={(v) => setSel((s) => { const n = new Set(s); v ? n.add(c.did) : n.delete(c.did); return n; })}
-                onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} ocupado={ocupado}
+                onCadete={(n) => { setFCadete(n); setBusca(""); }} onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} ocupado={ocupado}
                 onReclamar={() => reclamar(c.cadete, [c])} onVerEnvio={abrirEnvio ? () => abrirEnvio(c.did) : null} />
             ))}
             {lista.length > 400 && <div style={{ padding: 12, textAlign: "center", color: C.ink3, fontSize: 12 }}>Mostrando 400 de {num(lista.length)}. Usá el buscador para acotar.</div>}
@@ -449,7 +451,7 @@ function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, 
   );
 }
 
-function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqueta, onReclamar, onVerEnvio, ocupado }) {
+function Fila({ c, remito, abierto, marcado, onToggle, onSel, onCadete, onIngreso, onEtiqueta, onReclamar, onVerEnvio, ocupado }) {
   const [nota, setNota] = useState(c.marca_nota || "");
   useEffect(() => { setNota(c.marca_nota || ""); }, [c.marca_nota]);
   return (
@@ -463,11 +465,18 @@ function Fila({ c, remito, abierto, marcado, onToggle, onSel, onIngreso, onEtiqu
             {c.marca && <span className="dv-tag mk">{MARCAS[c.marca]}</span>}
             {remito && <span className="dv-tag">{remito.codigo}</span>}
           </div>
-          <div style={{ fontSize: 12, color: C.ink3, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {c.direccion ? <>{c.direccion}{c.localidad ? <span style={{ color: C.ink3 }}>, {c.localidad}</span> : null}</> : <span style={{ color: C.ink3 }}>Sin dirección</span>}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {c.ml_venta_id ? `Venta ${c.ml_venta_id}` : `Tracking ${c.tracking || "—"}`} · #{c.did}<span className="dv-show-m"> · {c.cadete || "—"}</span>
           </div>
         </div>
-        <span className="dv-hide-m" style={{ fontSize: 13, color: C.ink2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.cadete || "—"}</span>
+        <span className="dv-hide-m" style={{ minWidth: 0, overflow: "hidden" }}>
+          {c.cadete && !CHOFER_FICTICIO.test(c.cadete)
+            ? <button className="dv-cadete-link" onClick={(e) => { e.stopPropagation(); onCadete(c.cadete); }} title={`Ver solo los de ${c.cadete}`}>{c.cadete}</button>
+            : <span style={{ fontSize: 13, color: C.ink2 }}>{c.cadete || "—"}</span>}
+        </span>
         <span className="dv-hide-m" style={{ fontSize: 13, color: C.ink2, fontVariantNumeric: "tabular-nums" }}>{fechaCorta(c.desde)}</span>
         <span className="dv-r" style={{ fontSize: 13, color: C.ink2 }}>{plata(c.valor)}</span>
         <span className="dv-r" style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 15, color: c.vencido ? C.ambar : C.ink }}>{c.dias ?? "—"}</span>
@@ -1629,6 +1638,9 @@ const CSS = `
 .dv-pc{border:2px solid transparent;transition:border-color .15s,opacity .15s;opacity:.6}
 .dv-pc.on{border-color:rgba(46,230,182,.55);opacity:1}
 .dv-pc.dudosa:not(.on){border-color:rgba(245,192,68,.45);opacity:1}
+.dv-cadete-link{background:none;border:0;padding:2px 0;font:inherit;font-size:13px;color:#c9cbe0;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;border-bottom:1px dashed rgba(255,255,255,.2)}
+.dv-cadete-link:hover{color:#2ee6b6;border-bottom-color:#2ee6b6}
+.dv-chip-f{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;border:1px solid rgba(46,230,182,.45);background:rgba(46,230,182,.1);color:#2ee6b6;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}

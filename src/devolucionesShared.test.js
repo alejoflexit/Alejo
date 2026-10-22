@@ -100,3 +100,13 @@ test("calidad: detecta foto lisa (borrosa) y oscura; una con bordes pasa", () =>
   const tablero = Array.from({ length: w * h }, (_, i) => (((i % w) >> 2) + ((i / w | 0) >> 2)) % 2 ? 230 : 40);
   expect(calidadDeImagen(tablero, w, h).problemas).toEqual([]);
 });
+
+test("búsqueda: varias palabras, sin tildes, y 'al 200' = 200–299", () => {
+  const { coincideBusqueda } = require("./devolucionesShared");
+  const c = { cliente: "Ohpic", cadete: "Yamila Segovia", direccion: "Aráoz 245", localidad: "Palermo", did: 99 };
+  expect(coincideBusqueda(c, "yamila araoz 200")).toBe(true);
+  expect(coincideBusqueda(c, "Yamila al 200")).toBe(true);
+  expect(coincideBusqueda(c, "yamila 300")).toBe(false);
+  expect(coincideBusqueda(c, "kevin araoz")).toBe(false);
+  expect(coincideBusqueda(c, "palermo ohpic")).toBe(true);
+});
