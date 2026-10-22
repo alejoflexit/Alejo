@@ -752,6 +752,45 @@ async function firmarFotos(paths) {
   return out;
 }
 
+// Acciones poco frecuentes de un remito devuelto, escondidas en "⋯". Reemplazar la foto pide confirmación primero.
+function MasAcciones({ rem, onReemplazar, subiendo }) {
+  const [menu, setMenu] = useState(false);
+  const [confirma, setConfirma] = useState(false);
+  const input = useRef();
+  const caja = useRef();
+  useEffect(() => {
+    if (!menu) return;
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setMenu(false); };
+    document.addEventListener("mousedown", fuera);
+    return () => document.removeEventListener("mousedown", fuera);
+  }, [menu]);
+  return (
+    <div ref={caja} style={{ position: "relative" }}>
+      <button className="dv-btn" aria-label="Más acciones" title="Más acciones" disabled={subiendo} onClick={() => setMenu(!menu)} style={{ padding: "7px 11px", letterSpacing: ".1em" }}>{subiendo ? "…" : "⋯"}</button>
+      {menu && (
+        <div className="dv-menu abajo">
+          <button onClick={() => { setMenu(false); setConfirma(true); }}>Reemplazar foto…</button>
+        </div>
+      )}
+      <input ref={input} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { onReemplazar(e.target.files[0]); e.target.value = ""; }} />
+      {confirma && (
+        <div className="dv-modal-fondo" onClick={() => setConfirma(false)}>
+          <div className="dv-modal" style={{ width: "min(440px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Reemplazar foto">
+            <div className="dv-modal-cab">
+              <div style={{ fontWeight: 700, fontSize: 16 }}>¿Reemplazar la foto de {rem.codigo}?</div>
+              <div style={{ fontSize: 13, color: C.ink2, marginTop: 6, lineHeight: 1.5 }}>Se cambia solo la imagen del remito firmado de <b>{rem.cliente}</b>. La foto actual queda guardada como registro y en LightData no cambia nada.</div>
+            </div>
+            <div className="dv-modal-pie" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="dv-btn" onClick={() => setConfirma(false)}>Cancelar</button>
+              <button className="dv-btn pri" onClick={() => { setConfirma(false); input.current && input.current.click(); }}>Sí, elegir foto nueva</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar }) {
   const [cliente, setCliente] = useState(null);
   const [mes, setMes] = useState(null);
@@ -875,10 +914,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
                 <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>{(r.dids || []).length} envíos · firmado subido por {r.firmado_por || "—"}</div>
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                   <button className="dv-btn" style={{ flex: 1 }} onClick={() => onImprimir(r)}>Reimprimir</button>
-                  <label className="dv-btn" style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
-                    {subiendo === r.codigo ? "Subiendo…" : "Reemplazar foto"}
-                    <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} disabled={!!subiendo} onChange={(e) => { onReemplazar(r, e.target.files[0]); e.target.value = ""; }} />
-                  </label>
+                  <MasAcciones rem={r} subiendo={subiendo === r.codigo} onReemplazar={(f) => onReemplazar(r, f)} />
                 </div>
                 {(r.fotos_anteriores || []).length > 0 && <div style={{ fontSize: 11, color: C.ink3, marginTop: 6 }}>Foto reemplazada ({r.fotos_anteriores.length} anterior{r.fotos_anteriores.length > 1 ? "es" : ""} guardada{r.fotos_anteriores.length > 1 ? "s" : ""})</div>}
               </div>
@@ -1032,12 +1068,7 @@ function RemitoFila({ rem, casos, subiendo, onSubir, onImprimir, onFoto, onAnula
             </>
           )}
           {rem.foto_path && <button className="dv-btn" onClick={onFoto}>Ver firma</button>}
-          {rem.estado === "devuelto" && (
-            <label className="dv-btn" style={{ cursor: "pointer" }}>
-              {subiendo ? "Subiendo…" : "Reemplazar foto"}
-              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} disabled={subiendo} onChange={(e) => { onReemplazar(e.target.files[0]); e.target.value = ""; }} />
-            </label>
-          )}
+          {rem.estado === "devuelto" && <MasAcciones rem={rem} subiendo={subiendo} onReemplazar={onReemplazar} />}
           {rem.estado === "emitido" && <button className="dv-btn" onClick={onAnular}>Anular</button>}
         </div>
       </div>
@@ -1199,6 +1230,7 @@ const CSS = `
 @container dv (max-width:700px){.dv-head,.dv-linea{grid-template-columns:24px minmax(0,1fr) 80px 36px;gap:8px;padding:10px 12px}.dv-hide-m{display:none}.dv-show-m{display:inline}.dv-det{padding:4px 12px 14px 12px}}
 .dv-barra{position:sticky;bottom:12px;margin:0 auto;z-index:50;display:flex;gap:8px;align-items:center;background:rgba(22,23,38,.96);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(720px,100%);flex-wrap:wrap;color:#f4f5fa;font-size:13px}
 .dv-menu{position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:190px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.dv-menu.abajo{bottom:auto;top:calc(100% + 6px);z-index:65}
 .dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:7px;cursor:pointer}
 @media (hover:hover){.dv-menu button:hover{background:rgba(255,255,255,.06)}}
 .dv-modal-fondo{position:fixed;inset:0;z-index:70;background:rgba(5,6,14,.66);display:flex;align-items:center;justify-content:center;padding:16px}
