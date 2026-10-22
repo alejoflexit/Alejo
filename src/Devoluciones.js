@@ -764,7 +764,7 @@ async function firmarFotos(paths) {
 }
 
 // Acciones poco frecuentes de un remito devuelto, escondidas en "⋯". Reemplazar la foto pide confirmación primero.
-function MasAcciones({ rem, onReemplazar, subiendo }) {
+function MasAcciones({ rem, onReemplazar, subiendo, onImprimir }) {
   const [menu, setMenu] = useState(null); // posición en pantalla del menú abierto (fixed: no lo recorta ninguna tarjeta)
   const [confirma, setConfirma] = useState(false);
   const input = useRef();
@@ -781,10 +781,11 @@ function MasAcciones({ rem, onReemplazar, subiendo }) {
   return (
     <div ref={caja} style={{ position: "relative" }}>
       <button className="dv-btn" aria-label="Más acciones" title="Más acciones" disabled={subiendo} style={{ padding: "7px 11px", letterSpacing: ".1em" }}
-        onClick={(e) => { if (menu) { setMenu(null); return; } const b = e.currentTarget.getBoundingClientRect(); const abajo = window.innerHeight - b.bottom > 80; setMenu({ left: Math.max(8, b.right - 200), top: abajo ? b.bottom + 6 : b.top - 52 }); }}>{subiendo ? "…" : "⋯"}</button>
+        onClick={(e) => { if (menu) { setMenu(null); return; } const b = e.currentTarget.getBoundingClientRect(); const abajo = window.innerHeight - b.bottom > 80; setMenu({ left: Math.max(8, b.right - 200), top: abajo ? b.bottom + 6 : b.top - (onImprimir ? 96 : 52) }); }}>{subiendo ? "…" : "⋯"}</button>
       {menu && createPortal(
         // Va al body: el vidrio (backdrop-filter) de las tarjetas encierra a los position:fixed y los recorta
         <div className="dv-menu" ref={pop} style={{ position: "fixed", left: menu.left, top: menu.top, bottom: "auto", right: "auto", zIndex: 75, minWidth: 200 }}>
+          {onImprimir && <button onClick={() => { setMenu(null); onImprimir(); }}>Reimprimir</button>}
           <button onClick={() => { setMenu(null); setConfirma(true); }}>Reemplazar foto…</button>
         </div>, document.body)}
       <input ref={input} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { onReemplazar(e.target.files[0]); e.target.value = ""; }} />
@@ -807,8 +808,9 @@ function MasAcciones({ rem, onReemplazar, subiendo }) {
 
 // ---------------- Visor de fotos dentro de la página (en vez de abrir otra pestaña) ----------------
 // items: [{ path, titulo, sub }]. Flechas / teclado para pasar entre las fotos de la vista; tocar la foto = zoom.
-function Visor({ items, inicio = 0, onCerrar, acciones }) {
+function Visor({ items, inicio = 0, onCerrar, acciones, digital, vistaInicial = "foto" }) {
   const [i, setI] = useState(inicio);
+  const [vista, setVista] = useState(vistaInicial);
   const [urls, setUrls] = useState({});
   const [zoom, setZoom] = useState(false);
   const it = items[i] || {};
@@ -836,23 +838,70 @@ function Visor({ items, inicio = 0, onCerrar, acciones }) {
           {it.sub && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.65)", marginTop: 2 }}>{it.sub}</div>}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          {digital && (
+            <div className="dv-seg sm" style={{ marginRight: 4 }}>
+              <button className={vista === "foto" ? "on" : ""} onClick={() => setVista("foto")}>Foto firmada</button>
+              <button className={vista === "digital" ? "on" : ""} onClick={() => setVista("digital")}>Remito digital</button>
+            </div>
+          )}
           {items.length > 1 && <span style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", marginRight: 4 }}>{i + 1} de {items.length}</span>}
           {acciones && acciones(it)}
-          {url && <a className="dv-btn" href={url} download={`${(it.titulo || "remito").split(" ")[0]}.jpg`}>Descargar</a>}
+          {url && vista === "foto" && <a className="dv-btn" href={url} download={`${(it.titulo || "remito").split(" ")[0]}.jpg`}>Descargar</a>}
           <button className="dv-btn" onClick={onCerrar} aria-label="Cerrar">✕</button>
         </div>
       </div>
+      {digital && vista === "digital" ? <div className="dv-visor-img" style={{ alignItems: "flex-start" }} onClick={(e) => e.stopPropagation()}>{digital(it)}</div> :
       <div className={"dv-visor-img" + (zoom ? " zoom" : "")} onClick={(e) => e.stopPropagation()}>
         {url ? <img src={url} alt={it.titulo || "Foto"} onClick={() => setZoom((z) => !z)} /> : <span style={{ color: "rgba(255,255,255,.6)" }}>{it.path ? "Cargando…" : "Sin foto"}</span>}
-      </div>
+      </div>}
       {items.length > 1 && (
         <>
           <button className="dv-visor-flecha izq" disabled={i === 0} onClick={(e) => { e.stopPropagation(); ir(-1); }} aria-label="Anterior">‹</button>
           <button className="dv-visor-flecha der" disabled={i === items.length - 1} onClick={(e) => { e.stopPropagation(); ir(1); }} aria-label="Siguiente">›</button>
         </>
       )}
-      <div className="dv-visor-pie">Tocá la foto para acercar · Esc para cerrar</div>
+      <div className="dv-visor-pie">{vista === "foto" ? "Tocá la foto para acercar · Esc para cerrar" : "Esc para cerrar"}</div>
     </div>, document.body);
+}
+
+// ---------------- Remito digital: el remito original con sus envíos, buscable ----------------
+function RemitoDigital({ rem, casos, resaltar = "" }) {
+  const [q, setQ] = useState(resaltar);
+  const filas = casos.map((c, n) => ({ c, n: n + 1 })).filter(({ c }) => !q.trim() || coincideBusqueda(c, q));
+  const total = casos.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+  return (
+    <div className="dv-rd" onClick={(e) => e.stopPropagation()}>
+      <div className="dv-rd-cab">
+        <div>
+          <div style={{ fontSize: 12, color: C.ink3, letterSpacing: ".06em" }}>REMITO DE DEVOLUCIÓN</div>
+          <div style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 22 }}>{rem.codigo}</div>
+        </div>
+        <span className="dv-tag" style={rem.estado === "devuelto" ? { color: C.teal, borderColor: "rgba(46,230,182,.3)" } : null}>{ESTADO_REMITO[rem.estado]}</span>
+      </div>
+      <div className="dv-rd-meta">
+        <div><span>Cliente</span><b>{rem.cliente}</b></div>
+        <div><span>Emitido</span><b>{fecha(rem.creado_at)}</b><small>{rem.creado_por || "—"}</small></div>
+        <div><span>Firma subida</span><b>{rem.firmado_at ? fecha(rem.firmado_at) : "—"}</b><small>{rem.firmado_por || ""}</small></div>
+        <div><span>Confirmado</span><b>{rem.confirmado_at ? fecha(rem.confirmado_at) : rem.procesado_at ? fecha(rem.procesado_at) : "—"}</b><small>{rem.confirmado_por || ""}</small></div>
+        <div><span>Envíos</span><b>{casos.length}</b></div>
+        <div><span>Valor declarado</span><b>{plata(total)}</b></div>
+      </div>
+      <input className="dv-input" style={{ width: "100%", margin: "4px 0 10px" }} placeholder="Buscar en este remito: venta, dirección, tracking…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="dv-rd-tabla">
+        <div className="dv-rd-f dv-rd-th"><span>#</span><span>Venta / tracking</span><span>Dirección</span><span>Tipo</span><span className="dv-r">Valor</span></div>
+        {filas.map(({ c, n }) => (
+          <div key={c.did} className="dv-rd-f">
+            <span style={{ color: C.ink3 }}>{n}</span>
+            <span style={{ minWidth: 0 }}><b style={{ fontWeight: 600 }}>{c.ml_venta_id || c.tracking || "—"}</b><small>#{c.did}{c.ml_venta_id && c.tracking ? ` · ${c.tracking}` : ""}</small></span>
+            <span style={{ minWidth: 0 }}>{c.direccion || "—"}<small>{c.localidad || ""}</small></span>
+            <span>{c.tipo === "CAMBIO" ? "Cambio" : c.tipo ? "Cancelado" : "—"}</span>
+            <span className="dv-r">{c.valor ? plata(c.valor) : "—"}</span>
+          </div>
+        ))}
+        {!filas.length && <div style={{ padding: 16, color: C.ink3, fontSize: 13, textAlign: "center" }}>Ningún envío de este remito coincide.</div>}
+      </div>
+    </div>
+  );
 }
 
 function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar }) {
@@ -862,6 +911,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
   const [fotos, setFotos] = useState({});
   const [bajando, setBajando] = useState(false);
   const [visor, setVisor] = useState(null); // índice en enVista
+  const [visorVista, setVisorVista] = useState("foto");
   const devueltos = remitos.filter((r) => r.estado === "devuelto");
   const fechaRem = (r) => r.firmado_at || r.procesado_at || r.creado_at;
 
@@ -894,7 +944,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
     return devueltos.filter((r) => {
       if (String(r.codigo || "").toLowerCase().includes(q) || (qn && /^\d+$/.test(qn) && String(r.codigo || "").replace(/^RD-0*/, "") === qn)) return true;
       if (String(r.cliente || "").toLowerCase().includes(q)) return true;
-      return casosDe(r).some((c) => [c.ml_venta_id, c.tracking, c.did].some((v) => v != null && String(v).toLowerCase().includes(q)));
+      return casosDe(r).some((c) => coincideBusqueda(c, busca));
     }).sort((a, b) => String(fechaRem(b)).localeCompare(String(fechaRem(a)))).slice(0, 60);
   }, [q, cliente, remitos]); // eslint-disable-line react-hooks/exhaustive-deps
   const enVista = mes ? delMes : encontrados;
@@ -944,7 +994,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         {miga}
         <span style={{ flex: 1 }} />
-        {!cliente && <input className="dv-input" style={{ flex: "0 1 260px" }} placeholder="Buscar remito, cliente o n° de venta" value={busca} onChange={(e) => setBusca(e.target.value)} />}
+        {!cliente && <input className="dv-input" style={{ flex: "0 1 260px" }} placeholder="Buscar remito, cliente, venta o dirección" value={busca} onChange={(e) => setBusca(e.target.value)} />}
         {mes && <button className="dv-btn pri" disabled={bajando || !delMes.some((r) => r.foto_path)} onClick={bajarZip}>{bajando ? "Armando .zip…" : `Descargar carpeta (${delMes.length})`}</button>}
       </div>
 
@@ -981,12 +1031,14 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
           {encontrados.length ? `${encontrados.length} remito${encontrados.length > 1 ? "s" : ""} encontrado${encontrados.length > 1 ? "s" : ""}` : "Ningún remito devuelto coincide con la búsqueda."}
         </div>
       )}
-      {visor != null && <Visor items={visorItems} inicio={visor} onCerrar={() => setVisor(null)} acciones={(it) => <button className="dv-btn" onClick={() => onImprimir(it.rem)}>Reimprimir</button>} />}
+      {visor != null && <Visor items={visorItems} inicio={visor} onCerrar={() => setVisor(null)} acciones={(it) => <button className="dv-btn" onClick={() => onImprimir(it.rem)}>Reimprimir</button>}
+        digital={(it) => <RemitoDigital key={it.rem.id} rem={it.rem} casos={casosDe(it.rem)} resaltar={!cliente && q.length >= 2 && !String(it.rem.codigo).toLowerCase().includes(q) && !String(it.rem.cliente || "").toLowerCase().includes(q) ? busca.trim() : ""} />}
+        vistaInicial={visorVista} />}
       {(mes || (!cliente && encontrados.length > 0)) && (
         <div className="dv-fotos">
           {enVista.map((r) => (
             <div key={r.id} className="dv-foto">
-              <button className="dv-foto-img" style={{ border: 0, width: "100%", cursor: r.foto_path ? "zoom-in" : "default" }} onClick={() => r.foto_path && setVisor(enVista.indexOf(r))} aria-label={`Ver la foto del remito ${r.codigo}`}>
+              <button className="dv-foto-img" style={{ border: 0, width: "100%", cursor: r.foto_path ? "zoom-in" : "default" }} onClick={() => { setVisorVista(r.foto_path ? "foto" : "digital"); setVisor(enVista.indexOf(r)); }} aria-label={`Ver la foto del remito ${r.codigo}`}>
                 {fotos[r.foto_path] ? <img src={fotos[r.foto_path]} alt={`Remito ${r.codigo} firmado`} loading="lazy" /> : <span style={{ color: C.ink3, fontSize: 12 }}>{r.foto_path ? "Cargando…" : "Sin foto"}</span>}
               </button>
               <div style={{ padding: "10px 12px" }}>
@@ -995,9 +1047,15 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
                   <span style={{ fontSize: 12, color: C.ink3 }}>{fecha(fechaRem(r))}</span>
                 </div>
                 <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>{(r.dids || []).length} envíos · firmado subido por {r.firmado_por || "—"}</div>
+                {!mes && q.length >= 2 && (() => {
+                  const m = casosDe(r).filter((c) => coincideBusqueda(c, busca));
+                  if (!m.length || m.length === (r.dids || []).length) return null;
+                  const c = m[0];
+                  return <div style={{ fontSize: 12, color: C.teal, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Contiene: {c.ml_venta_id || c.tracking || `#${c.did}`}{c.direccion ? ` · ${c.direccion}` : ""}{m.length > 1 ? ` y ${m.length - 1} más` : ""}</div>;
+                })()}
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                  <button className="dv-btn" style={{ flex: 1 }} onClick={() => onImprimir(r)}>Reimprimir</button>
-                  <MasAcciones rem={r} subiendo={subiendo === r.codigo} onReemplazar={(f) => onReemplazar(r, f)} />
+                  <button className="dv-btn" style={{ flex: 1 }} onClick={() => { setVisorVista("digital"); setVisor(enVista.indexOf(r)); }}>Ver remito</button>
+                  <MasAcciones rem={r} subiendo={subiendo === r.codigo} onReemplazar={(f) => onReemplazar(r, f)} onImprimir={() => onImprimir(r)} />
                 </div>
                 {r.calidad && r.calidad.problemas && r.calidad.problemas.length > 0 && <div style={{ fontSize: 11.5, color: C.ambar, marginTop: 6 }}>{textoCalidad(r.calidad)} · revisar</div>}
                 {(r.fotos_anteriores || []).length > 0 && <div style={{ fontSize: 11, color: C.ink3, marginTop: 6 }}>Foto reemplazada ({r.fotos_anteriores.length} anterior{r.fotos_anteriores.length > 1 ? "es" : ""} guardada{r.fotos_anteriores.length > 1 ? "s" : ""})</div>}
@@ -1583,7 +1641,7 @@ async function imprimirRemitos(remitos, ventana) {
   const w = ventana || window.open("", "_blank");
   if (!w) { window.alert("El navegador bloqueó la ventana del remito. El remito quedó guardado: imprimilo desde la pestaña Remitos o permití ventanas emergentes para este sitio."); return; }
   w.document.open();
-  const hoy = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date());
+  const fmtDia = (d) => new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", year: "numeric" }).format(d ? new Date(d) : new Date());
   const hojas = [];
   for (const rem of remitos) {
     const qr = await QRCode.toDataURL(QR_PREFIJO + rem.codigo, { margin: 1, width: 320, errorCorrectionLevel: "M" });
@@ -1592,7 +1650,7 @@ async function imprimirRemitos(remitos, ventana) {
       hojas.push(`<section class="hoja">
         <header><div><div class="marca">FLEXIT</div><div class="tit">Remito de devolución</div><div class="cod">${esc(rem.codigo)}</div></div>
           <div class="qr"><img src="${qr}" alt=""/><div>${copia}</div></div></header>
-        <div class="meta"><div><span>Cliente</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${hoy}</b></div><div><span>Cantidad</span><b>${rem.casos.length}</b></div></div>
+        <div class="meta"><div><span>Cliente</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Cantidad</span><b>${rem.casos.length}</b></div></div>
         <table><thead><tr><th>#</th><th>Venta</th><th>Tracking</th><th>Tipo</th><th>Detalle</th></tr></thead><tbody>${filas}</tbody></table>
         <p class="leyenda">Recibí conforme los ${rem.casos.length} paquete(s) detallados.</p>
         <footer><div>Nombre y apellido</div><div>DNI</div><div>Firma</div><div>Fecha de recepción</div></footer>
@@ -1695,6 +1753,15 @@ const CSS = `
 .dv-visor-flecha:disabled{opacity:.25;cursor:default}
 .dv-visor-pie{text-align:center;font-size:12px;color:rgba(255,255,255,.45);padding:6px 0 calc(env(safe-area-inset-bottom) + 10px)}
 @media (max-width:560px){.dv-visor-img{padding:0 8px 8px}.dv-visor-flecha{top:auto;bottom:34px;transform:none}}
+.dv-rd{width:min(860px,100%);margin:0 auto;background:#16172a;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:18px 20px;color:#f4f5fa}
+.dv-rd-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px}
+.dv-rd-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 16px;padding:14px 0}
+.dv-rd-meta span{display:block;font-size:11.5px;color:#8a8ca6}.dv-rd-meta b{display:block;font-weight:600;font-size:14px}.dv-rd-meta small{display:block;font-size:11.5px;color:#8a8ca6}
+.dv-rd-tabla{border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden}
+.dv-rd-f{display:grid;grid-template-columns:32px minmax(0,1.2fr) minmax(0,1.5fr) 80px 96px;gap:10px;padding:9px 12px;font-size:13px;align-items:center;border-top:1px solid rgba(255,255,255,.05)}
+.dv-rd-f small{display:block;font-size:11.5px;color:#8a8ca6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dv-rd-th{border-top:0;background:rgba(255,255,255,.03);font-size:11px;color:#8a8ca6;text-transform:uppercase;letter-spacing:.05em}
+@media (max-width:620px){.dv-rd-f{grid-template-columns:24px minmax(0,1fr) 84px}.dv-rd-f>:nth-child(3),.dv-rd-f>:nth-child(4){display:none}}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
