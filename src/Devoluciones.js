@@ -730,6 +730,159 @@ function ReclamosModal({ grupos, trajo, onEnviar, onCerrar }) {
 // ---------------- Remitos ----------------
 const ESTADO_REMITO = { emitido: "Esperando firma", procesando: "Procesando en LightData", devuelto: "Devuelto al cliente", error: "Con error", anulado: "Anulado" };
 
+// ---------------- Archivo de remitos devueltos: cliente → mes → remitos ----------------
+// Las carpetas se arman con los datos de cada remito (cliente + mes de la firma): las fotos no se
+// mueven ni se duplican en el storage, y un remito nuevo aparece solo en su carpeta.
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const mesDe = (iso) => { const d = diaAR(iso); return d ? d.slice(0, 7) : "sin-fecha"; };
+const nombreMes = (k) => (k === "sin-fecha" ? "Sin fecha" : `${MESES[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`);
+function IconoCarpeta({ abierta }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={abierta ? C.teal : C.ink2} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </svg>
+  );
+}
+async function firmarFotos(paths) {
+  if (!paths.length) return {};
+  const r = await authedFetch(`${SUPABASE_URL}/storage/v1/object/sign/remitos-firmados`, { method: "POST", body: JSON.stringify({ expiresIn: 3600, paths }) });
+  const j = await r.json().catch(() => []);
+  const out = {};
+  (Array.isArray(j) ? j : []).forEach((x) => { if (x.signedURL && x.path) out[x.path] = `${SUPABASE_URL}/storage/v1${x.signedURL}`; });
+  return out;
+}
+
+function Carpetas({ remitos, casosDe, onImprimir, toast }) {
+  const [cliente, setCliente] = useState(null);
+  const [mes, setMes] = useState(null);
+  const [busca, setBusca] = useState("");
+  const [fotos, setFotos] = useState({});
+  const [bajando, setBajando] = useState(false);
+  const devueltos = remitos.filter((r) => r.estado === "devuelto");
+  const fechaRem = (r) => r.firmado_at || r.procesado_at || r.creado_at;
+
+  const porCliente = useMemo(() => {
+    const m = new Map();
+    for (const r of devueltos) {
+      const k = r.cliente || "(sin cliente)";
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(r);
+    }
+    return [...m.entries()].map(([nombre, rs]) => ({
+      nombre, remitos: rs, envios: rs.reduce((s, r) => s + (r.dids || []).length, 0),
+      ultimo: rs.map(fechaRem).filter(Boolean).sort().pop(),
+    })).sort((a, b) => String(b.ultimo).localeCompare(String(a.ultimo)));
+  }, [remitos]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const carpeta = cliente ? porCliente.find((c) => c.nombre === cliente) : null;
+  const meses = useMemo(() => {
+    if (!carpeta) return [];
+    const m = new Map();
+    for (const r of carpeta.remitos) { const k = mesDe(fechaRem(r)); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
+    return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([k, rs]) => ({ k, remitos: rs.sort((a, b) => String(fechaRem(b)).localeCompare(String(fechaRem(a)))) }));
+  }, [carpeta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const delMes = mes ? (meses.find((m) => m.k === mes) || { remitos: [] }).remitos : [];
+
+  // Miniaturas de las fotos firmadas del mes abierto
+  useEffect(() => {
+    const paths = delMes.map((r) => r.foto_path).filter((p) => p && !fotos[p]);
+    if (!paths.length) return;
+    firmarFotos(paths).then((m) => setFotos((f) => ({ ...f, ...m }))).catch(() => {});
+  }, [mes, cliente]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function bajarZip() {
+    setBajando(true);
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const urls = await firmarFotos(delMes.map((r) => r.foto_path).filter(Boolean));
+      for (const r of delMes) {
+        const u = urls[r.foto_path];
+        if (!u) continue;
+        const b = await (await fetch(u)).blob();
+        zip.file(`${r.codigo} - ${diaAR(fechaRem(r))}.jpg`, b);
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Remitos ${cliente} - ${nombreMes(mes)}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } catch (e) { toast("No se pudo armar el .zip: " + String(e.message || e).slice(0, 80)); }
+    setBajando(false);
+  }
+
+  const q = busca.trim().toLowerCase();
+  const miga = (
+    <div className="dv-miga">
+      <button onClick={() => { setCliente(null); setMes(null); }} className={!cliente ? "on" : ""}>Remitos devueltos</button>
+      {cliente && <><span>›</span><button onClick={() => setMes(null)} className={!mes ? "on" : ""}>{cliente}</button></>}
+      {mes && <><span>›</span><button className="on">{nombreMes(mes)}</button></>}
+    </div>
+  );
+
+  if (!devueltos.length) return <div style={{ ...card, padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Todavía no hay remitos devueltos. Cuando se sube la foto de un remito firmado y se procesa, queda guardado acá en la carpeta de su cliente.</div>;
+
+  return (
+    <div style={{ ...card, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        {miga}
+        <span style={{ flex: 1 }} />
+        {!cliente && <input className="dv-input" style={{ flex: "0 1 260px" }} placeholder="Buscar cliente" value={busca} onChange={(e) => setBusca(e.target.value)} />}
+        {mes && <button className="dv-btn pri" disabled={bajando || !delMes.some((r) => r.foto_path)} onClick={bajarZip}>{bajando ? "Armando .zip…" : `Descargar carpeta (${delMes.length})`}</button>}
+      </div>
+
+      {!cliente && (
+        <div className="dv-carpetas">
+          {porCliente.filter((c) => !q || c.nombre.toLowerCase().includes(q)).map((c) => (
+            <button key={c.nombre} className="dv-carpeta" onClick={() => { setCliente(c.nombre); setMes(null); }}>
+              <IconoCarpeta />
+              <span style={{ minWidth: 0 }}>
+                <span className="dv-carpeta-n">{c.nombre}</span>
+                <span className="dv-carpeta-s">{c.remitos.length} remito{c.remitos.length > 1 ? "s" : ""} · {num(c.envios)} envíos · último {fecha(c.ultimo).split(",")[0]}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {cliente && !mes && (
+        <div className="dv-carpetas">
+          {meses.map((m) => (
+            <button key={m.k} className="dv-carpeta" onClick={() => setMes(m.k)}>
+              <IconoCarpeta />
+              <span style={{ minWidth: 0 }}>
+                <span className="dv-carpeta-n">{nombreMes(m.k)}</span>
+                <span className="dv-carpeta-s">{m.remitos.length} remito{m.remitos.length > 1 ? "s" : ""} · {num(m.remitos.reduce((s, r) => s + (r.dids || []).length, 0))} envíos</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mes && (
+        <div className="dv-fotos">
+          {delMes.map((r) => (
+            <div key={r.id} className="dv-foto">
+              <a href={fotos[r.foto_path] || undefined} target="_blank" rel="noopener noreferrer" className="dv-foto-img" aria-label={`Ver la foto del remito ${r.codigo}`}>
+                {fotos[r.foto_path] ? <img src={fotos[r.foto_path]} alt={`Remito ${r.codigo} firmado`} loading="lazy" /> : <span style={{ color: C.ink3, fontSize: 12 }}>{r.foto_path ? "Cargando…" : "Sin foto"}</span>}
+              </a>
+              <div style={{ padding: "10px 12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <b style={{ fontFamily: C.grotesk }}>{r.codigo}</b>
+                  <span style={{ fontSize: 12, color: C.ink3 }}>{fecha(fechaRem(r))}</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>{(r.dids || []).length} envíos · firmado subido por {r.firmado_por || "—"}</div>
+                <button className="dv-btn" style={{ marginTop: 8, width: "100%" }} onClick={() => onImprimir(r)}>Reimprimir remito</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Remitos({ remitos, casosDe, recargar, toast }) {
   const [filtro, setFiltro] = useState("abiertos");
   const [subiendo, setSubiendo] = useState(null); // codigo en curso
@@ -791,17 +944,17 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
       </div>
 
       <div className="dv-seg sm" style={{ alignSelf: "flex-start" }}>
-        {[["abiertos", "Abiertos"], ["devueltos", "Devueltos"], ["todos", "Todos"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
+        {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"], ["todos", "Todos"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
       </div>
 
-      <div style={{ ...card, overflow: "hidden" }}>
+      {filtro === "devueltos" ? <Carpetas remitos={remitos} casosDe={casosDe} toast={toast} onImprimir={(r) => imprimirRemitos([{ ...r, casos: casosDe(r) }])} /> : <div style={{ ...card, overflow: "hidden" }}>
         {lista.length === 0 && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>No hay remitos en esta vista. Se arman desde Seguimiento → En depósito, seleccionando envíos.</div>}
         {lista.map((rem) => (
           <RemitoFila key={rem.id} rem={rem} casos={casosDe(rem)} subiendo={subiendo === rem.codigo}
             onSubir={(f) => subirFirmado(f, rem)} onImprimir={() => imprimirRemitos([{ ...rem, casos: casosDe(rem) }])}
             onFoto={() => verFoto(rem)} onAnular={() => anular(rem)} />
         ))}
-      </div>
+      </div>}
     </>
   );
 }
@@ -954,6 +1107,17 @@ const CSS = `
 .dv-rt-fila{border-bottom:1px solid rgba(255,255,255,.05)}.dv-rt-fila>.dv-rt{cursor:pointer}.dv-rt-fila.ab{background:rgba(255,255,255,.025)}.dv-rt-fila.hecho{opacity:.55}
 .dv-rec-item{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:#c9cde0;padding:3px 0}
 @media (max-width:640px){.dv-rt{grid-template-columns:minmax(0,1fr) 40px 40px 40px 70px;padding:10px 12px}.dv-rt-x,.dv-rt>span:nth-child(7){display:none}}
+.dv-miga{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px;color:#71768e}
+.dv-miga button{background:none;border:0;padding:2px 0;font:inherit;color:#a7adc2;cursor:pointer}.dv-miga button.on{color:#f4f5fa;font-weight:600}
+.dv-carpetas{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.dv-carpeta{display:flex;gap:12px;align-items:center;text-align:left;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;color:inherit;font:inherit;cursor:pointer}
+@media (hover:hover){.dv-carpeta:hover{border-color:rgba(46,230,182,.3);background:rgba(46,230,182,.04)}}
+.dv-carpeta-n{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dv-carpeta-s{display:block;font-size:12px;color:#71768e;margin-top:2px}
+.dv-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.dv-foto{border:1px solid rgba(255,255,255,.07);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.02)}
+.dv-foto-img{display:flex;align-items:center;justify-content:center;height:220px;background:#0d0e1c;overflow:hidden}
+.dv-foto-img img{width:100%;height:100%;object-fit:cover;object-position:top}
 .dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dv-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}
