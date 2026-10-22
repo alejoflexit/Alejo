@@ -91,3 +91,12 @@ test("cancelado en la calle marcado 'Ingresó a depósito' en la app pasa a dep�
   expect(c.dias).toBe(1);
   expect(quienTrajo(c)).toBe("Juan");
 });
+
+test("calidad: detecta foto lisa (borrosa) y oscura; una con bordes pasa", () => {
+  const { calidadDeImagen } = require("./devolucionesShared");
+  const w = 40, h = 40;
+  const lisa = new Array(w * h).fill(30);
+  expect(calidadDeImagen(lisa, w, h).problemas).toEqual(["oscura", "borrosa"]);
+  const tablero = Array.from({ length: w * h }, (_, i) => (((i % w) >> 2) + ((i / w | 0) >> 2)) % 2 ? 230 : 40);
+  expect(calidadDeImagen(tablero, w, h).problemas).toEqual([]);
+});

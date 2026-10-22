@@ -213,3 +213,29 @@ export function inicioSemana(fecha) {
   const t = Date.parse(fecha + "T12:00:00Z"); const dow = (new Date(t).getUTCDay() + 6) % 7;
   return new Date(t - dow * 864e5).toISOString().slice(0, 10);
 }
+
+// ---------------- Calidad de la foto del remito ----------------
+// gray: luminancia 0-255 por pixel (imagen chica, ~400 px de ancho). Nitidez = varianza del laplaciano
+// (una foto movida o fuera de foco tiene bordes suaves → varianza baja). Umbrales conservadores: solo
+// marca lo claramente malo, para no llenar de falsas alarmas.
+export const UMBRAL_CALIDAD = { oscura: 55, quemada: 240, borrosa: 25 };
+export function calidadDeImagen(gray, w, h) {
+  let suma = 0;
+  for (let i = 0; i < gray.length; i++) suma += gray[i];
+  const brillo = gray.length ? suma / gray.length : 0;
+  let n = 0, m = 0, m2 = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const lap = 4 * gray[i] - gray[i - 1] - gray[i + 1] - gray[i - w] - gray[i + w];
+      n++; const d = lap - m; m += d / n; m2 += d * (lap - m);
+    }
+  }
+  const nitidez = n > 1 ? m2 / (n - 1) : 0;
+  const problemas = [];
+  if (brillo < UMBRAL_CALIDAD.oscura) problemas.push("oscura");
+  if (brillo > UMBRAL_CALIDAD.quemada) problemas.push("muy clara");
+  if (nitidez < UMBRAL_CALIDAD.borrosa) problemas.push("borrosa");
+  return { brillo: Math.round(brillo), nitidez: Math.round(nitidez), problemas };
+}
+export const textoCalidad = (cal) => (cal && cal.problemas && cal.problemas.length ? `Foto ${cal.problemas.join(" y ")}` : "");

@@ -7,7 +7,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
-  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -93,15 +93,16 @@ export default function Devoluciones({ abrirEnvio = null }) {
     enCurso.current = true;
     try {
       const hace21 = new Date(Date.now() - 21 * 864e5).toISOString();
-      const [dev, gest, rem, sync, diario, eventos] = await Promise.all([
+      const [dev, gest, rem, sync, diario, eventos, fallidos] = await Promise.all([
         traerTodo("devoluciones?select=*&order=did"),
         traerTodo("devoluciones_gestion?select=*"),
         sbFetch("remitos_devolucion?select=*&order=id.desc&limit=300"),
         sbFetch("devoluciones_sync?select=*&id=eq.1"),
         sbFetch("devoluciones_diario?select=*&order=fecha.desc&limit=60").catch(() => []),
         sbFetch(`devoluciones_eventos?select=*&at=gte.${hace21}&order=at.desc&limit=2000`).catch(() => []),
+        sbFetch("remitos_fallidos?estado=eq.pendiente&select=*&order=at.desc&limit=100").catch(() => []),
       ]);
-      setDatos({ dev, gest, rem, sync: sync[0] || null, diario, eventos });
+      setDatos({ dev, gest, rem, sync: sync[0] || null, diario, eventos, fallidos });
       setError(null);
     } catch (e) { setError(String(e.message || e).slice(0, 200)); }
     finally { enCurso.current = false; }
@@ -343,7 +344,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
           )}
         </>
       ) : (
-        <Remitos remitos={datos.rem} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
+        <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
       )}
 
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
@@ -920,6 +921,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
                   <button className="dv-btn" style={{ flex: 1 }} onClick={() => onImprimir(r)}>Reimprimir</button>
                   <MasAcciones rem={r} subiendo={subiendo === r.codigo} onReemplazar={(f) => onReemplazar(r, f)} />
                 </div>
+                {r.calidad && r.calidad.problemas && r.calidad.problemas.length > 0 && <div style={{ fontSize: 11.5, color: C.ambar, marginTop: 6 }}>{textoCalidad(r.calidad)} · revisar</div>}
                 {(r.fotos_anteriores || []).length > 0 && <div style={{ fontSize: 11, color: C.ink3, marginTop: 6 }}>Foto reemplazada ({r.fotos_anteriores.length} anterior{r.fotos_anteriores.length > 1 ? "es" : ""} guardada{r.fotos_anteriores.length > 1 ? "s" : ""})</div>}
               </div>
             </div>
@@ -930,7 +932,121 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
   );
 }
 
-function Remitos({ remitos, casosDe, recargar, toast }) {
+// ---------------- Fotos que no se pudieron reconocer ----------------
+function NoReconocidas({ fallidos, remitos, onAsignar, onDescartar }) {
+  const [fotos, setFotos] = useState({});
+  const [elegido, setElegido] = useState({});
+  useEffect(() => {
+    const paths = fallidos.map((f) => f.foto_path).filter((p) => !fotos[p]);
+    if (paths.length) firmarFotos(paths).then((m) => setFotos((x) => ({ ...x, ...m }))).catch(() => {});
+  }, [fallidos]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!fallidos.length) return null;
+  const abiertos = remitos.filter((r) => ["emitido", "error"].includes(r.estado));
+  return (
+    <div style={{ ...card, padding: 16, borderColor: "rgba(245,192,68,.3)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span className="dv-dot" style={{ background: C.ambar, margin: 0 }} />
+        <span style={{ fontWeight: 600 }}>No reconocidas · {fallidos.length}</span>
+        <Info texto="Fotos subidas que la app no pudo asignar a un remito (no se leyó el QR o el QR no corresponde a un remito). Elegí a qué remito corresponde cada una viendo la foto, o descartala si no sirve." />
+      </div>
+      <div className="dv-fotos" style={{ marginTop: 12 }}>
+        {fallidos.map((f) => (
+          <div key={f.id} className="dv-foto">
+            <a href={fotos[f.foto_path] || undefined} target="_blank" rel="noopener noreferrer" className="dv-foto-img" style={{ height: 180 }} aria-label="Ver la foto">
+              {fotos[f.foto_path] ? <img src={fotos[f.foto_path]} alt="Foto no reconocida" loading="lazy" /> : <span style={{ color: C.ink3, fontSize: 12 }}>Cargando…</span>}
+            </a>
+            <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 12, color: C.ambar }}>{f.motivo}{f.calidad && f.calidad.problemas && f.calidad.problemas.length ? ` · ${textoCalidad(f.calidad).toLowerCase()}` : ""}</div>
+              <div style={{ fontSize: 11.5, color: C.ink3 }}>{fecha(f.at)} · {f.por || "—"}</div>
+              <select className="dv-input" value={elegido[f.id] || ""} onChange={(e) => setElegido((x) => ({ ...x, [f.id]: e.target.value }))} aria-label="Remito al que corresponde">
+                <option value="">¿De qué remito es?</option>
+                {abiertos.map((r) => <option key={r.id} value={r.codigo}>{r.codigo} · {r.cliente} ({(r.dids || []).length})</option>)}
+              </select>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="dv-btn pri" style={{ flex: 1 }} disabled={!elegido[f.id]} onClick={() => onAsignar(f, abiertos.find((r) => r.codigo === elegido[f.id]))}>Asignar</button>
+                <button className="dv-btn" onClick={() => onDescartar(f)}>Descartar</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Modo escáner: varios remitos seguidos con la cámara ----------------
+// Mira el video en vivo; cuando aparece un QR de remito nuevo, saca la foto sola (a resolución completa),
+// mide nitidez/luz y la manda a subir mientras se apunta al siguiente.
+function Escaner({ remitos, onLectura, onCerrar }) {
+  const video = useRef();
+  const vistos = useRef(new Set());
+  const ocupado = useRef(false);
+  const ultimo = useRef({ codigo: null, veces: 0 }); // estable = mismo QR en 2 lecturas seguidas (no saca la foto en movimiento)
+  const [error, setError] = useState(null);
+  const [flash, setFlash] = useState(null); // { texto, tipo }
+  const [cuenta, setCuenta] = useState(0);
+  useEffect(() => {
+    let stream, timer, vivo = true;
+    const chico = document.createElement("canvas");
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+        if (!vivo) { stream.getTracks().forEach((t) => t.stop()); return; }
+        video.current.srcObject = stream;
+        await video.current.play();
+      } catch (e) { setError("No se pudo abrir la cámara. Revisá el permiso de cámara del navegador para esta página."); return; }
+      timer = setInterval(async () => {
+        const v = video.current;
+        if (!v || ocupado.current || !v.videoWidth) return;
+        const esc = 640 / v.videoWidth;
+        chico.width = 640; chico.height = Math.round(v.videoHeight * esc);
+        const cx = chico.getContext("2d");
+        cx.drawImage(v, 0, 0, chico.width, chico.height);
+        const r = jsQR(cx.getImageData(0, 0, chico.width, chico.height).data, chico.width, chico.height, { inversionAttempts: "dontInvert" });
+        const codigo = r && codigoDeQR(r.data);
+        if (!codigo) { ultimo.current = { codigo: null, veces: 0 }; return; }
+        ultimo.current = ultimo.current.codigo === codigo ? { codigo, veces: ultimo.current.veces + 1 } : { codigo, veces: 1 };
+        if (ultimo.current.veces < 2 || vistos.current.has(codigo)) return;
+        vistos.current.add(codigo);
+        const rem = remitos.find((x) => x.codigo === codigo);
+        if (rem && rem.estado === "devuelto") { setFlash({ texto: `${codigo} ya estaba devuelto`, tipo: "info" }); setTimeout(() => setFlash(null), 1800); return; }
+        ocupado.current = true;
+        // Foto a resolución completa del mismo cuadro
+        const grande = document.createElement("canvas");
+        const e2 = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
+        grande.width = Math.round(v.videoWidth * e2); grande.height = Math.round(v.videoHeight * e2);
+        grande.getContext("2d").drawImage(v, 0, 0, grande.width, grande.height);
+        const blob = await new Promise((ok) => grande.toBlob(ok, "image/jpeg", 0.75));
+        const ch = document.createElement("canvas"); ch.width = 400; ch.height = Math.round(grande.height * 400 / grande.width);
+        ch.getContext("2d").drawImage(grande, 0, 0, ch.width, ch.height);
+        const calidad = medirCalidad(ch);
+        try { navigator.vibrate && navigator.vibrate(60); } catch {}
+        setFlash({ texto: `${codigo}${rem ? " · " + rem.cliente : ""}`, tipo: calidad && calidad.problemas.length ? "aviso" : "ok" });
+        setCuenta((n) => n + 1);
+        setTimeout(() => setFlash(null), 1500);
+        ocupado.current = false;
+        onLectura({ blob, qr: r.data, calidad });
+      }, 300);
+    })();
+    return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return createPortal(
+    <div className="dv-escaner">
+      <video ref={video} playsInline muted className="dv-escaner-video" />
+      <div className={"dv-escaner-marco" + (flash ? " " + flash.tipo : "")} />
+      <div className="dv-escaner-arriba">
+        <div>
+          <div style={{ fontWeight: 700 }}>Modo escáner</div>
+          <div style={{ fontSize: 12.5, opacity: .8 }}>Apuntá al QR de cada remito firmado, con el papel entero en cuadro. Saca la foto solo.</div>
+        </div>
+        <button className="dv-btn pri" onClick={onCerrar}>Terminar ({cuenta})</button>
+      </div>
+      {flash && <div className={"dv-escaner-flash " + flash.tipo}>{flash.tipo === "info" ? "" : "✓ "}{flash.texto}{flash.tipo === "aviso" ? " · foto con poca calidad" : ""}</div>}
+      {error && <div className="dv-escaner-flash aviso">{error}</div>}
+    </div>, document.body);
+}
+
+function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
   const [filtro, setFiltro] = useState("abiertos");
   const [subiendo, setSubiendo] = useState(null); // codigo en curso
   // Confirmación CON la foto a la vista cuando el QR no se lee (antes era un confirm a ciegas y se coló una captura de pantalla)
@@ -940,52 +1056,108 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
   const inputGeneral = useRef();
   const lista = remitos.filter((r) => (filtro === "abiertos" ? ["emitido", "procesando", "error"].includes(r.estado) : filtro === "devueltos" ? r.estado === "devuelto" : true));
 
-  // Devuelve { ok, codigo, cliente, msg }. silencioso = modo tanda (el resultado va a la lista, no al toast)
+  // ---- Subida de fotos firmadas ----
+  // Una foto que no se puede asignar (QR ilegible o de un remito que no existe) NO se pierde: queda en
+  // remitos_fallidos ("No reconocidas") para asignarla a mano viendo la foto, o descartarla.
+  async function guardarNoReconocida(blob, motivo, calidad) {
+    const path = `pendientes/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+    const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+    if (!up.ok) return false;
+    await sbFetch("remitos_fallidos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ por: yo(), foto_path: path, motivo, calidad }) }).catch(() => {});
+    return true;
+  }
+  // La foto ya se sabe de qué remito es: subir, marcar "procesando" y avisar a LightData
+  async function procesarFoto(rem, blob, calidad, pathExistente = null) {
+    setSubiendo(rem.codigo);
+    const path = pathExistente || `${rem.codigo}/${Date.now()}.jpg`;
+    if (!pathExistente) {
+      const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+      if (!up.ok) throw new Error("No se pudo subir la foto (" + up.status + ")");
+    }
+    await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ estado: "procesando", foto_path: path, firmado_por: yo(), firmado_at: new Date().toISOString(), error: null, calidad: calidad || null }) });
+    registrar("remito_firmado", (rem.dids || []).length, null, { codigo: rem.codigo, cliente: rem.cliente });
+    const j = await pedirAccion("procesar");
+    return { ok: true, codigo: rem.codigo, cliente: rem.cliente, aviso: textoCalidad(calidad), msg: j.ok ? "Recibido · pasa a Devuelto al cliente en 1–2 min" : "Guardado · se procesa en la próxima corrida horaria" };
+  }
+  // Decide a qué remito va una foto ya leída. remitoEsperado = se subió desde la fila de ese remito.
+  async function resolverFoto({ blob, qr, calidad }, remitoEsperado, silencioso) {
+    const codigo = codigoDeQR(qr);
+    let rem = codigo ? remitos.find((r) => r.codigo === codigo) : null;
+    if (remitoEsperado && codigo && codigo !== remitoEsperado.codigo) throw new Error(`La foto es del remito ${codigo}, no del ${remitoEsperado.codigo}`);
+    if (!rem && remitoEsperado && !codigo) {
+      if (!(await confirmarConFoto(blob, remitoEsperado))) throw new Error("Cancelado. Probá otra foto con el QR bien visible.");
+      rem = remitoEsperado;
+    }
+    if (!rem) {
+      const motivo = codigo ? `El QR dice ${codigo}, pero ese remito no existe` : "No se pudo leer el QR";
+      const ok = await guardarNoReconocida(blob, motivo, calidad);
+      throw new Error(ok ? `${motivo}. La foto quedó en “No reconocidas” para asignarla a mano.` : motivo);
+    }
+    if (rem.estado === "devuelto") throw new Error(`${rem.codigo} ya estaba devuelto: no se subió de nuevo`);
+    if (rem.estado === "anulado") throw new Error(`${rem.codigo} está anulado`);
+    const res = await procesarFoto(rem, blob, calidad);
+    if (!silencioso) toast(`${rem.codigo} recibido. Pasa a "Devuelto al cliente" en LightData en 1–2 minutos.${res.aviso ? ` Ojo: ${res.aviso.toLowerCase()}, conviene reemplazarla.` : ""}`);
+    return res;
+  }
+
+  // Devuelve { ok, codigo, cliente, msg, aviso }. silencioso = modo tanda (el resultado va a la lista, no al toast)
   async function subirFirmado(file, remitoEsperado, silencioso = false) {
     if (!file) return null;
     setSubiendo(remitoEsperado ? remitoEsperado.codigo : "…");
     let res;
-    try {
-      const { blob, qr } = await leerFoto(file);
-      const codigo = codigoDeQR(qr);
-      let rem = codigo ? remitos.find((r) => r.codigo === codigo) : null;
-      if (codigo && !rem) throw new Error(`El QR dice ${codigo}, pero ese remito no existe`);
-      if (remitoEsperado && codigo && codigo !== remitoEsperado.codigo) throw new Error(`La foto es del remito ${codigo}, no del ${remitoEsperado.codigo}`);
-      if (!rem && remitoEsperado) {
-        if (!(await confirmarConFoto(blob, remitoEsperado))) throw new Error("Cancelado. Probá otra foto con el QR bien visible.");
-        rem = remitoEsperado;
-      }
-      if (!rem) throw new Error("No pude leer el QR. Sacá la foto de nuevo con el QR entero y nítido, o subila desde la fila del remito.");
-      if (rem.estado === "devuelto") throw new Error(`El remito ${rem.codigo} ya figura devuelto`);
-      if (rem.estado === "anulado") throw new Error(`El remito ${rem.codigo} está anulado`);
-      setSubiendo(rem.codigo);
-      const path = `${rem.codigo}/${Date.now()}.jpg`;
-      const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
-      if (!up.ok) throw new Error("No se pudo subir la foto (" + up.status + ")");
-      await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ estado: "procesando", foto_path: path, firmado_por: yo(), firmado_at: new Date().toISOString(), error: null }) });
-      registrar("remito_firmado", (rem.dids || []).length, null, { codigo: rem.codigo, cliente: rem.cliente });
-      const j = await pedirAccion("procesar");
-      res = { ok: true, codigo: rem.codigo, cliente: rem.cliente, msg: j.ok ? "Recibido · pasa a Devuelto al cliente en 1–2 min" : "Guardado · se procesa en la próxima corrida horaria" };
-      if (!silencioso) toast(j.ok ? `${rem.codigo} recibido. Se pasa a "Devuelto al cliente" en LightData en 1–2 minutos.` : `${rem.codigo} guardado, pero no se pudo avisar a LightData (${j.motivo}). Se procesa en la próxima corrida horaria.`);
-      await recargar();
-    } catch (e) { res = { ok: false, msg: String(e.message || e) }; if (!silencioso) toast(res.msg); }
+    try { res = await resolverFoto(await leerFoto(file), remitoEsperado, silencioso); await recargar(); }
+    catch (e) { res = { ok: false, msg: String(e.message || e) }; if (!silencioso) toast(res.msg); await recargar(); }
     setSubiendo(null);
     return res;
   }
 
-  // Tanda: fotos de la cámara (de a una, "Sacar otra") o varias de la galería. Cada una se reconoce por su QR.
-  const [tanda, setTanda] = useState([]); // [{ id, nombre, estado: 'subiendo'|'ok'|'error', codigo, cliente, msg }]
+  // Tanda: fotos de la cámara (de a una, "Sacar otra"), varias de la galería o el escáner continuo.
+  const [tanda, setTanda] = useState([]); // [{ id, nombre, estado: 'subiendo'|'ok'|'error', codigo, cliente, msg, aviso }]
+  const [escaner, setEscaner] = useState(false);
   const inputGaleria = useRef();
   async function subirTanda(files) {
     const lista = [...(files || [])];
     if (!lista.length) return;
     const base = Date.now();
     const items = lista.map((f, i) => ({ id: base + i, nombre: lista.length > 1 ? `Foto ${i + 1}` : "Foto", estado: "subiendo" }));
-    setTanda((t) => [...items, ...t].slice(0, 30));
+    setTanda((t) => [...items, ...t].slice(0, 40));
     for (let i = 0; i < lista.length; i++) {
       const r = await subirFirmado(lista[i], null, true);
       setTanda((t) => t.map((x) => (x.id === items[i].id ? { ...x, ...(r || {}), estado: r && r.ok ? "ok" : "error" } : x)));
     }
+  }
+  // El escáner ya leyó el QR y sacó la foto: va directo a la tanda
+  async function desdeEscaner(lectura) {
+    const id = Date.now() + Math.random();
+    const codigo = codigoDeQR(lectura.qr);
+    const rem = codigo ? remitos.find((r) => r.codigo === codigo) : null;
+    setTanda((t) => [{ id, nombre: codigo || "Foto", codigo: rem ? rem.codigo : undefined, cliente: rem ? rem.cliente : undefined, estado: "subiendo" }, ...t].slice(0, 40));
+    let r;
+    try { r = await resolverFoto(lectura, null, true); } catch (e) { r = { ok: false, msg: String(e.message || e) }; }
+    setSubiendo(null);
+    setTanda((t) => t.map((x) => (x.id === id ? { ...x, ...r, estado: r.ok ? "ok" : "error" } : x)));
+    recargar();
+    return r;
+  }
+
+  // No reconocidas: asignar a mano (viendo la foto) o descartar
+  async function asignarFallida(f, rem) {
+    try {
+      const resp = await fetch((await firmarFotos([f.foto_path]))[f.foto_path]);
+      const blob = await resp.blob();
+      if (!(await confirmarConFoto(blob, rem))) return;
+      await procesarFoto(rem, null, f.calidad, f.foto_path);
+      await sbFetch(`remitos_fallidos?id=eq.${f.id}`, { method: "PATCH", body: JSON.stringify({ estado: "asignado", remito_codigo: rem.codigo, resuelto_por: yo(), resuelto_at: new Date().toISOString() }) });
+      toast(`Foto asignada a ${rem.codigo}. Pasa a "Devuelto al cliente" en 1–2 minutos.`);
+    } catch (e) { toast("No se pudo asignar: " + String(e.message || e).slice(0, 80)); }
+    setSubiendo(null);
+    await recargar();
+  }
+  async function descartarFallida(f) {
+    try {
+      await sbFetch(`remitos_fallidos?id=eq.${f.id}`, { method: "PATCH", body: JSON.stringify({ estado: "descartado", resuelto_por: yo(), resuelto_at: new Date().toISOString() }) });
+      await recargar();
+    } catch { toast("No se pudo descartar"); }
   }
 
   async function verFoto(rem) {
@@ -1051,6 +1223,7 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
           <button className="dv-btn pri dv-btn-grande" disabled={!!subiendo} onClick={() => inputGeneral.current.click()}>
             {subiendo ? `Subiendo ${subiendo}…` : tanda.length ? "📷 Sacar otra foto" : "📷 Sacar foto"}
           </button>
+          <button className="dv-btn" disabled={!!subiendo} onClick={() => setEscaner(true)} title="Pasá los remitos uno atrás de otro: la cámara detecta el QR y saca la foto sola">Modo escáner (varios)</button>
           <button className="dv-btn" disabled={!!subiendo} onClick={() => inputGaleria.current.click()}>Elegir de la galería</button>
         </div>
         {tanda.length > 0 && (
@@ -1067,6 +1240,7 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
                     <span style={{ display: "block", fontSize: 12, color: t.estado === "error" || fallo ? C.ambar : C.ink3 }}>
                       {t.estado === "subiendo" ? "Leyendo el QR y subiendo…" : fallo ? (rem.error || "LightData no lo pudo procesar") : listo ? "Devuelto al cliente en LightData ✓" : t.msg}
                     </span>
+                    {t.aviso && t.estado !== "error" && <span style={{ display: "block", fontSize: 12, color: C.ambar }}>{t.aviso}: conviene reemplazarla (⋯ → Reemplazar foto)</span>}
                   </span>
                 </div>
               );
@@ -1075,6 +1249,9 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
           </div>
         )}
       </div>
+
+      <NoReconocidas fallidos={fallidos} remitos={remitos} onAsignar={asignarFallida} onDescartar={descartarFallida} />
+      {escaner && <Escaner remitos={remitos} onLectura={desdeEscaner} onCerrar={() => setEscaner(false)} />}
 
       <div className="dv-seg sm" style={{ alignSelf: "flex-start" }}>
         {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"], ["todos", "Todos"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
@@ -1122,6 +1299,7 @@ function RemitoFila({ rem, casos, subiendo, onSubir, onImprimir, onFoto, onAnula
           {rem.estado === "emitido" && <button className="dv-btn" onClick={onAnular}>Anular</button>}
         </div>
       </div>
+      {rem.calidad && rem.calidad.problemas && rem.calidad.problemas.length > 0 && <div style={{ fontSize: 12, color: C.ambar, marginTop: 6 }}>{textoCalidad(rem.calidad)}: conviene reemplazarla (⋯ → Reemplazar foto)</div>}
       {rem.estado === "error" && rem.error && <div style={{ fontSize: 12, color: C.ambar, marginTop: 8 }}>{rem.error}. Podés volver a subir la foto para reintentar.</div>}
       {rem.estado === "devuelto" && (res.ok || res.ya_estaban) && <div style={{ fontSize: 12, color: C.ink3, marginTop: 6 }}>{(res.ok || []).length} pasados a devuelto{(res.ya_estaban || []).length ? ` · ${res.ya_estaban.length} ya lo estaban` : ""}{rem.procesado_at ? ` · ${fecha(rem.procesado_at)}` : ""}</div>}
     </div>
@@ -1151,7 +1329,15 @@ async function leerFoto(file) {
   }
   const cv = lienzo(1600);
   const blob = await new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.72));
-  return { blob, qr };
+  return { blob, qr, calidad: medirCalidad(lienzo(400)) };
+}
+function medirCalidad(cv) {
+  try {
+    const { data } = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height);
+    const gray = new Float32Array(cv.width * cv.height);
+    for (let i = 0, k = 0; k < gray.length; i += 4, k++) gray[k] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    return calidadDeImagen(gray, cv.width, cv.height);
+  } catch { return null; }
 }
 
 // ---------------- Impresión del remito ----------------
@@ -1259,6 +1445,14 @@ const CSS = `
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
 .dv-tanda-ico.ok{background:rgba(46,230,182,.15);color:#2ee6b6}.dv-tanda-ico.mal{background:rgba(245,192,68,.15);color:#F5C044}
+.dv-escaner{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
+.dv-escaner-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.dv-escaner-marco{position:absolute;inset:12% 8%;border:3px solid rgba(255,255,255,.55);border-radius:18px;transition:border-color .15s,box-shadow .15s;pointer-events:none}
+.dv-escaner-marco.ok{border-color:#2ee6b6;box-shadow:0 0 0 9999px rgba(46,230,182,.12)}
+.dv-escaner-marco.aviso{border-color:#F5C044}
+.dv-escaner-arriba{position:absolute;top:0;left:0;right:0;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;background:linear-gradient(rgba(0,0,0,.75),rgba(0,0,0,0))}
+.dv-escaner-flash{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translateX(-50%);background:rgba(10,12,24,.9);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
+.dv-escaner-flash.aviso{border-color:rgba(245,192,68,.6)}.dv-escaner-flash.info{border-color:rgba(255,255,255,.3);font-weight:500}
 .dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dv-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}
