@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
 import { authedFetch, getSession } from "./auth";
@@ -758,9 +759,10 @@ function MasAcciones({ rem, onReemplazar, subiendo }) {
   const [confirma, setConfirma] = useState(false);
   const input = useRef();
   const caja = useRef();
+  const pop = useRef();
   useEffect(() => {
     if (!menu) return;
-    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setMenu(null); };
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target) && !(pop.current && pop.current.contains(e.target))) setMenu(null); };
     const cerrar = () => setMenu(null);
     document.addEventListener("mousedown", fuera);
     window.addEventListener("scroll", cerrar, true);
@@ -770,13 +772,13 @@ function MasAcciones({ rem, onReemplazar, subiendo }) {
     <div ref={caja} style={{ position: "relative" }}>
       <button className="dv-btn" aria-label="Más acciones" title="Más acciones" disabled={subiendo} style={{ padding: "7px 11px", letterSpacing: ".1em" }}
         onClick={(e) => { if (menu) { setMenu(null); return; } const b = e.currentTarget.getBoundingClientRect(); const abajo = window.innerHeight - b.bottom > 80; setMenu({ left: Math.max(8, b.right - 200), top: abajo ? b.bottom + 6 : b.top - 52 }); }}>{subiendo ? "…" : "⋯"}</button>
-      {menu && (
-        <div className="dv-menu" style={{ position: "fixed", left: menu.left, top: menu.top, bottom: "auto", right: "auto", zIndex: 75, minWidth: 200 }}>
+      {menu && createPortal(
+        // Va al body: el vidrio (backdrop-filter) de las tarjetas encierra a los position:fixed y los recorta
+        <div className="dv-menu" ref={pop} style={{ position: "fixed", left: menu.left, top: menu.top, bottom: "auto", right: "auto", zIndex: 75, minWidth: 200 }}>
           <button onClick={() => { setMenu(null); setConfirma(true); }}>Reemplazar foto…</button>
-        </div>
-      )}
+        </div>, document.body)}
       <input ref={input} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { onReemplazar(e.target.files[0]); e.target.value = ""; }} />
-      {confirma && (
+      {confirma && createPortal(
         <div className="dv-modal-fondo" onClick={() => setConfirma(false)}>
           <div className="dv-modal" style={{ width: "min(440px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Reemplazar foto">
             <div className="dv-modal-cab">
@@ -788,8 +790,7 @@ function MasAcciones({ rem, onReemplazar, subiendo }) {
               <button className="dv-btn pri" onClick={() => { setConfirma(false); input.current && input.current.click(); }}>Sí, elegir foto nueva</button>
             </div>
           </div>
-        </div>
-      )}
+        </div>, document.body)}
     </div>
   );
 }
