@@ -940,9 +940,11 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
   const inputGeneral = useRef();
   const lista = remitos.filter((r) => (filtro === "abiertos" ? ["emitido", "procesando", "error"].includes(r.estado) : filtro === "devueltos" ? r.estado === "devuelto" : true));
 
-  async function subirFirmado(file, remitoEsperado) {
-    if (!file) return;
+  // Devuelve { ok, codigo, cliente, msg }. silencioso = modo tanda (el resultado va a la lista, no al toast)
+  async function subirFirmado(file, remitoEsperado, silencioso = false) {
+    if (!file) return null;
     setSubiendo(remitoEsperado ? remitoEsperado.codigo : "…");
+    let res;
     try {
       const { blob, qr } = await leerFoto(file);
       const codigo = codigoDeQR(qr);
@@ -963,10 +965,27 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
       await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ estado: "procesando", foto_path: path, firmado_por: yo(), firmado_at: new Date().toISOString(), error: null }) });
       registrar("remito_firmado", (rem.dids || []).length, null, { codigo: rem.codigo, cliente: rem.cliente });
       const j = await pedirAccion("procesar");
-      toast(j.ok ? `${rem.codigo} recibido. Se pasa a "Devuelto al cliente" en LightData en 1–2 minutos.` : `${rem.codigo} guardado, pero no se pudo avisar a LightData (${j.motivo}). Se procesa en la próxima corrida horaria.`);
+      res = { ok: true, codigo: rem.codigo, cliente: rem.cliente, msg: j.ok ? "Recibido · pasa a Devuelto al cliente en 1–2 min" : "Guardado · se procesa en la próxima corrida horaria" };
+      if (!silencioso) toast(j.ok ? `${rem.codigo} recibido. Se pasa a "Devuelto al cliente" en LightData en 1–2 minutos.` : `${rem.codigo} guardado, pero no se pudo avisar a LightData (${j.motivo}). Se procesa en la próxima corrida horaria.`);
       await recargar();
-    } catch (e) { toast(String(e.message || e)); }
+    } catch (e) { res = { ok: false, msg: String(e.message || e) }; if (!silencioso) toast(res.msg); }
     setSubiendo(null);
+    return res;
+  }
+
+  // Tanda: fotos de la cámara (de a una, "Sacar otra") o varias de la galería. Cada una se reconoce por su QR.
+  const [tanda, setTanda] = useState([]); // [{ id, nombre, estado: 'subiendo'|'ok'|'error', codigo, cliente, msg }]
+  const inputGaleria = useRef();
+  async function subirTanda(files) {
+    const lista = [...(files || [])];
+    if (!lista.length) return;
+    const base = Date.now();
+    const items = lista.map((f, i) => ({ id: base + i, nombre: lista.length > 1 ? `Foto ${i + 1}` : "Foto", estado: "subiendo" }));
+    setTanda((t) => [...items, ...t].slice(0, 30));
+    for (let i = 0; i < lista.length; i++) {
+      const r = await subirFirmado(lista[i], null, true);
+      setTanda((t) => t.map((x) => (x.id === items[i].id ? { ...x, ...(r || {}), estado: r && r.ok ? "ok" : "error" } : x)));
+    }
   }
 
   async function verFoto(rem) {
@@ -1023,11 +1042,38 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
       )}
       <div style={{ ...card, padding: 16, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 260px" }}>
-          <div style={{ fontWeight: 600 }}>Subir remito firmado</div>
-          <div style={{ fontSize: 13, color: C.ink3, marginTop: 2 }}>Sacale una foto con el QR visible. La app reconoce el remito y pasa sus envíos a “Devuelto al cliente” en LightData.</div>
+          <div style={{ fontWeight: 600 }}>Subir remitos firmados</div>
+          <div style={{ fontSize: 13, color: C.ink3, marginTop: 2 }}>Sacale una foto con el QR visible. La app reconoce cuál es y pasa sus envíos a “Devuelto al cliente” en LightData. Podés seguir sacando una atrás de otra.</div>
         </div>
-        <input ref={inputGeneral} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { subirFirmado(e.target.files[0], null); e.target.value = ""; }} />
-        <button className="dv-btn pri" disabled={!!subiendo} onClick={() => inputGeneral.current.click()}>{subiendo ? `Subiendo ${subiendo}…` : "Sacar foto / elegir archivo"}</button>
+        <input ref={inputGeneral} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
+        <input ref={inputGaleria} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
+        <div className="dv-subir-btns">
+          <button className="dv-btn pri dv-btn-grande" disabled={!!subiendo} onClick={() => inputGeneral.current.click()}>
+            {subiendo ? `Subiendo ${subiendo}…` : tanda.length ? "📷 Sacar otra foto" : "📷 Sacar foto"}
+          </button>
+          <button className="dv-btn" disabled={!!subiendo} onClick={() => inputGaleria.current.click()}>Elegir de la galería</button>
+        </div>
+        {tanda.length > 0 && (
+          <div className="dv-tanda">
+            {tanda.map((t) => {
+              const rem = t.codigo ? remitos.find((x) => x.codigo === t.codigo) : null;
+              const listo = rem && rem.estado === "devuelto";
+              const fallo = rem && rem.estado === "error";
+              return (
+                <div key={t.id} className="dv-tanda-fila">
+                  <span className={"dv-tanda-ico " + (t.estado === "error" || fallo ? "mal" : listo ? "ok" : "")}>{t.estado === "subiendo" ? "…" : t.estado === "error" || fallo ? "✕" : listo ? "✓" : "↻"}</span>
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    <b>{t.codigo ? `${t.codigo} · ${t.cliente}` : t.nombre}</b>
+                    <span style={{ display: "block", fontSize: 12, color: t.estado === "error" || fallo ? C.ambar : C.ink3 }}>
+                      {t.estado === "subiendo" ? "Leyendo el QR y subiendo…" : fallo ? (rem.error || "LightData no lo pudo procesar") : listo ? "Devuelto al cliente en LightData ✓" : t.msg}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+            <button className="dv-btn" style={{ alignSelf: "flex-start" }} onClick={() => setTanda([])}>Limpiar lista</button>
+          </div>
+        )}
       </div>
 
       <div className="dv-seg sm" style={{ alignSelf: "flex-start" }}>
@@ -1206,6 +1252,13 @@ const CSS = `
 .dv-foto{border:1px solid rgba(255,255,255,.07);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.02)}
 .dv-foto-img{display:flex;align-items:center;justify-content:center;height:220px;background:#0d0e1c;overflow:hidden}
 .dv-foto-img img{width:100%;height:100%;object-fit:cover;object-position:top}
+.dv-subir-btns{display:flex;gap:8px;flex-wrap:wrap}
+.dv-btn-grande{padding:11px 18px;font-size:14px;font-weight:600}
+@media (max-width:640px){.dv-subir-btns{width:100%}.dv-subir-btns .dv-btn{flex:1}.dv-btn-grande{flex-basis:100%!important;padding:14px 18px;font-size:15px}}
+.dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
+.dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
+.dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
+.dv-tanda-ico.ok{background:rgba(46,230,182,.15);color:#2ee6b6}.dv-tanda-ico.mal{background:rgba(245,192,68,.15);color:#F5C044}
 .dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dv-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}
