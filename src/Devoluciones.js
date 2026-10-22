@@ -1001,6 +1001,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
   const [tomados, setTomados] = useState(() => new Set());
   const [error, setError] = useState(null);
   const [disparo, setDisparo] = useState(false);
+  const [aviso, setAviso] = useState(null);
   const visto = useRef({ codigo: null, at: 0 });
   useEffect(() => {
     let stream, timer, vivo = true;
@@ -1026,7 +1027,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
           visto.current = { codigo, at: ahora };
           const rem = remitos.find((x) => x.codigo === codigo);
           setDetectado((d) => (d && d.codigo === codigo ? d : { codigo, qr: r.data, cliente: rem ? rem.cliente : null, estado: rem ? rem.estado : "inexistente" }));
-        } else if (ahora - visto.current.at > 1500) {
+        } else if (ahora - visto.current.at > 900) {
           setDetectado(null);
         }
       }, 300);
@@ -1044,16 +1045,31 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
     const e2 = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
     grande.width = Math.round(v.videoWidth * e2); grande.height = Math.round(v.videoHeight * e2);
     grande.getContext("2d").drawImage(v, 0, 0, grande.width, grande.height);
+    // Confirmar el remito con la foto misma (no con lo último que vio la cámara): evita que, sacando
+    // seguido, la foto del remito nuevo quede asignada al anterior.
+    const gx = grande.getContext("2d");
+    const rq = jsQR(gx.getImageData(0, 0, grande.width, grande.height).data, grande.width, grande.height, { inversionAttempts: "dontInvert" });
+    const enFoto = rq && codigoDeQR(rq.data);
+    const fresco = Date.now() - visto.current.at < 450;
+    let det = detectado;
+    if (enFoto && enFoto !== detectado.codigo) {
+      const rem = remitos.find((x) => x.codigo === enFoto);
+      if (!rem || !["emitido", "error", "procesando"].includes(rem.estado) && !tomados.has(enFoto)) { setAviso(`${enFoto} no está para devolver`); return; }
+      det = { codigo: enFoto, qr: rq.data, cliente: rem.cliente, estado: rem.estado };
+    } else if (!enFoto && !(fresco && visto.current.codigo === detectado.codigo)) {
+      setAviso("No se vio el QR en la foto. Volvé a apuntar y sacá de nuevo."); return;
+    }
     const blob = await new Promise((ok) => grande.toBlob(ok, "image/jpeg", 0.75));
     const ch = document.createElement("canvas"); ch.width = 400; ch.height = Math.round(grande.height * 400 / grande.width);
     ch.getContext("2d").drawImage(grande, 0, 0, ch.width, ch.height);
     const calidad = medirCalidad(ch);
     try { navigator.vibrate && navigator.vibrate(60); } catch {}
-    const lectura = { blob, qr: detectado.qr, calidad };
-    const yaTomado = tomados.has(detectado.codigo);
-    setUltima({ url: URL.createObjectURL(blob), codigo: detectado.codigo, cliente: detectado.cliente, aviso: textoCalidad(calidad), lectura });
-    if (yaTomado) onRepetir(detectado.codigo, lectura);
-    else { setTomados((t) => new Set(t).add(detectado.codigo)); onLectura(lectura); }
+    const lectura = { blob, qr: det.qr, calidad };
+    const yaTomado = tomados.has(det.codigo);
+    setAviso(null);
+    setUltima({ url: URL.createObjectURL(blob), codigo: det.codigo, cliente: det.cliente, aviso: textoCalidad(calidad), lectura });
+    if (yaTomado) onRepetir(det.codigo, lectura);
+    else { setTomados((t) => new Set(t).add(det.codigo)); onLectura(lectura); }
   }
 
   const yaTomado = detectado && tomados.has(detectado.codigo);
@@ -1091,7 +1107,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
         <button className={"dv-escaner-disparo" + (listo ? " on" : "")} disabled={!listo} onClick={capturar} aria-label="Sacar foto" />
         <div style={{ width: 120 }} />
       </div>
-      {error && <div className="dv-escaner-flash aviso">{error}</div>}
+      {(error || aviso) && <div className="dv-escaner-flash aviso" onClick={() => setAviso(null)}>{error || aviso}</div>}
     </div>, document.body);
 }
 
