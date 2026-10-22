@@ -752,7 +752,7 @@ async function firmarFotos(paths) {
   return out;
 }
 
-function Carpetas({ remitos, casosDe, onImprimir, toast }) {
+function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar }) {
   const [cliente, setCliente] = useState(null);
   const [mes, setMes] = useState(null);
   const [busca, setBusca] = useState("");
@@ -873,7 +873,14 @@ function Carpetas({ remitos, casosDe, onImprimir, toast }) {
                   <span style={{ fontSize: 12, color: C.ink3 }}>{fecha(fechaRem(r))}</span>
                 </div>
                 <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>{(r.dids || []).length} envíos · firmado subido por {r.firmado_por || "—"}</div>
-                <button className="dv-btn" style={{ marginTop: 8, width: "100%" }} onClick={() => onImprimir(r)}>Reimprimir remito</button>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <button className="dv-btn" style={{ flex: 1 }} onClick={() => onImprimir(r)}>Reimprimir</button>
+                  <label className="dv-btn" style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
+                    {subiendo === r.codigo ? "Subiendo…" : "Reemplazar foto"}
+                    <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} disabled={!!subiendo} onChange={(e) => { onReemplazar(r, e.target.files[0]); e.target.value = ""; }} />
+                  </label>
+                </div>
+                {(r.fotos_anteriores || []).length > 0 && <div style={{ fontSize: 11, color: C.ink3, marginTop: 6 }}>Foto reemplazada ({r.fotos_anteriores.length} anterior{r.fotos_anteriores.length > 1 ? "es" : ""} guardada{r.fotos_anteriores.length > 1 ? "s" : ""})</div>}
               </div>
             </div>
           ))}
@@ -886,6 +893,10 @@ function Carpetas({ remitos, casosDe, onImprimir, toast }) {
 function Remitos({ remitos, casosDe, recargar, toast }) {
   const [filtro, setFiltro] = useState("abiertos");
   const [subiendo, setSubiendo] = useState(null); // codigo en curso
+  // Confirmación CON la foto a la vista cuando el QR no se lee (antes era un confirm a ciegas y se coló una captura de pantalla)
+  const [confirmar, setConfirmar] = useState(null); // { url, rem, resolver }
+  const confirmarConFoto = (blob, rem) => new Promise((resolver) => setConfirmar({ url: URL.createObjectURL(blob), rem, resolver }));
+  const cerrarConfirmar = (ok) => { if (!confirmar) return; URL.revokeObjectURL(confirmar.url); confirmar.resolver(ok); setConfirmar(null); };
   const inputGeneral = useRef();
   const lista = remitos.filter((r) => (filtro === "abiertos" ? ["emitido", "procesando", "error"].includes(r.estado) : filtro === "devueltos" ? r.estado === "devuelto" : true));
 
@@ -899,8 +910,7 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
       if (codigo && !rem) throw new Error(`El QR dice ${codigo}, pero ese remito no existe`);
       if (remitoEsperado && codigo && codigo !== remitoEsperado.codigo) throw new Error(`La foto es del remito ${codigo}, no del ${remitoEsperado.codigo}`);
       if (!rem && remitoEsperado) {
-        // eslint-disable-next-line no-alert
-        if (!window.confirm(`No pude leer el QR de la foto.\n\n¿Confirmás que es el remito ${remitoEsperado.codigo} de ${remitoEsperado.cliente}, firmado?`)) throw new Error("Cancelado. Probá otra foto con el QR bien visible.");
+        if (!(await confirmarConFoto(blob, remitoEsperado))) throw new Error("Cancelado. Probá otra foto con el QR bien visible.");
         rem = remitoEsperado;
       }
       if (!rem) throw new Error("No pude leer el QR. Sacá la foto de nuevo con el QR entero y nítido, o subila desde la fila del remito.");
@@ -925,6 +935,26 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
     if (j.signedURL) window.open(`${SUPABASE_URL}/storage/v1${j.signedURL}`, "_blank", "noopener");
     else toast("No se pudo abrir la foto");
   }
+  // Remito ya devuelto con la foto equivocada: cambia SOLO la imagen (LightData no se vuelve a tocar).
+  // La foto anterior queda en fotos_anteriores como registro.
+  async function reemplazarFoto(rem, file) {
+    if (!file) return;
+    setSubiendo(rem.codigo);
+    try {
+      const { blob, qr } = await leerFoto(file);
+      const codigo = codigoDeQR(qr);
+      if (codigo && codigo !== rem.codigo) throw new Error(`La foto es del remito ${codigo}, no del ${rem.codigo}`);
+      if (!codigo && !(await confirmarConFoto(blob, rem))) throw new Error("Cancelado. Probá otra foto con el QR bien visible.");
+      const path = `${rem.codigo}/${Date.now()}.jpg`;
+      const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+      if (!up.ok) throw new Error("No se pudo subir la foto (" + up.status + ")");
+      await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ foto_path: path, fotos_anteriores: [...(rem.fotos_anteriores || []), rem.foto_path].filter(Boolean) }) });
+      registrar("remito_firmado", 0, null, { codigo: rem.codigo, reemplazo_foto: true });
+      toast(`Foto de ${rem.codigo} reemplazada. En LightData no cambia nada.`);
+      await recargar();
+    } catch (e) { toast(String(e.message || e)); }
+    setSubiendo(null);
+  }
   async function anular(rem) {
     // eslint-disable-next-line no-alert
     if (!window.confirm(`¿Anular ${rem.codigo}? Los envíos vuelven a quedar libres para otro remito.`)) return;
@@ -934,6 +964,23 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
 
   return (
     <>
+      {confirmar && (
+        <div className="dv-modal-fondo" onClick={() => cerrarConfirmar(false)}>
+          <div className="dv-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Confirmar foto del remito">
+            <div className="dv-modal-cab">
+              <div style={{ fontWeight: 700, fontSize: 16 }}>No pude leer el QR de la foto</div>
+              <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Mirala bien: ¿es el remito <b>{confirmar.rem.codigo}</b> de <b>{confirmar.rem.cliente}</b>, firmado por el cliente?</div>
+            </div>
+            <div className="dv-modal-cuerpo" style={{ padding: 12 }}>
+              <img src={confirmar.url} alt="Foto a subir" style={{ width: "100%", borderRadius: 10, display: "block", background: "#0d0e1c" }} />
+            </div>
+            <div className="dv-modal-pie" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="dv-btn" onClick={() => cerrarConfirmar(false)}>No, saco otra</button>
+              <button className="dv-btn pri" onClick={() => cerrarConfirmar(true)}>Sí, es el remito firmado</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ ...card, padding: 16, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 260px" }}>
           <div style={{ fontWeight: 600 }}>Subir remito firmado</div>
@@ -947,19 +994,19 @@ function Remitos({ remitos, casosDe, recargar, toast }) {
         {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"], ["todos", "Todos"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
       </div>
 
-      {filtro === "devueltos" ? <Carpetas remitos={remitos} casosDe={casosDe} toast={toast} onImprimir={(r) => imprimirRemitos([{ ...r, casos: casosDe(r) }])} /> : <div style={{ ...card, overflow: "hidden" }}>
+      {filtro === "devueltos" ? <Carpetas remitos={remitos} casosDe={casosDe} toast={toast} subiendo={subiendo} onReemplazar={reemplazarFoto} onImprimir={(r) => imprimirRemitos([{ ...r, casos: casosDe(r) }])} /> : <div style={{ ...card, overflow: "hidden" }}>
         {lista.length === 0 && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>No hay remitos en esta vista. Se arman desde Seguimiento → En depósito, seleccionando envíos.</div>}
         {lista.map((rem) => (
           <RemitoFila key={rem.id} rem={rem} casos={casosDe(rem)} subiendo={subiendo === rem.codigo}
             onSubir={(f) => subirFirmado(f, rem)} onImprimir={() => imprimirRemitos([{ ...rem, casos: casosDe(rem) }])}
-            onFoto={() => verFoto(rem)} onAnular={() => anular(rem)} />
+            onFoto={() => verFoto(rem)} onAnular={() => anular(rem)} onReemplazar={(f) => reemplazarFoto(rem, f)} />
         ))}
       </div>}
     </>
   );
 }
 
-function RemitoFila({ rem, casos, subiendo, onSubir, onImprimir, onFoto, onAnular }) {
+function RemitoFila({ rem, casos, subiendo, onSubir, onImprimir, onFoto, onAnular, onReemplazar }) {
   const input = useRef();
   const res = rem.resultado || {};
   return (
@@ -985,6 +1032,12 @@ function RemitoFila({ rem, casos, subiendo, onSubir, onImprimir, onFoto, onAnula
             </>
           )}
           {rem.foto_path && <button className="dv-btn" onClick={onFoto}>Ver firma</button>}
+          {rem.estado === "devuelto" && (
+            <label className="dv-btn" style={{ cursor: "pointer" }}>
+              {subiendo ? "Subiendo…" : "Reemplazar foto"}
+              <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} disabled={subiendo} onChange={(e) => { onReemplazar(e.target.files[0]); e.target.value = ""; }} />
+            </label>
+          )}
           {rem.estado === "emitido" && <button className="dv-btn" onClick={onAnular}>Anular</button>}
         </div>
       </div>
