@@ -754,22 +754,25 @@ async function firmarFotos(paths) {
 
 // Acciones poco frecuentes de un remito devuelto, escondidas en "⋯". Reemplazar la foto pide confirmación primero.
 function MasAcciones({ rem, onReemplazar, subiendo }) {
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState(null); // posición en pantalla del menú abierto (fixed: no lo recorta ninguna tarjeta)
   const [confirma, setConfirma] = useState(false);
   const input = useRef();
   const caja = useRef();
   useEffect(() => {
     if (!menu) return;
-    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setMenu(false); };
+    const fuera = (e) => { if (caja.current && !caja.current.contains(e.target)) setMenu(null); };
+    const cerrar = () => setMenu(null);
     document.addEventListener("mousedown", fuera);
-    return () => document.removeEventListener("mousedown", fuera);
+    window.addEventListener("scroll", cerrar, true);
+    return () => { document.removeEventListener("mousedown", fuera); window.removeEventListener("scroll", cerrar, true); };
   }, [menu]);
   return (
     <div ref={caja} style={{ position: "relative" }}>
-      <button className="dv-btn" aria-label="Más acciones" title="Más acciones" disabled={subiendo} onClick={() => setMenu(!menu)} style={{ padding: "7px 11px", letterSpacing: ".1em" }}>{subiendo ? "…" : "⋯"}</button>
+      <button className="dv-btn" aria-label="Más acciones" title="Más acciones" disabled={subiendo} style={{ padding: "7px 11px", letterSpacing: ".1em" }}
+        onClick={(e) => { if (menu) { setMenu(null); return; } const b = e.currentTarget.getBoundingClientRect(); const abajo = window.innerHeight - b.bottom > 80; setMenu({ left: Math.max(8, b.right - 200), top: abajo ? b.bottom + 6 : b.top - 52 }); }}>{subiendo ? "…" : "⋯"}</button>
       {menu && (
-        <div className="dv-menu abajo">
-          <button onClick={() => { setMenu(false); setConfirma(true); }}>Reemplazar foto…</button>
+        <div className="dv-menu" style={{ position: "fixed", left: menu.left, top: menu.top, bottom: "auto", right: "auto", zIndex: 75, minWidth: 200 }}>
+          <button onClick={() => { setMenu(null); setConfirma(true); }}>Reemplazar foto…</button>
         </div>
       )}
       <input ref={input} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { onReemplazar(e.target.files[0]); e.target.value = ""; }} />
@@ -1230,7 +1233,6 @@ const CSS = `
 @container dv (max-width:700px){.dv-head,.dv-linea{grid-template-columns:24px minmax(0,1fr) 80px 36px;gap:8px;padding:10px 12px}.dv-hide-m{display:none}.dv-show-m{display:inline}.dv-det{padding:4px 12px 14px 12px}}
 .dv-barra{position:sticky;bottom:12px;margin:0 auto;z-index:50;display:flex;gap:8px;align-items:center;background:rgba(22,23,38,.96);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(720px,100%);flex-wrap:wrap;color:#f4f5fa;font-size:13px}
 .dv-menu{position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:190px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
-.dv-menu.abajo{bottom:auto;top:calc(100% + 6px);z-index:65}
 .dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:7px;cursor:pointer}
 @media (hover:hover){.dv-menu button:hover{background:rgba(255,255,255,.06)}}
 .dv-modal-fondo{position:fixed;inset:0;z-index:70;background:rgba(5,6,14,.66);display:flex;align-items:center;justify-content:center;padding:16px}
