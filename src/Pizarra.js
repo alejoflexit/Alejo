@@ -595,7 +595,7 @@ function CreadorInline({ autor, fechaFija, clientes, onListo, onCancelar }) {
 
       {tipo === 'ausencia' && (
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: 14.5, fontWeight: 700, color: ROJO, whiteSpace: 'nowrap' }}>{AUSENCIA_PREFIJO}</span>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{AUSENCIA_PREFIJO}</span>
           <input ref={refCad} type="text" list="fx-choferes" value={cadete} onChange={e => setCadete(e.target.value)}
             placeholder="¿quién?"
             onKeyDown={e => { if (e.key === 'Enter' && !falta) { e.preventDefault(); publicar(); } if (e.key === 'Escape') onCancelar(); }}
@@ -673,7 +673,7 @@ function CreadorInline({ autor, fechaFija, clientes, onListo, onCancelar }) {
 }
 
 // ── TARJETA ──
-function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolver, onDesmarcar, onBorrar, onCubrir, onMover, onEditar, onComentar, onBorrarComentario, hoy, mostrarDia, arrastrable }) {
+function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolver, onDesmarcar, onBorrar, onCubrir, onMover, onEditar, onComentar, onBorrarComentario, hoy, mostrarDia, arrastrable, vencida }) {
   const comentarios = comentariosByNota[nota.id] || [];
   const [cubre, setCubre] = useState(nota.cubre || '');
   const [abierta, setAbierta] = useState(false);
@@ -707,9 +707,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
   };
   const resuelta = !!nota.resuelta_at;
   const t = NOTA_TIPOS[nota.tipo] || NOTA_TIPOS.aviso;
-  // Color semántico del tag por tipo: de un vistazo se entiende el motivo.
-  const TAG_COLOR = { ausencia: ROJO, colecta: AMBAR, aviso: '#8EC5FF', turno: '#bd8ed8' };
-  const tagCol = TAG_COLOR[nota.tipo] || 'rgba(255,255,255,0.5)';
+  // Sobria (pedido 22/10): el tipo va en gris; el color queda solo en un punto chico de urgencia.
   const urgente = !resuelta && nota.prioridad === 'ahora';
   const conHora = !resuelta && nota.prioridad === 'hora' && nota.hora_limite;
   const acento = urgente ? ROJO : conHora ? AMBAR : null;
@@ -736,7 +734,6 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
         padding: '8px 10px', borderRadius: 9,
         background: hover && !resuelta ? '#1a3550' : BRAND.navyCard,
         border: `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
-        borderLeft: acento ? `3px solid ${acento}` : `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
         boxShadow: hover && !resuelta ? '0 4px 14px rgba(0,0,0,0.35)' : 'none',
         opacity: resuelta ? 0.45 : 1, cursor: arrastrable && !resuelta ? 'grab' : 'default',
         transition: 'background .15s ease, border-color .15s ease, box-shadow .15s ease, opacity .2s ease',
@@ -760,10 +757,9 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
 
         <div style={{ flex: 1, minWidth: 0 }}>
           {(urgente || conHora) && (
-            <div style={{ marginBottom: 5 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 7px', borderRadius: 5, background: acento, color: '#14171c', fontSize: 9.5, fontWeight: 800, letterSpacing: '0.03em' }}>
-                {urgente ? '⚡ AHORA' : `⏰ ANTES DE LAS ${nota.hora_limite}`}
-              </span>
+            <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: 4, background: acento, flexShrink: 0 }} />
+              {urgente ? 'Ahora' : `Antes de las ${nota.hora_limite}`}
             </div>
           )}
 
@@ -799,7 +795,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
             /* Ausencia: el tag "🚫 Ausencia" se absorbió en el título. "No viene" va en rojo y el
                nombre en blanco — decir las dos cosas era ruido puro. El motivo, si lo hay, abajo. */
             <div style={{ fontWeight: 600, lineHeight: 1.3, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
-              <span style={{ color: ROJO, fontSize: 16.5 }}>{AUSENCIA_PREFIJO}</span>{' '}
+              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14.5, fontWeight: 500 }}>{AUSENCIA_PREFIJO}</span>{' '}
               <span style={{ color: BRAND.white, fontSize: 14.5 }}>{nota.cadete}</span>
               {nota.texto && (
                 <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>{nota.texto}</span>
@@ -807,9 +803,9 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
             </div>
           ) : (
             /* El tag va AL LADO del título, no en una línea propia debajo: ahorra una línea por tarjeta. */
-            <div style={{ fontSize: 15, fontWeight: 600, color: BRAND.white, lineHeight: 1.35, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
+            <div style={{ fontSize: 14.5, fontWeight: 500, color: BRAND.white, lineHeight: 1.4, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
               {nota.texto}
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 8, padding: '1px 7px', borderRadius: 5, background: `${tagCol}22`, border: `1px solid ${tagCol}33`, fontSize: 10.5, fontWeight: 700, color: tagCol, textDecoration: 'none', verticalAlign: 2, whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 8, padding: '1px 7px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', fontSize: 10.5, fontWeight: 600, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', verticalAlign: 2, whiteSpace: 'nowrap' }}>
                 {t.emoji} {t.label}{nota.cadete ? ` · ${nota.cadete}` : ''}
               </span>
             </div>
@@ -819,7 +815,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           {(mostrarDia || detalle) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
               {mostrarDia && (
-                <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 5, background: `${LILA}1f`, color: LILA, fontSize: 10.5, fontWeight: 600 }}>
+                <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)', fontSize: 10.5, fontWeight: 600 }}>
                   {labelDia(nota.fecha_objetivo, hoy)}
                 </span>
               )}
@@ -831,6 +827,17 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
                   ✓ {nota.tipo === 'ausencia' && nota.cubre ? `Cubierto por ${nota.cubre}` : `Resuelta por ${nota.resuelta_por || '—'}`}
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Vencida: las tres salidas a un toque, sin abrir el ⋯ (pedido 22/10: que no se acumulen). */}
+          {vencida && !resuelta && !editando && (
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+              <Accion onClick={() => onResolver(nota)} color={BRAND.teal} titulo="Ya se hizo">✓ Hecho</Accion>
+              <Accion onClick={() => onMover(nota, hoy)} titulo="Sigue pendiente: pasarla a hoy">→ Pasar a hoy</Accion>
+              {armado
+                ? <Accion onClick={() => onBorrar(nota)} color={ROJO} titulo="Borrar definitivamente">Borrar ✓</Accion>
+                : <Accion onClick={armarBorrar} titulo="Ya no aplica">Borrar</Accion>}
             </div>
           )}
 
@@ -922,10 +929,39 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
   );
 }
 
+// ── AUSENCIAS DEL DÍA EN UN RENGLÓN ──
+// "No vienen: A, B, C". Tocar un nombre despliega su tarjeta (cubrir, motivo, resolver).
+function BloqueAusencias({ notas, ...rest }) {
+  const [abierto, setAbierto] = useState(null);
+  const sel = notas.find(n => n.id === abierto);
+  return (
+    <div style={{ padding: '8px 10px', borderRadius: 9, background: BRAND.navyCard, border: `1px solid ${BRAND.border}` }}>
+      <div style={{ fontSize: 14, lineHeight: 1.7, color: BRAND.white }}>
+        <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>{notas.length === 1 ? 'No viene' : 'No vienen'}: </span>
+        {notas.map((n, i) => (
+          <span key={n.id}>
+            <span onClick={() => setAbierto(abierto === n.id ? null : n.id)} role="button" tabIndex={0}
+              style={{ fontWeight: 600, cursor: 'pointer', textDecoration: abierto === n.id ? 'underline' : 'none', textUnderlineOffset: 3 }}>{n.cadete}</span>
+            {n.cubre ? <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}> (cubre {n.cubre})</span> : null}
+            {i < notas.length - 1 ? ', ' : ''}
+          </span>
+        ))}
+      </div>
+      {sel && <div style={{ marginTop: 8 }}><Tarjeta nota={sel} {...rest} /></div>}
+    </div>
+  );
+}
+
 // ── COLUMNA ──
-function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar, modo, onModo, children, ...rest }) {
+function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, onCrear, onSoltar, modo, onModo, children, ...rest }) {
   const [encima, setEncima] = useState(false);
   const [verHechas, setVerHechas] = useState(false);
+  const [verArch, setVerArch] = useState(false);
+  // 5. Lo que dejó el turno noche va primero, en su propio bloque.
+  // 2. Las ausencias del día se juntan en un renglón ("No vienen: A, B, C").
+  const turno = notas.filter(n => n.tipo === 'turno');
+  const aus = col.agruparAus ? notas.filter(n => esAusenciaDeCadete(n)) : [];
+  const resto = notas.filter(n => n.tipo !== 'turno' && !aus.includes(n));
   const puedeSoltar = !!col.fecha;
   const vacia = !notas.length && !hechas.length && !creando;
   // Sin decisión manual, una columna vacía se pliega sola. Con decisión manual, manda Alejo:
@@ -965,7 +1001,7 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color, opacity: 0.7, flexShrink: 0 }} />
         <span style={{
           writingMode: esMovil ? 'horizontal-tb' : 'vertical-rl', textOrientation: 'mixed',
-          fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: col.color, opacity: 0.75,
+          fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', color: 'rgba(255,255,255,0.6)',
         }}>{col.titulo}</span>
         {/* Plegada con notas adentro: el número se ve en el color de la columna para que no
             parezca que ahí no hay nada. */}
@@ -986,7 +1022,7 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
         display: 'flex', flexDirection: 'column', gap: 6,
         padding: 8, borderRadius: 12,
         // Tinte apenas perceptible del color de la columna: el cerebro ubica Hoy/Mañana/Próximos sin leer.
-        background: encima ? 'rgba(46,207,170,0.07)' : `${col.color}0d`,
+        background: encima ? 'rgba(46,207,170,0.07)' : 'rgba(255,255,255,0.02)',
         border: `1px dashed ${encima ? BRAND.teal : 'transparent'}`,
         // Hoy es el protagonista; Mañana y Próximos van apenas más apagados.
         opacity: (col.id === 'manana' || col.id === 'proximos') ? 0.72 : 1,
@@ -995,7 +1031,7 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 3px 6px' }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color, flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: col.color, letterSpacing: '0.01em' }}>{col.titulo}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)', letterSpacing: '0.01em' }}>{col.titulo}</span>
         {/* El contador cuenta PENDIENTES; las hechas van aparte en verde (antes decía "Hoy 0"
             con una nota resuelta a la vista y parecía un error). */}
         <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>
@@ -1012,9 +1048,30 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
         )}
       </div>
 
-      {notas.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} {...rest} />)}
+      {turno.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 6px 8px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: `1px solid ${BRAND.border}` }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(255,255,255,0.55)', padding: '0 3px' }}>🌙 Del turno noche · {turno.length}</div>
+          {turno.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} vencida={col.id === 'vencidas'} {...rest} />)}
+        </div>
+      )}
 
-      {!notas.length && !hechas.length && !creando && (
+      {aus.length > 0 && <BloqueAusencias notas={aus} esMovil={esMovil} {...rest} />}
+
+      {resto.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} vencida={col.id === 'vencidas'} {...rest} />)}
+
+      {archivadas.length > 0 && (
+        <>
+          <button type="button" onClick={() => setVerArch(v => !v)} title="Vencidas de hace 2 días o más que nadie tocó"
+            style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '8px 3px 2px', border: 'none', background: 'transparent', cursor: 'pointer', touchAction: 'manipulation' }}>
+            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+            <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.35)' }}>{verArch ? '▾' : '▸'} Archivadas {archivadas.length}</span>
+            <span style={{ flex: 1, height: 1, background: BRAND.border }} />
+          </button>
+          {verArch && archivadas.map(n => <Tarjeta key={n.id} nota={n} mostrarDia vencida {...rest} />)}
+        </>
+      )}
+
+      {!notas.length && !hechas.length && !archivadas.length && !creando && (
         <div style={{ padding: '14px 6px 10px', textAlign: 'center' }}>
           <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.3)' }}>{col.vacio}</div>
           {col.creable && (
@@ -1048,7 +1105,7 @@ function Columna({ col, notas, hechas = [], esMovil, creando, onCrear, onSoltar,
 
       {creando ? children : col.creable && (
         <button type="button" onClick={onCrear}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 38, padding: '0 8px', borderRadius: 9, cursor: 'pointer', fontSize: 13, fontWeight: 700, touchAction: 'manipulation', border: `1px dashed ${col.color}88`, background: `${col.color}12`, color: col.color, textAlign: 'center' }}>
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 38, padding: '0 8px', borderRadius: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, touchAction: 'manipulation', border: '1px dashed rgba(255,255,255,0.16)', background: 'transparent', color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
           + Nueva nota{esMovil ? ` en ${col.titulo}` : ''}
         </button>
       )}
@@ -1185,7 +1242,11 @@ function PizarraInner({ usuario }) {
   const { cols } = useMemo(() => {
     const min = minutosAR(ahora);
     const pend = notas.filter(n => !n.resuelta_at);
-    const venc = ordenarNotas(pend.filter(n => estaVencida(n, hoy, min)));
+    // 1. Vencidas de hace 2 días o más que nadie tocó se archivan solas (no se borran: "Archivadas").
+    const limiteArch = sumarDias(hoy, -2);
+    const vencTodas = ordenarNotas(pend.filter(n => estaVencida(n, hoy, min)));
+    const venc = vencTodas.filter(n => n.fecha_objetivo > limiteArch);
+    const archivadas = vencTodas.filter(n => n.fecha_objetivo <= limiteArch);
     const resto = pend.filter(n => !estaVencida(n, hoy, min));
     // Próximos junta varios días: primero por fecha, y dentro de cada fecha el mismo orden por urgencia.
     const porDia = {};
@@ -1203,15 +1264,15 @@ function PizarraInner({ usuario }) {
       .sort((a, b) => String(a.fecha_objetivo).localeCompare(String(b.fecha_objetivo)) || porResuelta(a, b));
     return {
       cols: [
-        { id: 'vencidas', titulo: '⚠ Vencidas', color: ROJO, notas: venc, hechas: [], vacio: '', soloSiHay: true, anchoFijo: 300 },
-        { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, vacio: '✨ El día está limpio', pista: 'Agregá lo que haya que saber hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)), hechas: comp },
-        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, colapsable: true, vacio: '✨ Nada para mañana', pista: 'O arrastrá algo desde Hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: compMan },
+        { id: 'vencidas', titulo: 'Vencidas', color: ROJO, notas: venc, hechas: [], archivadas, vacio: '', soloSiHay: true, anchoFijo: 300 },
+        { id: 'hoy', titulo: 'Hoy', color: BRAND.teal, fecha: hoy, creable: true, agruparAus: true, vacio: '✨ El día está limpio', pista: 'Agregá lo que haya que saber hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === hoy)), hechas: comp },
+        { id: 'manana', titulo: 'Mañana', color: '#8EC5FF', fecha: manana, creable: true, colapsable: true, agruparAus: true, vacio: '✨ Nada para mañana', pista: 'O arrastrá algo desde Hoy', notas: ordenarNotas(resto.filter(n => n.fecha_objetivo === manana)), hechas: compMan },
         { id: 'proximos', titulo: 'Próximos', color: LILA, creable: true, colapsable: true, mostrarDia: true, vacio: '✨ Sin notas más adelante', pista: 'Ausencias avisadas, colectas especiales…', notas: prox, hechas: compProx },
       ],
     };
   }, [notas, hoy, manana, ahora]);
 
-  const visibles = cols.filter(c => !c.soloSiHay || c.notas.length || c.hechas.length);
+  const visibles = cols.filter(c => !c.soloSiHay || c.notas.length || c.hechas.length || (c.archivadas || []).length);
   const props = {
     clientesById, hoy, usuario, comentariosByNota,
     onResolver: n => resolver(n),
@@ -1256,7 +1317,7 @@ function PizarraInner({ usuario }) {
               propio "+ Nueva nota" (antes había además un botón enorme arriba, molesto). */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: esMovil ? 'wrap' : 'nowrap' }}>
             {visibles.map(col => (
-              <Columna key={col.id} col={col} notas={col.notas} hechas={col.hechas} esMovil={esMovil}
+              <Columna key={col.id} col={col} notas={col.notas} hechas={col.hechas} archivadas={col.archivadas || []} esMovil={esMovil}
                 creando={creandoEn === col.id}
                 modo={modoCol[col.id]}
                 onModo={v => setModoCol(m => ({ ...m, [col.id]: v }))}
@@ -1277,8 +1338,8 @@ function PizarraInner({ usuario }) {
               Es transitorio y accionable, así que va ancho completo y a la vista — antes estaba
               escondido detrás de un acordeón cerrado y nadie lo veía. */}
                 {sugerencias.length > 0 && (
-                  <div style={{ marginTop: 14, padding: '11px 14px', borderRadius: 12, border: `1px solid ${AMBAR}44`, background: `${AMBAR}0f` }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: AMBAR, marginBottom: 8 }}>💡 Seguimiento</div>
+                  <div style={{ marginTop: 14, padding: '11px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>Seguimiento de ausencias</div>
                     {sugerencias.map(a => (
                       <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${BRAND.border}` }}>
                         <span style={{ flex: 1, minWidth: 170, fontSize: 13, color: BRAND.white }}>
@@ -1290,7 +1351,7 @@ function PizarraInner({ usuario }) {
                           <button type="button" onClick={() => ocultarSug(a.id)}
                             style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>✓ Volvió</button>
                           <button type="button" onClick={() => seguirFaltando(a)}
-                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${AMBAR}`, background: `${AMBAR}22`, color: AMBAR }}>Sigue faltando</button>
+                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.75)' }}>Sigue faltando</button>
                         </div>
                       </div>
                     ))}
