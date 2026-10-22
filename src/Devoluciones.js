@@ -805,12 +805,63 @@ function MasAcciones({ rem, onReemplazar, subiendo }) {
   );
 }
 
+// ---------------- Visor de fotos dentro de la página (en vez de abrir otra pestaña) ----------------
+// items: [{ path, titulo, sub }]. Flechas / teclado para pasar entre las fotos de la vista; tocar la foto = zoom.
+function Visor({ items, inicio = 0, onCerrar, acciones }) {
+  const [i, setI] = useState(inicio);
+  const [urls, setUrls] = useState({});
+  const [zoom, setZoom] = useState(false);
+  const it = items[i] || {};
+  useEffect(() => {
+    const faltan = [items[i - 1], items[i], items[i + 1]].filter((x) => x && x.path && !urls[x.path]).map((x) => x.path);
+    if (faltan.length) firmarFotos(faltan).then((m) => setUrls((u) => ({ ...u, ...m }))).catch(() => {});
+  }, [i]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const tecla = (e) => {
+      if (e.key === "Escape") onCerrar();
+      else if (e.key === "ArrowRight") { setI((x) => Math.min(items.length - 1, x + 1)); setZoom(false); }
+      else if (e.key === "ArrowLeft") { setI((x) => Math.max(0, x - 1)); setZoom(false); }
+    };
+    window.addEventListener("keydown", tecla);
+    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", tecla); document.body.style.overflow = prev; };
+  }, [items.length, onCerrar]);
+  const url = urls[it.path];
+  const ir = (d) => { setI((x) => Math.min(items.length - 1, Math.max(0, x + d))); setZoom(false); };
+  return createPortal(
+    <div className="dv-visor" onClick={onCerrar} role="dialog" aria-label={it.titulo || "Foto del remito"}>
+      <div className="dv-visor-cab" onClick={(e) => e.stopPropagation()}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titulo}</div>
+          {it.sub && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.65)", marginTop: 2 }}>{it.sub}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          {items.length > 1 && <span style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", marginRight: 4 }}>{i + 1} de {items.length}</span>}
+          {acciones && acciones(it)}
+          {url && <a className="dv-btn" href={url} download={`${(it.titulo || "remito").split(" ")[0]}.jpg`}>Descargar</a>}
+          <button className="dv-btn" onClick={onCerrar} aria-label="Cerrar">✕</button>
+        </div>
+      </div>
+      <div className={"dv-visor-img" + (zoom ? " zoom" : "")} onClick={(e) => e.stopPropagation()}>
+        {url ? <img src={url} alt={it.titulo || "Foto"} onClick={() => setZoom((z) => !z)} /> : <span style={{ color: "rgba(255,255,255,.6)" }}>{it.path ? "Cargando…" : "Sin foto"}</span>}
+      </div>
+      {items.length > 1 && (
+        <>
+          <button className="dv-visor-flecha izq" disabled={i === 0} onClick={(e) => { e.stopPropagation(); ir(-1); }} aria-label="Anterior">‹</button>
+          <button className="dv-visor-flecha der" disabled={i === items.length - 1} onClick={(e) => { e.stopPropagation(); ir(1); }} aria-label="Siguiente">›</button>
+        </>
+      )}
+      <div className="dv-visor-pie">Tocá la foto para acercar · Esc para cerrar</div>
+    </div>, document.body);
+}
+
 function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar }) {
   const [cliente, setCliente] = useState(null);
   const [mes, setMes] = useState(null);
   const [busca, setBusca] = useState("");
   const [fotos, setFotos] = useState({});
   const [bajando, setBajando] = useState(false);
+  const [visor, setVisor] = useState(null); // índice en enVista
   const devueltos = remitos.filter((r) => r.estado === "devuelto");
   const fechaRem = (r) => r.firmado_at || r.procesado_at || r.creado_at;
 
@@ -885,6 +936,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
     </div>
   );
 
+  const visorItems = enVista.map((r) => ({ path: r.foto_path, rem: r, titulo: `${r.codigo} · ${r.cliente}`, sub: `${(r.dids || []).length} envíos · ${fecha(fechaRem(r))} · subido por ${r.firmado_por || "—"}${r.confirmado_por ? ` · confirmado por ${r.confirmado_por}` : ""}` }));
   if (!devueltos.length) return <div style={{ ...card, padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Todavía no hay remitos devueltos. Cuando se sube la foto de un remito firmado y se procesa, queda guardado acá en la carpeta de su cliente.</div>;
 
   return (
@@ -929,13 +981,14 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
           {encontrados.length ? `${encontrados.length} remito${encontrados.length > 1 ? "s" : ""} encontrado${encontrados.length > 1 ? "s" : ""}` : "Ningún remito devuelto coincide con la búsqueda."}
         </div>
       )}
+      {visor != null && <Visor items={visorItems} inicio={visor} onCerrar={() => setVisor(null)} acciones={(it) => <button className="dv-btn" onClick={() => onImprimir(it.rem)}>Reimprimir</button>} />}
       {(mes || (!cliente && encontrados.length > 0)) && (
         <div className="dv-fotos">
           {enVista.map((r) => (
             <div key={r.id} className="dv-foto">
-              <a href={fotos[r.foto_path] || undefined} target="_blank" rel="noopener noreferrer" className="dv-foto-img" aria-label={`Ver la foto del remito ${r.codigo}`}>
+              <button className="dv-foto-img" style={{ border: 0, width: "100%", cursor: r.foto_path ? "zoom-in" : "default" }} onClick={() => r.foto_path && setVisor(enVista.indexOf(r))} aria-label={`Ver la foto del remito ${r.codigo}`}>
                 {fotos[r.foto_path] ? <img src={fotos[r.foto_path]} alt={`Remito ${r.codigo} firmado`} loading="lazy" /> : <span style={{ color: C.ink3, fontSize: 12 }}>{r.foto_path ? "Cargando…" : "Sin foto"}</span>}
-              </a>
+              </button>
               <div style={{ padding: "10px 12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                   <b style={{ fontFamily: C.grotesk }}>{r.codigo}{!mes && <span style={{ fontWeight: 400, color: C.ink3, fontFamily: "inherit" }}> · {r.cliente}</span>}</b>
@@ -1000,7 +1053,7 @@ function PorConfirmar({ remitos, casosDe, onConfirmar, onRepetir, subiendo, refP
           const casos = casosDe(r);
           return (
             <div key={r.id} className={"dv-foto dv-pc" + (on ? " on" : "") + (dudosa(r) ? " dudosa" : "")}>
-              <button className="dv-foto-img" style={{ height: 230, border: 0, cursor: "zoom-in", width: "100%" }} onClick={() => fotos[r.foto_path] && setGrande({ url: fotos[r.foto_path], r })} aria-label={`Ver grande la foto del remito ${r.codigo}`}>
+              <button className="dv-foto-img" style={{ height: 230, border: 0, cursor: "zoom-in", width: "100%" }} onClick={() => r.foto_path && setGrande(pend.indexOf(r))} aria-label={`Ver grande la foto del remito ${r.codigo}`}>
                 {fotos[r.foto_path] ? <img src={fotos[r.foto_path]} alt={`Remito ${r.codigo} firmado`} /> : <span style={{ color: C.ink3, fontSize: 12 }}>Cargando…</span>}
               </button>
               <div style={{ padding: "10px 12px" }}>
@@ -1019,16 +1072,7 @@ function PorConfirmar({ remitos, casosDe, onConfirmar, onRepetir, subiendo, refP
           );
         })}
       </div>
-      {grande && createPortal(
-        <div className="dv-modal-fondo" onClick={() => setGrande(null)}>
-          <div className="dv-modal" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Foto del remito ${grande.r.codigo}`}>
-            <div className="dv-modal-cab" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-              <div style={{ fontWeight: 700 }}>{grande.r.codigo} · {grande.r.cliente}</div>
-              <button className="dv-btn" onClick={() => setGrande(null)}>Cerrar</button>
-            </div>
-            <div className="dv-modal-cuerpo" style={{ padding: 12 }}><img src={grande.url} alt={`Remito ${grande.r.codigo}`} style={{ width: "100%", borderRadius: 10, display: "block" }} /></div>
-          </div>
-        </div>, document.body)}
+      {grande != null && <Visor items={pend.map((r) => ({ path: r.foto_path, titulo: `${r.codigo} · ${r.cliente}`, sub: `${(r.dids || []).length} envíos · subido por ${r.firmado_por || "—"} · ${fecha(r.firmado_at)}` }))} inicio={grande} onCerrar={() => setGrande(null)} />}
     </div>
   );
 }
@@ -1037,6 +1081,7 @@ function PorConfirmar({ remitos, casosDe, onConfirmar, onRepetir, subiendo, refP
 function NoReconocidas({ fallidos, remitos, onAsignar, onDescartar }) {
   const [fotos, setFotos] = useState({});
   const [elegido, setElegido] = useState({});
+  const [visor, setVisor] = useState(null);
   useEffect(() => {
     const paths = fallidos.map((f) => f.foto_path).filter((p) => !fotos[p]);
     if (paths.length) firmarFotos(paths).then((m) => setFotos((x) => ({ ...x, ...m }))).catch(() => {});
@@ -1050,12 +1095,13 @@ function NoReconocidas({ fallidos, remitos, onAsignar, onDescartar }) {
         <span style={{ fontWeight: 600 }}>No reconocidas · {fallidos.length}</span>
         <Info texto="Fotos subidas que la app no pudo asignar a un remito (no se leyó el QR o el QR no corresponde a un remito). Elegí a qué remito corresponde cada una viendo la foto, o descartala si no sirve." />
       </div>
+      {visor != null && <Visor items={fallidos.map((f) => ({ path: f.foto_path, titulo: "Foto no reconocida", sub: `${f.motivo} · ${fecha(f.at)} · ${f.por || "—"}` }))} inicio={visor} onCerrar={() => setVisor(null)} />}
       <div className="dv-fotos" style={{ marginTop: 12 }}>
         {fallidos.map((f) => (
           <div key={f.id} className="dv-foto">
-            <a href={fotos[f.foto_path] || undefined} target="_blank" rel="noopener noreferrer" className="dv-foto-img" style={{ height: 180 }} aria-label="Ver la foto">
+            <button className="dv-foto-img" style={{ height: 180, border: 0, width: "100%", cursor: "zoom-in" }} onClick={() => setVisor(fallidos.indexOf(f))} aria-label="Ver la foto">
               {fotos[f.foto_path] ? <img src={fotos[f.foto_path]} alt="Foto no reconocida" loading="lazy" /> : <span style={{ color: C.ink3, fontSize: 12 }}>Cargando…</span>}
-            </a>
+            </button>
             <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ fontSize: 12, color: C.ambar }}>{f.motivo}{f.calidad && f.calidad.problemas && f.calidad.problemas.length ? ` · ${textoCalidad(f.calidad).toLowerCase()}` : ""}</div>
               <div style={{ fontSize: 11.5, color: C.ink3 }}>{fecha(f.at)} · {f.por || "—"}</div>
@@ -1325,12 +1371,8 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
     } catch { toast("No se pudo descartar"); }
   }
 
-  async function verFoto(rem) {
-    const r = await authedFetch(`${SUPABASE_URL}/storage/v1/object/sign/remitos-firmados/${rem.foto_path}`, { method: "POST", body: JSON.stringify({ expiresIn: 600 }) });
-    const j = await r.json().catch(() => ({}));
-    if (j.signedURL) window.open(`${SUPABASE_URL}/storage/v1${j.signedURL}`, "_blank", "noopener");
-    else toast("No se pudo abrir la foto");
-  }
+  const [visorRem, setVisorRem] = useState(null);
+  const verFoto = (rem) => setVisorRem(rem);
   // Remito ya devuelto con la foto equivocada: cambia SOLO la imagen (LightData no se vuelve a tocar).
   // La foto anterior queda en fotos_anteriores como registro.
   async function reemplazarFoto(rem, file) {
@@ -1443,6 +1485,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
         )}
       </div>
 
+      {visorRem && <Visor items={[{ path: visorRem.foto_path, titulo: `${visorRem.codigo} · ${visorRem.cliente}`, sub: `${(visorRem.dids || []).length} envíos · ${ESTADO_REMITO[visorRem.estado]} · subido por ${visorRem.firmado_por || "—"}` }]} onCerrar={() => setVisorRem(null)} />}
       <PorConfirmar remitos={remitos} casosDe={casosDe} onConfirmar={confirmarRemitos} onRepetir={repetirPorConfirmar} subiendo={subiendo} refPanel={panelPC} />
       <NoReconocidas fallidos={fallidos} remitos={remitos} onAsignar={asignarFallida} onDescartar={descartarFallida} />
       {escaner && <Escaner remitos={remitos} onLectura={desdeEscaner} onRepetir={repetirDesdeEscaner} onCerrar={() => { setEscaner(false); setTimeout(() => panelPC.current && panelPC.current.scrollIntoView({ behavior: "smooth", block: "start" }), 400); }} />}
@@ -1641,6 +1684,17 @@ const CSS = `
 .dv-cadete-link{background:none;border:0;padding:2px 0;font:inherit;font-size:13px;color:#c9cbe0;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;border-bottom:1px dashed rgba(255,255,255,.2)}
 .dv-cadete-link:hover{color:#2ee6b6;border-bottom-color:#2ee6b6}
 .dv-chip-f{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;border:1px solid rgba(46,230,182,.45);background:rgba(46,230,182,.1);color:#2ee6b6;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.dv-visor{position:fixed;inset:0;z-index:9999;background:rgba(6,7,16,.92);display:flex;flex-direction:column;color:#f4f5fa}
+.dv-visor-cab{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;flex-wrap:wrap}
+.dv-visor-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 64px 8px;overflow:auto}
+.dv-visor-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;cursor:zoom-in;background:#fff}
+.dv-visor-img.zoom{align-items:flex-start;justify-content:flex-start}
+.dv-visor-img.zoom img{max-width:none;max-height:none;width:200%;cursor:zoom-out}
+.dv-visor-flecha{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.45);color:#fff;font-size:32px;line-height:1;cursor:pointer}
+.dv-visor-flecha.izq{left:12px}.dv-visor-flecha.der{right:12px}
+.dv-visor-flecha:disabled{opacity:.25;cursor:default}
+.dv-visor-pie{text-align:center;font-size:12px;color:rgba(255,255,255,.45);padding:6px 0 calc(env(safe-area-inset-bottom) + 10px)}
+@media (max-width:560px){.dv-visor-img{padding:0 8px 8px}.dv-visor-flecha{top:auto;bottom:34px;transform:none}}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
