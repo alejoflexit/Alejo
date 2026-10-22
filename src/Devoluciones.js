@@ -826,13 +826,25 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
     return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([k, rs]) => ({ k, remitos: rs.sort((a, b) => String(fechaRem(b)).localeCompare(String(fechaRem(a)))) }));
   }, [carpeta]); // eslint-disable-line react-hooks/exhaustive-deps
   const delMes = mes ? (meses.find((m) => m.k === mes) || { remitos: [] }).remitos : [];
+  const q = busca.trim().toLowerCase();
+  // Búsqueda directa de remitos: por número (RD-00012 o 12), cliente, número de venta, tracking o envío
+  const encontrados = useMemo(() => {
+    if (cliente || q.length < 2) return [];
+    const qn = q.replace(/^rd-?0*/, "");
+    return devueltos.filter((r) => {
+      if (String(r.codigo || "").toLowerCase().includes(q) || (qn && /^\d+$/.test(qn) && String(r.codigo || "").replace(/^RD-0*/, "") === qn)) return true;
+      if (String(r.cliente || "").toLowerCase().includes(q)) return true;
+      return casosDe(r).some((c) => [c.ml_venta_id, c.tracking, c.did].some((v) => v != null && String(v).toLowerCase().includes(q)));
+    }).sort((a, b) => String(fechaRem(b)).localeCompare(String(fechaRem(a)))).slice(0, 60);
+  }, [q, cliente, remitos]); // eslint-disable-line react-hooks/exhaustive-deps
+  const enVista = mes ? delMes : encontrados;
 
   // Miniaturas de las fotos firmadas del mes abierto
   useEffect(() => {
-    const paths = delMes.map((r) => r.foto_path).filter((p) => p && !fotos[p]);
+    const paths = enVista.map((r) => r.foto_path).filter((p) => p && !fotos[p]);
     if (!paths.length) return;
     firmarFotos(paths).then((m) => setFotos((f) => ({ ...f, ...m }))).catch(() => {});
-  }, [mes, cliente]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mes, cliente, encontrados]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function bajarZip() {
     setBajando(true);
@@ -856,7 +868,6 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
     setBajando(false);
   }
 
-  const q = busca.trim().toLowerCase();
   const miga = (
     <div className="dv-miga">
       <button onClick={() => { setCliente(null); setMes(null); }} className={!cliente ? "on" : ""}>Remitos devueltos</button>
@@ -872,13 +883,13 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         {miga}
         <span style={{ flex: 1 }} />
-        {!cliente && <input className="dv-input" style={{ flex: "0 1 260px" }} placeholder="Buscar cliente" value={busca} onChange={(e) => setBusca(e.target.value)} />}
+        {!cliente && <input className="dv-input" style={{ flex: "0 1 260px" }} placeholder="Buscar remito, cliente o n° de venta" value={busca} onChange={(e) => setBusca(e.target.value)} />}
         {mes && <button className="dv-btn pri" disabled={bajando || !delMes.some((r) => r.foto_path)} onClick={bajarZip}>{bajando ? "Armando .zip…" : `Descargar carpeta (${delMes.length})`}</button>}
       </div>
 
       {!cliente && (
         <div className="dv-carpetas">
-          {porCliente.filter((c) => !q || c.nombre.toLowerCase().includes(q)).map((c) => (
+          {porCliente.filter((c) => !q || c.nombre.toLowerCase().includes(q) || encontrados.some((r) => (r.cliente || "(sin cliente)") === c.nombre)).map((c) => (
             <button key={c.nombre} className="dv-carpeta" onClick={() => { setCliente(c.nombre); setMes(null); }}>
               <IconoCarpeta />
               <span style={{ minWidth: 0 }}>
@@ -904,16 +915,21 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
         </div>
       )}
 
-      {mes && (
+      {!cliente && q.length >= 2 && (
+        <div style={{ fontSize: 13, color: C.ink3, margin: "18px 0 10px" }}>
+          {encontrados.length ? `${encontrados.length} remito${encontrados.length > 1 ? "s" : ""} encontrado${encontrados.length > 1 ? "s" : ""}` : "Ningún remito devuelto coincide con la búsqueda."}
+        </div>
+      )}
+      {(mes || (!cliente && encontrados.length > 0)) && (
         <div className="dv-fotos">
-          {delMes.map((r) => (
+          {enVista.map((r) => (
             <div key={r.id} className="dv-foto">
               <a href={fotos[r.foto_path] || undefined} target="_blank" rel="noopener noreferrer" className="dv-foto-img" aria-label={`Ver la foto del remito ${r.codigo}`}>
                 {fotos[r.foto_path] ? <img src={fotos[r.foto_path]} alt={`Remito ${r.codigo} firmado`} loading="lazy" /> : <span style={{ color: C.ink3, fontSize: 12 }}>{r.foto_path ? "Cargando…" : "Sin foto"}</span>}
               </a>
               <div style={{ padding: "10px 12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                  <b style={{ fontFamily: C.grotesk }}>{r.codigo}</b>
+                  <b style={{ fontFamily: C.grotesk }}>{r.codigo}{!mes && <span style={{ fontWeight: 400, color: C.ink3, fontFamily: "inherit" }}> · {r.cliente}</span>}</b>
                   <span style={{ fontSize: 12, color: C.ink3 }}>{fecha(fechaRem(r))}</span>
                 </div>
                 <div style={{ fontSize: 12, color: C.ink3, marginTop: 3 }}>{(r.dids || []).length} envíos · firmado subido por {r.firmado_por || "—"}</div>
@@ -975,16 +991,17 @@ function NoReconocidas({ fallidos, remitos, onAsignar, onDescartar }) {
 }
 
 // ---------------- Modo escáner: varios remitos seguidos con la cámara ----------------
-// Mira el video en vivo; cuando aparece un QR de remito nuevo, saca la foto sola (a resolución completa),
-// mide nitidez/luz y la manda a subir mientras se apunta al siguiente.
-function Escaner({ remitos, onLectura, onCerrar }) {
+// Semi-automático (pedido de Alejo 22/10): la cámara RECONOCE el QR sola, pero la foto la saca la persona
+// con el botón, encuadrando la hoja entera con la firma del cliente. Abajo queda la última foto para
+// controlar de un vistazo que se vea la firma, con "Repetir" (reemplaza la foto de ese remito).
+function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
   const video = useRef();
-  const vistos = useRef(new Set());
-  const ocupado = useRef(false);
-  const ultimo = useRef({ codigo: null, veces: 0 }); // estable = mismo QR en 2 lecturas seguidas (no saca la foto en movimiento)
+  const [detectado, setDetectado] = useState(null); // { codigo, cliente, estado, qr }
+  const [ultima, setUltima] = useState(null);       // { url, codigo, cliente, aviso, lectura }
+  const [tomados, setTomados] = useState(() => new Set());
   const [error, setError] = useState(null);
-  const [flash, setFlash] = useState(null); // { texto, tipo }
-  const [cuenta, setCuenta] = useState(0);
+  const [disparo, setDisparo] = useState(false);
+  const visto = useRef({ codigo: null, at: 0 });
   useEffect(() => {
     let stream, timer, vivo = true;
     const chico = document.createElement("canvas");
@@ -995,53 +1012,85 @@ function Escaner({ remitos, onLectura, onCerrar }) {
         video.current.srcObject = stream;
         await video.current.play();
       } catch (e) { setError("No se pudo abrir la cámara. Revisá el permiso de cámara del navegador para esta página."); return; }
-      timer = setInterval(async () => {
+      timer = setInterval(() => {
         const v = video.current;
-        if (!v || ocupado.current || !v.videoWidth) return;
+        if (!v || !v.videoWidth) return;
         const esc = 640 / v.videoWidth;
         chico.width = 640; chico.height = Math.round(v.videoHeight * esc);
         const cx = chico.getContext("2d");
         cx.drawImage(v, 0, 0, chico.width, chico.height);
         const r = jsQR(cx.getImageData(0, 0, chico.width, chico.height).data, chico.width, chico.height, { inversionAttempts: "dontInvert" });
         const codigo = r && codigoDeQR(r.data);
-        if (!codigo) { ultimo.current = { codigo: null, veces: 0 }; return; }
-        ultimo.current = ultimo.current.codigo === codigo ? { codigo, veces: ultimo.current.veces + 1 } : { codigo, veces: 1 };
-        if (ultimo.current.veces < 2 || vistos.current.has(codigo)) return;
-        vistos.current.add(codigo);
-        const rem = remitos.find((x) => x.codigo === codigo);
-        if (rem && rem.estado === "devuelto") { setFlash({ texto: `${codigo} ya estaba devuelto`, tipo: "info" }); setTimeout(() => setFlash(null), 1800); return; }
-        ocupado.current = true;
-        // Foto a resolución completa del mismo cuadro
-        const grande = document.createElement("canvas");
-        const e2 = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
-        grande.width = Math.round(v.videoWidth * e2); grande.height = Math.round(v.videoHeight * e2);
-        grande.getContext("2d").drawImage(v, 0, 0, grande.width, grande.height);
-        const blob = await new Promise((ok) => grande.toBlob(ok, "image/jpeg", 0.75));
-        const ch = document.createElement("canvas"); ch.width = 400; ch.height = Math.round(grande.height * 400 / grande.width);
-        ch.getContext("2d").drawImage(grande, 0, 0, ch.width, ch.height);
-        const calidad = medirCalidad(ch);
-        try { navigator.vibrate && navigator.vibrate(60); } catch {}
-        setFlash({ texto: `${codigo}${rem ? " · " + rem.cliente : ""}`, tipo: calidad && calidad.problemas.length ? "aviso" : "ok" });
-        setCuenta((n) => n + 1);
-        setTimeout(() => setFlash(null), 1500);
-        ocupado.current = false;
-        onLectura({ blob, qr: r.data, calidad });
+        const ahora = Date.now();
+        if (codigo) {
+          visto.current = { codigo, at: ahora };
+          const rem = remitos.find((x) => x.codigo === codigo);
+          setDetectado((d) => (d && d.codigo === codigo ? d : { codigo, qr: r.data, cliente: rem ? rem.cliente : null, estado: rem ? rem.estado : "inexistente" }));
+        } else if (ahora - visto.current.at > 1500) {
+          setDetectado(null);
+        }
       }, 300);
     })();
     return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => { if (ultima) URL.revokeObjectURL(ultima.url); }, [ultima]);
+
+  async function capturar() {
+    const v = video.current;
+    if (!v || !v.videoWidth || !detectado) return;
+    setDisparo(true); setTimeout(() => setDisparo(false), 180);
+    const grande = document.createElement("canvas");
+    const e2 = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
+    grande.width = Math.round(v.videoWidth * e2); grande.height = Math.round(v.videoHeight * e2);
+    grande.getContext("2d").drawImage(v, 0, 0, grande.width, grande.height);
+    const blob = await new Promise((ok) => grande.toBlob(ok, "image/jpeg", 0.75));
+    const ch = document.createElement("canvas"); ch.width = 400; ch.height = Math.round(grande.height * 400 / grande.width);
+    ch.getContext("2d").drawImage(grande, 0, 0, ch.width, ch.height);
+    const calidad = medirCalidad(ch);
+    try { navigator.vibrate && navigator.vibrate(60); } catch {}
+    const lectura = { blob, qr: detectado.qr, calidad };
+    const yaTomado = tomados.has(detectado.codigo);
+    setUltima({ url: URL.createObjectURL(blob), codigo: detectado.codigo, cliente: detectado.cliente, aviso: textoCalidad(calidad), lectura });
+    if (yaTomado) onRepetir(detectado.codigo, lectura);
+    else { setTomados((t) => new Set(t).add(detectado.codigo)); onLectura(lectura); }
+  }
+
+  const yaTomado = detectado && tomados.has(detectado.codigo);
+  const listo = detectado && (yaTomado || ["emitido", "error", "procesando"].includes(detectado.estado));
+  const texto = !detectado ? "Buscando el QR del remito…"
+    : detectado.estado === "inexistente" ? `${detectado.codigo}: ese remito no existe`
+    : detectado.estado === "devuelto" && !yaTomado ? `${detectado.codigo} ya está devuelto`
+    : detectado.estado === "anulado" ? `${detectado.codigo} está anulado`
+    : `${detectado.codigo} · ${detectado.cliente}${yaTomado ? " · ya tomado (repetir)" : ""}`;
+
   return createPortal(
     <div className="dv-escaner">
       <video ref={video} playsInline muted className="dv-escaner-video" />
-      <div className={"dv-escaner-marco" + (flash ? " " + flash.tipo : "")} />
+      <div className={"dv-escaner-marco" + (listo ? " ok" : "") + (disparo ? " flash" : "")} />
       <div className="dv-escaner-arriba">
-        <div>
-          <div style={{ fontWeight: 700 }}>Modo escáner</div>
-          <div style={{ fontSize: 12.5, opacity: .8 }}>Apuntá al QR de cada remito firmado, con el papel entero en cuadro. Saca la foto solo.</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, color: listo ? "#2ee6b6" : "#fff" }}>{listo ? "✓ " : ""}{texto}</div>
+          <div style={{ fontSize: 12.5, opacity: .8, marginTop: 2 }}>{listo ? "Encuadrá la hoja entera, con la firma del cliente, y sacá la foto." : "Apuntá al QR del remito firmado."}</div>
         </div>
-        <button className="dv-btn pri" onClick={onCerrar}>Terminar ({cuenta})</button>
+        <button className="dv-btn" onClick={onCerrar} style={{ background: "rgba(0,0,0,.5)" }}>Terminar ({tomados.size})</button>
       </div>
-      {flash && <div className={"dv-escaner-flash " + flash.tipo}>{flash.tipo === "info" ? "" : "✓ "}{flash.texto}{flash.tipo === "aviso" ? " · foto con poca calidad" : ""}</div>}
+      <div className="dv-escaner-abajo">
+        <div className="dv-escaner-ultima">
+          {ultima ? (
+            <>
+              <img src={ultima.url} alt={`Última foto, remito ${ultima.codigo}`} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{ultima.codigo}</div>
+                <div style={{ fontSize: 11.5, color: ultima.aviso ? "#F5C044" : "rgba(255,255,255,.7)" }}>{ultima.aviso || "¿Se ve la firma?"}</div>
+                <div style={{ fontSize: 11, opacity: .7, marginTop: 2 }}>Para repetirla, apuntá a ese QR y sacá otra</div>
+              </div>
+            </>
+          ) : <span style={{ fontSize: 12, opacity: .7 }}>Acá vas a ver la última foto</span>}
+        </div>
+        <button className={"dv-escaner-disparo" + (listo ? " on" : "")} disabled={!listo} onClick={capturar} aria-label="Sacar foto" />
+        <div style={{ width: 120 }} />
+      </div>
       {error && <div className="dv-escaner-flash aviso">{error}</div>}
     </div>, document.body);
 }
@@ -1138,6 +1187,21 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
     setTanda((t) => t.map((x) => (x.id === id ? { ...x, ...r, estado: r.ok ? "ok" : "error" } : x)));
     recargar();
     return r;
+  }
+
+  // "Repetir" en el escáner: la foto nueva reemplaza a la recién subida de ese remito (la anterior queda guardada)
+  async function repetirDesdeEscaner(codigo, { blob, calidad }) {
+    const rem = remitos.find((r) => r.codigo === codigo);
+    if (!rem) return;
+    try {
+      const fresco = (await sbFetch(`remitos_devolucion?id=eq.${rem.id}&select=foto_path,fotos_anteriores,estado`))[0] || rem;
+      const path = `${rem.codigo}/${Date.now()}.jpg`;
+      const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+      if (!up.ok) throw new Error("No se pudo subir la foto");
+      await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ foto_path: path, calidad: calidad || null, fotos_anteriores: [...(fresco.fotos_anteriores || []), fresco.foto_path].filter(Boolean) }) });
+      setTanda((t) => t.map((x) => (x.codigo === codigo ? { ...x, aviso: textoCalidad(calidad), msg: (x.msg || "") + " · foto repetida" } : x)));
+      recargar();
+    } catch (e) { toast(`No se pudo repetir la foto de ${codigo}: ${String(e.message || e).slice(0, 60)}`); }
   }
 
   // No reconocidas: asignar a mano (viendo la foto) o descartar
@@ -1251,7 +1315,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
       </div>
 
       <NoReconocidas fallidos={fallidos} remitos={remitos} onAsignar={asignarFallida} onDescartar={descartarFallida} />
-      {escaner && <Escaner remitos={remitos} onLectura={desdeEscaner} onCerrar={() => setEscaner(false)} />}
+      {escaner && <Escaner remitos={remitos} onLectura={desdeEscaner} onRepetir={repetirDesdeEscaner} onCerrar={() => setEscaner(false)} />}
 
       <div className="dv-seg sm" style={{ alignSelf: "flex-start" }}>
         {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"], ["todos", "Todos"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
@@ -1447,9 +1511,17 @@ const CSS = `
 .dv-tanda-ico.ok{background:rgba(46,230,182,.15);color:#2ee6b6}.dv-tanda-ico.mal{background:rgba(245,192,68,.15);color:#F5C044}
 .dv-escaner{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
 .dv-escaner-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.dv-escaner-marco{position:absolute;inset:12% 8%;border:3px solid rgba(255,255,255,.55);border-radius:18px;transition:border-color .15s,box-shadow .15s;pointer-events:none}
+.dv-escaner-marco{position:absolute;inset:max(90px,12%) 7% max(130px,16%);border:3px solid rgba(255,255,255,.55);border-radius:18px;transition:border-color .15s,box-shadow .15s;pointer-events:none}
 .dv-escaner-marco.ok{border-color:#2ee6b6;box-shadow:0 0 0 9999px rgba(46,230,182,.12)}
 .dv-escaner-marco.aviso{border-color:#F5C044}
+.dv-escaner-marco.flash{box-shadow:0 0 0 9999px rgba(255,255,255,.35)}
+.dv-escaner-abajo{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.8))}
+.dv-escaner-ultima{display:flex;gap:10px;align-items:center;width:150px;min-height:64px}
+.dv-escaner-ultima img{width:48px;height:64px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.4);flex-shrink:0}
+.dv-escaner-disparo{width:76px;height:76px;border-radius:50%;border:5px solid rgba(255,255,255,.45);background:rgba(255,255,255,.25);cursor:pointer;flex-shrink:0;transition:transform .1s}
+.dv-escaner-disparo.on{border-color:#fff;background:#2ee6b6}
+.dv-escaner-disparo:active{transform:scale(.92)}
+.dv-escaner-disparo:disabled{cursor:default}
 .dv-escaner-arriba{position:absolute;top:0;left:0;right:0;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;background:linear-gradient(rgba(0,0,0,.75),rgba(0,0,0,0))}
 .dv-escaner-flash{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translateX(-50%);background:rgba(10,12,24,.9);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
 .dv-escaner-flash.aviso{border-color:rgba(245,192,68,.6)}.dv-escaner-flash.info{border-color:rgba(255,255,255,.3);font-weight:500}
