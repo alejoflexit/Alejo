@@ -17,6 +17,8 @@ const GEO_ALERTA_M = 800; // umbral: alerta cuando el cadete está a <= 800 m de
 const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // clave del bridge (/root/flexit/bridge.key en el VPS) — visible en el bundle, riesgo aceptado (ver spec-lightdata-bridge)
 
 const SECCIONES = ['CABA', 'SUR', 'NOROESTE', 'SABADOS'];
+// Secciones con bot de confirmación por link (piloto CABA 10/2026; Sur y Noroeste desde 22/10)
+const SECCIONES_BOT = ['CABA', 'SUR', 'NOROESTE'];
 const DEFAULT_CHOFERES = ['Alric','Capra','Cepero','Vaccaro','Dani Vargas','Gonzalo','Maxi','Renzo','Cris','Pedro'];
 
 function fmtMonto(n) {
@@ -225,7 +227,7 @@ function ColectasInner({ soloArribos = false, irA }) {
   // WhatsApp está caído y a las 9 no se mandan los links. Se muestra en rojo en el botón y el panel.
   const [botEstado, setBotEstado] = useState(null);
   useEffect(() => {
-    if (tab !== 'CABA') return;
+    if (!SECCIONES_BOT.includes(tab)) return;
     let vivo = true;
     const cargar = () => sbFetch('rpc/colecta_bot_estado', { method: 'POST', body: '{}' })
       .then(r => { if (vivo) setBotEstado(r || null); })
@@ -1340,7 +1342,7 @@ function ColectasInner({ soloArribos = false, irA }) {
               <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {sinAsignar} sin asignar
             </div>
           )}
-          {tab === 'CABA' && !soloLectura && (() => { const preg = seccionClientes.filter(c => !c.fija); const on = preg.filter(c => c.bot_habilitado).length;
+          {SECCIONES_BOT.includes(tab) && !soloLectura && (() => { const preg = seccionClientes.filter(c => !c.fija); const on = preg.filter(c => c.bot_habilitado).length;
             const caido = botEstado && (botEstado.ok === false || botEstado.aviso);
             const col = caido ? '#E24B4A' : '#2ECFAA';
             return (
@@ -1351,7 +1353,8 @@ function ColectasInner({ soloArribos = false, irA }) {
           ); })()}
           {botPanel && (
             <ColectasBot
-              clientes={clientes.filter(c => c.activo && c.seccion === 'CABA')}
+              clientes={clientes.filter(c => c.activo && c.seccion === tab)}
+              seccion={tab}
               onClienteActualizado={upd => setClientes(prev => prev.map(c => c.id === upd.id ? { ...c, ...upd } : c))}
               estado={botEstado}
               onClose={() => setBotPanel(false)}
@@ -1384,7 +1387,7 @@ function ColectasInner({ soloArribos = false, irA }) {
             {(() => {
               // Clientes con el bot prendido que todavía no respondieron el link (se manda a las 9).
               // Reemplaza a la nota "No respondieron el link" que el barrido de las 11:30 dejaba en la Pizarra.
-              if (tab !== 'CABA' || fecha !== todayStr() || minutosAR() < 9 * 60) return null;
+              if (!SECCIONES_BOT.includes(tab) || fecha !== todayStr() || minutosAR() < 9 * 60) return null;
               const sinLink = seccionClientes.filter(c => c.bot_habilitado && !c.fija && estEf(c) === 'blanco');
               if (!sinLink.length) return null;
               const on = filtroEstado === 'sinlink';

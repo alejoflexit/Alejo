@@ -1,4 +1,4 @@
-// Panel "Bot de confirmación" de Colectas (piloto CABA, 2026-10).
+// Panel "Bot de confirmación" de Colectas (piloto CABA 2026-10; Sur y Noroeste desde 22/10). Recibe los clientes de la sección abierta.
 // El equipo prende el bot por cliente y le asigna su grupo de WhatsApp. Con eso:
 //  - el cliente tiene un link fijo (colectas_clientes.bot_token) → public/colecta.html
 //  - a las 9:00 (lun-vie) pg_cron encola el mensaje con el link (colecta_bot_encolar)
@@ -81,7 +81,7 @@ function ordenarGrupos(grupos, nombre) {
     .map(x => ({ ...x.g, parecido: x.p }));
 }
 
-export default function ColectasBot({ clientes, estado, onClienteActualizado, onClose }) {
+export default function ColectasBot({ clientes, estado, onClienteActualizado, onClose, seccion = 'CABA' }) {
   const [grupos, setGrupos] = useState(null);
   const [errorGrupos, setErrorGrupos] = useState('');
   const [busqueda, setBusqueda] = useState('');
@@ -183,7 +183,7 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
         <div style={{ padding: '18px 20px 14px', borderBottom: `1px solid ${BRAND.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <i className="ti ti-robot" aria-hidden="true" style={{ fontSize: 20, color: BRAND.teal }} />
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Bot de confirmación · CABA</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Bot de confirmación · {seccion === 'NOROESTE' ? 'Noroeste' : seccion === 'SUR' ? 'Sur' : 'CABA'}</div>
             <div style={{ marginLeft: 8, padding: '2px 10px', borderRadius: 20, background: 'rgba(46,207,170,0.12)', color: BRAND.teal, fontSize: 12, fontWeight: 700 }}>
               {prendidos} de {preguntables.length} configurados
             </div>
