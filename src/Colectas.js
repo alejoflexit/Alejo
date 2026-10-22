@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { getSession, getToken } from './auth';
 import {
   BRAND, VEHICULOS, normNombre, estadoEfectivo, ChoferPicker,
-  SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, mergeChoferes, LoginFlexit, NotasHoy,
+  SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, minutosAR, mergeChoferes, LoginFlexit, NotasHoy,
 } from './colectasShared';
 import ColectasBot from './ColectasBot';
 
@@ -961,7 +961,9 @@ function ColectasInner({ soloArribos = false, irA }) {
     const clientesFiltrados = seccionClientes.filter(c => {
       const reg = registros[c.id];
       const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
-      if (filtroEstado && estEf !== filtroEstado) return false;
+      // 'sinlink' = el bot les mandó el link y no respondieron (lo que antes iba como nota a la Pizarra)
+      if (filtroEstado === 'sinlink') { if (!(c.bot_habilitado && !c.fija && estEf === 'blanco')) return false; }
+      else if (filtroEstado && estEf !== filtroEstado) return false;
       if (busqueda.trim()) {
         const q = norm(busqueda);
         if (!norm(c.nombre).includes(q) && !(reg?.choferes||[]).some(ch => norm(ch).includes(q))) return false;
@@ -1379,6 +1381,31 @@ function ColectasInner({ soloArribos = false, irA }) {
                 {filtroEstado === key && <span style={{ fontSize:10, color }}>✕</span>}
               </div>
             ) : null)}
+            {(() => {
+              // Clientes con el bot prendido que todavía no respondieron el link (se manda a las 9).
+              // Reemplaza a la nota "No respondieron el link" que el barrido de las 11:30 dejaba en la Pizarra.
+              if (tab !== 'CABA' || fecha !== todayStr() || minutosAR() < 9 * 60) return null;
+              const sinLink = seccionClientes.filter(c => c.bot_habilitado && !c.fija && estEf(c) === 'blanco');
+              if (!sinLink.length) return null;
+              const on = filtroEstado === 'sinlink';
+              return (<>
+                <div onClick={() => setFiltroEstado(on ? null : 'sinlink')}
+                  title={on ? 'Quitar filtro' : 'Ver solo los que no respondieron el link'}
+                  style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 10px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:`1px solid ${on ? '#8EC5FF' : 'rgba(142,197,255,0.3)'}`, cursor:'pointer', userSelect:'none', opacity: filtroEstado && !on ? 0.4 : 1 }}>
+                  <i className="ti ti-link" aria-hidden="true" style={{ fontSize:12, color:'#8EC5FF' }} />
+                  <span style={{ fontSize:11, fontWeight:700, color:'#8EC5FF' }}>{sinLink.length}</span>
+                  <span style={{ fontSize:11, color:'#8EC5FF' }}>no respondieron el link</span>
+                  {on && <span style={{ fontSize:10, color:'#8EC5FF' }}>✕</span>}
+                </div>
+                {on && (
+                  <button onClick={() => { try { navigator.clipboard.writeText(sinLink.map(c => c.nombre).join('\n')); } catch (e) {} }}
+                    title="Copiar los nombres para preguntarles a mano"
+                    style={{ padding:'3px 10px', borderRadius:20, border:'1px solid rgba(255,255,255,0.12)', background:'none', color:BRAND.muted, fontSize:11, cursor:'pointer', fontFamily:'inherit' }}>
+                    Copiar nombres
+                  </button>
+                )}
+              </>);
+            })()}
           </div>
         )}
 
