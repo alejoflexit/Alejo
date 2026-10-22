@@ -708,7 +708,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
   const resuelta = !!nota.resuelta_at;
   const t = NOTA_TIPOS[nota.tipo] || NOTA_TIPOS.aviso;
   // Color semántico del tag por tipo: de un vistazo se entiende el motivo.
-  const TAG_COLOR = { ausencia: ROJO, colecta: AMBAR, aviso: '#8EC5FF' };
+  const TAG_COLOR = { ausencia: ROJO, colecta: AMBAR, aviso: '#8EC5FF', turno: '#bd8ed8' };
   const tagCol = TAG_COLOR[nota.tipo] || 'rgba(255,255,255,0.5)';
   const urgente = !resuelta && nota.prioridad === 'ahora';
   const conHora = !resuelta && nota.prioridad === 'hora' && nota.hora_limite;

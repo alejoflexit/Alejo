@@ -255,6 +255,7 @@ export const NOTA_TIPOS = {
   ausencia: { emoji: '🚫', label: 'Ausencia' },
   colecta:  { emoji: '📦', label: 'Colecta'  },
   aviso:    { emoji: '📌', label: 'Aviso'    },
+  turno:    { emoji: '🌙', label: 'Cierre de turno' }, // novedades del nocturno (Monitoreo → Cierre de turno)
 };
 
 const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
@@ -318,7 +319,7 @@ export function ordenarNotas(notas) {
     }
     // A igual urgencia, las ausencias van arriba: un chofer que falta te cambia el día,
     // un sobre que traen no.
-    const rt = n => (n.tipo === 'ausencia' ? 0 : n.tipo === 'colecta' ? 1 : 2);
+    const rt = n => (n.tipo === 'ausencia' ? 0 : n.tipo === 'turno' ? 1 : n.tipo === 'colecta' ? 2 : 3);
     const ta = rt(a), tb = rt(b);
     if (ta !== tb) return ta - tb;
     return String(a.created_at || '').localeCompare(String(b.created_at || ''));
@@ -337,7 +338,7 @@ export const esAusenciaDeCadete = (n) => n.tipo === 'ausencia' && !!n.cadete;
 export const nombreAusente = (n) => (n.cadete || n.texto || '').trim();
 export const textoNota = (n) => (esAusenciaDeCadete(n)
   ? `${AUSENCIA_PREFIJO} ${n.cadete}${n.texto ? ` — ${n.texto}` : ''}`
-  : n.texto);
+  : n.tipo === 'turno' && n.cadete ? `${n.texto} (${n.cadete})` : n.texto);
 
 // Trae las pendientes de cualquier día + TODO lo de hoy en adelante, resuelto o no.
 // Antes traía las resueltas solo si eran de hoy: una nota de un día futuro marcada por error
@@ -370,7 +371,8 @@ export function editarNota(id, { texto, tipo }) {
   if (tipo) {
     patch.tipo = tipo;
     if (tipo !== 'colecta') patch.cliente_id = null;
-    if (tipo !== 'ausencia') { patch.cadete = null; patch.cubre = null; }
+    if (tipo !== 'ausencia') patch.cubre = null;
+    if (tipo !== 'ausencia' && tipo !== 'turno') patch.cadete = null; // la novedad de turno puede nombrar a un cadete
   }
   return patchNota(id, patch);
 }

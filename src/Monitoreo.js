@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { armarCadetes, resumen, enMano, quedaronPlanta, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE,
   indexarHistorial, antiguedadDe, textoAntiguedad, nuevosRecientes, normNombre, RECIENTES_DIAS, NUEVO_JORNADAS } from "./monitoreoShared";
 import { slaMeli } from "./slaShared";
+import CierreTurno from "./CierreTurno";
 import { sbFetch, todayStr } from "./colectasShared";
 
 // Monitoreo — avance del reparto POR CADETE, en vivo, + detector de caída de datos.
@@ -127,11 +128,11 @@ export default function Monitoreo() {
 
   const pct = res.total ? Math.round((res.e / res.total) * 100) : 0;
   // SLA Meli si el día cerrara ahora: misma fórmula que Métricas (slaShared). Tiene sentido de noche.
-  const slaProy = conReglas && ahoraDato >= 20 * 60 ? slaMeli(res.ml, res.flexRiesgo, res.repro21) : null;
 
   return (
     <div style={{ color: C.ink }}>
       <SaludBanner salud={salud} error={error} datos={datos} ahoraReal={ahoraReal} ahoraDato={ahoraDato} />
+      <CierreTurno cadetes={cadetes.map((c) => c.nombre)} />
       {nuevosHoy.length > 0 && filtro !== "nuevos" && <AvisoNuevos nuevos={nuevosHoy} onVer={() => { setFiltro("nuevos"); setBusca(""); }} />}
 
       {!datos && !error && <div style={{ color: C.ink2, fontSize: 14, padding: "30px 4px" }}>Bajando el reparto de hoy desde LightData… (puede tardar un minuto)</div>}
@@ -141,7 +142,7 @@ export default function Monitoreo() {
           <Kpi titulo="Entregados" valor={`${num(res.e)}`} extra={`/ ${num(res.total)}`} sub={`${pct}% del día`} barra={pct} />
           {conReglas ? (<>
             <Kpi titulo="Flex en riesgo de demora" valor={num(res.flexRiesgo)} punto={res.flexRiesgo ? "atencion" : "ok"}
-              sub={slaProy !== null ? `si cerrara ahora: SLA Meli ${slaProy.toFixed(1).replace(".", ",")}%` : `de ${num(res.flexPend)} Flex pendientes`} />
+              sub={`de ${num(res.flexPend)} Flex pendientes`} />
             <Kpi titulo="Repro 21hs" valor={num(res.repro21)} punto={res.repro21 ? "atencion" : null} sub="Flex con intento después de las 21" />
             <Kpi titulo="Con intento" valor={num(res.nadie + res.repro + res.otros)} sub={`${num(res.nadie)} Nadie · ${num(res.repro)} reprog.${res.otros ? ` · ${num(res.otros)} otros` : ""}`} />
           </>) : <Kpi titulo="En la calle" valor={num(res.camino)} sub={`${res.enRuta} cadetes en ruta`} />}
