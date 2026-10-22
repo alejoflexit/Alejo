@@ -44,7 +44,7 @@ function DevolucionInfo({ did, verDevolucion }) {
     ['Ingresó a depósito', c.ingreso_deposito_at ? `${fechaCorta(c.ingreso_deposito_at)} · ${c.ingreso_por}` : fechaCorta(c.fecha_deposito)],
     trajo && ['Lo trajo', trajo],
     ['Devuelto al cliente', fechaCorta(c.fecha_devuelto_cliente || c.fecha_dev_ld)],
-    remito && ['Remito', `${remito.codigo} · ${remito.estado === 'devuelto' ? 'firmado y procesado' : remito.estado === 'procesando' ? 'firmado, procesando' : remito.estado === 'error' ? 'con error' : 'esperando firma'}`],
+    remito && ['Remito', `${remito.codigo} · ${remito.estado === 'devuelto' ? 'firmado y procesado' : remito.estado === 'por_confirmar' ? 'firmado, falta confirmar la foto' : remito.estado === 'procesando' ? 'firmado, procesando' : remito.estado === 'error' ? 'con error' : 'esperando firma'}`],
     c.marca && ['Etiqueta', `${MARCAS[c.marca]}${c.marca_nota ? ` — ${c.marca_nota}` : ''}`],
     c.reclamo_at && ['Último reclamo al cadete', fechaCorta(c.reclamo_at)],
   ].filter(Boolean);

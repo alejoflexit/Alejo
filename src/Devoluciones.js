@@ -128,7 +128,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const r = useMemo(() => resumen(casos), [casos]);
   const remitoDe = useMemo(() => {
     const m = new Map();
-    (datos ? datos.rem : []).filter((x) => ["emitido", "procesando", "error"].includes(x.estado))
+    (datos ? datos.rem : []).filter((x) => ["emitido", "por_confirmar", "procesando", "error"].includes(x.estado))
       .forEach((x) => (x.dids || []).forEach((d) => m.set(Number(d), x)));
     return m;
   }, [datos]);
@@ -730,7 +730,7 @@ function ReclamosModal({ grupos, trajo, onEnviar, onCerrar }) {
 }
 
 // ---------------- Remitos ----------------
-const ESTADO_REMITO = { emitido: "Esperando firma", procesando: "Procesando en LightData", devuelto: "Devuelto al cliente", error: "Con error", anulado: "Anulado" };
+const ESTADO_REMITO = { emitido: "Esperando firma", por_confirmar: "Por confirmar", procesando: "Procesando en LightData", devuelto: "Devuelto al cliente", error: "Con error", anulado: "Anulado" };
 
 // ---------------- Archivo de remitos devueltos: cliente → mes → remitos ----------------
 // Las carpetas se arman con los datos de cada remito (cliente + mes de la firma): las fotos no se
@@ -948,6 +948,82 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
   );
 }
 
+// ---------------- Por confirmar: revisión de las fotos antes de tocar LightData ----------------
+// Doble verificación (pedido de Alejo 22/10): la foto deja el remito "por_confirmar". Acá se revisa la tanda
+// de un vistazo y recién al confirmar pasa a "procesando" (el sync lo marca Devuelto al cliente en LightData).
+// Las fotos con problemas de calidad arrancan destildadas para que la atención vaya ahí.
+function PorConfirmar({ remitos, casosDe, onConfirmar, onRepetir, subiendo, refPanel }) {
+  const pend = useMemo(() => remitos.filter((r) => r.estado === "por_confirmar").sort((a, b) => String(b.firmado_at).localeCompare(String(a.firmado_at))), [remitos]);
+  const dudosa = (r) => !!(r.calidad && r.calidad.problemas && r.calidad.problemas.length);
+  const [tildes, setTildes] = useState({});
+  const [fotos, setFotos] = useState({});
+  const [grande, setGrande] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const inputs = useRef({});
+  useEffect(() => {
+    const paths = pend.map((r) => r.foto_path).filter((p) => p && !fotos[p]);
+    if (paths.length) firmarFotos(paths).then((m) => setFotos((f) => ({ ...f, ...m }))).catch(() => {});
+  }, [pend]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!pend.length) return null;
+  const tildado = (r) => (tildes[r.id + ":" + r.foto_path] ?? !dudosa(r));
+  const elegidos = pend.filter(tildado);
+  const envios = elegidos.reduce((s, r) => s + (r.dids || []).length, 0);
+  async function confirmar() {
+    setEnviando(true);
+    await onConfirmar(elegidos);
+    setEnviando(false);
+  }
+  return (
+    <div ref={refPanel} style={{ ...card, padding: 16, borderColor: "rgba(46,230,182,.35)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 240px" }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Por confirmar · {pend.length} remito{pend.length > 1 ? "s" : ""}</div>
+          <div style={{ fontSize: 13, color: C.ink3, marginTop: 2 }}>Mirá que en cada foto se vea la hoja entera con la firma. Lo que confirmes pasa a “Devuelto al cliente” en LightData; lo destildado queda acá esperando.</div>
+        </div>
+        <button className="dv-btn" onClick={() => setTildes(Object.fromEntries(pend.map((r) => [r.id + ":" + r.foto_path, elegidos.length !== pend.length])))}>{elegidos.length === pend.length ? "Destildar todas" : "Tildar todas"}</button>
+        <button className="dv-btn pri dv-btn-grande" disabled={!elegidos.length || enviando} onClick={confirmar}>
+          {enviando ? "Confirmando…" : `Confirmar ${elegidos.length} remito${elegidos.length !== 1 ? "s" : ""} · ${num(envios)} envíos`}
+        </button>
+      </div>
+      <div className="dv-fotos" style={{ marginTop: 14 }}>
+        {pend.map((r) => {
+          const on = tildado(r);
+          const casos = casosDe(r);
+          return (
+            <div key={r.id} className={"dv-foto dv-pc" + (on ? " on" : "") + (dudosa(r) ? " dudosa" : "")}>
+              <button className="dv-foto-img" style={{ height: 230, border: 0, cursor: "zoom-in", width: "100%" }} onClick={() => fotos[r.foto_path] && setGrande({ url: fotos[r.foto_path], r })} aria-label={`Ver grande la foto del remito ${r.codigo}`}>
+                {fotos[r.foto_path] ? <img src={fotos[r.foto_path]} alt={`Remito ${r.codigo} firmado`} /> : <span style={{ color: C.ink3, fontSize: 12 }}>Cargando…</span>}
+              </button>
+              <div style={{ padding: "10px 12px" }}>
+                <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+                  <input type="checkbox" checked={on} onChange={(e) => setTildes((t) => ({ ...t, [r.id + ":" + r.foto_path]: e.target.checked }))} style={{ width: 20, height: 20, marginTop: 1, accentColor: C.teal, flexShrink: 0 }} />
+                  <span style={{ minWidth: 0 }}>
+                    <b style={{ fontFamily: C.grotesk }}>{r.codigo}</b> · {r.cliente}
+                    <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{casos.length} envío{casos.length !== 1 ? "s" : ""} · {r.firmado_por || "—"} · {fecha(r.firmado_at)}</span>
+                    {dudosa(r) && <span style={{ display: "block", fontSize: 12, color: C.ambar }}>{textoCalidad(r.calidad)}: revisala antes de confirmar</span>}
+                  </span>
+                </label>
+                <input ref={(el) => (inputs.current[r.id] = el)} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { onRepetir(r, e.target.files[0]); e.target.value = ""; }} />
+                <button className="dv-btn" style={{ width: "100%", marginTop: 8 }} disabled={subiendo === r.codigo} onClick={() => inputs.current[r.id].click()}>{subiendo === r.codigo ? "Subiendo…" : "Repetir foto"}</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {grande && createPortal(
+        <div className="dv-modal-fondo" onClick={() => setGrande(null)}>
+          <div className="dv-modal" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`Foto del remito ${grande.r.codigo}`}>
+            <div className="dv-modal-cab" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <div style={{ fontWeight: 700 }}>{grande.r.codigo} · {grande.r.cliente}</div>
+              <button className="dv-btn" onClick={() => setGrande(null)}>Cerrar</button>
+            </div>
+            <div className="dv-modal-cuerpo" style={{ padding: 12 }}><img src={grande.url} alt={`Remito ${grande.r.codigo}`} style={{ width: "100%", borderRadius: 10, display: "block" }} /></div>
+          </div>
+        </div>, document.body)}
+    </div>
+  );
+}
+
 // ---------------- Fotos que no se pudieron reconocer ----------------
 function NoReconocidas({ fallidos, remitos, onAsignar, onDescartar }) {
   const [fotos, setFotos] = useState({});
@@ -1054,7 +1130,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
     let det = detectado;
     if (enFoto && enFoto !== detectado.codigo) {
       const rem = remitos.find((x) => x.codigo === enFoto);
-      if (!rem || !["emitido", "error", "procesando"].includes(rem.estado) && !tomados.has(enFoto)) { setAviso(`${enFoto} no está para devolver`); return; }
+      if (!rem || !["emitido", "error", "por_confirmar"].includes(rem.estado) && !tomados.has(enFoto)) { setAviso(`${enFoto} no está para devolver`); return; }
       det = { codigo: enFoto, qr: rq.data, cliente: rem.cliente, estado: rem.estado };
     } else if (!enFoto && !(fresco && visto.current.codigo === detectado.codigo)) {
       setAviso("No se vio el QR en la foto. Volvé a apuntar y sacá de nuevo."); return;
@@ -1073,11 +1149,12 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
   }
 
   const yaTomado = detectado && tomados.has(detectado.codigo);
-  const listo = detectado && (yaTomado || ["emitido", "error", "procesando"].includes(detectado.estado));
+  const listo = detectado && (yaTomado || ["emitido", "error", "por_confirmar"].includes(detectado.estado));
   const texto = !detectado ? "Buscando el QR del remito…"
     : detectado.estado === "inexistente" ? `${detectado.codigo}: ese remito no existe`
     : detectado.estado === "devuelto" && !yaTomado ? `${detectado.codigo} ya está devuelto`
     : detectado.estado === "anulado" ? `${detectado.codigo} está anulado`
+    : detectado.estado === "procesando" && !yaTomado ? `${detectado.codigo} ya está confirmado`
     : `${detectado.codigo} · ${detectado.cliente}${yaTomado ? " · ya tomado (repetir)" : ""}`;
 
   return createPortal(
@@ -1119,7 +1196,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
   const confirmarConFoto = (blob, rem) => new Promise((resolver) => setConfirmar({ url: URL.createObjectURL(blob), rem, resolver }));
   const cerrarConfirmar = (ok) => { if (!confirmar) return; URL.revokeObjectURL(confirmar.url); confirmar.resolver(ok); setConfirmar(null); };
   const inputGeneral = useRef();
-  const lista = remitos.filter((r) => (filtro === "abiertos" ? ["emitido", "procesando", "error"].includes(r.estado) : filtro === "devueltos" ? r.estado === "devuelto" : true));
+  const lista = remitos.filter((r) => (filtro === "abiertos" ? ["emitido", "por_confirmar", "procesando", "error"].includes(r.estado) : filtro === "devueltos" ? r.estado === "devuelto" : true));
 
   // ---- Subida de fotos firmadas ----
   // Una foto que no se puede asignar (QR ilegible o de un remito que no existe) NO se pierde: queda en
@@ -1131,7 +1208,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
     await sbFetch("remitos_fallidos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ por: yo(), foto_path: path, motivo, calidad }) }).catch(() => {});
     return true;
   }
-  // La foto ya se sabe de qué remito es: subir, marcar "procesando" y avisar a LightData
+  // La foto ya se sabe de qué remito es: subir y dejarlo "por confirmar" (LightData se toca recién al confirmar)
   async function procesarFoto(rem, blob, calidad, pathExistente = null) {
     setSubiendo(rem.codigo);
     const path = pathExistente || `${rem.codigo}/${Date.now()}.jpg`;
@@ -1139,10 +1216,8 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
       const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
       if (!up.ok) throw new Error("No se pudo subir la foto (" + up.status + ")");
     }
-    await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ estado: "procesando", foto_path: path, firmado_por: yo(), firmado_at: new Date().toISOString(), error: null, calidad: calidad || null }) });
-    registrar("remito_firmado", (rem.dids || []).length, null, { codigo: rem.codigo, cliente: rem.cliente });
-    const j = await pedirAccion("procesar");
-    return { ok: true, codigo: rem.codigo, cliente: rem.cliente, aviso: textoCalidad(calidad), msg: j.ok ? "Recibido · pasa a Devuelto al cliente en 1–2 min" : "Guardado · se procesa en la próxima corrida horaria" };
+    await sbFetch(`remitos_devolucion?id=eq.${rem.id}`, { method: "PATCH", body: JSON.stringify({ estado: "por_confirmar", foto_path: path, firmado_por: yo(), firmado_at: new Date().toISOString(), error: null, calidad: calidad || null, fotos_anteriores: rem.estado === "por_confirmar" && rem.foto_path ? [...(rem.fotos_anteriores || []), rem.foto_path] : (rem.fotos_anteriores || []) }) });
+    return { ok: true, codigo: rem.codigo, cliente: rem.cliente, aviso: textoCalidad(calidad), msg: "Foto guardada · falta confirmarla abajo" };
   }
   // Decide a qué remito va una foto ya leída. remitoEsperado = se subió desde la fila de ese remito.
   async function resolverFoto({ blob, qr, calidad }, remitoEsperado, silencioso) {
@@ -1160,8 +1235,9 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
     }
     if (rem.estado === "devuelto") throw new Error(`${rem.codigo} ya estaba devuelto: no se subió de nuevo`);
     if (rem.estado === "anulado") throw new Error(`${rem.codigo} está anulado`);
+    if (rem.estado === "procesando") throw new Error(`${rem.codigo} ya está confirmado y procesándose en LightData`);
     const res = await procesarFoto(rem, blob, calidad);
-    if (!silencioso) toast(`${rem.codigo} recibido. Pasa a "Devuelto al cliente" en LightData en 1–2 minutos.${res.aviso ? ` Ojo: ${res.aviso.toLowerCase()}, conviene reemplazarla.` : ""}`);
+    if (!silencioso) toast(`${rem.codigo}: foto guardada. Revisala y confirmala en “Por confirmar”.${res.aviso ? ` Ojo: ${res.aviso.toLowerCase()}.` : ""}`);
     return res;
   }
 
@@ -1228,7 +1304,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
       if (!(await confirmarConFoto(blob, rem))) return;
       await procesarFoto(rem, null, f.calidad, f.foto_path);
       await sbFetch(`remitos_fallidos?id=eq.${f.id}`, { method: "PATCH", body: JSON.stringify({ estado: "asignado", remito_codigo: rem.codigo, resuelto_por: yo(), resuelto_at: new Date().toISOString() }) });
-      toast(`Foto asignada a ${rem.codigo}. Pasa a "Devuelto al cliente" en 1–2 minutos.`);
+      toast(`Foto asignada a ${rem.codigo}. Falta confirmarla en “Por confirmar”.`);
     } catch (e) { toast("No se pudo asignar: " + String(e.message || e).slice(0, 80)); }
     setSubiendo(null);
     await recargar();
@@ -1266,6 +1342,33 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
     } catch (e) { toast(String(e.message || e)); }
     setSubiendo(null);
   }
+  // Confirmación: recién acá el remito pasa a "procesando" y se le avisa al sync de LightData
+  async function confirmarRemitos(rems) {
+    if (!rems.length) return;
+    try {
+      const ahora = new Date().toISOString();
+      await sbFetch(`remitos_devolucion?id=in.(${rems.map((r) => r.id).join(",")})&estado=eq.por_confirmar`, { method: "PATCH", body: JSON.stringify({ estado: "procesando", confirmado_por: yo(), confirmado_at: ahora }) });
+      rems.forEach((r) => registrar("remito_firmado", (r.dids || []).length, null, { codigo: r.codigo, cliente: r.cliente }));
+      const j = await pedirAccion("procesar");
+      toast(`${rems.length} remito${rems.length > 1 ? "s" : ""} confirmado${rems.length > 1 ? "s" : ""}. ${j.ok ? "Pasan a “Devuelto al cliente” en LightData en 1–2 minutos." : "Se procesan en la próxima corrida horaria."}`);
+    } catch (e) { toast("No se pudo confirmar: " + String(e.message || e).slice(0, 80)); }
+    await recargar();
+  }
+  async function repetirPorConfirmar(rem, file) {
+    if (!file) return;
+    setSubiendo(rem.codigo);
+    try {
+      const { blob, qr, calidad } = await leerFoto(file);
+      const codigo = codigoDeQR(qr);
+      if (codigo && codigo !== rem.codigo) throw new Error(`La foto es del remito ${codigo}, no del ${rem.codigo}`);
+      if (!codigo && !(await confirmarConFoto(blob, rem))) throw new Error("Cancelado.");
+      await procesarFoto(rem, blob, calidad);
+      toast(`Foto de ${rem.codigo} cambiada.`);
+    } catch (e) { toast(String(e.message || e)); }
+    setSubiendo(null);
+    await recargar();
+  }
+  const panelPC = useRef();
   async function anular(rem) {
     // eslint-disable-next-line no-alert
     if (!window.confirm(`¿Anular ${rem.codigo}? Los envíos vuelven a quedar libres para otro remito.`)) return;
@@ -1295,7 +1398,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
       <div style={{ ...card, padding: 16, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 260px" }}>
           <div style={{ fontWeight: 600 }}>Subir remitos firmados</div>
-          <div style={{ fontSize: 13, color: C.ink3, marginTop: 2 }}>Sacale una foto con el QR visible. La app reconoce cuál es y pasa sus envíos a “Devuelto al cliente” en LightData. Podés seguir sacando una atrás de otra.</div>
+          <div style={{ fontSize: 13, color: C.ink3, marginTop: 2 }}>Sacale una foto con el QR visible. La app reconoce cuál es y la deja “Por confirmar”: cuando terminás, revisás las fotos y confirmás, y recién ahí pasan a “Devuelto al cliente” en LightData.</div>
         </div>
         <input ref={inputGeneral} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
         <input ref={inputGaleria} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
@@ -1303,7 +1406,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
           <button className="dv-btn pri dv-btn-grande" disabled={!!subiendo} onClick={() => inputGeneral.current.click()}>
             {subiendo ? `Subiendo ${subiendo}…` : tanda.length ? "📷 Sacar otra foto" : "📷 Sacar foto"}
           </button>
-          <button className="dv-btn" disabled={!!subiendo} onClick={() => setEscaner(true)} title="Pasá los remitos uno atrás de otro: la cámara detecta el QR y saca la foto sola">Modo escáner (varios)</button>
+          <button className="dv-btn" disabled={!!subiendo} onClick={() => setEscaner(true)} title="Pasá los remitos uno atrás de otro: la cámara reconoce el QR y vos sacás la foto">Modo escáner (varios)</button>
           <button className="dv-btn" disabled={!!subiendo} onClick={() => inputGaleria.current.click()}>Elegir de la galería</button>
         </div>
         {tanda.length > 0 && (
@@ -1311,6 +1414,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
             {tanda.map((t) => {
               const rem = t.codigo ? remitos.find((x) => x.codigo === t.codigo) : null;
               const listo = rem && rem.estado === "devuelto";
+              const porConf = rem && rem.estado === "por_confirmar";
               const fallo = rem && rem.estado === "error";
               return (
                 <div key={t.id} className="dv-tanda-fila">
@@ -1318,9 +1422,9 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <b>{t.codigo ? `${t.codigo} · ${t.cliente}` : t.nombre}</b>
                     <span style={{ display: "block", fontSize: 12, color: t.estado === "error" || fallo ? C.ambar : C.ink3 }}>
-                      {t.estado === "subiendo" ? "Leyendo el QR y subiendo…" : fallo ? (rem.error || "LightData no lo pudo procesar") : listo ? "Devuelto al cliente en LightData ✓" : t.msg}
+                      {t.estado === "subiendo" ? "Leyendo el QR y subiendo…" : fallo ? (rem.error || "LightData no lo pudo procesar") : listo ? "Devuelto al cliente en LightData ✓" : porConf ? "Foto guardada · falta confirmarla abajo" : rem && rem.estado === "procesando" ? "Confirmado · procesando en LightData" : t.msg}
                     </span>
-                    {t.aviso && t.estado !== "error" && <span style={{ display: "block", fontSize: 12, color: C.ambar }}>{t.aviso}: conviene reemplazarla (⋯ → Reemplazar foto)</span>}
+                    {t.aviso && t.estado !== "error" && <span style={{ display: "block", fontSize: 12, color: C.ambar }}>{t.aviso}: revisala antes de confirmar</span>}
                   </span>
                 </div>
               );
@@ -1330,8 +1434,9 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
         )}
       </div>
 
+      <PorConfirmar remitos={remitos} casosDe={casosDe} onConfirmar={confirmarRemitos} onRepetir={repetirPorConfirmar} subiendo={subiendo} refPanel={panelPC} />
       <NoReconocidas fallidos={fallidos} remitos={remitos} onAsignar={asignarFallida} onDescartar={descartarFallida} />
-      {escaner && <Escaner remitos={remitos} onLectura={desdeEscaner} onRepetir={repetirDesdeEscaner} onCerrar={() => setEscaner(false)} />}
+      {escaner && <Escaner remitos={remitos} onLectura={desdeEscaner} onRepetir={repetirDesdeEscaner} onCerrar={() => { setEscaner(false); setTimeout(() => panelPC.current && panelPC.current.scrollIntoView({ behavior: "smooth", block: "start" }), 400); }} />}
 
       <div className="dv-seg sm" style={{ alignSelf: "flex-start" }}>
         {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"], ["todos", "Todos"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
@@ -1365,7 +1470,7 @@ function RemitoFila({ rem, casos, subiendo, onSubir, onImprimir, onFoto, onAnula
             {rem.firmado_at ? ` · firmado subido ${fecha(rem.firmado_at)}` : ""}
           </div>
         </div>
-        <span className="dv-tag" style={rem.estado === "devuelto" ? { color: C.teal, borderColor: "rgba(46,230,182,.3)" } : rem.estado === "error" ? { color: C.ambar, borderColor: "rgba(245,192,68,.3)" } : null}>{ESTADO_REMITO[rem.estado]}</span>
+        <span className="dv-tag" style={rem.estado === "devuelto" ? { color: C.teal, borderColor: "rgba(46,230,182,.3)" } : rem.estado === "error" || rem.estado === "por_confirmar" ? { color: C.ambar, borderColor: "rgba(245,192,68,.3)" } : null}>{ESTADO_REMITO[rem.estado]}</span>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {rem.estado !== "anulado" && <button className="dv-btn" onClick={onImprimir}>Imprimir</button>}
           {["emitido", "error"].includes(rem.estado) && (
@@ -1521,6 +1626,9 @@ const CSS = `
 .dv-subir-btns{display:flex;gap:8px;flex-wrap:wrap}
 .dv-btn-grande{padding:11px 18px;font-size:14px;font-weight:600}
 @media (max-width:640px){.dv-subir-btns{width:100%}.dv-subir-btns .dv-btn{flex:1}.dv-btn-grande{flex-basis:100%!important;padding:14px 18px;font-size:15px}}
+.dv-pc{border:2px solid transparent;transition:border-color .15s,opacity .15s;opacity:.6}
+.dv-pc.on{border-color:rgba(46,230,182,.55);opacity:1}
+.dv-pc.dudosa:not(.on){border-color:rgba(245,192,68,.45);opacity:1}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
