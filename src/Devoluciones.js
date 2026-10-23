@@ -89,6 +89,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [armando, setArmando] = useState(null); // { libres, previa, yaEnRemito }
   const [escIngreso, setEscIngreso] = useState(false);
   const [verListos, setVerListos] = useState(false);
+  const esCelu = useEsCelu();
+  const [pedidoEscaner, setPedidoEscaner] = useState(0); // celu: abrir el escáner de remitos desde arriba
   const [verReclamos, setVerReclamos] = useState(false);
   const enCurso = useRef(false);
 
@@ -276,13 +278,37 @@ export default function Devoluciones({ abrirEnvio = null }) {
           <span className="dv-dot" style={{ background: sync.ok === false ? C.ambar : C.teal }} />
           LightData {hace(sync.ultima_at)}{sync.ok === false ? " · falló la última lectura" : ""}
         </span>
-        <button className="dv-btn" onClick={actualizar}>Pedir actualización</button>
+        {!esCelu && <button className="dv-btn" onClick={actualizar}>Pedir actualización</button>}
       </div>
 
-      <Progreso casos={casos} r={r} diario={datos.diario || []} eventos={datos.eventos || []} remitos={datos.rem}
-        onReclamar={() => setVerReclamos(true)} onDevolver={() => irA("deposito", true)} />
+      {esCelu && (() => {
+        const pc = datos.rem.filter((x) => x.estado === "por_confirmar").length;
+        return (
+          <div className="dv-celu">
+            <button className="dv-celu-btn" onClick={() => setEscIngreso(true)}>
+              <IcoScan size={26} /><span><b>Escanear ingreso</b><small>Paquetes que entran al depósito</small></span>
+            </button>
+            <button className="dv-celu-btn" onClick={() => { setTab("remitos"); setPedidoEscaner((n) => n + 1); }}>
+              <IcoCamara size={26} /><span><b>Remitos firmados</b><small>Sacarles foto</small></span>
+            </button>
+            {pc > 0 && <button className="dv-celu-pc" onClick={() => setTab("remitos")}>{pc} remito{pc > 1 ? "s" : ""} por confirmar →</button>}
+          </div>
+        );
+      })()}
 
-      {/* Etapas: cada tarjeta es una vista; adentro se elige todos o solo vencidos */}
+      {!esCelu && <Progreso casos={casos} r={r} diario={datos.diario || []} eventos={datos.eventos || []} remitos={datos.rem}
+        onReclamar={() => setVerReclamos(true)} onDevolver={() => irA("deposito", true)} />}
+
+      {/* Celu: resumen compacto (la vista completa es para la compu) */}
+      {esCelu ? (
+        <div className="dv-celu-stats">
+          {[["calle", "En la calle", r.calle, r.calleVencidos, `+${LIMITE_CALLE} d`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `+${LIMITE_DEPOSITO} d`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos]].map(([id, n, v, venc, lv]) => (
+            <button key={id} className={"dv-celu-stat" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
+              <span>{n}</span><b>{num(v)}</b>{venc ? <small>{num(venc)} {lv}</small> : null}
+            </button>
+          ))}
+        </div>
+      ) : (
       <div className="dv-etapas">
         <EtapaCard titulo="En la calle" ayuda={AYUDA.calle} valor={r.calle} sub={`${plata(r.calleValor)} declarado`}
           activo={tab === "seguimiento" && etapa === "calle"} venc={soloVencidos}
@@ -299,7 +325,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
             </button>
           ))}
         </div>
-      </div>
+      </div>)}
 
       {tab === "seguimiento" ? (
         <>
@@ -317,8 +343,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
             </div>
             {fCadete && <button className="dv-chip-f" onClick={() => setFCadete(null)} title="Sacar el filtro de cadete">{fCadete} <span aria-hidden="true">✕</span></button>}
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
-            <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />
-            {(etapa === "calle" || etapa === "retiro" || etapa === "deposito") && <button className="dv-btn" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo">Escanear ingreso</button>}
+            {!esCelu && <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />}
+            {!esCelu && (etapa === "calle" || etapa === "retiro" || etapa === "deposito") && <button className="dv-btn" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo">Escanear ingreso</button>}
             {etapa === "deposito" && <button className="dv-btn pri" onClick={() => setVerListos(true)} title="La app arma los remitos de lo que está en depósito, por seller">Listos para devolver</button>}
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
@@ -358,7 +384,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
           )}
         </>
       ) : (
-        <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
+        <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} pedidoEscaner={pedidoEscaner} esCelu={esCelu} />
       )}
 
       {escIngreso && <IngresoEscaner casos={casos} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); }} />}
@@ -958,6 +984,25 @@ function ListosModal({ grupos, onArmar, onCerrar }) {
     </div>, document.body);
 }
 
+// Celular: la sección se usa sobre todo en la compu; en el celu lo importante es la cámara (ingreso y remitos)
+function useEsCelu() {
+  const q = "(max-width: 700px)";
+  const [es, setEs] = useState(() => typeof window !== "undefined" && window.matchMedia && window.matchMedia(q).matches);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const m = window.matchMedia(q); const f = () => setEs(m.matches);
+    m.addEventListener ? m.addEventListener("change", f) : m.addListener(f);
+    return () => (m.removeEventListener ? m.removeEventListener("change", f) : m.removeListener(f));
+  }, []);
+  return es;
+}
+const IcoCamara = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 7h1a2 2 0 0 0 2-2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2" /><circle cx="12" cy="13" r="3" /></svg>
+);
+const IcoScan = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7V6a2 2 0 0 1 2-2h2M4 17v1a2 2 0 0 0 2 2h2M16 4h2a2 2 0 0 1 2 2v1M16 20h2a2 2 0 0 0 2-2v-1M5 12h14" /></svg>
+);
+
 // ---------------- Armar remito: confirmación + chofer que lo lleva ----------------
 function ArmarRemitoModal({ previa, yaEnRemito, choferes, onConfirmar, onCerrar }) {
   const [chofer, setChofer] = useState("");
@@ -1484,7 +1529,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
     </div>, document.body);
 }
 
-function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
+function Remitos({ remitos, fallidos = [], casosDe, recargar, toast, pedidoEscaner = 0, esCelu = false }) {
   const [filtro, setFiltro] = useState("abiertos");
   const [subiendo, setSubiendo] = useState(null); // codigo en curso
   // Confirmación CON la foto a la vista cuando el QR no se lee (antes era un confirm a ciegas y se coló una captura de pantalla)
@@ -1551,6 +1596,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
   // Tanda: fotos de la cámara (de a una, "Sacar otra"), varias de la galería o el escáner continuo.
   const [tanda, setTanda] = useState([]); // [{ id, nombre, estado: 'subiendo'|'ok'|'error', codigo, cliente, msg, aviso }]
   const [escaner, setEscaner] = useState(false);
+  useEffect(() => { if (pedidoEscaner) setEscaner(true); }, [pedidoEscaner]);
   const inputGaleria = useRef();
   async function subirTanda(files) {
     const lista = [...(files || [])];
@@ -1695,10 +1741,11 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
         <input ref={inputGeneral} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
         <input ref={inputGaleria} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
         <div className="dv-subir-btns">
-          <button className="dv-btn pri dv-btn-grande" disabled={!!subiendo} onClick={() => inputGeneral.current.click()}>
+          {esCelu && <button className="dv-btn pri dv-btn-grande" disabled={!!subiendo} onClick={() => setEscaner(true)}>📷 Escanear remitos</button>}
+          <button className={"dv-btn dv-btn-grande" + (esCelu ? "" : " pri")} disabled={!!subiendo} onClick={() => inputGeneral.current.click()}>
             {subiendo ? `Subiendo ${subiendo}…` : tanda.length ? "📷 Sacar otra foto" : "📷 Sacar foto"}
           </button>
-          <button className="dv-btn" disabled={!!subiendo} onClick={() => setEscaner(true)} title="Pasá los remitos uno atrás de otro: la cámara reconoce el QR y vos sacás la foto">Modo escáner (varios)</button>
+          {!esCelu && <button className="dv-btn" disabled={!!subiendo} onClick={() => setEscaner(true)} title="Pasá los remitos uno atrás de otro: la cámara reconoce el QR y vos sacás la foto">Modo escáner (varios)</button>}
           <button className="dv-btn" disabled={!!subiendo} onClick={() => inputGaleria.current.click()}>Elegir de la galería</button>
         </div>
         {tanda.length > 0 && (
@@ -1968,6 +2015,17 @@ const CSS = `
 .dv-ing-fila{display:flex;gap:10px;align-items:center;color:#fff}
 .dv-listo{display:flex;gap:12px;align-items:center;padding:10px 8px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer}
 .dv-listo:first-child{border-top:0}
+.dv-celu{display:flex;flex-direction:column;gap:10px;position:sticky;top:8px;z-index:20}
+.dv-celu-btn{display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;border-radius:16px;border:1px solid rgba(46,230,182,.4);background:rgba(18,40,44,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#2ee6b6;font:inherit;text-align:left;cursor:pointer}
+.dv-celu-btn:nth-child(2){border-color:rgba(255,255,255,.14);background:rgba(27,28,46,.92);color:#f4f5fa}
+.dv-celu-btn b{display:block;font-size:16px;color:#f4f5fa}.dv-celu-btn small{display:block;font-size:12.5px;color:#a7adc2;margin-top:2px}
+.dv-celu-btn:active{transform:scale(.98)}
+.dv-celu-pc{border:1px solid rgba(245,192,68,.4);background:rgba(245,192,68,.1);color:#F5C044;border-radius:12px;padding:11px 14px;font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
+.dv-celu-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dv-celu-stat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(27,28,46,.72);color:#a7adc2;font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.dv-celu-stat b{font-family:'Space Grotesk',sans-serif;font-size:24px;color:#f4f5fa;line-height:1.1}
+.dv-celu-stat small{font-size:11.5px;color:#F5C044}
+.dv-celu-stat.on{border-color:rgba(46,230,182,.45);background:rgba(46,230,182,.07)}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
