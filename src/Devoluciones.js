@@ -302,7 +302,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       {/* Celu: resumen compacto (la vista completa es para la compu) */}
       {esCelu ? (
         <div className="dv-celu-stats">
-          {[["calle", "En la calle", r.calle, r.calleVencidos, `+${LIMITE_CALLE} d`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `+${LIMITE_DEPOSITO} d`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos]].map(([id, n, v, venc, lv]) => (
+          {[["calle", "En la calle", r.calle, r.calleVencidos, `con +${LIMITE_CALLE} días`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `con +${LIMITE_DEPOSITO} días`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos]].map(([id, n, v, venc, lv]) => (
             <button key={id} className={"dv-celu-stat" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
               <span>{n}</span><b>{num(v)}</b>{venc ? <small>{num(venc)} {lv}</small> : null}
             </button>
@@ -2071,7 +2071,7 @@ const CSS = `
 .dv-det{padding:4px 16px 16px 56px}
 .dv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 16px}
 .dv-show-m{display:none}
-@container dv (max-width:700px){.dv-head,.dv-linea{grid-template-columns:24px minmax(0,1fr) 80px 36px;gap:8px;padding:10px 12px}.dv-hide-m{display:none}.dv-show-m{display:inline}.dv-det{padding:4px 12px 14px 12px}}
+@container dv (max-width:700px){.dv-head,.dv-linea{grid-template-columns:24px minmax(0,1fr) 80px 36px;gap:8px;padding:10px 12px}.dv-hide-m{display:none!important}.dv-show-m{display:inline}.dv-det{padding:4px 12px 14px 12px}}
 .dv-barra{position:sticky;bottom:12px;margin:0 auto;z-index:50;display:flex;gap:8px;align-items:center;background:rgba(22,23,38,.96);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(720px,100%);flex-wrap:wrap;color:#f4f5fa;font-size:13px}
 .dv-menu{position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:190px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
 .dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:7px;cursor:pointer}
