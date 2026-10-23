@@ -816,7 +816,7 @@ function ArmarRemitoModal({ previa, yaEnRemito, choferes, onConfirmar, onCerrar 
       <div className="dv-modal" style={{ width: "min(480px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Armar remito">
         <div className="dv-modal-cab">
           <div style={{ fontWeight: 700, fontSize: 16 }}>{previa.length === 1 ? "Armar 1 remito" : `Armar ${previa.length} remitos (uno por cliente)`}</div>
-          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Se imprimen dos hojas por remito: el <b>remito chofer</b> (lo firma el chofer al retirar) y el <b>remito cliente</b> (lo firman el chofer y quien recibe; vuelve y se fotografía).</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Se imprimen dos hojas por remito: el <b>remito chofer</b> (lo firma el chofer al retirar) y el <b>remito seller</b> (lo firman el chofer y quien recibe; vuelve y se fotografía).</div>
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1681,7 +1681,7 @@ async function imprimirRemitos(remitos, ventana) {
     const filas = rem.casos.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.ml_venta_id || c.tracking || "—")}</td><td>${esc([c.direccion, c.localidad].filter(Boolean).join(", ") || "—")}</td><td>${c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"}${c.tipo === "CAMBIO" && c.li_texto ? `<small>${esc(c.li_texto)}</small>` : ""}</td></tr>`).join("");
     const tabla = `<table><thead><tr><th>#</th><th>Venta / tracking</th><th>Dirección</th><th>Tipo</th></tr></thead><tbody>${filas}</tbody></table>`;
     const chofer = rem.chofer ? `<b>${esc(rem.chofer)}</b>` : `<b class="vacio"></b>`;
-    const meta = `<div class="meta"><div><span>Cliente</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Paquetes</span><b>${rem.casos.length}</b></div><div class="ch"><span>Chofer</span>${chofer}</div></div>`;
+    const meta = `<div class="meta"><div><span>Seller</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Paquetes</span><b>${rem.casos.length}</b></div><div class="ch"><span>Chofer</span>${chofer}</div></div>`;
     const cab = (tipo, der) => `<header><div><div class="marca">FLEXIT</div><div class="tit">${tipo}</div><div class="cod">${esc(rem.codigo)}</div></div>${der}</header>`;
     // Remito chofer: lo firma el chofer al retirar del depósito. Sin QR (no se sube a la app).
     hojas.push(`<section class="hoja">
@@ -1690,14 +1690,14 @@ async function imprimirRemitos(remitos, ventana) {
       <p class="leyenda">Retiré del depósito de Flexit los ${rem.casos.length} paquete(s) detallados para entregar a <b>${esc(rem.cliente)}</b>.</p>
       <footer class="f4"><div>Firma del chofer</div><div>Aclaración</div><div>DNI</div><div>Fecha y hora de retiro</div></footer>
     </section>`);
-    // Remito cliente: lo firman el chofer (entregó) y quien recibe. Vuelve a Flexit y se fotografía: lleva el QR.
+    // Remito seller: lo firman el chofer (entregó) y quien recibe (puede ser un empleado). Vuelve a Flexit y se fotografía: lleva el QR.
     hojas.push(`<section class="hoja">
-      ${cab("Remito cliente", `<div class="qr"><img src="${qr}" alt=""/><div>REMITO CLIENTE</div></div>`)}
+      ${cab("Remito seller", `<div class="qr"><img src="${qr}" alt=""/><div>REMITO SELLER</div></div>`)}
       ${meta}${tabla}
-      <p class="leyenda">${esc(rem.cliente)} recibe conforme los ${rem.casos.length} paquete(s) detallados.</p>
+      <p class="leyenda">Recibí conforme los ${rem.casos.length} paquete(s) detallados.</p>
       <footer class="f2">
         <div class="blq"><div class="t">Entregó (chofer)</div><div class="l">Firma</div><div class="l">Aclaración</div></div>
-        <div class="blq"><div class="t">Recibió (cliente)</div><div class="l">Firma</div><div class="l">Aclaración y DNI</div><div class="l">Fecha y hora</div></div>
+        <div class="blq"><div class="t">Recibió</div><div class="l">Firma</div><div class="l">Aclaración y DNI</div><div class="l">Fecha y hora</div></div>
       </footer>
     </section>`);
   }
