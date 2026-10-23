@@ -42,6 +42,7 @@ async function login() {
     executablePath: process.env.CHROMIUM_PATH || await chromium.executablePath(), headless: chromium.headless,
   });
   const page = await browser.newPage();
+  page.setDefaultTimeout(60000);
   await page.goto('https://flexit.lightdata.app', { waitUntil: 'networkidle2', timeout: 30000 });
   await page.waitForSelector('input', { timeout: 15000 });
   const inputs = await page.$$('input');
@@ -57,7 +58,8 @@ async function login() {
 const postLD = (page, url, campos) => page.evaluate(async (url, campos) => {
   const body = new URLSearchParams();
   for (const [k, v] of campos) body.append(k, String(v));
-  const r = await fetch(url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: body.toString() });
+  // Tope de 2 min por consulta: una respuesta colgada de LightData no puede trabar toda la corrida
+  const r = await fetch(url, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: body.toString(), signal: AbortSignal.timeout(120000) });
   const t = await r.text();
   return { status: r.status, texto: t };
 }, url, campos);
@@ -72,7 +74,7 @@ async function fichas(page, dids) {
         while (next < ids.length) {
           const id = ids[next++];
           try {
-            const r = await fetch('/modules/envios/alta/controlador.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: `operador=get&did=${id}` });
+            const r = await fetch('/modules/envios/alta/controlador.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: `operador=get&did=${id}`, signal: AbortSignal.timeout(25000) });
             if (!r.ok) continue;
             const p = await r.json();
             res[id] = { historial: p.historial || [], asignaciones: p.asignaciones || [], header: { valor_declarado: p.header && p.header.valor_declarado, estado_envio: p.header && p.header.estado_envio, destination_shipping_address_line: p.header && p.header.destination_shipping_address_line, destination_city_name: p.header && p.header.destination_city_name } };
@@ -291,6 +293,14 @@ async function importarSanti() {
 }
 
 async function main() {
+  // Si algo se cuelga igual, cortar a los 15 min dejando el error registrado (la app lo muestra) en vez de
+  // que GitHub mate la corrida a los 20 sin avisar y las siguientes queden en cola.
+  const guardia = setTimeout(async () => {
+    console.error('Corrida colgada: corto a los 15 minutos');
+    await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultima_at: new Date().toISOString(), ok: false, detalle: 'La lectura de LightData se colgó (15 min). Reintenta en la próxima corrida.' }) }).catch(() => {});
+    process.exit(1);
+  }, 15 * 60e3);
+  guardia.unref();
   if (!SUPABASE_URL || !SUPABASE_KEY || !LD_USER || !LD_PASS) throw new Error('Faltan SUPABASE_URL, SUPABASE_KEY, LIGHTDATA_USER o LIGHTDATA_PASSWORD');
   const { browser, page } = await login();
   let detalle = '';
