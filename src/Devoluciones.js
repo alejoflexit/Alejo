@@ -1470,6 +1470,28 @@ function NoReconocidas({ fallidos, remitos, onAsignar, onDescartar }) {
 // Semi-automático (pedido de Alejo 22/10): la cámara RECONOCE el QR sola, pero la foto la saca la persona
 // con el botón, encuadrando la hoja entera con la firma del cliente. Abajo queda la última foto para
 // controlar de un vistazo que se vea la firma, con "Repetir" (reemplaza la foto de ese remito).
+// Lee un QR de remito de una fuente (video o canvas) probando varios tamaños y el centro recortado:
+// con la hoja entera en cuadro el QR queda chico, y en algunos celulares un solo tamaño no alcanza.
+function leerQRRemito(fuente, fw, fh, intento = 0) {
+  const cv = leerQRRemito.cv || (leerQRRemito.cv = document.createElement("canvas"));
+  const cx = cv.getContext("2d", { willReadFrequently: true });
+  const pruebas = [
+    { sx: 0, sy: 0, sw: fw, sh: fh, w: 640 },
+    { sx: 0, sy: 0, sw: fw, sh: fh, w: 1000 },
+    { sx: fw * 0.2, sy: fh * 0.1, sw: fw * 0.8, sh: fh * 0.6, w: 900 }, // arriba/derecha, donde va el QR
+    { sx: fw * 0.15, sy: fh * 0.15, sw: fw * 0.7, sh: fh * 0.7, w: 900 },
+  ];
+  const lista = intento == null ? pruebas : [pruebas[intento % pruebas.length]];
+  for (const p of lista) {
+    const w = Math.min(p.w, Math.round(p.sw)); const h = Math.round(p.sh * w / p.sw);
+    cv.width = w; cv.height = h;
+    cx.drawImage(fuente, p.sx, p.sy, p.sw, p.sh, 0, 0, w, h);
+    const r = jsQR(cx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: "attemptBoth" });
+    if (r && codigoDeQR(r.data)) return r.data;
+  }
+  return null;
+}
+
 function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
   const video = useRef();
   const [detectado, setDetectado] = useState(null); // { codigo, cliente, estado, qr }
@@ -1479,9 +1501,10 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
   const [disparo, setDisparo] = useState(false);
   const [aviso, setAviso] = useState(null);
   const visto = useRef({ codigo: null, at: 0 });
+  const [camara, setCamara] = useState(null); // "1080×1920" cuando ya está andando
   useEffect(() => {
-    let stream, timer, vivo = true;
-    const chico = document.createElement("canvas");
+    let stream, timer, vivo = true, n = 0, ocupado = false;
+    const det = "BarcodeDetector" in window ? new window.BarcodeDetector({ formats: ["qr_code"] }) : null;
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
@@ -1489,24 +1512,27 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
         video.current.srcObject = stream;
         await video.current.play();
       } catch (e) { setError("No se pudo abrir la cámara. Revisá el permiso de cámara del navegador para esta página."); return; }
-      timer = setInterval(() => {
+      timer = setInterval(async () => {
         const v = video.current;
-        if (!v || !v.videoWidth) return;
-        const esc = 640 / v.videoWidth;
-        chico.width = 640; chico.height = Math.round(v.videoHeight * esc);
-        const cx = chico.getContext("2d");
-        cx.drawImage(v, 0, 0, chico.width, chico.height);
-        const r = jsQR(cx.getImageData(0, 0, chico.width, chico.height).data, chico.width, chico.height, { inversionAttempts: "dontInvert" });
-        const codigo = r && codigoDeQR(r.data);
-        const ahora = Date.now();
-        if (codigo) {
-          visto.current = { codigo, at: ahora };
-          const rem = remitos.find((x) => x.codigo === codigo);
-          setDetectado((d) => (d && d.codigo === codigo ? d : { codigo, qr: r.data, cliente: rem ? rem.cliente : null, estado: rem ? rem.estado : "inexistente" }));
-        } else if (ahora - visto.current.at > 900) {
-          setDetectado(null);
-        }
-      }, 300);
+        if (ocupado || !v || !v.videoWidth) return;
+        ocupado = true;
+        try {
+          if (n === 0) setCamara(`${v.videoWidth}×${v.videoHeight}`);
+          let dato = null;
+          if (det) { const r = await det.detect(v).catch(() => []); const q = (r || []).find((x) => codigoDeQR(x.rawValue)); if (q) dato = q.rawValue; }
+          if (!dato) dato = leerQRRemito(v, v.videoWidth, v.videoHeight, n); // un tamaño distinto por vuelta
+          n++;
+          const codigo = dato && codigoDeQR(dato);
+          const ahora = Date.now();
+          if (codigo) {
+            visto.current = { codigo, at: ahora };
+            const rem = remitos.find((x) => x.codigo === codigo);
+            setDetectado((d) => (d && d.codigo === codigo ? d : { codigo, qr: dato, cliente: rem ? rem.cliente : null, estado: rem ? rem.estado : "inexistente" }));
+          } else if (ahora - visto.current.at > 1600) {
+            setDetectado(null);
+          }
+        } finally { ocupado = false; }
+      }, 220);
     })();
     return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1515,7 +1541,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
 
   async function capturar() {
     const v = video.current;
-    if (!v || !v.videoWidth || !detectado) return;
+    if (!v || !v.videoWidth) return;
     setDisparo(true); setTimeout(() => setDisparo(false), 180);
     const grande = document.createElement("canvas");
     const e2 = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
@@ -1523,19 +1549,24 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
     grande.getContext("2d").drawImage(v, 0, 0, grande.width, grande.height);
     // Confirmar el remito con la foto misma (no con lo último que vio la cámara): evita que, sacando
     // seguido, la foto del remito nuevo quede asignada al anterior.
-    const gx = grande.getContext("2d");
-    const rq = jsQR(gx.getImageData(0, 0, grande.width, grande.height).data, grande.width, grande.height, { inversionAttempts: "dontInvert" });
-    const enFoto = rq && codigoDeQR(rq.data);
-    const fresco = Date.now() - visto.current.at < 450;
-    let det = detectado;
-    if (enFoto && enFoto !== detectado.codigo) {
+    const qrFoto = leerQRRemito(grande, grande.width, grande.height, null);
+    const enFoto = qrFoto && codigoDeQR(qrFoto);
+    const fresco = detectado && Date.now() - visto.current.at < 700 && visto.current.codigo === detectado.codigo;
+    let det = null;
+    if (enFoto) {
       const rem = remitos.find((x) => x.codigo === enFoto);
       if (!rem || !["emitido", "error", "por_confirmar"].includes(rem.estado) && !tomados.has(enFoto)) { setAviso(`${enFoto} no está para devolver`); return; }
-      det = { codigo: enFoto, qr: rq.data, cliente: rem.cliente, estado: rem.estado };
-    } else if (!enFoto && !(fresco && visto.current.codigo === detectado.codigo)) {
-      setAviso("No se vio el QR en la foto. Volvé a apuntar y sacá de nuevo."); return;
-    }
+      det = { codigo: enFoto, qr: qrFoto, cliente: rem.cliente, estado: rem.estado };
+    } else if (fresco) det = detectado;
     const blob = await new Promise((ok) => grande.toBlob(ok, "image/jpeg", 0.75));
+    if (!det) {
+      // No se leyó el QR: la foto igual se guarda en "No reconocidas" para asignarla a mano viendo la foto
+      try { navigator.vibrate && navigator.vibrate([40, 60, 40]); } catch {}
+      setUltima({ url: URL.createObjectURL(blob), codigo: "Sin QR", cliente: "", aviso: "No se leyó el QR: quedó en “No reconocidas”", lectura: null });
+      onLectura({ blob, qr: null, calidad: null });
+      setAviso("No se leyó el QR. La foto quedó en “No reconocidas” para asignarla. ¿Es la hoja “Remito seller”? La del chofer no tiene QR.");
+      return;
+    }
     const ch = document.createElement("canvas"); ch.width = 400; ch.height = Math.round(grande.height * 400 / grande.width);
     ch.getContext("2d").drawImage(grande, 0, 0, ch.width, ch.height);
     const calidad = medirCalidad(ch);
@@ -1564,7 +1595,8 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
       <div className="dv-escaner-arriba">
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700, color: listo ? "#2ee6b6" : "#fff" }}>{listo ? "✓ " : ""}{texto}</div>
-          <div style={{ fontSize: 12.5, opacity: .8, marginTop: 2 }}>{listo ? "Encuadrá la hoja entera, con la firma del cliente, y sacá la foto." : "Apuntá al QR del remito firmado."}</div>
+          <div style={{ fontSize: 12.5, opacity: .8, marginTop: 2 }}>{listo ? "Encuadrá la hoja entera, con la firma, y sacá la foto." : "Apuntá a la hoja “Remito seller” (la que tiene QR). Si no lo toma, sacá la foto igual."}</div>
+          {camara && !listo && <div style={{ fontSize: 11, opacity: .5, marginTop: 2 }}>Cámara {camara} · buscando…</div>}
         </div>
         <button className="dv-btn" onClick={onCerrar} style={{ background: "rgba(0,0,0,.5)" }}>Terminar ({tomados.size})</button>
       </div>
@@ -1581,7 +1613,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
             </>
           ) : <span style={{ fontSize: 12, opacity: .7 }}>Acá vas a ver la última foto</span>}
         </div>
-        <button className={"dv-escaner-disparo" + (listo ? " on" : "")} disabled={!listo} onClick={capturar} aria-label="Sacar foto" />
+        <button className={"dv-escaner-disparo" + (listo ? " on" : "")} disabled={!camara} onClick={capturar} aria-label="Sacar foto" />
         <div style={{ width: 120 }} />
       </div>
       {(error || aviso) && <div className="dv-escaner-flash aviso" onClick={() => setAviso(null)}>{error || aviso}</div>}
