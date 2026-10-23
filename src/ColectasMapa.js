@@ -284,6 +284,7 @@ export default function ColectasMapa({
   const [guardado, setGuardado] = useState('');
   const [geoError, setGeoError] = useState('');
   const [choferFoco, setChoferFoco] = useState(null); // leyenda: resaltar un chofer
+  const [busqChofer, setBusqChofer] = useState(''); // leyenda: buscador de choferes
   const [filtroEst, setFiltroEst] = useState(null);   // null = todos | 'blanco' | 'amarillo' | 'verde'
   const [verCanceladas, setVerCanceladas] = useState(false); // mostrar también las "sin envíos" (rojo)
   const [buscandoDir, setBuscandoDir] = useState(null); // cliente_id con el buscador de dirección abierto
@@ -679,6 +680,8 @@ export default function ColectasMapa({
   };
 
   // ── Leyenda por chofer ──
+  // Sin tildes ni mayúsculas: "gonzalo" encuentra a "Gonzalo Capra" y "fiasche" a "Juan Fiasche".
+  const normBusq = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const leyenda = useMemo(() => {
     const acc = new Map();
     conPin.forEach(c => {
@@ -809,7 +812,20 @@ export default function ColectasMapa({
         {/* Leyenda por chofer */}
         {!lazo && leyenda.length > 0 && (
           <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 800, maxHeight: '55%', overflowY: 'auto', padding: '8px 10px', borderRadius: 10, background: 'rgba(13,27,42,0.9)', border: `1px solid ${BRAND.border}`, backdropFilter: 'blur(3px)' }}>
-            {leyenda.map(([ch, n]) => {
+            <div style={{ position: 'sticky', top: -8, margin: '-8px -10px 4px', padding: '8px 10px 6px', background: 'rgba(13,27,42,0.97)', zIndex: 1 }}>
+              <input value={busqChofer} onChange={e => setBusqChofer(e.target.value)} placeholder="Buscar chofer"
+                aria-label="Buscar chofer"
+                onKeyDown={e => {
+                  // Enter con un solo resultado: lo resalta directo. Esc limpia.
+                  if (e.key === 'Escape') { setBusqChofer(''); return; }
+                  if (e.key !== 'Enter') return;
+                  const q = normBusq(busqChofer);
+                  const hits = leyenda.filter(([ch]) => normBusq(ch).includes(q));
+                  if (q && hits.length === 1) setChoferFoco(hits[0][0]);
+                }}
+                style={{ width: 150, boxSizing: 'border-box', height: 28, padding: '0 9px', borderRadius: 7, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+            </div>
+            {leyenda.filter(([ch]) => !busqChofer.trim() || normBusq(ch).includes(normBusq(busqChofer)) || choferFoco === ch).map(([ch, n]) => {
               const activo = choferFoco === ch;
               return (
                 <div key={ch} onClick={() => setChoferFoco(activo ? null : ch)}
@@ -821,6 +837,9 @@ export default function ColectasMapa({
                 </div>
               );
             })}
+            {busqChofer.trim() && !leyenda.some(([ch]) => normBusq(ch).includes(normBusq(busqChofer))) && (
+              <div style={{ fontSize: 12, color: BRAND.muted, padding: '4px' }}>Nadie con ese nombre hoy</div>
+            )}
           </div>
         )}
 
