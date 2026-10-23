@@ -58,6 +58,7 @@ test("reclamos: agrupa por cadete, saca choferes ficticios y arma el mensaje", (
 
 test("QR: lee el código y rechaza otra cosa", () => {
   expect(codigoDeQR(QR_PREFIJO + "RD-00012")).toBe("RD-00012");
+  expect(codigoDeQR(QR_PREFIJO + "CelularesYEtc-03")).toBe("CelularesYEtc-03");
   expect(codigoDeQR("https://mercadolibre.com/123")).toBeNull();
 });
 

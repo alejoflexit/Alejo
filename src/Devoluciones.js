@@ -1258,7 +1258,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
     if (cliente || q.length < 2) return [];
     const qn = q.replace(/^rd-?0*/, "");
     return devueltos.filter((r) => {
-      if (String(r.codigo || "").toLowerCase().includes(q) || (qn && /^\d+$/.test(qn) && String(r.codigo || "").replace(/^RD-0*/, "") === qn)) return true;
+      if (String(r.codigo || "").toLowerCase().includes(q) || (qn && /^\d+$/.test(qn) && String(r.codigo || "").replace(/^.*-0*/, "") === qn)) return true;
       if (String(r.cliente || "").toLowerCase().includes(q)) return true;
       return casosDe(r).some((c) => coincideBusqueda(c, busca));
     }).sort((a, b) => String(fechaRem(b)).localeCompare(String(fechaRem(a)))).slice(0, 60);

@@ -132,7 +132,8 @@ export function mensajeReclamo(cadete, casos) {
 // QR del remito: solo el código; la lista de envíos se busca en la base (no se puede falsificar desde el papel)
 export const QR_PREFIJO = "FLEXIT-RD:";
 export function codigoDeQR(texto) {
-  const m = /FLEXIT-RD:(RD-\d+)/.exec(String(texto || ""));
+  // Viejos: RD-00012. Nuevos (23/10): nombre del cliente + número, ej. Casper-01
+  const m = /FLEXIT-RD:([A-Za-z0-9]+-\d+)/.exec(String(texto || ""));
   return m ? m[1] : null;
 }
 
