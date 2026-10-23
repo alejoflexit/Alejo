@@ -255,3 +255,43 @@ export function coincideBusqueda(c, q) {
     return false;
   });
 }
+
+// ---- Etiqueta del paquete → caso de devolución ----
+// La etiqueta de ML trae un QR JSON ({"id":"47963506158","sender_id":…,"hash_code":…}) y un código de barras con
+// el id del envío (= tracking). LightData usa su propio QR (JSON con "did"). También sirve tipear venta/tracking/#did.
+export function codigosDeEtiqueta(texto) {
+  const t = String(texto || "").trim();
+  if (!t) return [];
+  const out = new Set();
+  try {
+    const j = JSON.parse(t);
+    if (j && typeof j === "object") ["id", "did", "tracking", "shipment_id", "envio", "id_envio"].forEach((k) => j[k] != null && out.add(String(j[k]).trim()));
+  } catch { /* no es JSON */ }
+  out.add(t.replace(/^#/, ""));
+  (t.match(/\d{5,}/g) || []).forEach((n) => out.add(n));
+  return [...out].filter(Boolean);
+}
+export function casoDeEtiqueta(casos, texto) {
+  const cods = codigosDeEtiqueta(texto).map((x) => x.toLowerCase());
+  if (!cods.length) return null;
+  for (const c of casos) {
+    const mios = [c.tracking, c.ml_venta_id, c.did].filter((v) => v != null && v !== "").map((v) => String(v).toLowerCase());
+    if (mios.some((m) => cods.includes(m))) return c;
+  }
+  return null;
+}
+
+// ---- "Listos para devolver": lo que está en depósito, sin remito, por seller, el más viejo primero ----
+export function listosParaDevolver(casos, enRemito = new Set()) {
+  const m = new Map();
+  for (const c of casos) {
+    if (c.etapa !== "deposito" || c.cerrado || enRemito.has(Number(c.did))) continue;
+    const k = c.cliente || "(sin cliente)";
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(c);
+  }
+  return [...m.entries()].map(([cliente, cs]) => {
+    cs.sort((a, b) => (b.dias ?? 0) - (a.dias ?? 0));
+    return { cliente, casos: cs, maxDias: cs[0].dias ?? 0, vencidos: cs.filter((c) => c.vencido).length, valor: cs.reduce((s, c) => s + (Number(c.valor) || 0), 0) };
+  }).sort((a, b) => b.maxDias - a.maxDias || b.casos.length - a.casos.length);
+}

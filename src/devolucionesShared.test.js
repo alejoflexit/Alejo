@@ -110,3 +110,26 @@ test("búsqueda: varias palabras, sin tildes, y 'al 200' = 200–299", () => {
   expect(coincideBusqueda(c, "kevin araoz")).toBe(false);
   expect(coincideBusqueda(c, "palermo ohpic")).toBe(true);
 });
+
+test("etiqueta: QR de ML, código de barras, QR de LightData y tipeado", () => {
+  const { casoDeEtiqueta } = require("./devolucionesShared");
+  const casos = [{ did: 973846, tracking: "47963506158", ml_venta_id: "2000018349428094" }, { did: 1015902, tracking: "B5060" }];
+  expect(casoDeEtiqueta(casos, '{"id":"47963506158","sender_id":123,"hash_code":"x"}').did).toBe(973846);
+  expect(casoDeEtiqueta(casos, "47963506158").did).toBe(973846);
+  expect(casoDeEtiqueta(casos, '{"local":1,"did":"1015902","cliente":5}').did).toBe(1015902);
+  expect(casoDeEtiqueta(casos, "b5060").did).toBe(1015902);
+  expect(casoDeEtiqueta(casos, "#1015902").did).toBe(1015902);
+  expect(casoDeEtiqueta(casos, "999999999")).toBeNull();
+});
+
+test("listos para devolver: solo depósito sin remito, por seller, el más viejo primero", () => {
+  const { listosParaDevolver } = require("./devolucionesShared");
+  const casos = [
+    { did: 1, cliente: "A", etapa: "deposito", dias: 3 }, { did: 2, cliente: "B", etapa: "deposito", dias: 20, vencido: true },
+    { did: 3, cliente: "A", etapa: "deposito", dias: 9 }, { did: 4, cliente: "B", etapa: "deposito", dias: 1 },
+    { did: 5, cliente: "C", etapa: "calle", dias: 30 }, { did: 6, cliente: "C", etapa: "deposito", dias: 50 },
+  ];
+  const g = listosParaDevolver(casos, new Set([6]));
+  expect(g.map((x) => [x.cliente, x.casos.map((c) => c.did)])).toEqual([["B", [2, 4]], ["A", [3, 1]]]);
+  expect(g[0].vencidos).toBe(1);
+});

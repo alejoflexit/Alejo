@@ -7,7 +7,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
-  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -87,6 +87,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [aviso, setAviso] = useState(null);
   const [ocupado, setOcupado] = useState(false);
   const [armando, setArmando] = useState(null); // { libres, previa, yaEnRemito }
+  const [escIngreso, setEscIngreso] = useState(false);
+  const [verListos, setVerListos] = useState(false);
   const [verReclamos, setVerReclamos] = useState(false);
   const enCurso = useRef(false);
 
@@ -185,6 +187,13 @@ export default function Devoluciones({ abrirEnvio = null }) {
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
     setOcupado(false);
+  }
+  async function ingresoEscaneado(c) {
+    try {
+      await guardarGestion([{ did: c.did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
+      registrar("ingreso", 1, null, { dids: [c.did], via: "escaner" });
+      return true;
+    } catch { return false; }
   }
   async function etiquetar(cs, marca, nota) {
     setOcupado(true);
@@ -309,6 +318,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
             {fCadete && <button className="dv-chip-f" onClick={() => setFCadete(null)} title="Sacar el filtro de cadete">{fCadete} <span aria-hidden="true">✕</span></button>}
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
             <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />
+            {(etapa === "calle" || etapa === "retiro" || etapa === "deposito") && <button className="dv-btn" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo">Escanear ingreso</button>}
+            {etapa === "deposito" && <button className="dv-btn pri" onClick={() => setVerListos(true)} title="La app arma los remitos de lo que está en depósito, por seller">Listos para devolver</button>}
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
 
@@ -350,6 +361,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
         <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
       )}
 
+      {escIngreso && <IngresoEscaner casos={casos} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); }} />}
+      {verListos && <ListosModal grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
@@ -806,6 +819,143 @@ function MasAcciones({ rem, onReemplazar, subiendo, onImprimir }) {
         </div>, document.body)}
     </div>
   );
+}
+
+// ---------------- Ingreso a depósito escaneando la etiqueta del paquete ----------------
+// Continuo (acá no hace falta foto de prueba): lee el QR/código de barras de la etiqueta de ML o de LightData,
+// busca la devolución y la pasa a depósito al toque. Se puede tipear la venta/tracking si la etiqueta está rota.
+function IngresoEscaner({ casos, onIngresar, onCerrar }) {
+  const video = useRef();
+  const casosRef = useRef(casos); casosRef.current = casos;
+  const ultimo = useRef({ t: "", at: 0 });
+  const hechos = useRef(new Set());
+  const [lecturas, setLecturas] = useState([]); // { id, tipo: ok|ya|no, titulo, sub }
+  const [error, setError] = useState(null);
+  const [manual, setManual] = useState("");
+  const [flash, setFlash] = useState(null);
+
+  async function procesar(texto) {
+    const ahora = Date.now();
+    if (texto === ultimo.current.t && ahora - ultimo.current.at < 4000) return; // la misma etiqueta sigue en cuadro
+    ultimo.current = { t: texto, at: ahora };
+    const c = casoDeEtiqueta(casosRef.current, texto);
+    let l;
+    if (!c) l = { tipo: "no", titulo: "No es una devolución abierta", sub: `Leído: ${String(texto).slice(0, 40)}. Si se canceló hace menos de 1 hora, todavía no llegó de LightData.` };
+    else if (hechos.current.has(c.did) || c.etapa === "deposito") l = { tipo: "ya", titulo: `${c.cliente} · ya estaba en depósito`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
+    else if (c.etapa === "devuelto" || c.cerrado) l = { tipo: "ya", titulo: `${c.cliente} · ${c.etapa === "devuelto" ? "ya fue devuelto al seller" : "está cerrado"}`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
+    else {
+      hechos.current.add(c.did);
+      const ok = await onIngresar(c);
+      l = ok ? { tipo: "ok", titulo: `${c.cliente} · ${c.tipo === "CAMBIO" ? "cambio" : "cancelado"}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · ") }
+        : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" };
+      if (!ok) hechos.current.delete(c.did);
+    }
+    try { navigator.vibrate && navigator.vibrate(l.tipo === "ok" ? 60 : [40, 60, 40]); } catch {}
+    setFlash(l); setTimeout(() => setFlash((f) => (f === l ? null : f)), 2200);
+    setLecturas((x) => [{ ...l, id: ahora }, ...x].slice(0, 60));
+  }
+
+  useEffect(() => {
+    let stream, timer, vivo = true;
+    const cv = document.createElement("canvas");
+    const det = "BarcodeDetector" in window ? new window.BarcodeDetector({ formats: ["qr_code", "code_128", "ean_13", "data_matrix"] }) : null;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+        if (!vivo) { stream.getTracks().forEach((t) => t.stop()); return; }
+        video.current.srcObject = stream; await video.current.play();
+      } catch { setError("No se pudo abrir la cámara. Podés tipear la venta o el tracking abajo."); return; }
+      let ocupado = false;
+      timer = setInterval(async () => {
+        const v = video.current;
+        if (ocupado || !v || !v.videoWidth) return;
+        ocupado = true;
+        try {
+          let texto = null;
+          if (det) { const r = await det.detect(v).catch(() => []); if (r && r[0]) texto = r[0].rawValue; }
+          if (!texto) {
+            const e = 800 / v.videoWidth; cv.width = 800; cv.height = Math.round(v.videoHeight * e);
+            const cx = cv.getContext("2d"); cx.drawImage(v, 0, 0, cv.width, cv.height);
+            const r = jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, { inversionAttempts: "dontInvert" });
+            if (r) texto = r.data;
+          }
+          if (texto && !codigoDeQR(texto)) await procesar(texto); // un QR de remito no es una etiqueta
+        } finally { ocupado = false; }
+      }, 280);
+    })();
+    return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const nOk = lecturas.filter((l) => l.tipo === "ok").length;
+  return createPortal(
+    <div className="dv-escaner">
+      <video ref={video} playsInline muted className="dv-escaner-video" />
+      <div className={"dv-escaner-marco" + (flash && flash.tipo === "ok" ? " ok" : flash ? " aviso" : "")} />
+      <div className="dv-escaner-arriba">
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700 }}>Ingreso a depósito</div>
+          <div style={{ fontSize: 12.5, opacity: .8, marginTop: 2 }}>Apuntá a la etiqueta del paquete (QR o código de barras). Entra solo.</div>
+        </div>
+        <button className="dv-btn" onClick={onCerrar} style={{ background: "rgba(0,0,0,.5)" }}>Terminar ({nOk})</button>
+      </div>
+      {flash && <div className={"dv-escaner-flash " + (flash.tipo === "ok" ? "" : flash.tipo === "ya" ? "info" : "aviso")}><b>{flash.tipo === "ok" ? "✓ " : ""}{flash.titulo}</b>{flash.sub && <div style={{ fontSize: 12.5, opacity: .85, marginTop: 2 }}>{flash.sub}</div>}</div>}
+      {error && !flash && <div className="dv-escaner-flash aviso">{error}</div>}
+      <div className="dv-ing-abajo">
+        <form onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { ultimo.current = { t: "", at: 0 }; procesar(manual.trim()); setManual(""); } }} style={{ display: "flex", gap: 8 }}>
+          <input className="dv-input" style={{ flex: 1, background: "rgba(0,0,0,.55)" }} inputMode="text" placeholder="Etiqueta rota: tipeá venta, tracking o #envío" value={manual} onChange={(e) => setManual(e.target.value)} />
+          <button className="dv-btn pri" type="submit">Ingresar</button>
+        </form>
+        {lecturas.length > 0 && (
+          <div className="dv-ing-lista">
+            {lecturas.slice(0, 6).map((l) => (
+              <div key={l.id} className="dv-ing-fila">
+                <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "✕" : "·"}</span>
+                <span style={{ minWidth: 0 }}><b style={{ fontSize: 13 }}>{l.titulo}</b><span style={{ display: "block", fontSize: 11.5, opacity: .7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.sub}</span></span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>, document.body);
+}
+
+// ---------------- Listos para devolver: la app propone los remitos ----------------
+function ListosModal({ grupos, onArmar, onCerrar }) {
+  const [tildes, setTildes] = useState(() => Object.fromEntries(grupos.map((g) => [g.cliente, g.vencidos > 0])));
+  const elegidos = grupos.filter((g) => tildes[g.cliente]);
+  const envios = elegidos.reduce((s, g) => s + g.casos.length, 0);
+  const remitos = elegidos.reduce((s, g) => s + Math.ceil(g.casos.length / MAX_POR_REMITO), 0);
+  return createPortal(
+    <div className="dv-modal-fondo" onClick={onCerrar}>
+      <div className="dv-modal" style={{ width: "min(620px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Listos para devolver">
+        <div className="dv-modal-cab">
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Listos para devolver</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Todo lo que está en depósito y todavía no tiene remito, por seller, el más viejo arriba. Vienen tildados los que tienen paquetes de más de {LIMITE_DEPOSITO} días.</div>
+        </div>
+        <div className="dv-modal-cuerpo" style={{ padding: "6px 12px" }}>
+          {!grupos.length && <div style={{ padding: 24, textAlign: "center", color: C.ink3 }}>No hay nada en depósito sin remito.</div>}
+          {grupos.map((g) => (
+            <label key={g.cliente} className="dv-listo">
+              <input type="checkbox" checked={!!tildes[g.cliente]} onChange={(e) => setTildes((t) => ({ ...t, [g.cliente]: e.target.checked }))} style={{ width: 18, height: 18, accentColor: C.teal }} />
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <b>{g.cliente}</b>
+                <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{g.casos.length} paquete{g.casos.length !== 1 ? "s" : ""} · {plata(g.valor)}{g.casos.length > MAX_POR_REMITO ? ` · ${Math.ceil(g.casos.length / MAX_POR_REMITO)} remitos (de a ${MAX_POR_REMITO})` : ""}</span>
+              </span>
+              <span style={{ textAlign: "right", fontSize: 12.5 }}>
+                <b style={{ fontFamily: C.grotesk, fontSize: 15, color: g.vencidos ? C.ambar : C.ink }}>{g.maxDias} d</b>
+                <span style={{ display: "block", fontSize: 11.5, color: g.vencidos ? C.ambar : C.ink3 }}>{g.vencidos ? `${g.vencidos} vencido${g.vencidos > 1 ? "s" : ""}` : "el más viejo"}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="dv-modal-pie" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button className="dv-btn" onClick={() => setTildes(Object.fromEntries(grupos.map((g) => [g.cliente, elegidos.length !== grupos.length])))}>{elegidos.length === grupos.length ? "Destildar todos" : "Tildar todos"}</button>
+          <span style={{ flex: 1 }} />
+          <button className="dv-btn" onClick={onCerrar}>Cancelar</button>
+          <button className="dv-btn pri" disabled={!elegidos.length} onClick={() => onArmar(elegidos.flatMap((g) => g.casos))}>{elegidos.length ? `Armar ${remitos} remito${remitos !== 1 ? "s" : ""} · ${envios} paquetes` : "Elegí al menos un seller"}</button>
+        </div>
+      </div>
+    </div>, document.body);
 }
 
 // ---------------- Armar remito: confirmación + chofer que lo lleva ----------------
@@ -1813,6 +1963,11 @@ const CSS = `
 .dv-rd-f small{display:block;font-size:11.5px;color:#8a8ca6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dv-rd-th{border-top:0;background:rgba(255,255,255,.03);font-size:11px;color:#8a8ca6;text-transform:uppercase;letter-spacing:.05em}
 @media (max-width:620px){.dv-rd-f{grid-template-columns:24px minmax(0,1fr) 84px}.dv-rd-f>:nth-child(3),.dv-rd-f>:nth-child(4){display:none}}
+.dv-ing-abajo{position:absolute;left:0;right:0;bottom:0;padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.85) 30%);display:flex;flex-direction:column;gap:10px}
+.dv-ing-lista{display:flex;flex-direction:column;gap:6px;max-height:30vh;overflow:auto}
+.dv-ing-fila{display:flex;gap:10px;align-items:center;color:#fff}
+.dv-listo{display:flex;gap:12px;align-items:center;padding:10px 8px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer}
+.dv-listo:first-child{border-top:0}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
