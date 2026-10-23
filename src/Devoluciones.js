@@ -64,9 +64,10 @@ const AYUDA = {
   retiro: "Cambios que el cadete todavía no retiró al comprador. No suman en “En la calle” hasta que se retiran.",
   devuelto: "Ya figuran “Devuelto al cliente” en LightData (por remito firmado o cargado a mano). Caso cerrado.",
   marcados: "Tienen etiqueta: reclamado al cadete, extraviado o descartado. Extraviados y descartados no suman en los totales.",
+  extraviados: "Envíos marcados como extraviados. No suman en los totales. Abrí cada uno para ver y agregar notas del seguimiento (reclamo a ML, al cadete, al seller…).",
 };
-const COL_FECHA = { calle: "Cancelados: cuándo se cancelaron. Cambios: cuándo se retiró el producto al comprador.", deposito: "Cuándo ingresó al depósito.", retiro: "Cuándo se cargó el cambio en LightData.", devuelto: "Cuándo se devolvió al cliente.", marcados: "La fecha de la etapa en la que está cada envío." };
-const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados" };
+const COL_FECHA = { calle: "Cancelados: cuándo se cancelaron. Cambios: cuándo se retiró el producto al comprador.", deposito: "Cuándo ingresó al depósito.", retiro: "Cuándo se cargó el cambio en LightData.", devuelto: "Cuándo se devolvió al cliente.", marcados: "La fecha de la etapa en la que está cada envío.", extraviados: "La fecha de la etapa en la que estaba cuando se perdió." };
+const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados", extraviados: "Extraviados" };
 const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
 
 export default function Devoluciones({ abrirEnvio = null }) {
@@ -145,7 +146,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
     const q = busca.trim();
     return casos.filter((c) => {
       if (fCadete && (c.cadete || "") !== fCadete) return false;
-      if (etapa === "marcados" ? !c.marca : c.etapa !== etapa || (c.cerrado && etapa !== "devuelto")) return false;
+      if (etapa === "extraviados" ? c.marca !== "extraviado" : etapa === "marcados" ? !c.marca : c.etapa !== etapa || (c.cerrado && etapa !== "devuelto")) return false;
       if (tipo !== "todos" && c.tipo !== tipo) return false;
       if (soloSel) return sel.has(c.did);
       if (soloVencidos && !c.vencido) return false;
@@ -200,6 +201,18 @@ export default function Devoluciones({ abrirEnvio = null }) {
       setDatos((d) => { const u = { ...(d.ubic || {}) }; if (codigo) u[cliente] = codigo; else delete u[cliente]; return { ...d, ubic: u }; });
     } catch (e) { toast("No se pudo guardar la ubicación: " + String(e.message || e).slice(0, 60)); }
   }
+  async function agregarNota(c, texto) {
+    const t = String(texto || "").trim();
+    if (!t) return false;
+    try {
+      const fresco = (await sbFetch(`devoluciones_gestion?did=eq.${c.did}&select=notas`))[0];
+      const previas = (fresco && Array.isArray(fresco.notas)) ? fresco.notas : (c.notas || []);
+      await guardarGestion([{ did: c.did, notas: [...previas, { texto: t, por: yo(), at: new Date().toISOString() }] }]);
+      registrar("nota", 1, null, { did: c.did });
+      await cargar();
+      return true;
+    } catch (e) { toast("No se pudo guardar la nota: " + String(e.message || e).slice(0, 60)); return false; }
+  }
   async function ingresoEscaneado(c) {
     try {
       await guardarGestion([{ did: c.did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
@@ -210,7 +223,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
   async function etiquetar(cs, marca, nota) {
     setOcupado(true);
     try {
-      await guardarGestion(cs.map((c) => ({ did: c.did, marca: marca || null, marca_nota: marca ? nota || null : null, marca_por: marca ? yo() : null, marca_at: marca ? new Date().toISOString() : null })));
+      const at = new Date().toISOString();
+      await guardarGestion(cs.map((c) => ({ did: c.did, marca: marca || null, marca_nota: marca ? nota || null : null, marca_por: marca ? yo() : null, marca_at: marca ? at : null,
+        notas: [...(c.notas || []), { texto: marca ? `Marcado “${MARCAS[marca]}”${nota ? `: ${nota}` : ""}` : `Se quitó la etiqueta “${MARCAS[c.marca] || ""}”`, por: yo(), at }] })));
       if (marca) registrar("etiqueta", cs.length, null, { marca, dids: cs.map((c) => c.did) });
       toast(marca ? `Etiquetado: ${MARCAS[marca]}` : "Etiqueta quitada");
       setSel(new Set()); await cargar();
@@ -312,7 +327,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       {/* Celu: resumen compacto (la vista completa es para la compu) */}
       {esCelu ? (tab === "remitos" ? null :
         <div className="dv-celu-stats">
-          {[["calle", "En la calle", r.calle, r.calleVencidos, `con +${LIMITE_CALLE} días`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `con +${LIMITE_DEPOSITO} días`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos]].map(([id, n, v, venc, lv]) => (
+          {[["calle", "En la calle", r.calle, r.calleVencidos, `con +${LIMITE_CALLE} días`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `con +${LIMITE_DEPOSITO} días`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos], ["extraviados", "Extraviados", casos.filter((c) => c.marca === "extraviado").length]].map(([id, n, v, venc, lv]) => (
             <button key={id} className={"dv-celu-stat" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
               <span>{n}</span><b>{num(v)}</b>{venc ? <small>{num(venc)} {lv}</small> : null}
             </button>
@@ -329,7 +344,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
           vencidos={r.depositoVencidos} limite={LIMITE_DEPOSITO} ayudaVenc={AYUDA.depositoVenc}
           onElegir={(v) => irA("deposito", v)} />
         <div className="dv-otros" style={card}>
-          {[["retiro", r.retiro], ["devuelto", r.devueltos], ["marcados", r.marcados]].map(([id, n]) => (
+          {[["retiro", r.retiro], ["devuelto", r.devueltos], ["extraviados", casos.filter((c) => c.marca === "extraviado").length], ["marcados", r.marcados]].map(([id, n]) => (
             <button key={id} className={"dv-otro" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
               <span>{NOMBRE_ETAPA[id]}</span><Info texto={AYUDA[id]} /><span style={{ flex: 1 }} /><b>{num(n)}</b>
             </button>
@@ -374,7 +389,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
               <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} ubicacion={ubicacionDe(c.cliente, ubic).codigo.replace("Caja ", "")} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
                 onSel={(v) => setSel((s) => { const n = new Set(s); v ? n.add(c.did) : n.delete(c.did); return n; })}
-                onCadete={(n) => { setFCadete(n); setBusca(""); }} onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} ocupado={ocupado}
+                onCadete={(n) => { setFCadete(n); setBusca(""); }} onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} onNota={(t) => agregarNota(c, t)} ocupado={ocupado}
                 onReclamar={() => reclamar(c.cadete, [c])} onVerEnvio={abrirEnvio ? () => abrirEnvio(c.did) : null} />
             ))}
             {lista.length > 400 && <div style={{ padding: 12, textAlign: "center", color: C.ink3, fontSize: 12 }}>Mostrando 400 de {num(lista.length)}. Usá el buscador para acotar.</div>}
@@ -504,9 +519,13 @@ function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, 
   );
 }
 
-function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadete, onIngreso, onEtiqueta, onReclamar, onVerEnvio, ocupado }) {
+function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadete, onIngreso, onEtiqueta, onNota, onReclamar, onVerEnvio, ocupado }) {
   const [nota, setNota] = useState(c.marca_nota || "");
   useEffect(() => { setNota(c.marca_nota || ""); }, [c.marca_nota]);
+  const [nueva, setNueva] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const notas = c.notas || [];
+  const ultNota = notas[notas.length - 1];
   return (
     <div className={"dv-fila" + (abierto ? " ab" : "")}>
       <div className="dv-linea" onClick={onToggle}>
@@ -525,6 +544,7 @@ function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadet
           <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {c.ml_venta_id ? `Venta ${c.ml_venta_id}` : `Tracking ${c.tracking || "—"}`} · #{c.did}<span className="dv-show-m"> · {c.cadete || "—"}</span>
           </div>
+          {c.marca && ultNota && <div style={{ fontSize: 12, color: C.ink2, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {ultNota.texto} <span style={{ color: C.ink3 }}>· {ultNota.por} · {fechaCorta(ultNota.at)}</span>{notas.length > 1 ? <span style={{ color: C.ink3 }}> · {notas.length} notas</span> : null}</div>}
         </div>
         <span className="dv-hide-m" style={{ minWidth: 0, overflow: "hidden" }}>
           {c.cadete && !CHOFER_FICTICIO.test(c.cadete)
@@ -547,13 +567,22 @@ function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadet
             <Dato k="Último reclamo" v={c.reclamo_at ? fecha(c.reclamo_at) : "—"} />
           </div>
           {c.tipo === "CAMBIO" && c.li_texto && <div style={{ fontSize: 13, color: C.ink2, marginTop: 10 }}>Logística inversa: “{c.li_texto}”</div>}
-          {c.marca && <div style={{ fontSize: 13, color: C.ink2, marginTop: 8 }}>Etiqueta: <b>{MARCAS[c.marca]}</b>{c.marca_por ? ` · ${c.marca_por}` : ""}{c.marca_nota ? ` — ${c.marca_nota}` : ""}</div>}
+          {c.marca && <div style={{ fontSize: 13, color: C.ink2, marginTop: 8 }}>Etiqueta: <b>{MARCAS[c.marca]}</b>{c.marca_por ? ` · ${c.marca_por}` : ""}{c.marca_at ? ` · ${fecha(c.marca_at)}` : ""}</div>}
+          <div className="dv-notas">
+            <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em" }}>Notas{notas.length ? ` · ${notas.length}` : ""}</div>
+            {c.marca_nota && !notas.some((n) => String(n.texto).includes(c.marca_nota)) && <div className="dv-nota"><span>{c.marca_nota}</span><small>{c.marca_por || "—"}{c.marca_at ? ` · ${fecha(c.marca_at)}` : ""}</small></div>}
+            {notas.map((n, i) => <div key={i} className="dv-nota"><span>{n.texto}</span><small>{n.por || "—"} · {fecha(n.at)}</small></div>)}
+            <form style={{ display: "flex", gap: 8, marginTop: 4 }} onSubmit={async (e) => { e.preventDefault(); setGuardando(true); if (await onNota(nueva)) setNueva(""); setGuardando(false); }}>
+              <input className="dv-input" style={{ flex: 1 }} placeholder="Agregar nota: “Se reclamó a ML”, “El cadete dice que lo dejó en…”" value={nueva} onChange={(e) => setNueva(e.target.value)} />
+              <button className="dv-btn pri" type="submit" disabled={!nueva.trim() || guardando}>{guardando ? "Guardando…" : "Agregar"}</button>
+            </form>
+          </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
             {onVerEnvio && <button className="dv-btn" onClick={onVerEnvio}>Ver envío e historial</button>}
             {c.etapa === "calle" && c.cadete && !CHOFER_FICTICIO.test(c.cadete) && <button className="dv-btn" disabled={ocupado} onClick={onReclamar}>Copiar reclamo</button>}
             {c.etapa === "deposito" && c.ingreso_deposito_at && !c.en_deposito_ld && <button className="dv-btn" disabled={ocupado} onClick={() => onIngreso(true)}>Volver a “en la calle”</button>}
             {(c.etapa === "calle" || c.etapa === "retiro") && <button className="dv-btn pri" disabled={ocupado} onClick={() => onIngreso(false)}>Pasar a depósito</button>}
-            <input className="dv-input" style={{ flex: "1 1 180px" }} placeholder="Nota (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} />
+            <input className="dv-input" style={{ flex: "1 1 180px" }} placeholder="Motivo de la etiqueta (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} />
             {Object.entries(MARCAS).map(([k, lbl]) => (
               <button key={k} className={"dv-btn" + (c.marca === k ? " on" : "")} disabled={ocupado} onClick={() => onEtiqueta(c.marca === k ? null : k, nota)}>{c.marca === k ? `Quitar “${lbl}”` : lbl}</button>
             ))}
@@ -2119,6 +2148,9 @@ const CSS = `
 .dv-celu-stat.on{border-color:rgba(46,230,182,.45);background:rgba(46,230,182,.07)}
 .dv-tag.ub{color:#c9cbe0;border-color:rgba(255,255,255,.18)}
 .dv-donde{margin:8px 0 2px;font-size:15px}.dv-donde b{font-family:'Space Grotesk',sans-serif;font-size:30px;color:#2ee6b6;margin-left:6px;vertical-align:-3px}
+.dv-notas{margin-top:12px;padding:10px 12px;border:1px solid rgba(255,255,255,.07);border-radius:10px;background:rgba(255,255,255,.02);display:flex;flex-direction:column;gap:6px}
+.dv-nota{display:flex;flex-direction:column;font-size:13px;border-left:2px solid rgba(46,230,182,.35);padding-left:8px}
+.dv-nota small{font-size:11.5px;color:#8a8ca6}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}

@@ -212,13 +212,15 @@ async function sync(page) {
     });
   }
 
-  const previas = new Map((await sbTodo('devoluciones?select=did,estado_ld,en_deposito_ld,detalle_at,direccion,localidad')).map((r) => [Number(r.did), r]));
+  const previas = new Map((await sbTodo('devoluciones?select=did,estado_ld,en_deposito_ld,detalle_at,direccion,localidad,cadete_asignado_at')).map((r) => [Number(r.did), r]));
   const dia = 24 * 3600e3;
   const necesitan = filas.filter((f) => {
     const p = previas.get(f.did);
     if (!p || !p.detalle_at) return true;
     if (Date.parse(p.detalle_at) < Date.parse('2026-10-21T01:30:00Z')) return true; // backfill único: dirección + quién lo trajo
     if (p.estado_ld !== f.estado_ld || p.en_deposito_ld !== f.en_deposito_ld) return true;
+    // backfill único: fecha de la última asignación (mensaje de reclamo), solo lo que sigue abierto
+    if (!p.cadete_asignado_at && f.estado_ld !== ESTADO.DEVUELTO_CLIENTE && Date.parse(p.detalle_at) < Date.parse('2026-10-23T13:30:00Z')) return true;
     return f.estado_ld !== ESTADO.DEVUELTO_CLIENTE && Date.now() - Date.parse(p.detalle_at) > dia;
   }).map((f) => f.did);
   console.log(`Fichas a consultar: ${necesitan.length} de ${filas.length}`);

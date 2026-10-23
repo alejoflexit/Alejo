@@ -50,7 +50,7 @@ export function armarCaso(d, g = {}, ahora = Date.now()) {
   const marca = g.marca || null;
   return {
     ...d, tipo, etapa, desde, dias, marca, marca_nota: g.marca_nota || "", marca_por: g.marca_por || "", marca_at: g.marca_at || null,
-    reclamo_at: g.reclamo_at || null,
+    reclamo_at: g.reclamo_at || null, notas: Array.isArray(g.notas) ? g.notas : [],
     ingreso_deposito_at: g.ingreso_deposito_at || null, ingreso_por: g.ingreso_por || "",
     vencido: limite !== null && dias !== null && dias > limite,
     cerrado: MARCAS_CIERRAN.includes(marca),
@@ -119,6 +119,7 @@ export function mensajeReclamo(cadete, casos) {
     const dir = [c.direccion, c.localidad].filter(Boolean).join(", ") || `CP ${c.cp || "?"}`;
     const nro = c.ml_venta_id || c.tracking;
     let l = `${k}. ${c.tipo === "CAMBIO" ? "CAMBIO · " : ""}${dir} · ${dias(c.dias)}${nro ? ` · #${nro}` : ""}`;
+    if (c.cadete_asignado_at) l += `\n   📅 Te lo asignaron el ${new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit" }).format(new Date(c.cadete_asignado_at))}`;
     if (c.tipo === "CAMBIO" && c.li_texto) l += `\n   ↳ ${c.li_texto}`;
     return l;
   };

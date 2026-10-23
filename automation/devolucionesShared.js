@@ -63,6 +63,7 @@ function datosFicha(ficha) {
     fecha_devuelto_cliente: ultimo((h) => Number(h.estado) === ESTADO.DEVUELTO_CLIENTE, hist),
     fecha_deposito: ultimo((a) => CHOFER_DEPOSITO.test(a.operador || ''), asig),
     cadete: ultAsig ? String(ultAsig.operador || '').replace(/\s+/g, ' ').trim() : null,
+    cadete_asignado_at: ultAsig ? fechaLD(ultAsig.fecha) : null, // la última asignación = al cadete actual
     valor: Number.isFinite(valor) && valor > 0 ? valor : null,
     direccion: String(header.destination_shipping_address_line || '').trim() || null,
     localidad: String(header.destination_city_name || '').trim() || null,

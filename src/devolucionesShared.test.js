@@ -52,6 +52,8 @@ test("reclamos: agrupa por cadete, saca choferes ficticios y arma el mensaje", (
   expect(m.includes("Tenés *2 paquetes*")).toBe(true);
   expect(m.includes("🔴 *Atrasados")).toBe(true);
   expect(m.includes("Bustamante 1987, Hurlingham")).toBe(true);
+  const m2 = mensajeReclamo("Juan", [armarCaso({ ...d, cadete: "Juan", cadete_asignado_at: "2026-10-13T15:00:00-03:00" }, {}, AHORA)]);
+  expect(m2.includes("📅 Te lo asignaron el 13/10")).toBe(true);
 });
 
 test("QR: lee el código y rechaza otra cosa", () => {
