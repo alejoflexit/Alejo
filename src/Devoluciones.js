@@ -300,7 +300,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
         onReclamar={() => setVerReclamos(true)} onDevolver={() => irA("deposito", true)} />}
 
       {/* Celu: resumen compacto (la vista completa es para la compu) */}
-      {esCelu ? (
+      {esCelu ? (tab === "remitos" ? null :
         <div className="dv-celu-stats">
           {[["calle", "En la calle", r.calle, r.calleVencidos, `con +${LIMITE_CALLE} días`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `con +${LIMITE_DEPOSITO} días`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos]].map(([id, n, v, venc, lv]) => (
             <button key={id} className={"dv-celu-stat" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
@@ -1741,7 +1741,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast, pedidoEscan
         <input ref={inputGeneral} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
         <input ref={inputGaleria} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { subirTanda(e.target.files); e.target.value = ""; }} />
         <div className="dv-subir-btns">
-          {esCelu && <button className="dv-btn pri dv-btn-grande" disabled={!!subiendo} onClick={() => setEscaner(true)}>📷 Escanear remitos</button>}
+          {esCelu && <button className="dv-btn pri dv-btn-grande" disabled={!!subiendo} onClick={() => setEscaner(true)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><IcoCamara size={18} /> Escanear remitos</button>}
           <button className={"dv-btn dv-btn-grande" + (esCelu ? "" : " pri")} disabled={!!subiendo} onClick={() => inputGeneral.current.click()}>
             {subiendo ? `Subiendo ${subiendo}…` : tanda.length ? "📷 Sacar otra foto" : "📷 Sacar foto"}
           </button>
