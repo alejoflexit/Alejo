@@ -1549,7 +1549,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast }) {
       {escaner && <Escaner remitos={remitos} onLectura={desdeEscaner} onRepetir={repetirDesdeEscaner} onCerrar={() => { setEscaner(false); setTimeout(() => panelPC.current && panelPC.current.scrollIntoView({ behavior: "smooth", block: "start" }), 400); }} />}
 
       <div className="dv-seg sm" style={{ alignSelf: "flex-start" }}>
-        {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"], ["todos", "Todos"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
+        {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
       </div>
 
       {filtro === "devueltos" ? <Carpetas remitos={remitos} casosDe={casosDe} toast={toast} subiendo={subiendo} onReemplazar={reemplazarFoto} onImprimir={(r) => imprimirRemitos([{ ...r, casos: casosDe(r) }])} /> : <div style={{ ...card, overflow: "hidden" }}>
