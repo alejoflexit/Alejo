@@ -86,6 +86,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [sel, setSel] = useState(() => new Set());
   const [aviso, setAviso] = useState(null);
   const [ocupado, setOcupado] = useState(false);
+  const [armando, setArmando] = useState(null); // { libres, previa, yaEnRemito }
   const [verReclamos, setVerReclamos] = useState(false);
   const enCurso = useRef(false);
 
@@ -214,15 +215,14 @@ export default function Devoluciones({ abrirEnvio = null }) {
     } catch { /* el mensaje ya se copió; el registro se reintenta la próxima vez */ }
     toast(via === "wa" ? `Reclamo a ${cadete.split(" ")[0]} registrado` : `Mensaje copiado. Pegalo en el WhatsApp de ${cadete.split(" ")[0]}.`);
   }
-  async function armarRemitos(cs) {
+  function armarRemitos(cs) {
     const libres = cs.filter((c) => !remitoDe.has(c.did));
     if (!libres.length) { toast("Esos envíos ya están en un remito abierto"); return; }
-    const previa = agruparParaRemitos(libres);
-    const yaEnRemito = cs.length - libres.length;
-    const texto = previa.length === 1
-      ? `Se arma 1 remito para ${previa[0].cliente} con ${previa[0].casos.length} envío(s).`
-      : `Se arman ${previa.length} remitos, uno por cliente (cada cliente firma el suyo):\n\n${previa.map((g) => `• ${g.cliente}: ${g.casos.length} envío(s)`).join("\n")}`;
-    if (!window.confirm(texto + (yaEnRemito ? `\n\n${yaEnRemito} envío(s) ya estaban en otro remito y no se incluyen.` : "") + "\n\n¿Continuar?")) return;
+    setArmando({ libres, previa: agruparParaRemitos(libres), yaEnRemito: cs.length - libres.length });
+  }
+  async function confirmarArmado(chofer) {
+    const { libres } = armando;
+    setArmando(null);
     // La ventana se abre YA, en el clic: si se abre después de guardar, el navegador la bloquea
     const w = window.open("", "_blank");
     if (w) w.document.write("<p style='font-family:sans-serif;padding:24px'>Armando remito…</p>");
@@ -231,16 +231,17 @@ export default function Devoluciones({ abrirEnvio = null }) {
       const grupos = agruparParaRemitos(libres);
       const creados = [];
       for (const g of grupos) {
-        const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify({ cliente: g.cliente, dids: g.casos.map((c) => c.did), creado_por: yo() }) });
+        const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify({ cliente: g.cliente, dids: g.casos.map((c) => c.did), creado_por: yo(), chofer: chofer || null }) });
         creados.push({ ...row, casos: g.casos });
       }
-      registrar("remito_armado", creados.length, null, { codigos: creados.map((x) => x.codigo), envios: libres.length });
+      registrar("remito_armado", creados.length, null, { codigos: creados.map((x) => x.codigo), envios: libres.length, chofer: chofer || null });
       await imprimirRemitos(creados, w);
       toast(`${creados.length} remito${creados.length > 1 ? "s" : ""} generado${creados.length > 1 ? "s" : ""} (uno por cliente). También quedan en la pestaña Remitos.`);
       setSel(new Set()); await cargar();
     } catch (e) { if (w) w.close(); toast("No se pudo armar el remito: " + String(e.message).slice(0, 100)); }
     setOcupado(false);
   }
+  const choferes = useMemo(() => [...new Set(casos.map((c) => c.cadete).filter((n) => n && !CHOFER_FICTICIO.test(n)))].sort((a, b) => a.localeCompare(b)), [casos]);
   const casosDeRemito = (rem) => { const m = new Map(casos.map((c) => [Number(c.did), c])); return (rem.dids || []).map((d) => m.get(Number(d)) || { did: d }); };
 
   async function actualizar() {
@@ -349,6 +350,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
         <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} />
       )}
 
+      {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
     </div>
@@ -806,6 +808,36 @@ function MasAcciones({ rem, onReemplazar, subiendo, onImprimir }) {
   );
 }
 
+// ---------------- Armar remito: confirmación + chofer que lo lleva ----------------
+function ArmarRemitoModal({ previa, yaEnRemito, choferes, onConfirmar, onCerrar }) {
+  const [chofer, setChofer] = useState("");
+  return createPortal(
+    <div className="dv-modal-fondo" onClick={onCerrar}>
+      <div className="dv-modal" style={{ width: "min(480px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Armar remito">
+        <div className="dv-modal-cab">
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{previa.length === 1 ? "Armar 1 remito" : `Armar ${previa.length} remitos (uno por cliente)`}</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Se imprimen dos hojas por remito: el <b>remito chofer</b> (lo firma el chofer al retirar) y el <b>remito cliente</b> (lo firman el chofer y quien recibe; vuelve y se fotografía).</div>
+        </div>
+        <div className="dv-modal-cuerpo" style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {previa.map((g, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5 }}><span>{g.cliente}</span><b>{g.casos.length} envío{g.casos.length !== 1 ? "s" : ""}</b></div>)}
+            {yaEnRemito > 0 && <div style={{ fontSize: 12, color: C.ambar }}>{yaEnRemito} envío(s) ya estaban en otro remito y no se incluyen.</div>}
+          </div>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+            <span>Chofer que lo lleva <span style={{ color: C.ink3 }}>(opcional)</span></span>
+            <input className="dv-input" list="dv-choferes" placeholder="Elegí o escribí el nombre" value={chofer} onChange={(e) => setChofer(e.target.value)} autoFocus />
+            <datalist id="dv-choferes">{choferes.map((n) => <option key={n} value={n} />)}</datalist>
+            <span style={{ fontSize: 12, color: C.ink3 }}>Sale impreso en las dos hojas. Si después lo lleva otro, se tacha y se escribe a mano. Vacío = línea en blanco.</span>
+          </label>
+        </div>
+        <div className="dv-modal-pie" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="dv-btn" onClick={onCerrar}>Cancelar</button>
+          <button className="dv-btn pri" onClick={() => onConfirmar(chofer.trim())}>Armar e imprimir</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
 // ---------------- Visor de fotos dentro de la página (en vez de abrir otra pestaña) ----------------
 // items: [{ path, titulo, sub }]. Flechas / teclado para pasar entre las fotos de la vista; tocar la foto = zoom.
 function Visor({ items, inicio = 0, onCerrar, acciones, digital, vistaInicial = "foto" }) {
@@ -881,6 +913,7 @@ function RemitoDigital({ rem, casos, resaltar = "" }) {
       <div className="dv-rd-meta">
         <div><span>Cliente</span><b>{rem.cliente}</b></div>
         <div><span>Emitido</span><b>{fecha(rem.creado_at)}</b><small>{rem.creado_por || "—"}</small></div>
+        <div><span>Chofer</span><b>{rem.chofer || "—"}</b></div>
         <div><span>Firma subida</span><b>{rem.firmado_at ? fecha(rem.firmado_at) : "—"}</b><small>{rem.firmado_por || ""}</small></div>
         <div><span>Confirmado</span><b>{rem.confirmado_at ? fecha(rem.confirmado_at) : rem.procesado_at ? fecha(rem.procesado_at) : "—"}</b><small>{rem.confirmado_por || ""}</small></div>
         <div><span>Envíos</span><b>{casos.length}</b></div>
@@ -1576,7 +1609,7 @@ function RemitoFila({ rem, casos, subiendo, onSubir, onImprimir, onFoto, onAnula
             <span style={{ fontWeight: 600 }}>{rem.cliente}</span>
           </div>
           <div style={{ fontSize: 12, color: C.ink3, marginTop: 2 }}>
-            {casos.length} envío{casos.length !== 1 ? "s" : ""} · {fecha(rem.creado_at)} · {rem.creado_por || "—"}
+            {casos.length} envío{casos.length !== 1 ? "s" : ""} · {fecha(rem.creado_at)} · {rem.creado_por || "—"}{rem.chofer ? ` · chofer ${rem.chofer}` : ""}
             {rem.firmado_at ? ` · firmado subido ${fecha(rem.firmado_at)}` : ""}
           </div>
         </div>
@@ -1645,17 +1678,28 @@ async function imprimirRemitos(remitos, ventana) {
   const hojas = [];
   for (const rem of remitos) {
     const qr = await QRCode.toDataURL(QR_PREFIJO + rem.codigo, { margin: 1, width: 320, errorCorrectionLevel: "M" });
-    const filas = rem.casos.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.ml_venta_id || "—")}</td><td>${esc(c.tracking || "—")}</td><td>${c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"}</td><td>${esc(c.tipo === "CAMBIO" ? c.li_texto || "" : "")}</td></tr>`).join("");
-    for (const copia of ["ORIGINAL", "DUPLICADO"]) {
-      hojas.push(`<section class="hoja">
-        <header><div><div class="marca">FLEXIT</div><div class="tit">Remito de devolución</div><div class="cod">${esc(rem.codigo)}</div></div>
-          <div class="qr"><img src="${qr}" alt=""/><div>${copia}</div></div></header>
-        <div class="meta"><div><span>Cliente</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Cantidad</span><b>${rem.casos.length}</b></div></div>
-        <table><thead><tr><th>#</th><th>Venta</th><th>Tracking</th><th>Tipo</th><th>Detalle</th></tr></thead><tbody>${filas}</tbody></table>
-        <p class="leyenda">Recibí conforme los ${rem.casos.length} paquete(s) detallados.</p>
-        <footer><div>Nombre y apellido</div><div>DNI</div><div>Firma</div><div>Fecha de recepción</div></footer>
-      </section>`);
-    }
+    const filas = rem.casos.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.ml_venta_id || c.tracking || "—")}</td><td>${esc([c.direccion, c.localidad].filter(Boolean).join(", ") || "—")}</td><td>${c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"}${c.tipo === "CAMBIO" && c.li_texto ? `<small>${esc(c.li_texto)}</small>` : ""}</td></tr>`).join("");
+    const tabla = `<table><thead><tr><th>#</th><th>Venta / tracking</th><th>Dirección</th><th>Tipo</th></tr></thead><tbody>${filas}</tbody></table>`;
+    const chofer = rem.chofer ? `<b>${esc(rem.chofer)}</b>` : `<b class="vacio"></b>`;
+    const meta = `<div class="meta"><div><span>Cliente</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Paquetes</span><b>${rem.casos.length}</b></div><div class="ch"><span>Chofer</span>${chofer}</div></div>`;
+    const cab = (tipo, der) => `<header><div><div class="marca">FLEXIT</div><div class="tit">${tipo}</div><div class="cod">${esc(rem.codigo)}</div></div>${der}</header>`;
+    // Remito chofer: lo firma el chofer al retirar del depósito. Sin QR (no se sube a la app).
+    hojas.push(`<section class="hoja">
+      ${cab("Remito chofer", `<div class="copia">REMITO CHOFER</div>`)}
+      ${meta}${tabla}
+      <p class="leyenda">Retiré del depósito de Flexit los ${rem.casos.length} paquete(s) detallados para entregar a <b>${esc(rem.cliente)}</b>.</p>
+      <footer class="f4"><div>Firma del chofer</div><div>Aclaración</div><div>DNI</div><div>Fecha y hora de retiro</div></footer>
+    </section>`);
+    // Remito cliente: lo firman el chofer (entregó) y quien recibe. Vuelve a Flexit y se fotografía: lleva el QR.
+    hojas.push(`<section class="hoja">
+      ${cab("Remito cliente", `<div class="qr"><img src="${qr}" alt=""/><div>REMITO CLIENTE</div></div>`)}
+      ${meta}${tabla}
+      <p class="leyenda">${esc(rem.cliente)} recibe conforme los ${rem.casos.length} paquete(s) detallados.</p>
+      <footer class="f2">
+        <div class="blq"><div class="t">Entregó (chofer)</div><div class="l">Firma</div><div class="l">Aclaración</div></div>
+        <div class="blq"><div class="t">Recibió (cliente)</div><div class="l">Firma</div><div class="l">Aclaración y DNI</div><div class="l">Fecha y hora</div></div>
+      </footer>
+    </section>`);
   }
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Remitos ${remitos.map((r) => r.codigo).join(" ")}</title><style>
     @page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0}
@@ -1665,8 +1709,15 @@ async function imprimirRemitos(remitos, ventana) {
     .qr{text-align:center;font-size:10px;letter-spacing:.15em;color:#444}.qr img{width:38mm;height:38mm;display:block}
     .meta{display:flex;gap:28px;margin:14px 0}.meta span{display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.08em}.meta b{font-size:15px}
     table{width:100%;border-collapse:collapse;font-size:11.5px}th{text-align:left;border-bottom:1px solid #111;padding:6px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#444}td{border-bottom:1px solid #ddd;padding:6px 4px;vertical-align:top}
-    .leyenda{margin-top:18px;font-size:12px}footer{margin-top:auto;display:grid;grid-template-columns:1.4fr 1fr 1.2fr 1fr;gap:16px;padding-top:56px}
-    footer div{border-top:1px solid #111;padding-top:6px;font-size:11px;text-align:center}
+    td small{display:block;color:#555;font-size:10px;margin-top:2px}
+    .meta .ch b{min-width:60mm;display:inline-block}.meta b.vacio{border-bottom:1px solid #111;height:18px}
+    .copia{font-size:11px;letter-spacing:.15em;color:#444;border:1px solid #111;padding:6px 10px;border-radius:4px}
+    .leyenda{margin-top:18px;font-size:12px}
+    footer{margin-top:auto;padding-top:40px}
+    footer.f4{display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1fr;gap:16px;padding-top:56px}
+    footer.f4 div{border-top:1px solid #111;padding-top:6px;font-size:11px;text-align:center}
+    footer.f2{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+    .blq .t{font-size:12px;font-weight:700;margin-bottom:6px}.blq .l{border-top:1px solid #111;margin-top:34px;padding-top:5px;font-size:11px}
   </style></head><body>${hojas.join("")}<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
   w.document.close();
 }
