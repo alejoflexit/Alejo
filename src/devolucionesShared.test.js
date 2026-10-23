@@ -133,3 +133,12 @@ test("listos para devolver: solo depósito sin remito, por seller, el más viejo
   expect(g.map((x) => [x.cliente, x.casos.map((c) => c.did)])).toEqual([["B", [2, 4]], ["A", [3, 1]]]);
   expect(g[0].vencidos).toBe(1);
 });
+
+test("ubicación: lugar propio o caja por letra", () => {
+  const { ubicacionDe } = require("./devolucionesShared");
+  expect(ubicacionDe("Ohpic", { Ohpic: "B3" })).toEqual({ codigo: "B3", propia: true });
+  expect(ubicacionDe("iamiqué").codigo).toBe("Caja G-I");
+  expect(ubicacionDe("Électro").codigo).toBe("Caja D-F");
+  expect(ubicacionDe("3D Store").codigo).toBe("Caja 0-9");
+  expect(ubicacionDe("Zeta").codigo).toBe("Caja V-Z");
+});

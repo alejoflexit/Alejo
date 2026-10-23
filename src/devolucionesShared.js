@@ -295,3 +295,17 @@ export function listosParaDevolver(casos, enRemito = new Set()) {
     return { cliente, casos: cs, maxDias: cs[0].dias ?? 0, vencidos: cs.filter((c) => c.vencido).length, valor: cs.reduce((s, c) => s + (Number(c.valor) || 0), 0) };
   }).sort((a, b) => b.maxDias - a.maxDias || b.casos.length - a.casos.length);
 }
+
+// ---- Ubicación en el cuartito ----
+// Cada seller con lugar propio tiene un código (B3). El resto va a una caja por la primera letra del nombre.
+export const CAJAS_LETRA = ["A-C", "D-F", "G-I", "J-L", "M-O", "P-R", "S-U", "V-Z"];
+export function cajaPorLetra(cliente) {
+  const l = String(cliente || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase()[0] || "";
+  if (!/[A-Z]/.test(l)) return "Caja 0-9";
+  const c = CAJAS_LETRA.find((r) => l >= r[0] && l <= r[2]);
+  return `Caja ${c}`;
+}
+export function ubicacionDe(cliente, mapa = {}) {
+  const k = String(cliente || "");
+  return mapa[k] ? { codigo: mapa[k], propia: true } : { codigo: cajaPorLetra(k), propia: false };
+}

@@ -7,7 +7,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
-  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -89,6 +89,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [armando, setArmando] = useState(null); // { libres, previa, yaEnRemito }
   const [escIngreso, setEscIngreso] = useState(false);
   const [verListos, setVerListos] = useState(false);
+  const [verUbic, setVerUbic] = useState(false);
   const esCelu = useEsCelu();
   const [pedidoEscaner, setPedidoEscaner] = useState(0); // celu: abrir el escáner de remitos desde arriba
   const [verReclamos, setVerReclamos] = useState(false);
@@ -99,7 +100,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
     enCurso.current = true;
     try {
       const hace21 = new Date(Date.now() - 21 * 864e5).toISOString();
-      const [dev, gest, rem, sync, diario, eventos, fallidos] = await Promise.all([
+      const [dev, gest, rem, sync, diario, eventos, fallidos, ubic] = await Promise.all([
         traerTodo("devoluciones?select=*&order=did"),
         traerTodo("devoluciones_gestion?select=*"),
         sbFetch("remitos_devolucion?select=*&order=id.desc&limit=300"),
@@ -107,8 +108,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
         sbFetch("devoluciones_diario?select=*&order=fecha.desc&limit=60").catch(() => []),
         sbFetch(`devoluciones_eventos?select=*&at=gte.${hace21}&order=at.desc&limit=2000`).catch(() => []),
         sbFetch("remitos_fallidos?estado=eq.pendiente&select=*&order=at.desc&limit=100").catch(() => []),
+        sbFetch("devoluciones_ubicaciones?select=cliente,codigo").catch(() => []),
       ]);
-      setDatos({ dev, gest, rem, sync: sync[0] || null, diario, eventos, fallidos });
+      setDatos({ dev, gest, rem, sync: sync[0] || null, diario, eventos, fallidos, ubic: Object.fromEntries((ubic || []).map((u) => [u.cliente, u.codigo])) });
       setError(null);
     } catch (e) { setError(String(e.message || e).slice(0, 200)); }
     finally { enCurso.current = false; }
@@ -190,6 +192,14 @@ export default function Devoluciones({ abrirEnvio = null }) {
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
     setOcupado(false);
   }
+  const ubic = (datos && datos.ubic) || {};
+  async function guardarUbicacion(cliente, codigo) {
+    try {
+      if (codigo) await sbFetch("devoluciones_ubicaciones?on_conflict=cliente", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ cliente, codigo, actualizado_por: yo(), actualizado_at: new Date().toISOString() }) });
+      else await sbFetch(`devoluciones_ubicaciones?cliente=eq.${encodeURIComponent(cliente)}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      setDatos((d) => { const u = { ...(d.ubic || {}) }; if (codigo) u[cliente] = codigo; else delete u[cliente]; return { ...d, ubic: u }; });
+    } catch (e) { toast("No se pudo guardar la ubicación: " + String(e.message || e).slice(0, 60)); }
+  }
   async function ingresoEscaneado(c) {
     try {
       await guardarGestion([{ did: c.did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
@@ -243,7 +253,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       const creados = [];
       for (const g of grupos) {
         const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify({ cliente: g.cliente, dids: g.casos.map((c) => c.did), creado_por: yo(), chofer: chofer || null }) });
-        creados.push({ ...row, casos: g.casos });
+        creados.push({ ...row, casos: g.casos, ubicacion: ubicacionDe(g.cliente, ubic).codigo });
       }
       registrar("remito_armado", creados.length, null, { codigos: creados.map((x) => x.codigo), envios: libres.length, chofer: chofer || null });
       await imprimirRemitos(creados, w);
@@ -345,6 +355,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
             {!esCelu && <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />}
             {!esCelu && (etapa === "calle" || etapa === "retiro" || etapa === "deposito") && <button className="dv-btn" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo">Escanear ingreso</button>}
+            {!esCelu && etapa === "deposito" && <button className="dv-btn" onClick={() => setVerUbic(true)} title="Qué estante o caja tiene cada seller en el cuartito">Ubicaciones</button>}
             {etapa === "deposito" && <button className="dv-btn pri" onClick={() => setVerListos(true)} title="La app arma los remitos de lo que está en depósito, por seller">Listos para devolver</button>}
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
@@ -360,7 +371,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
             </div>
             {lista.length === 0 && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
             {lista.slice(0, 400).map((c) => (
-              <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} abierto={abierto === c.did} marcado={sel.has(c.did)}
+              <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} ubicacion={ubicacionDe(c.cliente, ubic).codigo.replace("Caja ", "")} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
                 onSel={(v) => setSel((s) => { const n = new Set(s); v ? n.add(c.did) : n.delete(c.did); return n; })}
                 onCadete={(n) => { setFCadete(n); setBusca(""); }} onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} ocupado={ocupado}
@@ -387,8 +398,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
         <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} pedidoEscaner={pedidoEscaner} esCelu={esCelu} />
       )}
 
-      {escIngreso && <IngresoEscaner casos={casos} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); }} />}
-      {verListos && <ListosModal grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
+      {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); }} />}
+      {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
       {aviso && <div className="dv-toast">{aviso}</div>}
@@ -492,7 +504,7 @@ function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, 
   );
 }
 
-function Fila({ c, remito, abierto, marcado, onToggle, onSel, onCadete, onIngreso, onEtiqueta, onReclamar, onVerEnvio, ocupado }) {
+function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadete, onIngreso, onEtiqueta, onReclamar, onVerEnvio, ocupado }) {
   const [nota, setNota] = useState(c.marca_nota || "");
   useEffect(() => { setNota(c.marca_nota || ""); }, [c.marca_nota]);
   return (
@@ -505,6 +517,7 @@ function Fila({ c, remito, abierto, marcado, onToggle, onSel, onCadete, onIngres
             <span className="dv-tag">{c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"}</span>
             {c.marca && <span className="dv-tag mk">{MARCAS[c.marca]}</span>}
             {remito && <span className="dv-tag">{remito.codigo}</span>}
+            {ubicacion && c.etapa === "deposito" && <span className="dv-tag ub" title="Dónde está guardado en el cuartito">📍 {ubicacion}</span>}
           </div>
           <div style={{ fontSize: 13, color: C.ink2, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {c.direccion ? <>{c.direccion}{c.localidad ? <span style={{ color: C.ink3 }}>, {c.localidad}</span> : null}</> : <span style={{ color: C.ink3 }}>Sin dirección</span>}
@@ -847,10 +860,56 @@ function MasAcciones({ rem, onReemplazar, subiendo, onImprimir }) {
   );
 }
 
+// ---------------- Ubicaciones del cuartito: qué lugar tiene cada seller ----------------
+function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
+  const [busca, setBusca] = useState("");
+  const [borr, setBorr] = useState({});
+  const filas = useMemo(() => {
+    const n = new Map();
+    casos.forEach((c) => { if (c.etapa === "deposito" && !c.cerrado) n.set(c.cliente || "(sin cliente)", (n.get(c.cliente || "(sin cliente)") || 0) + 1); });
+    Object.keys(mapa).forEach((k) => { if (!n.has(k)) n.set(k, 0); });
+    return [...n.entries()].map(([cliente, cant]) => ({ cliente, cant })).sort((a, b) => b.cant - a.cant || a.cliente.localeCompare(b.cliente));
+  }, [casos, mapa]);
+  const q = busca.trim().toLowerCase();
+  const vis = filas.filter((f) => !q || f.cliente.toLowerCase().includes(q) || String(mapa[f.cliente] || "").toLowerCase().includes(q));
+  const guardar = (cliente) => { const v = (borr[cliente] ?? mapa[cliente] ?? "").trim().toUpperCase(); if (v !== (mapa[cliente] || "")) onGuardar(cliente, v); };
+  return createPortal(
+    <div className="dv-modal-fondo" onClick={onCerrar}>
+      <div className="dv-modal" style={{ width: "min(560px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ubicaciones del cuartito">
+        <div className="dv-modal-cab">
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Ubicaciones en el cuartito</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Poné el código del estante o caja de cada seller (ej. B3). Los que quedan vacíos van a la caja de su letra. Al escanear un ingreso, la app dice dónde guardarlo.</div>
+          <input className="dv-input" style={{ width: "100%", marginTop: 10 }} placeholder="Buscar seller o código" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </div>
+        <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
+          {vis.map((f) => {
+            const sugerir = !mapa[f.cliente] && f.cant >= 5;
+            return (
+              <div key={f.cliente} className="dv-listo" style={{ cursor: "default" }}>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <b>{f.cliente}</b>
+                  <span style={{ display: "block", fontSize: 12, color: sugerir ? C.ambar : C.ink3 }}>{f.cant} en depósito{sugerir ? " · conviene darle lugar propio" : ""}</span>
+                </span>
+                <input className="dv-input" style={{ width: 110, textAlign: "center", fontFamily: C.grotesk, fontWeight: 700, textTransform: "uppercase" }} maxLength={12}
+                  placeholder={cajaPorLetra(f.cliente).replace("Caja ", "")} value={borr[f.cliente] ?? mapa[f.cliente] ?? ""}
+                  onChange={(e) => setBorr((b) => ({ ...b, [f.cliente]: e.target.value }))} onBlur={() => guardar(f.cliente)}
+                  onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} aria-label={`Ubicación de ${f.cliente}`} />
+              </div>
+            );
+          })}
+        </div>
+        <div className="dv-modal-pie" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 12, color: C.ink3 }}>{Object.keys(mapa).length} sellers con lugar propio · se guarda solo</span>
+          <button className="dv-btn pri" onClick={onCerrar}>Listo</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
 // ---------------- Ingreso a depósito escaneando la etiqueta del paquete ----------------
 // Continuo (acá no hace falta foto de prueba): lee el QR/código de barras de la etiqueta de ML o de LightData,
 // busca la devolución y la pasa a depósito al toque. Se puede tipear la venta/tracking si la etiqueta está rota.
-function IngresoEscaner({ casos, onIngresar, onCerrar }) {
+function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar }) {
   const video = useRef();
   const casosRef = useRef(casos); casosRef.current = casos;
   const ultimo = useRef({ t: "", at: 0 });
@@ -872,7 +931,7 @@ function IngresoEscaner({ casos, onIngresar, onCerrar }) {
     else {
       hechos.current.add(c.did);
       const ok = await onIngresar(c);
-      l = ok ? { tipo: "ok", titulo: `${c.cliente} · ${c.tipo === "CAMBIO" ? "cambio" : "cancelado"}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · ") }
+      l = ok ? { tipo: "ok", titulo: `${c.cliente} · ${c.tipo === "CAMBIO" ? "cambio" : "cancelado"}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · "), donde: ubicacionDe(c.cliente, ubic).codigo }
         : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" };
       if (!ok) hechos.current.delete(c.did);
     }
@@ -924,7 +983,7 @@ function IngresoEscaner({ casos, onIngresar, onCerrar }) {
         </div>
         <button className="dv-btn" onClick={onCerrar} style={{ background: "rgba(0,0,0,.5)" }}>Terminar ({nOk})</button>
       </div>
-      {flash && <div className={"dv-escaner-flash " + (flash.tipo === "ok" ? "" : flash.tipo === "ya" ? "info" : "aviso")}><b>{flash.tipo === "ok" ? "✓ " : ""}{flash.titulo}</b>{flash.sub && <div style={{ fontSize: 12.5, opacity: .85, marginTop: 2 }}>{flash.sub}</div>}</div>}
+      {flash && <div className={"dv-escaner-flash " + (flash.tipo === "ok" ? "" : flash.tipo === "ya" ? "info" : "aviso")}><b>{flash.tipo === "ok" ? "✓ " : ""}{flash.titulo}</b>{flash.donde && <div className="dv-donde">Guardalo en <b>{flash.donde}</b></div>}{flash.sub && <div style={{ fontSize: 12.5, opacity: .85, marginTop: 2 }}>{flash.sub}</div>}</div>}
       {error && !flash && <div className="dv-escaner-flash aviso">{error}</div>}
       <div className="dv-ing-abajo">
         <form onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { ultimo.current = { t: "", at: 0 }; procesar(manual.trim()); setManual(""); } }} style={{ display: "flex", gap: 8 }}>
@@ -936,7 +995,7 @@ function IngresoEscaner({ casos, onIngresar, onCerrar }) {
             {lecturas.slice(0, 6).map((l) => (
               <div key={l.id} className="dv-ing-fila">
                 <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "✕" : "·"}</span>
-                <span style={{ minWidth: 0 }}><b style={{ fontSize: 13 }}>{l.titulo}</b><span style={{ display: "block", fontSize: 11.5, opacity: .7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.sub}</span></span>
+                <span style={{ minWidth: 0 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b><span style={{ display: "block", fontSize: 11.5, opacity: .7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.sub}</span></span>
               </div>
             ))}
           </div>
@@ -946,7 +1005,7 @@ function IngresoEscaner({ casos, onIngresar, onCerrar }) {
 }
 
 // ---------------- Listos para devolver: la app propone los remitos ----------------
-function ListosModal({ grupos, onArmar, onCerrar }) {
+function ListosModal({ grupos, ubic = {}, onArmar, onCerrar }) {
   const [tildes, setTildes] = useState(() => Object.fromEntries(grupos.map((g) => [g.cliente, g.vencidos > 0])));
   const elegidos = grupos.filter((g) => tildes[g.cliente]);
   const envios = elegidos.reduce((s, g) => s + g.casos.length, 0);
@@ -964,7 +1023,7 @@ function ListosModal({ grupos, onArmar, onCerrar }) {
             <label key={g.cliente} className="dv-listo">
               <input type="checkbox" checked={!!tildes[g.cliente]} onChange={(e) => setTildes((t) => ({ ...t, [g.cliente]: e.target.checked }))} style={{ width: 18, height: 18, accentColor: C.teal }} />
               <span style={{ minWidth: 0, flex: 1 }}>
-                <b>{g.cliente}</b>
+                <b>{g.cliente}</b> <span className="dv-tag ub">📍 {ubicacionDe(g.cliente, ubic).codigo}</span>
                 <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{g.casos.length} paquete{g.casos.length !== 1 ? "s" : ""} · {plata(g.valor)}{g.casos.length > MAX_POR_REMITO ? ` · ${Math.ceil(g.casos.length / MAX_POR_REMITO)} remitos (de a ${MAX_POR_REMITO})` : ""}</span>
               </span>
               <span style={{ textAlign: "right", fontSize: 12.5 }}>
@@ -1878,7 +1937,7 @@ async function imprimirRemitos(remitos, ventana) {
     const filas = rem.casos.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.ml_venta_id || c.tracking || "—")}</td><td>${esc([c.direccion, c.localidad].filter(Boolean).join(", ") || "—")}</td><td>${c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"}${c.tipo === "CAMBIO" && c.li_texto ? `<small>${esc(c.li_texto)}</small>` : ""}</td></tr>`).join("");
     const tabla = `<table><thead><tr><th>#</th><th>Venta / tracking</th><th>Dirección</th><th>Tipo</th></tr></thead><tbody>${filas}</tbody></table>`;
     const chofer = rem.chofer ? `<b>${esc(rem.chofer)}</b>` : `<b class="vacio"></b>`;
-    const meta = `<div class="meta"><div><span>Seller</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Paquetes</span><b>${rem.casos.length}</b></div><div class="ch"><span>Chofer</span>${chofer}</div></div>`;
+    const meta = `<div class="meta"><div><span>Seller</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Paquetes</span><b>${rem.casos.length}</b></div><div class="ch"><span>Chofer</span>${chofer}</div>${rem.ubicacion ? `<div><span>Ubicación</span><b>${esc(rem.ubicacion)}</b></div>` : ""}</div>`;
     const cab = (tipo, der) => `<header><div><div class="marca">FLEXIT</div><div class="tit">${tipo}</div><div class="cod">${esc(rem.codigo)}</div></div>${der}</header>`;
     // Remito chofer: lo firma el chofer al retirar del depósito. Sin QR (no se sube a la app).
     hojas.push(`<section class="hoja">
@@ -2026,6 +2085,8 @@ const CSS = `
 .dv-celu-stat b{font-family:'Space Grotesk',sans-serif;font-size:24px;color:#f4f5fa;line-height:1.1}
 .dv-celu-stat small{font-size:11.5px;color:#F5C044}
 .dv-celu-stat.on{border-color:rgba(46,230,182,.45);background:rgba(46,230,182,.07)}
+.dv-tag.ub{color:#c9cbe0;border-color:rgba(255,255,255,.18)}
+.dv-donde{margin:8px 0 2px;font-size:15px}.dv-donde b{font-family:'Space Grotesk',sans-serif;font-size:30px;color:#2ee6b6;margin-left:6px;vertical-align:-3px}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
