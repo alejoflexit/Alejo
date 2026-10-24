@@ -295,28 +295,23 @@ async function importarSanti() {
 // ---------- EXPLORAR (temporal): encontrar en LightData cómo se asigna un chofer a un envío ----------
 // Solo lee páginas/JS de LightData y guarda lo que menciona "asign" en ld_exploracion (los logs de Actions no se pueden leer desde Claude).
 async function explorar(page) {
-  const guardar = (clave, contenido) => sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave, contenido: String(contenido).slice(0, 60000) }) }).catch(() => {});
-  const links = await page.evaluate(() => [...new Set([...document.querySelectorAll('a[href], [onclick], [data-url], [data-href]')].map((a) => a.getAttribute('href') || a.getAttribute('data-url') || a.getAttribute('data-href') || a.getAttribute('onclick')).filter(Boolean))]);
-  await guardar('menu', links.join('\n'));
-  const scripts = await page.evaluate(() => [...document.scripts].map((s) => s.src).filter(Boolean));
-  await guardar('scripts_home', scripts.join('\n'));
-  const candidatos = links.filter((l) => /asign|envio|hdr|ruta|chofer/i.test(l)).slice(0, 25);
-  for (const l of candidatos) {
-    try {
-      const url = l.startsWith('http') ? l : new URL(l.replace(/^javascript:.*?['"]([^'"]+)['"].*$/, '$1'), page.url()).href;
-      const r = await page.evaluate(async (u) => { const x = await fetch(u, { credentials: 'include', signal: AbortSignal.timeout(30000) }); return { s: x.status, t: await x.text() }; }, url);
-      const srcs = [...r.t.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map((m) => m[1]);
-      const lineas = r.t.split('\n').filter((x) => /asign|operador|controlador|\.php/i.test(x)).slice(0, 200);
-      await guardar('pagina ' + url, `status ${r.s}\nSCRIPTS:\n${srcs.join('\n')}\nLINEAS:\n${lineas.join('\n')}`);
-      for (const src of srcs.filter((x) => !/jquery|bootstrap|cdn|min\.js|select2|datatable|moment|chart/i.test(x)).slice(0, 8)) {
-        const su = new URL(src, url).href;
-        const js = await page.evaluate(async (u) => { const x = await fetch(u, { credentials: 'include', signal: AbortSignal.timeout(30000) }); return x.text(); }, su);
-        const trozos = [];
-        js.split('\n').forEach((ln, i, arr) => { if (/asign/i.test(ln) && /php|ajax|url|operador/i.test(arr.slice(Math.max(0, i - 6), i + 7).join(' '))) trozos.push(arr.slice(Math.max(0, i - 6), i + 7).join('\n')); });
-        if (trozos.length) await guardar('js ' + su, trozos.slice(0, 30).join('\n-----\n'));
-      }
-    } catch (e) { await guardar('error ' + l, e.message); }
-  }
+  const guardar = (clave, contenido) => sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave, contenido: String(contenido).slice(0, 90000) }) }).catch(() => {});
+  // Código de los objetos de LightData que asignan choferes (appAsignaciones*, appAsignacion_*, etc.)
+  const objs = await page.evaluate(() => {
+    const out = {};
+    for (const k of Object.getOwnPropertyNames(window)) {
+      if (!/asign/i.test(k)) continue;
+      let v; try { v = window[k]; } catch { continue; }
+      if (!v || (typeof v !== 'object' && typeof v !== 'function')) continue;
+      let txt = '';
+      if (typeof v === 'function') txt = v.toString();
+      else for (const m of Object.keys(v)) { try { const f = v[m]; txt += `\n// ${m}\n` + (typeof f === 'function' ? f.toString() : JSON.stringify(f).slice(0, 300)); } catch { /* */ } }
+      out[k] = txt;
+    }
+    return out;
+  });
+  for (const [k, txt] of Object.entries(objs)) await guardar('obj ' + k, txt);
+  if (!Object.keys(objs).length) await guardar('obj', 'ninguno');
 }
 
 async function main() {
