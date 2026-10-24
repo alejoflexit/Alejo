@@ -292,6 +292,33 @@ async function importarSanti() {
   return ingresos.length + marcas.length;
 }
 
+// ---------- EXPLORAR (temporal): encontrar en LightData cómo se asigna un chofer a un envío ----------
+// Solo lee páginas/JS de LightData y guarda lo que menciona "asign" en ld_exploracion (los logs de Actions no se pueden leer desde Claude).
+async function explorar(page) {
+  const guardar = (clave, contenido) => sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave, contenido: String(contenido).slice(0, 60000) }) }).catch(() => {});
+  const links = await page.evaluate(() => [...new Set([...document.querySelectorAll('a[href], [onclick], [data-url], [data-href]')].map((a) => a.getAttribute('href') || a.getAttribute('data-url') || a.getAttribute('data-href') || a.getAttribute('onclick')).filter(Boolean))]);
+  await guardar('menu', links.join('\n'));
+  const scripts = await page.evaluate(() => [...document.scripts].map((s) => s.src).filter(Boolean));
+  await guardar('scripts_home', scripts.join('\n'));
+  const candidatos = links.filter((l) => /asign|envio|hdr|ruta|chofer/i.test(l)).slice(0, 25);
+  for (const l of candidatos) {
+    try {
+      const url = l.startsWith('http') ? l : new URL(l.replace(/^javascript:.*?['"]([^'"]+)['"].*$/, '$1'), page.url()).href;
+      const r = await page.evaluate(async (u) => { const x = await fetch(u, { credentials: 'include', signal: AbortSignal.timeout(30000) }); return { s: x.status, t: await x.text() }; }, url);
+      const srcs = [...r.t.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map((m) => m[1]);
+      const lineas = r.t.split('\n').filter((x) => /asign|operador|controlador|\.php/i.test(x)).slice(0, 200);
+      await guardar('pagina ' + url, `status ${r.s}\nSCRIPTS:\n${srcs.join('\n')}\nLINEAS:\n${lineas.join('\n')}`);
+      for (const src of srcs.filter((x) => !/jquery|bootstrap|cdn|min\.js|select2|datatable|moment|chart/i.test(x)).slice(0, 8)) {
+        const su = new URL(src, url).href;
+        const js = await page.evaluate(async (u) => { const x = await fetch(u, { credentials: 'include', signal: AbortSignal.timeout(30000) }); return x.text(); }, su);
+        const trozos = [];
+        js.split('\n').forEach((ln, i, arr) => { if (/asign/i.test(ln) && /php|ajax|url|operador/i.test(arr.slice(Math.max(0, i - 6), i + 7).join(' '))) trozos.push(arr.slice(Math.max(0, i - 6), i + 7).join('\n')); });
+        if (trozos.length) await guardar('js ' + su, trozos.slice(0, 30).join('\n-----\n'));
+      }
+    } catch (e) { await guardar('error ' + l, e.message); }
+  }
+}
+
 async function main() {
   // Si algo se cuelga igual, cortar a los 15 min dejando el error registrado (la app lo muestra) en vez de
   // que GitHub mate la corrida a los 20 sin avisar y las siguientes queden en cola.
@@ -306,6 +333,7 @@ async function main() {
   let detalle = '';
   try {
     try { const n = await importarSanti(); if (n) detalle += `importados de Santi ${n}; `; } catch (e) { console.error(e.message); detalle += `importación Santi falló: ${String(e.message).slice(0, 120)}; `; }
+    if (ACCION === 'explorar') { await explorar(page); console.log('explorado'); return; }
     if (ACCION !== 'sync') { const n = await procesarRemitos(page); detalle += `remitos ${n}; `; }
     if (ACCION !== 'procesar') { const s = await sync(page); detalle += `devoluciones ${s.total}, fichas ${s.fichas}`; }
     await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultima_at: new Date().toISOString(), ok: true, detalle }) });
