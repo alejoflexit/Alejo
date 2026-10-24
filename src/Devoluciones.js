@@ -543,7 +543,7 @@ function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadet
             {c.direccion ? <>{c.direccion}{c.localidad ? <span style={{ color: C.ink3 }}>, {c.localidad}</span> : null}</> : <span style={{ color: C.ink3 }}>Sin dirección</span>}
           </div>
           <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {c.ml_venta_id ? `Venta ${c.ml_venta_id}` : `Tracking ${c.tracking || "—"}`} · #{c.did}<span className="dv-show-m"> · {ch ? `${ch.trajo ? "lo trajo " : ""}${ch.nombre}` : c.etapa === "retiro" ? "sin asignar" : "—"}</span>
+            {c.ml_venta_id ? `Venta ${c.ml_venta_id}` : `Tracking ${c.tracking || "—"}`} · #{c.did}<span className="dv-show-m"> · <b style={{ color: C.ink2, fontWeight: 600 }}>{ch ? `${ch.trajo ? "lo trajo " : ""}${ch.nombre}` : c.etapa === "retiro" ? "sin asignar" : "sin chofer"}</b></span>
           </div>
           {c.marca && ultNota && <div style={{ fontSize: 12, color: C.ink2, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {ultNota.texto} <span style={{ color: C.ink3 }}>· {ultNota.por} · {fechaCorta(ultNota.at)}</span>{notas.length > 1 ? <span style={{ color: C.ink3 }}> · {notas.length} notas</span> : null}</div>}
         </div>
@@ -562,6 +562,7 @@ function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadet
       {abierto && (
         <div className="dv-det">
           <div className="dv-grid">
+            <Dato k={ch && ch.trajo ? "Lo trajo" : "Chofer"} v={ch ? <b>{ch.nombre}{!ch.trajo && c.cadete_asignado_at ? <span style={{ fontWeight: 400, color: C.ink3 }}> · asignado {fechaCorta(c.cadete_asignado_at)}</span> : null}</b> : (c.etapa === "retiro" ? "Sin asignar en LightData" : "—")} />
             <Dato k="Cargado en LightData" v={fecha(c.fecha_alta)} />
             {c.tipo === "CANCELADO" ? <Dato k="Cancelado" v={fecha(c.fecha_cancelado)} /> : <Dato k="Retirado al comprador" v={fecha(c.fecha_retiro)} />}
             <Dato k="Ingresó a depósito" v={c.ingreso_deposito_at ? `${fecha(c.ingreso_deposito_at)} · ${c.ingreso_por}` : fecha(c.fecha_deposito)} />
