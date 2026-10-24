@@ -64,10 +64,11 @@ const AYUDA = {
   retiro: "Cambios que el cadete todavía no retiró al comprador. No suman en “En la calle” hasta que se retiran.",
   devuelto: "Ya figuran “Devuelto al cliente” en LightData (por remito firmado o cargado a mano). Caso cerrado.",
   marcados: "Tienen etiqueta: reclamado al cadete, extraviado o descartado. Extraviados y descartados no suman en los totales.",
+  gestionar: "Paquetes que llegaron y no se sabe de quién son (ej. un retiro que el cadete no pudo ubicar). Se cargan con foto, quién lo trajo y una nota, y quedan acá hasta vincularlos a un envío o cerrarlos.",
   extraviados: "Envíos marcados como extraviados. No suman en los totales. Abrí cada uno para ver y agregar notas del seguimiento (reclamo a ML, al cadete, al seller…).",
 };
 const COL_FECHA = { calle: "Cancelados: cuándo se cancelaron. Cambios: cuándo se retiró el producto al comprador.", deposito: "Cuándo ingresó al depósito.", retiro: "Cuándo se cargó el cambio en LightData.", devuelto: "Cuándo se devolvió al cliente.", marcados: "La fecha de la etapa en la que está cada envío.", extraviados: "La fecha de la etapa en la que estaba cuando se perdió." };
-const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados", extraviados: "Extraviados" };
+const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados", extraviados: "Extraviados", gestionar: "A gestionar" };
 const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
 
 export default function Devoluciones({ abrirEnvio = null }) {
@@ -91,6 +92,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [escIngreso, setEscIngreso] = useState(false);
   const [verListos, setVerListos] = useState(false);
   const [verUbic, setVerUbic] = useState(false);
+  const [cargarG, setCargarG] = useState(null); // { inicial } = abierto el alta de "A gestionar"
   const esCelu = useEsCelu();
   const [pedidoEscaner, setPedidoEscaner] = useState(0); // celu: abrir el escáner de remitos desde arriba
   const [verReclamos, setVerReclamos] = useState(false);
@@ -101,7 +103,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
     enCurso.current = true;
     try {
       const hace21 = new Date(Date.now() - 21 * 864e5).toISOString();
-      const [dev, gest, rem, sync, diario, eventos, fallidos, ubic] = await Promise.all([
+      const hace60 = new Date(Date.now() - 60 * 864e5).toISOString();
+      const [dev, gest, rem, sync, diario, eventos, fallidos, ubic, gestionar] = await Promise.all([
         traerTodo("devoluciones?select=*&order=did"),
         traerTodo("devoluciones_gestion?select=*"),
         sbFetch("remitos_devolucion?select=*&order=id.desc&limit=300"),
@@ -110,8 +113,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
         sbFetch(`devoluciones_eventos?select=*&at=gte.${hace21}&order=at.desc&limit=2000`).catch(() => []),
         sbFetch("remitos_fallidos?estado=eq.pendiente&select=*&order=at.desc&limit=100").catch(() => []),
         sbFetch("devoluciones_ubicaciones?select=cliente,codigo").catch(() => []),
+        sbFetch(`paquetes_gestionar?select=*&or=(estado.eq.pendiente,creado_at.gte.${hace60})&order=creado_at.desc&limit=300`).catch(() => []),
       ]);
-      setDatos({ dev, gest, rem, sync: sync[0] || null, diario, eventos, fallidos, ubic: Object.fromEntries((ubic || []).map((u) => [u.cliente, u.codigo])) });
+      setDatos({ dev, gest, rem, sync: sync[0] || null, diario, eventos, fallidos, ubic: Object.fromEntries((ubic || []).map((u) => [u.cliente, u.codigo])), gestionar: gestionar || [] });
       setError(null);
     } catch (e) { setError(String(e.message || e).slice(0, 200)); }
     finally { enCurso.current = false; }
@@ -316,6 +320,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
             <button className="dv-celu-btn" onClick={() => { setTab("remitos"); setPedidoEscaner((n) => n + 1); }}>
               <IcoCamara size={26} /><span><b>Remitos firmados</b><small>Sacarles foto</small></span>
             </button>
+            <button className="dv-celu-btn" onClick={() => setCargarG({ inicial: "" })}>
+              <IcoCamara size={26} /><span><b>Cargar a gestionar</b><small>Paquete que no se sabe de quién es</small></span>
+            </button>
             {pc > 0 && <button className="dv-celu-pc" onClick={() => setTab("remitos")}>{pc} remito{pc > 1 ? "s" : ""} por confirmar →</button>}
           </div>
         );
@@ -327,7 +334,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       {/* Celu: resumen compacto (la vista completa es para la compu) */}
       {esCelu ? (tab === "remitos" ? null :
         <div className="dv-celu-stats">
-          {[["calle", "En la calle", r.calle, r.calleVencidos, `con +${LIMITE_CALLE} días`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `con +${LIMITE_DEPOSITO} días`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos], ["extraviados", "Extraviados", casos.filter((c) => c.marca === "extraviado").length]].map(([id, n, v, venc, lv]) => (
+          {[["calle", "En la calle", r.calle, r.calleVencidos, `con +${LIMITE_CALLE} días`], ["deposito", "En depósito", r.deposito, r.depositoVencidos, `con +${LIMITE_DEPOSITO} días`], ["retiro", "Por retirar", r.retiro], ["devuelto", "Devueltos", r.devueltos], ["extraviados", "Extraviados", casos.filter((c) => c.marca === "extraviado").length], ["gestionar", "A gestionar", (datos.gestionar || []).filter((x) => x.estado === "pendiente").length]].map(([id, n, v, venc, lv]) => (
             <button key={id} className={"dv-celu-stat" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
               <span>{n}</span><b>{num(v)}</b>{venc ? <small>{num(venc)} {lv}</small> : null}
             </button>
@@ -344,7 +351,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
           vencidos={r.depositoVencidos} limite={LIMITE_DEPOSITO} ayudaVenc={AYUDA.depositoVenc}
           onElegir={(v) => irA("deposito", v)} />
         <div className="dv-otros" style={card}>
-          {[["retiro", r.retiro], ["devuelto", r.devueltos], ["extraviados", casos.filter((c) => c.marca === "extraviado").length], ["marcados", r.marcados]].map(([id, n]) => (
+          {[["gestionar", (datos.gestionar || []).filter((x) => x.estado === "pendiente").length], ["retiro", r.retiro], ["devuelto", r.devueltos], ["extraviados", casos.filter((c) => c.marca === "extraviado").length], ["marcados", r.marcados]].map(([id, n]) => (
             <button key={id} className={"dv-otro" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
               <span>{NOMBRE_ETAPA[id]}</span><Info texto={AYUDA[id]} /><span style={{ flex: 1 }} /><b>{num(n)}</b>
             </button>
@@ -352,7 +359,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
         </div>
       </div>)}
 
-      {tab === "seguimiento" ? (
+      {tab === "seguimiento" && etapa === "gestionar" ? (
+        <Gestionar items={datos.gestionar || []} casos={casos} toast={toast} onCambio={cargar} onAgregar={() => setCargarG({ inicial: "" })} onIngreso={(c) => marcarIngreso([c])} />
+      ) : tab === "seguimiento" ? (
         <>
           <div className="dv-barra-filtros">
             <div style={{ minWidth: 0 }}>
@@ -413,8 +422,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
         <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} pedidoEscaner={pedidoEscaner} esCelu={esCelu} />
       )}
 
+      {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
-      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
@@ -894,6 +904,218 @@ function MasAcciones({ rem, onReemplazar, subiendo, onImprimir }) {
   );
 }
 
+// ---------------- A gestionar: paquetes que llegan y no se sabe de quién son ----------------
+// Ej.: un retiro que el cadete no pudo ubicar. Se carga con foto + quién lo trajo + nota, y queda en la
+// bandeja "A gestionar" hasta vincularlo a un envío o cerrarlo con lo que se hizo.
+async function comprimirFoto(file) {
+  const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = URL.createObjectURL(file); });
+  const e = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+  const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth * e); cv.height = Math.round(img.naturalHeight * e);
+  cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+  URL.revokeObjectURL(img.src);
+  return new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.72));
+}
+
+function CargarGestionar({ choferes, inicial = "", onGuardado, onCerrar, toast }) {
+  const [fotos, setFotos] = useState([]); // { blob, url }
+  const [cadete, setCadete] = useState("");
+  const [nota, setNota] = useState(inicial);
+  const [guardando, setGuardando] = useState(false);
+  const input = useRef();
+  useEffect(() => () => fotos.forEach((f) => URL.revokeObjectURL(f.url)), []); // eslint-disable-line react-hooks/exhaustive-deps
+  async function agregar(files) {
+    for (const f of [...(files || [])]) { try { const blob = await comprimirFoto(f); setFotos((x) => [...x, { blob, url: URL.createObjectURL(blob) }]); } catch { /* foto rota: se ignora */ } }
+  }
+  async function guardar() {
+    setGuardando(true);
+    try {
+      const paths = [];
+      for (const f of fotos) {
+        const path = `gestionar/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+        const up = await authedFetch(`${SUPABASE_URL}/storage/v1/object/remitos-firmados/${path}`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: f.blob });
+        if (!up.ok) throw new Error("No se pudo subir una foto");
+        paths.push(path);
+      }
+      await sbFetch("paquetes_gestionar", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ creado_por: yo(), cadete: cadete.trim() || null, nota: nota.trim() || null, fotos: paths }) });
+      registrar("a_gestionar", 1, cadete.trim() || null);
+      toast("Paquete cargado en “A gestionar”");
+      onGuardado();
+    } catch (e) { toast("No se pudo guardar: " + String(e.message || e).slice(0, 80)); }
+    setGuardando(false);
+  }
+  return createPortal(
+    <div className="dv-modal-fondo" style={{ zIndex: 95 }} onClick={onCerrar}>
+      <div className="dv-modal" style={{ width: "min(460px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Cargar paquete a gestionar">
+        <div className="dv-modal-cab">
+          <div style={{ fontWeight: 700, fontSize: 16 }}>Cargar paquete a gestionar</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Para un paquete que llegó y no se sabe de quién es. Queda pendiente hasta que alguien lo resuelva.</div>
+        </div>
+        <div className="dv-modal-cuerpo" style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <input ref={input} type="file" accept="image/*" capture="environment" multiple style={{ display: "none" }} onChange={(e) => { agregar(e.target.files); e.target.value = ""; }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {fotos.map((f, i) => <img key={i} src={f.url} alt={`Foto ${i + 1}`} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8 }} />)}
+            <button className="dv-btn" style={{ width: fotos.length ? 72 : "100%", height: 72, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }} onClick={() => input.current.click()}>
+              <IcoCamara size={20} />{fotos.length ? "" : "Sacar foto del paquete y la etiqueta"}
+            </button>
+          </div>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+            <span>Lo trajo</span>
+            <input className="dv-input" list="dv-choferes-g" placeholder="Elegí o escribí el cadete" value={cadete} onChange={(e) => setCadete(e.target.value)} />
+            <datalist id="dv-choferes-g">{choferes.map((n) => <option key={n} value={n} />)}</datalist>
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+            <span>Qué se sabe</span>
+            <textarea className="dv-input" rows={3} style={{ resize: "vertical", padding: 10 }} placeholder="Ej.: retiro, no lo pudo ubicar. La etiqueta dice “Belgrano”." value={nota} onChange={(e) => setNota(e.target.value)} />
+          </label>
+        </div>
+        <div className="dv-modal-pie" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="dv-btn" onClick={onCerrar}>Cancelar</button>
+          <button className="dv-btn pri" disabled={guardando || (!fotos.length && !nota.trim())} onClick={guardar}>{guardando ? "Guardando…" : "Guardar a gestionar"}</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
+function Gestionar({ items, casos, onCambio, onAgregar, onIngreso, toast }) {
+  const [ver, setVer] = useState("pendiente");
+  const [fotos, setFotos] = useState({});
+  const [visor, setVisor] = useState(null);
+  const [vincular, setVincular] = useState(null); // item
+  const [cerrar, setCerrar] = useState(null);     // item
+  const [texto, setTexto] = useState("");
+  const [notaNueva, setNotaNueva] = useState({});
+  const lista = items.filter((x) => (ver === "pendiente" ? x.estado === "pendiente" : x.estado !== "pendiente"));
+  useEffect(() => {
+    const p = lista.flatMap((x) => x.fotos || []).filter((x) => !fotos[x]);
+    if (p.length) firmarFotos(p).then((m) => setFotos((f) => ({ ...f, ...m }))).catch(() => {});
+  }, [items, ver]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dias = (iso) => Math.floor((Date.now() - Date.parse(iso)) / 864e5);
+  async function patch(it, cambios, msg) {
+    try { await sbFetch(`paquetes_gestionar?id=eq.${it.id}`, { method: "PATCH", body: JSON.stringify(cambios) }); if (msg) toast(msg); onCambio(); }
+    catch (e) { toast("No se pudo guardar: " + String(e.message || e).slice(0, 60)); }
+  }
+  const notaLog = (it, t) => [...(it.notas || []), { texto: t, por: yo(), at: new Date().toISOString() }];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="dv-seg sm">
+          <button className={ver === "pendiente" ? "on" : ""} onClick={() => setVer("pendiente")}>Pendientes · {items.filter((x) => x.estado === "pendiente").length}</button>
+          <button className={ver !== "pendiente" ? "on" : ""} onClick={() => setVer("cerrados")}>Resueltos</button>
+        </div>
+        <span style={{ flex: 1 }} />
+        <button className="dv-btn pri" onClick={onAgregar}>+ Cargar paquete</button>
+      </div>
+      {!lista.length && <div style={{ ...card, padding: 28, textAlign: "center", color: C.ink3 }}>{ver === "pendiente" ? "No hay paquetes pendientes de gestionar." : "Todavía no hay paquetes resueltos."}</div>}
+      {lista.map((it) => {
+        const d = dias(it.creado_at);
+        const caso = it.did ? casos.find((c) => Number(c.did) === Number(it.did)) : null;
+        return (
+          <div key={it.id} style={{ ...card, padding: 14, display: "flex", gap: 14, flexWrap: "wrap", borderColor: it.estado === "pendiente" && d >= 3 ? "rgba(245,192,68,.4)" : undefined }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {(it.fotos || []).map((p, i) => (
+                <button key={p} className="dv-foto-img" style={{ width: 88, height: 88, border: 0, borderRadius: 10, cursor: "zoom-in", padding: 0 }} onClick={() => setVisor({ it, i })} aria-label="Ver foto">
+                  {fotos[p] ? <img src={fotos[p]} alt="Paquete" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <span style={{ fontSize: 11, color: C.ink3 }}>…</span>}
+                </button>
+              ))}
+              {!(it.fotos || []).length && <div style={{ width: 88, height: 88, borderRadius: 10, background: "rgba(255,255,255,.04)", display: "flex", alignItems: "center", justifyContent: "center", color: C.ink3, fontSize: 11 }}>Sin foto</div>}
+            </div>
+            <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>{it.estado === "pendiente" ? "Sin identificar" : it.estado === "vinculado" ? `Vinculado a #${it.did}${caso ? ` · ${caso.cliente}` : ""}` : "Resuelto"}</div>
+              <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 2 }}>Lo trajo {it.cadete || "—"} · {fecha(it.creado_at)} · cargó {it.creado_por || "—"}</div>
+              {it.estado === "pendiente" && <div style={{ fontSize: 12.5, color: d >= 3 ? C.ambar : C.ink3, marginTop: 2 }}>{d === 0 ? "Cargado hoy" : `Hace ${d} día${d > 1 ? "s" : ""} sin resolver`}</div>}
+              <div className="dv-notas" style={{ marginTop: 8 }}>
+                {it.nota && <div className="dv-nota"><span>{it.nota}</span><small>{it.creado_por || "—"} · {fecha(it.creado_at)}</small></div>}
+                {(it.notas || []).map((n, i) => <div key={i} className="dv-nota"><span>{n.texto}</span><small>{n.por || "—"} · {fecha(n.at)}</small></div>)}
+                {it.resolucion && <div className="dv-nota"><span><b>Resolución:</b> {it.resolucion}</span><small>{it.resuelto_por || "—"} · {fecha(it.resuelto_at)}</small></div>}
+                {it.estado === "pendiente" && (
+                  <form style={{ display: "flex", gap: 8 }} onSubmit={(e) => { e.preventDefault(); const t = (notaNueva[it.id] || "").trim(); if (!t) return; patch(it, { notas: notaLog(it, t) }); setNotaNueva((x) => ({ ...x, [it.id]: "" })); }}>
+                    <input className="dv-input" style={{ flex: 1 }} placeholder="Agregar nota: “Le escribí al cadete”…" value={notaNueva[it.id] || ""} onChange={(e) => setNotaNueva((x) => ({ ...x, [it.id]: e.target.value }))} />
+                    <button className="dv-btn" type="submit" disabled={!(notaNueva[it.id] || "").trim()}>Agregar</button>
+                  </form>
+                )}
+              </div>
+              {it.estado === "pendiente" && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  <button className="dv-btn pri" onClick={() => { setVincular(it); setTexto(""); }}>Es este envío…</button>
+                  <button className="dv-btn" onClick={() => { setCerrar(it); setTexto(""); }}>Resuelto</button>
+                </div>
+              )}
+              {it.estado !== "pendiente" && <button className="dv-btn" style={{ marginTop: 10 }} onClick={() => patch(it, { estado: "pendiente", notas: notaLog(it, "Se reabrió") }, "Reabierto")}>Reabrir</button>}
+            </div>
+          </div>
+        );
+      })}
+      {visor && <Visor items={(visor.it.fotos || []).map((p, i) => ({ path: p, titulo: `Paquete a gestionar · foto ${i + 1}`, sub: `Lo trajo ${visor.it.cadete || "—"} · ${fecha(visor.it.creado_at)}` }))} inicio={visor.i} onCerrar={() => setVisor(null)} />}
+      {vincular && <VincularEnvio item={vincular} casos={casos} onCerrar={() => setVincular(null)} onElegir={async (env) => {
+        const caso = casos.find((c) => Number(c.did) === Number(env.did));
+        await patch(vincular, { estado: "vinculado", did: Number(env.did), resuelto_por: yo(), resuelto_at: new Date().toISOString(), notas: notaLog(vincular, `Vinculado a #${env.did}${env.cliente ? ` (${env.cliente})` : ""}`) },
+          caso && (caso.etapa === "calle" || caso.etapa === "retiro") ? `Vinculado. ${caso.cliente}: pasa a depósito.` : "Vinculado al envío");
+        if (caso && (caso.etapa === "calle" || caso.etapa === "retiro")) await onIngreso(caso);
+        setVincular(null);
+      }} />}
+      {cerrar && createPortal(
+        <div className="dv-modal-fondo" onClick={() => setCerrar(null)}>
+          <div className="dv-modal" style={{ width: "min(440px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Marcar resuelto">
+            <div className="dv-modal-cab"><div style={{ fontWeight: 700, fontSize: 16 }}>¿Qué se hizo con el paquete?</div></div>
+            <div className="dv-modal-cuerpo" style={{ padding: "12px 20px" }}>
+              <textarea className="dv-input" rows={3} autoFocus style={{ width: "100%", resize: "vertical", padding: 10 }} placeholder="Ej.: era de Ohpic, se le devolvió con el remito Ohpic-03" value={texto} onChange={(e) => setTexto(e.target.value)} />
+            </div>
+            <div className="dv-modal-pie" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="dv-btn" onClick={() => setCerrar(null)}>Cancelar</button>
+              <button className="dv-btn pri" disabled={!texto.trim()} onClick={async () => { await patch(cerrar, { estado: "resuelto", resolucion: texto.trim(), resuelto_por: yo(), resuelto_at: new Date().toISOString() }, "Marcado como resuelto"); setCerrar(null); }}>Marcar resuelto</button>
+            </div>
+          </div>
+        </div>, document.body)}
+    </div>
+  );
+}
+
+// Buscar el envío al que corresponde un paquete: primero en devoluciones, después en todos los envíos
+function VincularEnvio({ item, casos, onElegir, onCerrar }) {
+  const [q, setQ] = useState("");
+  const [otros, setOtros] = useState([]);
+  const [buscando, setBuscando] = useState(false);
+  const enDev = q.trim().length >= 3 ? casos.filter((c) => coincideBusqueda(c, q)).slice(0, 12) : [];
+  useEffect(() => {
+    const t = q.trim();
+    if (t.length < 4) { setOtros([]); return; }
+    const h = setTimeout(async () => {
+      setBuscando(true);
+      try {
+        const e = encodeURIComponent(t.replace(/[,()*]/g, " ").trim());
+        const rows = await sbFetch(`envios_busqueda?or=(id_venta_ml.eq.${e},tracking.eq.${e},id_interno.eq.${e},direccion.ilike.*${e}*,nombre.ilike.*${e}*)&select=id_interno,razon_social,direccion,localidad,nombre,estado,cadete,id_venta_ml&limit=12`);
+        setOtros((rows || []).filter((r) => !casos.some((c) => String(c.did) === String(r.id_interno))));
+      } catch { setOtros([]); }
+      setBuscando(false);
+    }, 400);
+    return () => clearTimeout(h);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const Fila = ({ did, titulo, sub, extra }) => (
+    <button className="dv-listo" style={{ width: "100%", background: "none", border: 0, color: "inherit", font: "inherit", textAlign: "left" }} onClick={() => onElegir({ did, cliente: titulo })}>
+      <span style={{ minWidth: 0, flex: 1 }}><b>{titulo}</b><span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{sub}</span></span>
+      <span style={{ fontSize: 12, color: C.ink3 }}>{extra}</span>
+    </button>
+  );
+  return createPortal(
+    <div className="dv-modal-fondo" onClick={onCerrar}>
+      <div className="dv-modal" style={{ width: "min(560px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Vincular a un envío">
+        <div className="dv-modal-cab">
+          <div style={{ fontWeight: 700, fontSize: 16 }}>¿De qué envío es?</div>
+          {item.nota && <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 4 }}>Nota: {item.nota}</div>}
+          <input className="dv-input" autoFocus style={{ width: "100%", marginTop: 10 }} placeholder="Venta, tracking, #envío, dirección o destinatario" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
+          {enDev.length > 0 && <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em", padding: "8px 8px 2px" }}>En devoluciones</div>}
+          {enDev.map((c) => <Fila key={c.did} did={c.did} titulo={c.cliente} sub={[c.direccion, c.localidad, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ")} extra={`${c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"} · ${NOMBRE_ETAPA[c.etapa] || c.etapa}`} />)}
+          {otros.length > 0 && <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em", padding: "8px 8px 2px" }}>Otros envíos</div>}
+          {otros.map((r) => <Fila key={r.id_interno} did={r.id_interno} titulo={r.razon_social || "—"} sub={[r.direccion, r.localidad, r.nombre].filter(Boolean).join(" · ")} extra={r.estado || ""} />)}
+          {q.trim().length >= 3 && !enDev.length && !otros.length && <div style={{ padding: 20, textAlign: "center", color: C.ink3, fontSize: 13 }}>{buscando ? "Buscando…" : "No encontré nada con eso."}</div>}
+        </div>
+        <div className="dv-modal-pie" style={{ display: "flex", justifyContent: "flex-end" }}><button className="dv-btn" onClick={onCerrar}>Cancelar</button></div>
+      </div>
+    </div>, document.body);
+}
+
 // ---------------- Ubicaciones del cuartito: qué lugar tiene cada seller ----------------
 function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
   const [busca, setBusca] = useState("");
@@ -943,7 +1165,7 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
 // ---------------- Ingreso a depósito escaneando la etiqueta del paquete ----------------
 // Continuo (acá no hace falta foto de prueba): lee el QR/código de barras de la etiqueta de ML o de LightData,
 // busca la devolución y la pasa a depósito al toque. Se puede tipear la venta/tracking si la etiqueta está rota.
-function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar }) {
+function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar, onGestionar }) {
   const video = useRef();
   const casosRef = useRef(casos); casosRef.current = casos;
   const ultimo = useRef({ t: "", at: 0 });
@@ -959,7 +1181,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar }) {
     ultimo.current = { t: texto, at: ahora };
     const c = casoDeEtiqueta(casosRef.current, texto);
     let l;
-    if (!c) l = { tipo: "no", titulo: "No es una devolución abierta", sub: `Leído: ${String(texto).slice(0, 40)}. Si se canceló hace menos de 1 hora, todavía no llegó de LightData.` };
+    if (!c) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: "No es una devolución abierta", sub: `Leído: ${String(texto).slice(0, 40)}. Si se canceló hace menos de 1 hora, todavía no llegó de LightData.` };
     else if (hechos.current.has(c.did) || c.etapa === "deposito") l = { tipo: "ya", titulo: `${c.cliente} · ya estaba en depósito`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
     else if (c.etapa === "devuelto" || c.cerrado) l = { tipo: "ya", titulo: `${c.cliente} · ${c.etapa === "devuelto" ? "ya fue devuelto al seller" : "está cerrado"}`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
     else {
@@ -1030,6 +1252,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar }) {
               <div key={l.id} className="dv-ing-fila">
                 <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "✕" : "·"}</span>
                 <span style={{ minWidth: 0 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b><span style={{ display: "block", fontSize: 11.5, opacity: .7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.sub}</span></span>
+                {l.tipo === "no" && onGestionar && <button className="dv-btn" style={{ flexShrink: 0, background: "rgba(0,0,0,.5)" }} onClick={() => onGestionar(l.leido)}>A gestionar</button>}
               </div>
             ))}
           </div>
@@ -2145,9 +2368,9 @@ const CSS = `
 .dv-ing-fila{display:flex;gap:10px;align-items:center;color:#fff}
 .dv-listo{display:flex;gap:12px;align-items:center;padding:10px 8px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer}
 .dv-listo:first-child{border-top:0}
-.dv-celu{display:flex;flex-direction:column;gap:10px;position:sticky;top:8px;z-index:20}
+.dv-celu{display:flex;flex-direction:column;gap:10px}
 .dv-celu-btn{display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;border-radius:16px;border:1px solid rgba(46,230,182,.4);background:rgba(18,40,44,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#2ee6b6;font:inherit;text-align:left;cursor:pointer}
-.dv-celu-btn:nth-child(2){border-color:rgba(255,255,255,.14);background:rgba(27,28,46,.92);color:#f4f5fa}
+.dv-celu-btn:nth-child(n+2){border-color:rgba(255,255,255,.14);background:rgba(27,28,46,.92);color:#f4f5fa}
 .dv-celu-btn b{display:block;font-size:16px;color:#f4f5fa}.dv-celu-btn small{display:block;font-size:12.5px;color:#a7adc2;margin-top:2px}
 .dv-celu-btn:active{transform:scale(.98)}
 .dv-celu-pc{border:1px solid rgba(245,192,68,.4);background:rgba(245,192,68,.1);color:#F5C044;border-radius:12px;padding:11px 14px;font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
