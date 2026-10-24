@@ -309,7 +309,7 @@ async function empresaLD(page) {
     for (const st of [localStorage, sessionStorage]) for (let i = 0; i < st.length; i++) { const k = st.key(i); if (/empresa/i.test(k)) out.claves['storage:' + k] = String(st.getItem(k)).slice(0, 80); }
     return out;
   });
-  let e = info.global || info.claves.idempresa || info.claves.idEmpresa || info.claves.g_idempresa;
+  let e = info.global || info.claves.empresa || info.claves.idempresa || info.claves.idEmpresa || info.claves.g_idempresa;
   if (!e) { const m = info.html.join('\n').match(/idempresa\s*[=:]\s*["']?(\d+)/i); if (m) e = m[1]; }
   if (!e) await sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave: 'empresa', contenido: JSON.stringify(info).slice(0, 20000) }) }).catch(() => {});
   if (!e) throw new Error('No encontré el id de empresa de LightData');
