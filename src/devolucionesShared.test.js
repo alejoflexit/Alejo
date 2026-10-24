@@ -145,3 +145,12 @@ test("ubicación: lugar propio o caja por letra", () => {
   expect(ubicacionDe("3D Store").codigo).toBe("Caja 0-9");
   expect(ubicacionDe("Zeta").codigo).toBe("Caja V-Z");
 });
+
+test("chofer visible: asignado real, o quien lo trajo si está en 'devuelto deposito'", () => {
+  const { choferDe } = require("./devolucionesShared");
+  const cambioDep = armarCaso({ ...base, tipo: "CAMBIO", estado_ld: 5, en_deposito_ld: true, cadete: "devuelto deposito", cadete_previo: "Ana Gomez" }, {}, AHORA);
+  expect(cambioDep.etapa).toBe("deposito");
+  expect(choferDe(cambioDep)).toEqual({ nombre: "Ana Gomez", trajo: true });
+  expect(choferDe(armarCaso({ ...base, tipo: "CAMBIO", estado_ld: 5, cadete: "Juan Perez", fecha_retiro: "2026-10-18T10:00:00-03:00" }, {}, AHORA))).toEqual({ nombre: "Juan Perez", trajo: false });
+  expect(choferDe(armarCaso({ ...base, tipo: "CAMBIO", estado_ld: 7 }, {}, AHORA))).toBeNull();
+});

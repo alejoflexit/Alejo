@@ -7,7 +7,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
-  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -145,7 +145,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const lista = useMemo(() => {
     const q = busca.trim();
     return casos.filter((c) => {
-      if (fCadete && (c.cadete || "") !== fCadete) return false;
+      if (fCadete && (c.cadete || "") !== fCadete && (choferDe(c) || {}).nombre !== fCadete) return false;
       if (etapa === "extraviados" ? c.marca !== "extraviado" : etapa === "marcados" ? !c.marca : c.etapa !== etapa || (c.cerrado && etapa !== "devuelto")) return false;
       if (tipo !== "todos" && c.tipo !== tipo) return false;
       if (soloSel) return sel.has(c.did);
@@ -525,6 +525,7 @@ function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadet
   const [nueva, setNueva] = useState("");
   const [guardando, setGuardando] = useState(false);
   const notas = c.notas || [];
+  const ch = choferDe(c);
   const ultNota = notas[notas.length - 1];
   return (
     <div className={"dv-fila" + (abierto ? " ab" : "")}>
@@ -542,14 +543,17 @@ function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadet
             {c.direccion ? <>{c.direccion}{c.localidad ? <span style={{ color: C.ink3 }}>, {c.localidad}</span> : null}</> : <span style={{ color: C.ink3 }}>Sin dirección</span>}
           </div>
           <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {c.ml_venta_id ? `Venta ${c.ml_venta_id}` : `Tracking ${c.tracking || "—"}`} · #{c.did}<span className="dv-show-m"> · {c.cadete || "—"}</span>
+            {c.ml_venta_id ? `Venta ${c.ml_venta_id}` : `Tracking ${c.tracking || "—"}`} · #{c.did}<span className="dv-show-m"> · {ch ? `${ch.trajo ? "lo trajo " : ""}${ch.nombre}` : c.etapa === "retiro" ? "sin asignar" : "—"}</span>
           </div>
           {c.marca && ultNota && <div style={{ fontSize: 12, color: C.ink2, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {ultNota.texto} <span style={{ color: C.ink3 }}>· {ultNota.por} · {fechaCorta(ultNota.at)}</span>{notas.length > 1 ? <span style={{ color: C.ink3 }}> · {notas.length} notas</span> : null}</div>}
         </div>
         <span className="dv-hide-m" style={{ minWidth: 0, overflow: "hidden" }}>
-          {c.cadete && !CHOFER_FICTICIO.test(c.cadete)
-            ? <button className="dv-cadete-link" onClick={(e) => { e.stopPropagation(); onCadete(c.cadete); }} title={`Ver solo los de ${c.cadete}`}>{c.cadete}</button>
-            : <span style={{ fontSize: 13, color: C.ink2 }}>{c.cadete || "—"}</span>}
+          {ch ? (
+            <>
+              <button className="dv-cadete-link" onClick={(e) => { e.stopPropagation(); onCadete(ch.nombre); }} title={`Ver solo los de ${ch.nombre}`}>{ch.nombre}</button>
+              {ch.trajo && <span style={{ display: "block", fontSize: 11, color: C.ink3 }}>lo trajo</span>}
+            </>
+          ) : <span style={{ fontSize: 13, color: C.ink3 }}>{c.etapa === "retiro" ? "Sin asignar" : c.cadete || "—"}</span>}
         </span>
         <span className="dv-hide-m" style={{ fontSize: 13, color: C.ink2, fontVariantNumeric: "tabular-nums" }}>{fechaCorta(c.desde)}</span>
         <span className="dv-r" style={{ fontSize: 13, color: C.ink2 }}>{plata(c.valor)}</span>

@@ -167,8 +167,15 @@ export function quienTrajo(c) {
   if (c.etapa !== "deposito" && c.etapa !== "devuelto") return null;
   // marcado a mano en la app: lo trajo el cadete que lo tenía (sigue asignado en LightData)
   const aMano = c.ingreso_deposito_at && !c.en_deposito_ld;
-  const q = c.tipo === "CANCELADO" && !aMano ? c.cadete_previo : (c.ingreso_deposito_at ? c.cadete : null);
+  // si no, el último chofer real antes de "devuelto deposito" (cancelados y cambios)
+  const q = aMano ? c.cadete : (c.cadete_previo || (c.ingreso_deposito_at ? c.cadete : null));
   return q && !CHOFER_FICTICIO.test(q) ? q : null;
+}
+// Qué chofer mostrar en la lista: el asignado si es real; en depósito, el que lo trajo; si no hay, null
+export function choferDe(c) {
+  if (c.cadete && !CHOFER_FICTICIO.test(c.cadete)) return { nombre: c.cadete, trajo: false };
+  const t = quienTrajo(c);
+  return t ? { nombre: t, trajo: true } : null;
 }
 export function trajoPorCadete(casos) {
   const m = new Map();
@@ -248,7 +255,7 @@ const normal = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[�
 export function coincideBusqueda(c, q) {
   const palabras = normal(q).split(/\s+/).filter((p) => p && p !== "al");
   if (!palabras.length) return true;
-  const campos = [c.cliente, c.ml_venta_id, c.tracking, c.cadete, c.did, c.li_texto, c.direccion, c.localidad].map(normal);
+  const campos = [c.cliente, c.ml_venta_id, c.tracking, c.cadete, c.cadete_previo, c.did, c.li_texto, c.direccion, c.localidad].map(normal);
   const alturas = (normal(c.direccion).match(/\d+/g) || []).map(Number);
   return palabras.every((p) => {
     if (campos.some((f) => f.includes(p))) return true;
