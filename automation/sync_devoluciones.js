@@ -297,6 +297,24 @@ async function importarSanti() {
 // "devuelto deposito", igual que si lo hicieran desde Asignaciones (mismo endpoint que el Excel de asignaciones:
 // envios/alta/controlador.php operador=setOperadorExcel). Desde REASIGNAR_DESDE (lo anterior queda como estaba).
 const REASIGNAR_DESDE = process.env.REASIGNAR_DESDE || '2026-10-24T00:00:00-03:00';
+// id de empresa de la sesión de LightData (lo pide setOperadorExcel). Está en una variable global del index
+// o escrito en el HTML; se busca en los dos lados y queda registrado si no aparece.
+async function empresaLD(page) {
+  const info = await page.evaluate(() => {
+    const out = { global: null, claves: {}, html: [] };
+    try { /* eslint-disable-next-line no-undef */ out.global = typeof idempresa !== 'undefined' ? idempresa : null; } catch { /* */ }
+    for (const k of Object.getOwnPropertyNames(window)) if (/empresa/i.test(k)) { try { const v = window[k]; if (['string', 'number'].includes(typeof v)) out.claves[k] = v; } catch { /* */ } }
+    const h = document.documentElement.innerHTML;
+    out.html = (h.match(/.{0,60}empresa.{0,60}/gi) || []).slice(0, 40);
+    for (const st of [localStorage, sessionStorage]) for (let i = 0; i < st.length; i++) { const k = st.key(i); if (/empresa/i.test(k)) out.claves['storage:' + k] = String(st.getItem(k)).slice(0, 80); }
+    return out;
+  });
+  let e = info.global || info.claves.idempresa || info.claves.idEmpresa || info.claves.g_idempresa;
+  if (!e) { const m = info.html.join('\n').match(/idempresa\s*[=:]\s*["']?(\d+)/i); if (m) e = m[1]; }
+  if (!e) await sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave: 'empresa', contenido: JSON.stringify(info).slice(0, 20000) }) }).catch(() => {});
+  if (!e) throw new Error('No encontré el id de empresa de LightData');
+  return e;
+}
 async function reasignarDeposito(page) {
   const pend = await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}&ld_reasignado_at=is.null&ld_reasignado_error=is.null&order=ingreso_deposito_at`);
   if (!pend.length) return 0;
@@ -304,7 +322,7 @@ async function reasignarDeposito(page) {
   const dids = pend.map((p) => Number(p.did)).filter((d) => { const x = devs.get(d); return x && !x.en_deposito_ld && Number(x.estado_ld) !== ESTADO.DEVUELTO_CLIENTE; });
   if (!dids.length) return 0;
   const chofer = Number(await choferDeposito(page));
-  const empresa = await page.evaluate(() => (typeof idempresa !== 'undefined' ? idempresa : null));
+  const empresa = await empresaLD(page);
   const ahora = new Date().toISOString();
   for (let i = 0; i < dids.length; i += 100) {
     const parte = dids.slice(i, i + 100);
