@@ -2003,14 +2003,14 @@ async function imprimirRemitos(remitos, ventana) {
     const meta = `<div class="meta"><div><span>Seller</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Paquetes</span><b>${rem.casos.length}</b></div><div class="ch"><span>Chofer</span>${chofer}</div>${rem.ubicacion ? `<div><span>Ubicación</span><b>${esc(rem.ubicacion)}</b></div>` : ""}</div>`;
     const cab = (tipo, der) => `<header><div><div class="marca">${LOGO_REMITO}</div><div class="tit">${tipo}</div><div class="cod">${esc(rem.codigo)}</div></div>${der}</header>`;
     // Remito chofer: lo firma el chofer al retirar del depósito. Sin QR (no se sube a la app).
-    hojas.push(`<section class="hoja">
+    hojas.push(`<section class="hoja${rem.casos.length > 12 ? " denso" : ""}">
       ${cab("Remito chofer", `<div class="copia">REMITO CHOFER</div>`)}
       ${meta}${tabla}
       <p class="leyenda">Retiré del depósito de Flexit los ${rem.casos.length} paquete(s) detallados para entregar a <b>${esc(rem.cliente)}</b>.</p>
       <footer class="f4"><div>Firma del chofer</div><div>Aclaración</div><div>DNI</div><div>Fecha y hora de retiro</div></footer>
     </section>`);
     // Remito seller: lo firman el chofer (entregó) y quien recibe (puede ser un empleado). Vuelve a Flexit y se fotografía: lleva el QR.
-    hojas.push(`<section class="hoja">
+    hojas.push(`<section class="hoja${rem.casos.length > 12 ? " denso" : ""}">
       ${cab("Remito seller", `<div class="qr"><img src="${qr}" alt=""/><div>REMITO SELLER</div></div>`)}
       ${meta}${tabla}
       <p class="leyenda">Recibí conforme los ${rem.casos.length} paquete(s) detallados.</p>
@@ -2022,7 +2022,10 @@ async function imprimirRemitos(remitos, ventana) {
   }
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Remitos ${remitos.map((r) => r.codigo).join(" ")}</title><style>
     @page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0}
-    .hoja{page-break-after:always;min-height:265mm;display:flex;flex-direction:column}.hoja:last-child{page-break-after:auto}
+    .hoja{page-break-after:always;height:268mm;overflow:hidden;display:flex;flex-direction:column}.hoja:last-child{page-break-after:auto}
+    .denso .qr img{width:30mm;height:30mm}.denso .meta{margin:8px 0}.denso .tit{font-size:18px;margin-top:2px}.denso .cod{font-size:22px}
+    .denso table{font-size:10px}.denso td,.denso th{padding:2.5px 4px}.denso td small{display:inline;margin-left:6px}.denso .leyenda{margin-top:8px}
+    .denso footer{padding-top:18px}.denso footer.f4{padding-top:30px}.denso .blq .l{margin-top:24px}
     header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px}
     .marca .logo{height:13mm;width:auto;display:block;margin:-1mm 0 2mm -1mm}.tit{font-size:22px;font-weight:700;margin-top:6px}.cod{font-size:28px;font-weight:800;margin-top:2px;letter-spacing:.02em}
     .qr{text-align:center;font-size:10px;letter-spacing:.15em;color:#444}.qr img{width:38mm;height:38mm;display:block}
