@@ -340,7 +340,7 @@ async function reasignarDeposito(page) {
     }
     if (ok.length) await sb(`devoluciones_gestion?did=in.(${ok.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_at: ahora }) });
     for (const did of mal) await sb(`devoluciones_gestion?did=eq.${did}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_error: (j && j.mensaje ? String(j.mensaje) : `HTTP ${r.status}`).slice(0, 200) }) });
-    if (ok.length) await sb(`devoluciones?did=in.(${ok.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ en_deposito_ld: true }) });
+    if (ok.length) await sb(`devoluciones?did=in.(${ok.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ en_deposito_ld: true, detalle_at: null }) }); // detalle_at null = releer la ficha (chofer, quién lo trajo)
   }
   return dids.length;
 }
