@@ -187,7 +187,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
     setOcupado(true);
     try {
       await guardarGestion(cs.map((c) => ({ did: c.did, ingreso_deposito_at: deshacer ? null : new Date().toISOString(), ingreso_por: deshacer ? null : yo() })));
-      if (!deshacer) registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) });
+      if (!deshacer) { registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) }); pedirAccion("sync").catch(() => {}); } // LightData: se reasigna a "devuelto deposito"
       toast(deshacer ? "Volvió a “en la calle”" : `${cs.length} envío${cs.length > 1 ? "s" : ""} pasado${cs.length > 1 ? "s" : ""} a depósito`);
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
@@ -414,7 +414,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       )}
 
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
-      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); }} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}

@@ -292,26 +292,39 @@ async function importarSanti() {
   return ingresos.length + marcas.length;
 }
 
-// ---------- EXPLORAR (temporal): encontrar en LightData cómo se asigna un chofer a un envío ----------
-// Solo lee páginas/JS de LightData y guarda lo que menciona "asign" en ld_exploracion (los logs de Actions no se pueden leer desde Claude).
-async function explorar(page) {
-  const guardar = (clave, contenido) => sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave, contenido: String(contenido).slice(0, 90000) }) }).catch(() => {});
-  // Código de los objetos de LightData que asignan choferes (appAsignaciones*, appAsignacion_*, etc.)
-  const objs = await page.evaluate(() => {
-    const out = {};
-    for (const k of Object.getOwnPropertyNames(window)) {
-      if (!/asign/i.test(k)) continue;
-      let v; try { v = window[k]; } catch { continue; }
-      if (!v || (typeof v !== 'object' && typeof v !== 'function')) continue;
-      let txt = '';
-      if (typeof v === 'function') txt = v.toString();
-      else for (const m of Object.keys(v)) { try { const f = v[m]; txt += `\n// ${m}\n` + (typeof f === 'function' ? f.toString() : JSON.stringify(f).slice(0, 300)); } catch { /* */ } }
-      out[k] = txt;
+// ---------- 3) REASIGNAR EN LIGHTDATA lo que entró al depósito desde la app ----------
+// Lo que Tiago escanea (o pasa a mano) a depósito en la app se reasigna en LightData al chofer
+// "devuelto deposito", igual que si lo hicieran desde Asignaciones (mismo endpoint que el Excel de asignaciones:
+// envios/alta/controlador.php operador=setOperadorExcel). Desde REASIGNAR_DESDE (lo anterior queda como estaba).
+const REASIGNAR_DESDE = process.env.REASIGNAR_DESDE || '2026-10-24T00:00:00-03:00';
+async function reasignarDeposito(page) {
+  const pend = await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}&ld_reasignado_at=is.null&ld_reasignado_error=is.null&order=ingreso_deposito_at`);
+  if (!pend.length) return 0;
+  const devs = new Map((await sbTodo(`devoluciones?select=did,estado_ld,en_deposito_ld&did=in.(${pend.map((p) => p.did).join(',')})`)).map((d) => [Number(d.did), d]));
+  const dids = pend.map((p) => Number(p.did)).filter((d) => { const x = devs.get(d); return x && !x.en_deposito_ld && Number(x.estado_ld) !== ESTADO.DEVUELTO_CLIENTE; });
+  if (!dids.length) return 0;
+  const chofer = Number(await choferDeposito(page));
+  const empresa = await page.evaluate(() => (typeof idempresa !== 'undefined' ? idempresa : null));
+  const ahora = new Date().toISOString();
+  for (let i = 0; i < dids.length; i += 100) {
+    const parte = dids.slice(i, i + 100);
+    const r = await postLD(page, 'modules/envios/alta/controlador.php', [['operador', 'setOperadorExcel'], ['empresaID', empresa], ['userId', 5], ['perfil', 1], ['data', JSON.stringify([{ chofer, idpaquetes: parte.join(',') }])]]);
+    let j = null; try { j = JSON.parse(r.texto); } catch { /* */ }
+    const fallidos = new Set([...(j && j.enviosNoAsignados) || [], ...(j && j.enviosNoProcesados) || []].map((x) => Number(typeof x === 'object' ? (x.idPaquete || x.did || x.id) : x)));
+    console.log(`Reasignar ${parte.length} a devuelto deposito → HTTP ${r.status} ${String(r.texto).slice(0, 200)}`);
+    // Verificar con la ficha: la última asignación tiene que ser "devuelto deposito"
+    const fx = await fichas(page, parte);
+    const ok = [], mal = [];
+    for (const did of parte) {
+      const asig = (fx[did] && fx[did].asignaciones) || [];
+      const ult = asig.length ? String(asig[asig.length - 1].operador || '') : '';
+      (CHOFER_DEPOSITO.test(ult) && !fallidos.has(did) ? ok : mal).push(did);
     }
-    return out;
-  });
-  for (const [k, txt] of Object.entries(objs)) await guardar('obj ' + k, txt);
-  if (!Object.keys(objs).length) await guardar('obj', 'ninguno');
+    if (ok.length) await sb(`devoluciones_gestion?did=in.(${ok.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_at: ahora }) });
+    for (const did of mal) await sb(`devoluciones_gestion?did=eq.${did}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_error: (j && j.mensaje ? String(j.mensaje) : `HTTP ${r.status}`).slice(0, 200) }) });
+    if (ok.length) await sb(`devoluciones?did=in.(${ok.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ en_deposito_ld: true }) });
+  }
+  return dids.length;
 }
 
 async function main() {
@@ -328,8 +341,8 @@ async function main() {
   let detalle = '';
   try {
     try { const n = await importarSanti(); if (n) detalle += `importados de Santi ${n}; `; } catch (e) { console.error(e.message); detalle += `importación Santi falló: ${String(e.message).slice(0, 120)}; `; }
-    if (ACCION === 'explorar') { await explorar(page); console.log('explorado'); return; }
     if (ACCION !== 'sync') { const n = await procesarRemitos(page); detalle += `remitos ${n}; `; }
+    if (ACCION !== 'procesar') { try { const n = await reasignarDeposito(page); if (n) detalle += `reasignados a depósito ${n}; `; } catch (e) { console.error(e.message); detalle += `reasignar falló: ${String(e.message).slice(0, 100)}; `; } }
     if (ACCION !== 'procesar') { const s = await sync(page); detalle += `devoluciones ${s.total}, fichas ${s.fichas}`; }
     await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultima_at: new Date().toISOString(), ok: true, detalle }) });
     console.log('Listo:', detalle);
