@@ -121,7 +121,9 @@ const CSS_CIELO = `
 .fx-cielo .e { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff; animation: fx-titila ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .fx-cielo { display: none; } }`;
 
-const azar = (i, k) => ((i * 9301 + k * 49297) % 233280) / 233280; // pseudo-azar estable (no cambia en cada render)
+// Pseudo-azar estable (no cambia en cada render). Hash no lineal: con la fórmula lineal anterior
+// azar(i,1) y azar(i,2) crecían juntos y las estrellas quedaban alineadas en diagonal.
+const azar = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
 
 export function CieloFX({ cond = 'lluvia', rafagas = 0 }) {
   const el = [];
