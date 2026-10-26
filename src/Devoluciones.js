@@ -7,7 +7,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
-  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, CAJAS_LETRA, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -231,6 +231,15 @@ export default function Devoluciones({ abrirEnvio = null }) {
       return true;
     } catch (e) { toast("No se pudo guardar la nota: " + String(e.message || e).slice(0, 60)); return false; }
   }
+  // Lugar de un paquete: el que se le puso a mano (ej. P2 por grande) o el de su seller
+  const lugarDe = (c) => c.ubicacion_manual || ubicacionDe(c.cliente, ubic).codigo;
+  const codigosLugar = useMemo(() => [...new Set([...Object.values(ubic), "P2", "PROBLEMAS"])].sort().concat(CAJAS_LETRA.map((l) => `Caja ${l}`)), [ubic]);
+  async function cambiarLugar(did, codigo) {
+    try {
+      await guardarGestion([{ did, ubicacion: codigo || null }]);
+      setDatos((d) => ({ ...d, gest: d.gest.some((g) => Number(g.did) === Number(did)) ? d.gest.map((g) => (Number(g.did) === Number(did) ? { ...g, ubicacion: codigo || null } : g)) : [...d.gest, { did, ubicacion: codigo || null }] }));
+    } catch (e) { toast("No se pudo cambiar el lugar: " + String(e.message || e).slice(0, 60)); }
+  }
   async function ingresoEscaneado(c) {
     try {
       await guardarGestion([{ did: c.did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
@@ -415,7 +424,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
             )}
             {lista.length === 0 && !enOtras.length && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
             {lista.slice(0, 400).map((c) => (
-              <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} ubicacion={ubicacionDe(c.cliente, ubic).codigo.replace("Caja ", "")} abierto={abierto === c.did} marcado={sel.has(c.did)}
+              <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} ubicacion={lugarDe(c).replace("Caja ", "")} codigosLugar={codigosLugar} onLugar={(cod) => cambiarLugar(c.did, cod)} lugarSeller={ubicacionDe(c.cliente, ubic).codigo} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
                 onSel={(v) => setSel((s) => { const n = new Set(s); v ? n.add(c.did) : n.delete(c.did); return n; })}
                 onCadete={(n) => { setFCadete(n); setBusca(""); }} onIngreso={(deshacer) => marcarIngreso([c], deshacer)} onEtiqueta={(m, nota) => etiquetar([c], m, nota)} onNota={(t) => agregarNota(c, t)} ocupado={ocupado}
@@ -444,7 +453,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
 
       {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
-      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
@@ -549,7 +558,7 @@ function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, 
   );
 }
 
-function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadete, onIngreso, onEtiqueta, onNota, onReclamar, onVerEnvio, ocupado }) {
+function Fila({ c, remito, ubicacion, codigosLugar = [], onLugar, lugarSeller, abierto, marcado, onToggle, onSel, onCadete, onIngreso, onEtiqueta, onNota, onReclamar, onVerEnvio, ocupado }) {
   const [nota, setNota] = useState(c.marca_nota || "");
   useEffect(() => { setNota(c.marca_nota || ""); }, [c.marca_nota]);
   const [nueva, setNueva] = useState("");
@@ -593,6 +602,13 @@ function Fila({ c, remito, ubicacion, abierto, marcado, onToggle, onSel, onCadet
         <div className="dv-det">
           <div className="dv-grid">
             <Dato k={ch && ch.trajo ? "Lo trajo" : "Chofer"} v={ch ? <b>{ch.nombre}{!ch.trajo && c.cadete_asignado_at ? <span style={{ fontWeight: 400, color: C.ink3 }}> · asignado {fechaCorta(c.cadete_asignado_at)}</span> : null}</b> : (c.etapa === "retiro" ? "Sin asignar en LightData" : "—")} />
+            {c.etapa === "deposito" && onLugar && <Dato k="Lugar en el cuartito" v={
+              <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <select className="dv-input" style={{ height: 30, padding: "0 8px" }} value={c.ubicacion_manual || ""} onChange={(e) => onLugar(e.target.value)} onClick={(e) => e.stopPropagation()}>
+                  <option value="">{lugarSeller} (el del seller)</option>
+                  {codigosLugar.filter((x) => x !== lugarSeller).map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </span>} />}
             <Dato k="Cargado en LightData" v={fecha(c.fecha_alta)} />
             {c.tipo === "CANCELADO" ? <Dato k="Cancelado" v={fecha(c.fecha_cancelado)} /> : <Dato k="Retirado al comprador" v={fecha(c.fecha_retiro)} />}
             <Dato k="Ingresó a depósito" v={c.ingreso_deposito_at ? `${fecha(c.ingreso_deposito_at)} · ${c.ingreso_por}` : fecha(c.fecha_deposito)} />
@@ -1185,7 +1201,7 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
 // ---------------- Ingreso a depósito escaneando la etiqueta del paquete ----------------
 // Continuo (acá no hace falta foto de prueba): lee el QR/código de barras de la etiqueta de ML o de LightData,
 // busca la devolución y la pasa a depósito al toque. Se puede tipear la venta/tracking si la etiqueta está rota.
-function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar, onGestionar }) {
+function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar, onGestionar, codigosLugar = [], onLugar }) {
   const video = useRef();
   const casosRef = useRef(casos); casosRef.current = casos;
   const ultimo = useRef({ t: "", at: 0 });
@@ -1207,13 +1223,13 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar, onGestionar })
     else {
       hechos.current.add(c.did);
       const ok = await onIngresar(c);
-      l = ok ? { tipo: "ok", titulo: `${c.cliente} · ${c.tipo === "CAMBIO" ? "cambio" : "cancelado"}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · "), donde: ubicacionDe(c.cliente, ubic).codigo }
+      l = ok ? { tipo: "ok", did: c.did, titulo: `${c.cliente} · ${c.tipo === "CAMBIO" ? "cambio" : "cancelado"}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · "), donde: ubicacionDe(c.cliente, ubic).codigo }
         : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" };
       if (!ok) hechos.current.delete(c.did);
     }
     try { navigator.vibrate && navigator.vibrate(l.tipo === "ok" ? 60 : [40, 60, 40]); } catch {}
     setFlash(l); setTimeout(() => setFlash((f) => (f === l ? null : f)), 2200);
-    setLecturas((x) => [{ ...l, id: ahora }, ...x].slice(0, 60));
+    setLecturas((x) => [{ ...l, id: ahora, dondeSeller: l.donde }, ...x].slice(0, 60));
   }
 
   useEffect(() => {
@@ -1272,6 +1288,13 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar, onGestionar })
               <div key={l.id} className="dv-ing-fila">
                 <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "✕" : "·"}</span>
                 <span style={{ minWidth: 0 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b><span style={{ display: "block", fontSize: 11.5, opacity: .7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.sub}</span></span>
+                {l.tipo === "ok" && l.did && onLugar && (
+                  <select className="dv-input" aria-label="Cambiar el lugar" style={{ flexShrink: 0, height: 32, maxWidth: 110, background: "rgba(0,0,0,.55)", color: "#fff" }} value={l.manual || ""}
+                    onChange={(e) => { const v = e.target.value; onLugar(l.did, v); setLecturas((x) => x.map((y) => (y.id === l.id ? { ...y, manual: v, donde: v || y.dondeSeller || y.donde } : y))); }}>
+                    <option value="">{l.dondeSeller || l.donde}</option>
+                    {codigosLugar.filter((x) => x !== (l.dondeSeller || l.donde)).map((x) => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                )}
                 {l.tipo === "no" && onGestionar && <button className="dv-btn" style={{ flexShrink: 0, background: "rgba(0,0,0,.5)" }} onClick={() => onGestionar(l.leido)}>A gestionar</button>}
               </div>
             ))}
@@ -1301,6 +1324,7 @@ function ListosModal({ grupos, ubic = {}, onArmar, onCerrar }) {
               <input type="checkbox" checked={!!tildes[g.cliente]} onChange={(e) => setTildes((t) => ({ ...t, [g.cliente]: e.target.checked }))} style={{ width: 18, height: 18, accentColor: C.teal }} />
               <span style={{ minWidth: 0, flex: 1 }}>
                 <b>{g.cliente}</b> <span className="dv-tag ub">📍 {ubicacionDe(g.cliente, ubic).codigo}</span>
+                {[...new Set(g.casos.map((c) => c.ubicacion_manual).filter(Boolean))].map((u) => <span key={u} className="dv-tag ub" style={{ marginLeft: 4 }}>+ {g.casos.filter((c) => c.ubicacion_manual === u).length} en {u}</span>)}
                 <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{g.casos.length} paquete{g.casos.length !== 1 ? "s" : ""} · {plata(g.valor)}{g.casos.length > MAX_POR_REMITO ? ` · ${Math.ceil(g.casos.length / MAX_POR_REMITO)} remitos (de a ${MAX_POR_REMITO})` : ""}</span>
               </span>
               <span style={{ textAlign: "right", fontSize: 12.5 }}>

@@ -50,7 +50,7 @@ export function armarCaso(d, g = {}, ahora = Date.now()) {
   const marca = g.marca || null;
   return {
     ...d, tipo, etapa, desde, dias, marca, marca_nota: g.marca_nota || "", marca_por: g.marca_por || "", marca_at: g.marca_at || null,
-    reclamo_at: g.reclamo_at || null, notas: Array.isArray(g.notas) ? g.notas : [],
+    reclamo_at: g.reclamo_at || null, notas: Array.isArray(g.notas) ? g.notas : [], ubicacion_manual: g.ubicacion || null,
     ingreso_deposito_at: g.ingreso_deposito_at || null, ingreso_por: g.ingreso_por || "",
     vencido: limite !== null && dias !== null && dias > limite,
     cerrado: MARCAS_CIERRAN.includes(marca),
