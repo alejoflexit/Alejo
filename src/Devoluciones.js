@@ -166,6 +166,20 @@ export default function Devoluciones({ abrirEnvio = null }) {
     });
   }, [casos, etapa, tipo, soloVencidos, busca, fCadete, fDesde, fHasta, orden, soloSel, sel]);
 
+  // La búsqueda es por etapa: si lo que se busca está en otra, avisarlo (ej. un cambio que pasó de "por retirar" a "en la calle")
+  const enOtras = useMemo(() => {
+    const q = busca.trim();
+    if (q.length < 3) return [];
+    const m = new Map();
+    for (const c of casos) {
+      if (!coincideBusqueda(c, q)) continue;
+      const e = c.marca === "extraviado" ? "extraviados" : c.cerrado && c.etapa !== "devuelto" ? "marcados" : c.etapa;
+      if (e === etapa) continue;
+      m.set(e, (m.get(e) || 0) + 1);
+    }
+    return [...m.entries()];
+  }, [casos, busca, etapa]);
+
   const abrirAlLlegar = useRef(null);
   useEffect(() => { setSel(new Set()); setSoloSel(false); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tab]);
 
@@ -393,7 +407,13 @@ export default function Devoluciones({ abrirEnvio = null }) {
               <Orden col="valor" orden={orden} set={setOrden} className="dv-r">Valor</Orden>
               <Orden col="dias" orden={orden} set={setOrden} className="dv-r">Días</Orden>
             </div>
-            {lista.length === 0 && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
+            {enOtras.length > 0 && (
+              <div className="dv-otras">
+                <span>{lista.length ? "También aparece en:" : "No está en esta vista, pero sí en:"}</span>
+                {enOtras.map(([e, n]) => <button key={e} className="dv-btn" onClick={() => { setTipo("todos"); setFCadete(null); irA(e); }}>{NOMBRE_ETAPA[e] || e} ({n}) →</button>)}
+              </div>
+            )}
+            {lista.length === 0 && !enOtras.length && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
             {lista.slice(0, 400).map((c) => (
               <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} ubicacion={ubicacionDe(c.cliente, ubic).codigo.replace("Caja ", "")} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
@@ -2384,6 +2404,7 @@ const CSS = `
 .dv-notas{margin-top:12px;padding:10px 12px;border:1px solid rgba(255,255,255,.07);border-radius:10px;background:rgba(255,255,255,.02);display:flex;flex-direction:column;gap:6px}
 .dv-nota{display:flex;flex-direction:column;font-size:13px;border-left:2px solid rgba(46,230,182,.35);padding-left:8px}
 .dv-nota small{font-size:11.5px;color:#8a8ca6}
+.dv-otras{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:rgba(46,230,182,.06);border-bottom:1px solid rgba(46,230,182,.2);font-size:13px;color:#c9cbe0}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
 .dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
