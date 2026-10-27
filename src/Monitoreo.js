@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { armarCadetes, resumen, enMano, quedaronPlanta, gestionados, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE,
+import { armarCadetes, resumen, enMano, quedaronPlanta, gestionados, enAlerta, minSinEntregar, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE,
   indexarHistorial, antiguedadDe, textoAntiguedad, nuevosRecientes, normNombre, RECIENTES_DIAS, NUEVO_JORNADAS } from "./monitoreoShared";
 import { slaMeli } from "./slaShared";
 import CierreTurno from "./CierreTurno";
@@ -93,6 +93,7 @@ export default function Monitoreo() {
   const nuevosHoy = useMemo(() => cadetes.filter((c) => c.antig), [cadetes]);
   const res = useMemo(() => resumen(cadetes, datos), [cadetes, datos]);
   const salud = useMemo(() => saludDatos(datos, ahoraReal), [datos, ahoraReal]);
+  const datosCaidos = !!error || salud.nivel === "crit";
   const conReglas = cadetes.some((c) => c.flexRiesgo !== undefined);
 
   const cuenta = useMemo(() => ({
@@ -132,6 +133,7 @@ export default function Monitoreo() {
   return (
     <div style={{ color: C.ink }}>
       <SaludBanner salud={salud} error={error} datos={datos} ahoraReal={ahoraReal} ahoraDato={ahoraDato} />
+      <BandaAlerta pausada={datosCaidos} cadetes={cadetes} ahora={ahoraDato} onIr={(n) => { setBusca(""); setFiltro("atencion"); setAbierto(n); setTimeout(() => { const el = document.getElementById("cad-" + n); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); }} />
       <CierreTurno cadetes={cadetes.map((c) => c.nombre)} />
       {nuevosHoy.length > 0 && filtro !== "nuevos" && <AvisoNuevos nuevos={nuevosHoy} onVer={() => { setFiltro("nuevos"); setBusca(""); }} />}
 
@@ -179,7 +181,7 @@ export default function Monitoreo() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {visibles.map((c) => (
-              <FilaCadete key={c.nombre} c={c} ahora={ahoraDato} abierto={abierto === c.nombre} onToggle={() => setAbierto(abierto === c.nombre ? null : c.nombre)} />
+              <FilaCadete key={c.nombre} id={"cad-" + c.nombre} sinAlertas={datosCaidos} c={c} ahora={ahoraDato} abierto={abierto === c.nombre} onToggle={() => setAbierto(abierto === c.nombre ? null : c.nombre)} />
             ))}
           </div>
         )}
@@ -275,7 +277,9 @@ function Kpi({ titulo, valor, extra, sub, barra, punto }) {
   );
 }
 
-function FilaCadete({ c, ahora, abierto, onToggle }) {
+function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
+  const alerta = !sinAlertas && enAlerta(c);
+  const sinEnt = minSinEntregar(c, ahora);
   // Avance = entregados + ya gestionados (Nadie, reprogramado, rechazado…): un Nadie no es un pendiente abierto
   const pct = c.t ? (c.e / c.t) * 100 : 0;
   const pctGest = c.t ? (Math.min(c.t, gestionados(c)) / c.t) * 100 : pct;
@@ -304,8 +308,13 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
   const hMin = horas.length ? Math.min(...horas) : null, hMax = horas.length ? Math.max(...horas) : null;
   const finTxt = pr && pr.fin !== null ? (pr.fin >= 23 * 60 ? "después de las 23" : hhmm(pr.fin)) : enMano(c) === 0 ? "listo" : "—";
   return (
-    <div style={{ ...card, borderRadius: 14, padding: "12px 14px" }}>
+    <div id={id} style={{ ...card, borderRadius: 14, padding: "12px 14px", ...(alerta ? { borderColor: "rgba(232,97,95,0.45)", boxShadow: `inset 3px 0 0 ${C.rojo}` } : {}) }}>
       <button onClick={onToggle} aria-expanded={abierto} style={{ all: "unset", display: "block", width: "100%", cursor: "pointer" }}>
+        {alerta && (
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.rojo, marginBottom: 6, letterSpacing: "0.02em" }}>
+            ALERTA · {c.flexRiesgo} Flex en riesgo y {c.e ? `sin entregar hace ${hace(sinEnt).replace("hace ", "")}` : `sin ninguna entrega desde que salió (${hhmm(c.salida)})`}
+          </div>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 14.5 }}>{c.nombre}</span>
           {c.antig && <EtiquetaNuevo a={c.antig} />}
@@ -481,6 +490,35 @@ function Incorporaciones({ hist, hoy, cadetesHoy }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Banda arriba de todo: cadetes frenados con Flex en riesgo (opción C, 26/10). Se va sola cuando no queda ninguno.
+function BandaAlerta({ cadetes, ahora, onIr, pausada }) {
+  const al = cadetes.filter(enAlerta);
+  // Con la data caída todos parecen frenados: no alarmar por cadete hasta que vuelva a entrar data.
+  if (!al.length || pausada) return null;
+  const flex = al.reduce((s, c) => s + (c.flexRiesgo || 0), 0);
+  return (
+    <div role="alert" style={{ ...card, padding: "11px 14px", marginTop: 12, borderColor: "rgba(232,97,95,0.45)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Punto tono="critico" />
+        <span style={{ fontWeight: 600, fontSize: 14 }}>
+          {al.length === 1 ? "1 cadete frenado" : `${al.length} cadetes frenados`} con Flex en riesgo · {flex} Flex
+        </span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+        {al.map((c) => {
+          const m = minSinEntregar(c, ahora);
+          return (
+            <button key={c.nombre} onClick={() => onIr(c.nombre)}
+              style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 10px", fontSize: 12.5, color: C.ink2, cursor: "pointer" }}>
+              <b style={{ color: C.ink }}>{c.nombre}</b> · {c.flexRiesgo} Flex · {c.e ? hace(m) : "sin entregas"}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

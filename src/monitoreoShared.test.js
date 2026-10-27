@@ -122,3 +122,15 @@ test("nuevos recientes: últimos 30 días, el más nuevo primero", () => {
   ], "2026-10-19");
   expect(r.map((x) => x.cadete)).toEqual(["A", "B"]);
 });
+
+import { enAlerta, estadoCadete as est2 } from "./monitoreoShared";
+test("alerta: frenado o sin entregas con Flex en riesgo; no con solo particulares", () => {
+  const H2 = (h, m = 0) => h * 60 + m;
+  const base = { t: 41, e: 34, pend: 7, camino: 4, planta: 0, otros: 0, cancel: 0, salida: H2(14, 54), primeraEnt: H2(15, 20), ultimaEnt: H2(20, 4), entH: {}, flexRiesgo: 4, flexRiesgoPlanta: 0, partSinVisita: 2, partSinVisitaPlanta: 0, repro21: 0, nadie: 0, repro: 1, otroRes: {} };
+  const c = { ...base, estado: est2(base, H2(21, 23)) };
+  expect(enAlerta(c)).toBe(true);
+  const p = { ...base, flexRiesgo: 0 };
+  expect(enAlerta({ ...p, estado: est2(p, H2(21, 23)) })).toBe(false);
+  const s = { ...base, e: 0, primeraEnt: null, ultimaEnt: null, salida: H2(15) };
+  expect(enAlerta({ ...s, estado: est2(s, H2(16, 30)) })).toBe(true);
+});
