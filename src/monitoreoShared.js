@@ -37,6 +37,9 @@ export const enMano = (c) => (tieneReglas(c)
 export const quedaronPlanta = (c) => (tieneReglas(c) ? n0(c.flexRiesgoPlanta) + n0(c.partSinVisitaPlanta) : 0);
 export const otrosResultados = (c) => Object.values(c.otroRes || {}).reduce((s, n) => s + n, 0);
 export const intentos = (c) => n0(c.nadie) + n0(c.repro) + otrosResultados(c);
+// Avance del día: lo entregado + lo que ya tuvo su intento (Nadie, reprogramado, rechazado…).
+// Un Nadie o un reprogramado ya está gestionado: suma al progreso, no es un pendiente "abierto".
+export const gestionados = (c) => n0(c.e) + intentos(c);
 
 export function proyeccion(c, ahora) {
   if (!c || c.e < 3 || c.primeraEnt === null || c.ultimaEnt === null) return null;
@@ -63,6 +66,11 @@ export function estadoCadete(c, ahora) {
   }
   const ref = c.ultimaEnt ?? c.salida;
   if (ref !== null && ahora - ref >= MIN_FRENADO) {
+    // Frenado es peligro solo si hay Flex en riesgo (van a ser demorados). Si lo que le queda son
+    // particulares, se informa pero no va a "Para mirar" (pedido 26/10).
+    if (tieneReglas(c) && n0(c.flexRiesgo) === 0) {
+      return { clave: "frenado_part", label: "Frenado · solo particulares", tono: "neutro", orden: 5, atencion: false, pr };
+    }
     return { clave: "frenado", label: "Frenado", tono: "warn", orden: 3, atencion: true, pr };
   }
   if (pr && pr.fin !== null && pr.fin > CORTE_21 && ahora < CORTE_21) {

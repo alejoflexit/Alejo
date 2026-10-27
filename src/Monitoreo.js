@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { armarCadetes, resumen, enMano, quedaronPlanta, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE,
+import { armarCadetes, resumen, enMano, quedaronPlanta, gestionados, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE,
   indexarHistorial, antiguedadDe, textoAntiguedad, nuevosRecientes, normNombre, RECIENTES_DIAS, NUEVO_JORNADAS } from "./monitoreoShared";
 import { slaMeli } from "./slaShared";
 import CierreTurno from "./CierreTurno";
@@ -276,7 +276,9 @@ function Kpi({ titulo, valor, extra, sub, barra, punto }) {
 }
 
 function FilaCadete({ c, ahora, abierto, onToggle }) {
+  // Avance = entregados + ya gestionados (Nadie, reprogramado, rechazado…): un Nadie no es un pendiente abierto
   const pct = c.t ? (c.e / c.t) * 100 : 0;
+  const pctGest = c.t ? (Math.min(c.t, gestionados(c)) / c.t) * 100 : pct;
   const pr = c.estado.pr;
   const ref = c.ultimaEnt ?? null;
   const conReglas = c.flexRiesgo !== undefined;
@@ -286,11 +288,12 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
       <div style={{ fontSize: 13, fontWeight: 500, color: C.ink }}>{val}</div>
     </div>
   );
-  // Qué le queda: una línea en texto plano, lo importante primero
+  // Qué le queda: lo que es peligro (Flex en riesgo, Repro 21hs) resaltado; el resto en gris
   const queda = [];
+  const peligro = [];
   if (conReglas) {
-    if (c.flexRiesgo) queda.push(`${c.flexRiesgo} Flex en riesgo`);
-    if (c.repro21) queda.push(`${c.repro21} Repro 21hs`);
+    if (c.flexRiesgo) peligro.push(`${c.flexRiesgo} Flex en riesgo`);
+    if (c.repro21) peligro.push(`${c.repro21} Repro 21hs`);
     if (c.partSinVisita) queda.push(`${c.partSinVisita} particular${c.partSinVisita > 1 ? "es" : ""} sin visita`);
     if (quedaronPlanta(c)) queda.push(`${quedaronPlanta(c)} en planta`);
     if (c.nadie) queda.push(`${c.nadie} Nadie`);
@@ -310,16 +313,24 @@ function FilaCadete({ c, ahora, abierto, onToggle }) {
             <Punto tono={tonoEstado(c.estado)} />{c.estado.label}
           </span>
           <span style={{ marginLeft: "auto", fontSize: 13, color: C.ink2, fontFamily: C.grotesk }}>
-            <span style={{ color: C.ink }}>{c.e}</span>/{c.t}
+            <span style={{ color: C.ink }}>{c.e}</span>{gestionados(c) > c.e ? <span title="con intento: Nadie, reprogramado, rechazado…"> + {gestionados(c) - c.e}</span> : null}/{c.t}
             {c.mlPend !== undefined && <> · <span style={{ color: C.ink }}>{c.mlPend}</span> Flex pend.</>}
           </span>
         </div>
-        <div style={{ height: 4, borderRadius: 2, background: C.soft, overflow: "hidden", marginBottom: 9 }}>
+        <div style={{ height: 4, borderRadius: 2, background: C.soft, overflow: "hidden", marginBottom: 9, display: "flex" }}>
           <div style={{ width: `${pct.toFixed(1)}%`, height: "100%", background: C.teal, opacity: 0.75, transition: "width .5s" }} />
+          <div title="con intento" style={{ width: `${Math.max(0, pctGest - pct).toFixed(1)}%`, height: "100%", background: C.teal, opacity: 0.3, transition: "width .5s" }} />
         </div>
-        {queda.length > 0 && (
+        {(peligro.length > 0 || queda.length > 0) && (
           <div style={{ fontSize: 12.5, color: C.ink2, marginBottom: 9, display: "flex", gap: 10, alignItems: "baseline" }}>
-            <span style={{ flex: 1 }}>{queda.join(" · ")}</span>
+            <span style={{ flex: 1 }}>
+              {peligro.length > 0 && (
+                <span style={{ color: C.ink, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Punto tono="atencion" />{peligro.join(" · ")}
+                </span>
+              )}
+              {peligro.length > 0 && queda.length > 0 ? " · " : ""}{queda.join(" · ")}
+            </span>
             {(c.detalle || []).length > 0 && <span style={{ color: C.ink3, whiteSpace: "nowrap" }}>{abierto ? "ocultar" : "ver envíos"}</span>}
           </div>
         )}

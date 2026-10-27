@@ -35,9 +35,11 @@ test("Félix 08/10: 2 Nadie Flex + 3 particulares que nunca salieron de planta =
   expect(estadoCadete(c, H(22, 7)).clave).toBe("termino");
 });
 
-test("Terradas 08/10: Rechazado no es demora; le queda 1 particular en la calle = frenado", () => {
+test("Terradas 08/10: Rechazado no es demora; le queda 1 particular en la calle = frenado sin alarma", () => {
   const c = cad({ t: 29, e: 25, pend: 4, camino: 1, otros: 3, mlPend: 2, flexRiesgo: 0, flexRiesgoPlanta: 0, repro21: 0, partSinVisita: 1, partSinVisitaPlanta: 0, nadie: 2, repro: 0, otroRes: { "rechazado por el comprador": 1 }, salida: H(15, 11), primeraEnt: H(16, 24), ultimaEnt: H(20, 35) });
-  expect(estadoCadete(c, H(22, 20)).clave).toBe("frenado");
+  expect(estadoCadete(c, H(22, 20))).toMatchObject({ clave: "frenado_part", atencion: false });
+  // con un Flex en riesgo sí es peligro
+  expect(estadoCadete({ ...c, flexRiesgo: 1 }, H(22, 20))).toMatchObject({ clave: "frenado", atencion: true });
   expect(resumen([{ ...c, estado: estadoCadete(c, H(22, 20)) }], {})).toMatchObject({ nadie: 2, otros: 1, flexRiesgo: 0, partSinVisita: 1 });
 });
 
@@ -82,6 +84,12 @@ test("salud: caída si hay gente en la calle y 45' sin movimientos en horario", 
   // de noche o sin nadie en la calle no alarma
   expect(saludDatos({ ...d, ultimoEvento: H(22, 50) }, H(23, 40)).nivel).toBe("ok");
   expect(saludDatos({ ...d, porCadete: { A: cad({ camino: 0, pend: 0 }) } }, H(18, 50)).nivel).toBe("ok");
+});
+
+import { gestionados } from "./monitoreoShared";
+
+test("avance: los Nadie y reprogramados suman al progreso", () => {
+  expect(gestionados(cad({ e: 20, nadie: 2, repro: 1, otroRes: { "rechazado por el comprador": 1 } }))).toBe(24);
 });
 
 import { antiguedadDe, indexarHistorial, nuevosRecientes, normNombre, textoAntiguedad } from "./monitoreoShared";
