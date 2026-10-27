@@ -3,6 +3,7 @@ import { armarCadetes, resumen, enMano, quedaronPlanta, gestionados, enAlerta, m
   indexarHistorial, antiguedadDe, textoAntiguedad, nuevosRecientes, normNombre, RECIENTES_DIAS, NUEVO_JORNADAS } from "./monitoreoShared";
 import { slaMeli } from "./slaShared";
 import CierreTurno from "./CierreTurno";
+import { ABRIR_CADETE_KEY, ActivarAvisos } from "./AlertasReparto";
 import { sbFetch, todayStr } from "./colectasShared";
 
 // Monitoreo — avance del reparto POR CADETE, en vivo, + detector de caída de datos.
@@ -46,6 +47,14 @@ export default function Monitoreo() {
   const [filtro, setFiltro] = useState("atencion");
   const [busca, setBusca] = useState("");
   const [abierto, setAbierto] = useState(null);
+  // Venir desde el pop-up "Ojo, cadete frenado": abrir ese cadete
+  const [irA, setIrA] = useState(null);
+  useEffect(() => {
+    const tomar = () => { try { const n = sessionStorage.getItem(ABRIR_CADETE_KEY); if (n) { sessionStorage.removeItem(ABRIR_CADETE_KEY); setIrA(n); } } catch (e) {} };
+    tomar();
+    window.addEventListener("fx-abrir-cadete", tomar);
+    return () => window.removeEventListener("fx-abrir-cadete", tomar);
+  }, []);
   const [, setTick] = useState(0);
   const [hist, setHist] = useState(null); // historial por cadete (vista cadetes_antiguedad) para detectar nuevos
   const enCurso = useRef(false);
@@ -90,6 +99,11 @@ export default function Monitoreo() {
   const idxHist = useMemo(() => (hist ? indexarHistorial(hist) : null), [hist]);
   const cadetes = useMemo(() => (datos ? armarCadetes(datos.porCadete, ahoraDato) : [])
     .map((c) => ({ ...c, antig: antiguedadDe(idxHist, c.nombre, hoyISO) })), [datos, ahoraDato, idxHist, hoyISO]);
+  useEffect(() => {
+    if (!irA || !cadetes.some((c) => c.nombre === irA)) return;
+    setBusca(""); setFiltro("todos"); setAbierto(irA); setIrA(null);
+    setTimeout(() => { const el = document.getElementById("cad-" + irA); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 80);
+  }, [irA, cadetes]);
   const nuevosHoy = useMemo(() => cadetes.filter((c) => c.antig), [cadetes]);
   const res = useMemo(() => resumen(cadetes, datos), [cadetes, datos]);
   const salud = useMemo(() => saludDatos(datos, ahoraReal), [datos, ahoraReal]);
@@ -167,6 +181,7 @@ export default function Monitoreo() {
           </div>
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cadete…"
             style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "8px 12px", fontSize: 13, width: 170, maxWidth: "50vw" }} />
+          <ActivarAvisos />
           <button onClick={cargar} disabled={cargando}
             style={{ marginLeft: "auto", background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
             {cargando ? "Actualizando…" : "Actualizar"}

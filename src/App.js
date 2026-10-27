@@ -19,6 +19,7 @@ const Analisis = lazy(() => import("./Analisis"));
 const Seguimiento = lazy(() => import("./Seguimiento"));
 const Zonas = lazy(() => import("./Zonas"));
 const Monitoreo = lazy(() => import("./Monitoreo"));
+const AlertasReparto = lazy(() => import("./AlertasReparto"));
 const Pizarra = lazy(() => import("./Pizarra"));
 const Devoluciones = lazy(() => import("./Devoluciones"));
 const Usuarios = lazy(() => import("./Usuarios"));
@@ -1177,6 +1178,8 @@ export default function App() {
 
       )}
 
+      {/* Pop-up "Ojo, cadete frenado" en cualquier sección (y notificación del sistema si la pestaña está de fondo) */}
+      {puedeVer("monitoreo") && <Suspense fallback={null}><AlertasReparto onIrMonitoreo={() => setSeccion("monitoreo")} /></Suspense>}
       {seccion === "home" && <Home onNav={setSeccion} onMenu={() => setSidebarOpen(true)} isMobile={isMobile} logo={FLEXIT_LOGO}
         session={session} comBadge={comNuevos}
         onLogin={async (em, pw) => { const s = await login(em, pw); setSession(s); return s; }}
