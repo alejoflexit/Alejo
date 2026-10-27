@@ -134,3 +134,11 @@ test("alerta: frenado o sin entregas con Flex en riesgo; no con solo particulare
   const s = { ...base, e: 0, primeraEnt: null, ultimaEnt: null, salida: H2(15) };
   expect(enAlerta({ ...s, estado: est2(s, H2(16, 30)) })).toBe(true);
 });
+
+test("alerta: antes de las 18 no alerta aunque esté frenado", () => {
+  const H3 = (h, m = 0) => h * 60 + m;
+  const base = { t: 30, e: 0, pend: 30, camino: 30, salida: H3(13, 16), primeraEnt: null, ultimaEnt: null, entH: {}, flexRiesgo: 21, flexRiesgoPlanta: 0, partSinVisita: 0, partSinVisitaPlanta: 0, repro21: 0, nadie: 0, repro: 0, otroRes: {} };
+  const c = { ...base, estado: est2(base, H3(16, 15)) };
+  expect(enAlerta(c, H3(16, 15))).toBe(false);
+  expect(enAlerta({ ...base, estado: est2(base, H3(18, 5)) }, H3(18, 5))).toBe(true);
+});

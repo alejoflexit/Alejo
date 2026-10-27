@@ -81,7 +81,10 @@ export function estadoCadete(c, ahora) {
 
 // ALERTA (pedido 26/10): frenado o sin entregas hace 60'+ CON Flex en riesgo → van a ser demorados.
 // Misma regla que el vigía del VPS (vps/vigia-datos.js), que avisa por Telegram una vez por cadete.
-export function enAlerta(c) {
+// Recién desde las 18: antes, los que acaban de salir del depósito figuraban "sin entregas" (pedido 27/10).
+export const HORA_ALERTA = 18 * 60;
+export function enAlerta(c, ahora) {
+  if (ahora !== undefined && ahora !== null && ahora < HORA_ALERTA) return false;
   return !!c.estado && ["frenado", "sin_entregas"].includes(c.estado.clave) && c.estado.atencion && n0(c.flexRiesgo) > 0;
 }
 export function minSinEntregar(c, ahora) {

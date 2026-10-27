@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { armarCadetes, enAlerta, saludDatos, minSinEntregar, hace, hhmm } from "./monitoreoShared";
+import { armarCadetes, enAlerta, HORA_ALERTA, saludDatos, minSinEntregar, hace, hhmm } from "./monitoreoShared";
 import { sbFetch } from "./colectasShared";
 import { getSession } from "./auth";
 
@@ -22,7 +22,7 @@ function ahoraAR(iso) {
   const g = (t) => p.find((x) => x.type === t).value;
   return { dia: `${g("year")}-${g("month")}-${g("day")}`, min: (+g("hour") % 24) * 60 + +g("minute"), dow: g("weekday") };
 }
-const claveDia = (dia) => `fx_alertas_reparto_${dia}`;
+const claveDia = (dia) => `fx_alertas_reparto_v2_${dia}`; // v2: desde el 27/10 solo alerta después de las 18
 function leerVistos(dia) { try { return new Set(JSON.parse(localStorage.getItem(claveDia(dia)) || "[]")); } catch (e) { return new Set(); } }
 function guardarVistos(dia, set) { try { localStorage.setItem(claveDia(dia), JSON.stringify([...set])); } catch (e) {} }
 
@@ -35,7 +35,7 @@ export default function AlertasReparto({ onIrMonitoreo }) {
 
   const revisar = useCallback(async () => {
     const a = ahoraAR();
-    if (a.dow === "Sun" || a.min < 10 * 60 || a.min > 23 * 60) return;
+    if (a.dow === "Sun" || a.min < HORA_ALERTA || a.min > 23 * 60) return;
     let d;
     try {
       const r = await fetch(BRIDGE_URL, { headers: { "x-bridge-key": BRIDGE_KEY }, cache: "no-store" });
@@ -45,7 +45,7 @@ export default function AlertasReparto({ onIrMonitoreo }) {
     if (!d || !d.porCadete) return;
     if (saludDatos(d, a.min).nivel === "crit") return; // data caída: no alarmar por cadete
     const ahoraDato = ahoraAR(d.actualizado).min;
-    const al = armarCadetes(d.porCadete, ahoraDato).filter(enAlerta);
+    const al = armarCadetes(d.porCadete, ahoraDato).filter((c) => enAlerta(c, ahoraDato));
     const vistos = leerVistos(a.dia);
     const nuevos = al.filter((c) => !vistos.has(c.nombre));
     if (!nuevos.length) return;

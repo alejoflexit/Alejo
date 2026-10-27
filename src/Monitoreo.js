@@ -293,7 +293,7 @@ function Kpi({ titulo, valor, extra, sub, barra, punto }) {
 }
 
 function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
-  const alerta = !sinAlertas && enAlerta(c);
+  const alerta = !sinAlertas && enAlerta(c, ahora);
   const sinEnt = minSinEntregar(c, ahora);
   // Avance = entregados + ya gestionados (Nadie, reprogramado, rechazado…): un Nadie no es un pendiente abierto
   const pct = c.t ? (c.e / c.t) * 100 : 0;
@@ -511,7 +511,7 @@ function Incorporaciones({ hist, hoy, cadetesHoy }) {
 
 // Banda arriba de todo: cadetes frenados con Flex en riesgo (opción C, 26/10). Se va sola cuando no queda ninguno.
 function BandaAlerta({ cadetes, ahora, onIr, pausada }) {
-  const al = cadetes.filter(enAlerta);
+  const al = cadetes.filter((c) => enAlerta(c, ahora));
   // Con la data caída todos parecen frenados: no alarmar por cadete hasta que vuelva a entrar data.
   if (!al.length || pausada) return null;
   const flex = al.reduce((s, c) => s + (c.flexRiesgo || 0), 0);
