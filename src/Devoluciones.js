@@ -149,6 +149,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const lista = useMemo(() => {
     const q = busca.trim();
     return casos.filter((c) => {
+      if (soloSel) return sel.has(c.did); // "Ver seleccionados" muestra todo lo elegido, de cualquier etapa
       if (fCadete && (c.cadete || "") !== fCadete && (choferDe(c) || {}).nombre !== fCadete) return false;
       if (etapa === "extraviados" ? c.marca !== "extraviado" : etapa === "marcados" ? !c.marca : c.etapa !== etapa || (c.cerrado && etapa !== "devuelto")) return false;
       if (tipo !== "todos" && c.tipo !== tipo) return false;
@@ -181,7 +182,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
   }, [casos, busca, etapa]);
 
   const abrirAlLlegar = useRef(null);
-  useEffect(() => { setSel(new Set()); setSoloSel(false); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tab]);
+  // La selección se mantiene al cambiar de etapa (ej. elegir en depósito y en la calle, y actuar sobre todo junto)
+  useEffect(() => { setSoloSel(false); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tab]);
 
   // Llegada desde Buscar envío: abrir ese envío en su etapa
   useEffect(() => {
@@ -435,7 +437,12 @@ export default function Devoluciones({ abrirEnvio = null }) {
 
           {seleccionados.length > 0 && (
             <div className="dv-barra">
-              <span><b>{seleccionados.length}</b> seleccionado{seleccionados.length > 1 ? "s" : ""}</span>
+              <span><b>{seleccionados.length}</b> seleccionado{seleccionados.length > 1 ? "s" : ""}{(() => {
+                const porEtapa = {};
+                seleccionados.forEach((c) => { porEtapa[c.etapa] = (porEtapa[c.etapa] || 0) + 1; });
+                const partes = Object.entries(porEtapa);
+                return partes.length > 1 ? <span style={{ color: C.ink3, fontWeight: 400 }}> ({partes.map(([e, n]) => `${n} ${(NOMBRE_ETAPA[e] || e).toLowerCase()}`).join(", ")})</span> : null;
+              })()}</span>
               <button className={"dv-btn" + (soloSel ? " on" : "")} onClick={() => setSoloSel(!soloSel)} title="Mostrar solo lo seleccionado">{soloSel ? "Ver todos" : "Ver seleccionados"}</button>
               <div style={{ flex: 1 }} />
               {seleccionados.some((c) => c.etapa === "deposito") && <button className="dv-btn pri" disabled={ocupado} onClick={() => armarRemitos(seleccionados.filter((c) => c.etapa === "deposito"))}>Armar remito</button>}
