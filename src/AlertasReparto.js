@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { armarCadetes, enAlerta, saludDatos, minSinEntregar, hace, hhmm } from "./monitoreoShared";
+import { sbFetch } from "./colectasShared";
+import { getSession } from "./auth";
 
 // Alertas del reparto en TODA la app (pedido 26/10): cuando un cadete queda frenado con Flex en
 // riesgo, salta un pop-up esté donde esté el usuario dentro de la app, y si la pestaña no está a la
@@ -72,6 +74,20 @@ export default function AlertasReparto({ onIrMonitoreo }) {
     return () => clearInterval(t);
   }, [revisar]);
 
+  // Toque en una notificación del sistema (Web Push) con la app abierta → ir al cadete.
+  // Con la app cerrada, la notificación abre /?cadete=X#monitoreo.
+  useEffect(() => {
+    const ir = (cadete) => { if (cadete) { try { sessionStorage.setItem(ABRIR_CADETE_KEY, cadete); } catch (e) {} } onIrMonitoreo && onIrMonitoreo(); window.dispatchEvent(new Event("fx-abrir-cadete")); };
+    try {
+      const q = new URLSearchParams(window.location.search).get("cadete");
+      if (q) { window.history.replaceState(null, "", window.location.pathname + window.location.hash); ir(q); }
+    } catch (e) {}
+    if (!("serviceWorker" in navigator)) return;
+    const onMsg = (ev) => { if (ev.data && ev.data.tipo === "fx-abrir-cadete") ir(ev.data.cadete); };
+    navigator.serviceWorker.addEventListener("message", onMsg);
+    return () => navigator.serviceWorker.removeEventListener("message", onMsg);
+  }, [onIrMonitoreo]);
+
   // Con alertas sin ver y la pestaña de fondo, el título titila para que se note en la barra
   useEffect(() => {
     if (!cola.length) return;
@@ -116,14 +132,60 @@ export default function AlertasReparto({ onIrMonitoreo }) {
   );
 }
 
-// Botón para habilitar las notificaciones del sistema (el navegador exige que lo pida un toque).
+// Avisos del sistema (Web Push): llegan aunque la app esté cerrada — Windows / Mac / Android con el
+// navegador abierto en segundo plano; en iPhone solo si la app está agregada a la pantalla de inicio.
+// El navegador exige que se activen con un toque. La suscripción se guarda en push_suscripciones y el
+// vigía del VPS (vps/vigia-datos.js) manda los avisos: cadete frenado con Flex en riesgo y caída de datos.
+const VAPID_PUBLICA = "BAV2AK-5akqZhCEW1K2794j-5JD-GqKDrpb2z8LALbD4Mg_61bWS80IepsYeZ9eLWnbR6KwVdj7OAUwSpefmMSA";
+const b64aU8 = (b64) => {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+};
+const soportaPush = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && typeof Notification !== "undefined";
+
+async function suscribir() {
+  const reg = await navigator.serviceWorker.register("/sw-avisos.js");
+  await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aU8(VAPID_PUBLICA) });
+  const j = sub.toJSON();
+  const ses = getSession() || {};
+  await sbFetch("push_suscripciones?on_conflict=endpoint", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, usuario: ses.nombre || null, email: ses.email || null, ua: navigator.userAgent.slice(0, 200), fallos: 0 }),
+  });
+}
+
 export function ActivarAvisos() {
-  const [perm, setPerm] = useState(() => (typeof Notification === "undefined" ? "no" : Notification.permission));
-  if (perm !== "default") return null;
+  const [estado, setEstado] = useState("cargando"); // cargando | no | bloqueado | apagado | activo | error
+  useEffect(() => {
+    if (!soportaPush()) { setEstado("no"); return; }
+    if (Notification.permission === "denied") { setEstado("bloqueado"); return; }
+    navigator.serviceWorker.getRegistration("/sw-avisos.js")
+      .then((reg) => (reg ? reg.pushManager.getSubscription() : null))
+      .then((sub) => {
+        if (sub && Notification.permission === "granted") { setEstado("activo"); suscribir().catch(() => {}); } // refresca usuario / endpoint
+        else setEstado("apagado");
+      })
+      .catch(() => setEstado("apagado"));
+  }, []);
+  const activar = async () => {
+    try {
+      const p = await Notification.requestPermission();
+      if (p !== "granted") { setEstado(p === "denied" ? "bloqueado" : "apagado"); return; }
+      await suscribir();
+      setEstado("activo");
+    } catch (e) { setEstado("error"); }
+  };
+  const st = { background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13 };
+  if (estado === "cargando" || estado === "no") return null;
+  if (estado === "activo") return <span style={{ ...st, color: C.teal }} title="Te llegan los avisos aunque la app esté cerrada">Avisos en esta compu: activados</span>;
+  if (estado === "bloqueado") return <span style={st} title="Habilitalos desde el candado de la barra de direcciones → Notificaciones">Avisos bloqueados en el navegador</span>;
   return (
-    <button onClick={() => Notification.requestPermission().then(setPerm).catch(() => {})}
-      style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
-      Activar avisos en la compu
+    <button onClick={activar} style={{ ...st, cursor: "pointer" }}>
+      {estado === "error" ? "No se pudo activar · reintentar" : "Activar avisos en la compu"}
     </button>
   );
 }
