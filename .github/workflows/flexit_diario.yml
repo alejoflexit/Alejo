@@ -54,5 +54,13 @@ jobs:
           BACKFILL_DESDE: ${{ inputs.backfill_desde }}
           BACKFILL_HASTA: ${{ inputs.backfill_hasta }}
           RUN_SOURCE: ${{ github.event_name }}
-        run: cd automation && node descargar_lightdata.js
+        run: |
+          set -o pipefail
+          cd automation && node descargar_lightdata.js 2>&1 | tee /tmp/carga.log
         timeout-minutes: 45
+
+      - name: Mostrar error (si falló)
+        if: failure()
+        run: |
+          MSG=$(tail -n 25 /tmp/carga.log 2>/dev/null | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error title=Carga diaria falló::${MSG}"
