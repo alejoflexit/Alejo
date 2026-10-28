@@ -185,11 +185,13 @@ export default function Devoluciones({ abrirEnvio = null }) {
   // La selección se mantiene al cambiar de etapa (ej. elegir en depósito y en la calle, y actuar sobre todo junto)
   useEffect(() => { setSoloSel(false); setAbierto(abrirAlLlegar.current); abrirAlLlegar.current = null; }, [etapa, tab]);
 
-  // Llegada desde Buscar envío: abrir ese envío en su etapa
+  // Llegada desde Buscar envío: abrir ese envío en su etapa (o, si ya se devolvió, la carpeta con su remito firmado)
+  const [abrirRemito, setAbrirRemito] = useState(null);
   useEffect(() => {
     if (!casos.length) return;
-    let did = null;
-    try { did = sessionStorage.getItem("fx_dev_buscar"); sessionStorage.removeItem("fx_dev_buscar"); } catch {}
+    let did = null, rem = null;
+    try { did = sessionStorage.getItem("fx_dev_buscar"); sessionStorage.removeItem("fx_dev_buscar"); rem = sessionStorage.getItem("fx_dev_remito"); sessionStorage.removeItem("fx_dev_remito"); } catch {}
+    if (rem) { setTab("remitos"); setAbrirRemito(rem); return; }
     const c = did && casos.find((x) => String(x.did) === String(did));
     if (!c) return;
     setTab("seguimiento"); setTipo("todos"); setSoloVencidos(false); setFDesde(""); setFHasta("");
@@ -455,7 +457,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
           )}
         </>
       ) : (
-        <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} pedidoEscaner={pedidoEscaner} esCelu={esCelu} />
+        <Remitos remitos={datos.rem} fallidos={datos.fallidos || []} casosDe={casosDeRemito} recargar={cargar} toast={toast} pedidoEscaner={pedidoEscaner} esCelu={esCelu} abrirRemito={abrirRemito} />
       )}
 
       {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
@@ -1499,7 +1501,7 @@ function RemitoDigital({ rem, casos, resaltar = "" }) {
   );
 }
 
-function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar }) {
+function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar, abrir = null }) {
   const [cliente, setCliente] = useState(null);
   const [mes, setMes] = useState(null);
   const [busca, setBusca] = useState("");
@@ -1543,6 +1545,14 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar 
     }).sort((a, b) => String(fechaRem(b)).localeCompare(String(fechaRem(a)))).slice(0, 60);
   }, [q, cliente, remitos]); // eslint-disable-line react-hooks/exhaustive-deps
   const enVista = mes ? delMes : encontrados;
+  // Llegada desde Buscar envío con un remito devuelto: buscarlo y abrir su foto firmada
+  const pendienteAbrir = useRef(abrir);
+  useEffect(() => { if (abrir) { pendienteAbrir.current = abrir; setCliente(null); setMes(null); setBusca(abrir); } }, [abrir]);
+  useEffect(() => {
+    if (!pendienteAbrir.current) return;
+    const i = encontrados.findIndex((r) => r.codigo === pendienteAbrir.current);
+    if (i >= 0) { const r = encontrados[i]; setVisorVista(r.foto_path ? "foto" : "digital"); setVisor(i); pendienteAbrir.current = null; }
+  }, [encontrados]);
 
   // Miniaturas de las fotos firmadas del mes abierto
   useEffect(() => {
@@ -1928,8 +1938,9 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
     </div>, document.body);
 }
 
-function Remitos({ remitos, fallidos = [], casosDe, recargar, toast, pedidoEscaner = 0, esCelu = false }) {
-  const [filtro, setFiltro] = useState("abiertos");
+function Remitos({ remitos, fallidos = [], casosDe, recargar, toast, pedidoEscaner = 0, esCelu = false, abrirRemito = null }) {
+  const [filtro, setFiltro] = useState(abrirRemito ? "devueltos" : "abiertos");
+  useEffect(() => { if (abrirRemito) setFiltro("devueltos"); }, [abrirRemito]);
   const [subiendo, setSubiendo] = useState(null); // codigo en curso
   // Confirmación CON la foto a la vista cuando el QR no se lee (antes era un confirm a ciegas y se coló una captura de pantalla)
   const [confirmar, setConfirmar] = useState(null); // { url, rem, resolver }
@@ -2181,7 +2192,7 @@ function Remitos({ remitos, fallidos = [], casosDe, recargar, toast, pedidoEscan
         {[["abiertos", "Abiertos"], ["devueltos", "Devueltos · carpetas"]].map(([id, l]) => <button key={id} className={filtro === id ? "on" : ""} onClick={() => setFiltro(id)}>{l}</button>)}
       </div>
 
-      {filtro === "devueltos" ? <Carpetas remitos={remitos} casosDe={casosDe} toast={toast} subiendo={subiendo} onReemplazar={reemplazarFoto} onImprimir={(r) => imprimirRemitos([{ ...r, casos: casosDe(r) }])} /> : <div style={{ ...card, overflow: "hidden" }}>
+      {filtro === "devueltos" ? <Carpetas abrir={abrirRemito} remitos={remitos} casosDe={casosDe} toast={toast} subiendo={subiendo} onReemplazar={reemplazarFoto} onImprimir={(r) => imprimirRemitos([{ ...r, casos: casosDe(r) }])} /> : <div style={{ ...card, overflow: "hidden" }}>
         {lista.length === 0 && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>No hay remitos en esta vista. Se arman desde Seguimiento → En depósito, seleccionando envíos.</div>}
         {lista.map((rem) => (
           <RemitoFila key={rem.id} rem={rem} casos={casosDe(rem)} subiendo={subiendo === rem.codigo}

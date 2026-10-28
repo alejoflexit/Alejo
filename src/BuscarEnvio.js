@@ -56,7 +56,9 @@ function DevolucionInfo({ did, verDevolucion }) {
         <span style={{ fontWeight: 700, color }}>● {ETAPA_TXT[c.etapa]}</span>
         {c.dias != null && c.etapa !== 'devuelto' && <span style={{ fontSize: 13, color: c.vencido ? '#FFB020' : 'rgba(255,255,255,0.6)' }}>hace {c.dias} día{c.dias !== 1 ? 's' : ''}{c.vencido && limite ? ` (más de ${limite})` : ''}</span>}
         <span style={{ flex: 1 }} />
-        {verDevolucion && <button onClick={() => verDevolucion(c.did)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', borderRadius: 8, fontSize: 12.5, padding: '5px 10px', cursor: 'pointer' }}>Ver en Devoluciones →</button>}
+        {verDevolucion && (c.etapa === 'devuelto' && remito && remito.estado === 'devuelto'
+          ? <button onClick={() => verDevolucion(c.did, remito.codigo)} style={{ background: 'none', border: '1px solid rgba(46,207,170,0.5)', color: '#2ECFAA', borderRadius: 8, fontSize: 12.5, padding: '5px 10px', cursor: 'pointer' }}>Ver remito firmado →</button>
+          : <button onClick={() => verDevolucion(c.did)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', borderRadius: 8, fontSize: 12.5, padding: '5px 10px', cursor: 'pointer' }}>Ver en Devoluciones →</button>)}
       </div>
       <div style={{ marginTop: 8 }}>
         {filas.map(([k, v]) => (

@@ -852,7 +852,7 @@ export default function App() {
   const vista = puedeVer(seccion) ? seccion : "sin-acceso";
   // Conexión Buscar envío ↔ Devoluciones
   const abrirEnvio = (id) => { setEnvioQ(String(id)); setSeccion("envio"); };
-  const verDevolucion = (did) => { try { sessionStorage.setItem("fx_dev_buscar", String(did)); } catch {} setSeccion("devoluciones"); };
+  const verDevolucion = (did, remito) => { try { sessionStorage.setItem("fx_dev_buscar", String(did)); if (remito) sessionStorage.setItem("fx_dev_remito", remito); } catch {} setSeccion("devoluciones"); };
   const puedeDividir = !isMobile && (vista === "devoluciones" || vista === "arribos") && puedeVer("devoluciones") && puedeVer("arribos");
   const enDividida = puedeDividir && dividida;
   const fileRef = useRef();
