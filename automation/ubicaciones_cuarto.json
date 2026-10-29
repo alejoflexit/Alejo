@@ -1,0 +1,20 @@
+{
+  "fecha": "2026-10-29",
+  "nota": "Plano de Alejo 29/10: estanterías A, C y E de 4 pisos (A-1 arriba … A-4 abajo). B = voluminosos (piso), D = problemas, M = mesa con cajas por letra.",
+  "sellers": {
+    "Independent Agent SA": "A-1",
+    "La Plata Trade SAS": "A-2",
+    "Nitid": "A-3",
+    "zafra revistimientos": "A-4",
+    "NUEVE.BA": "C-1",
+    "iamiqué": "C-2",
+    "Buho Color": "C-3",
+    "Oregon Hotel": "C-4",
+    "Mo Mascotas": "E-1",
+    "Paperland": "E-2",
+    "Cuantoarte": "E-3",
+    "Ohpic": "E-4",
+    "Celulares y Etc.": "B"
+  },
+  "renombrar_manuales": { "P2": "B", "P1": "B", "PROBLEMAS": "D" }
+}

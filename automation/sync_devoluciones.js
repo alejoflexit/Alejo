@@ -345,7 +345,26 @@ async function reasignarDeposito(page) {
   return dids.length;
 }
 
+// ---------- Carga única del plano del cuartito (ACCION=ubicaciones): reemplaza los lugares por seller ----------
+async function aplicarUbicaciones() {
+  const cfg = require('./ubicaciones_cuarto.json');
+  const actuales = await sbTodo('devoluciones_ubicaciones?select=cliente,codigo');
+  const sobran = actuales.filter((u) => !cfg.sellers[u.cliente]).map((u) => u.cliente);
+  for (const c of sobran) await sb(`devoluciones_ubicaciones?cliente=eq.${encodeURIComponent(c)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+  const filas = Object.entries(cfg.sellers).map(([cliente, codigo]) => ({ cliente, codigo, actualizado_por: `plano ${cfg.fecha}`, actualizado_at: new Date().toISOString() }));
+  await sb('devoluciones_ubicaciones?on_conflict=cliente', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(filas) });
+  // lugares puestos a mano con los códigos viejos
+  const man = await sbTodo('devoluciones_gestion?select=did,ubicacion&ubicacion=not.is.null');
+  for (const g of man) {
+    const nuevo = cfg.renombrar_manuales[g.ubicacion] ?? (/^[A-Z]-\d$/.test(g.ubicacion) || /^Caja /.test(g.ubicacion) ? g.ubicacion : null);
+    if (nuevo !== g.ubicacion) await sb(`devoluciones_gestion?did=eq.${g.did}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ubicacion: nuevo }) });
+  }
+  await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ detalle: `ubicaciones cargadas (${filas.length}), borradas ${sobran.length}, manuales revisados ${man.length}` }) });
+  console.log('Ubicaciones aplicadas', filas.length, sobran.length, man.length);
+}
+
 async function main() {
+  if (ACCION === 'ubicaciones') { await aplicarUbicaciones(); return; }
   // Si algo se cuelga igual, cortar a los 15 min dejando el error registrado (la app lo muestra) en vez de
   // que GitHub mate la corrida a los 20 sin avisar y las siguientes queden en cola.
   const guardia = setTimeout(async () => {
