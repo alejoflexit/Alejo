@@ -3,6 +3,7 @@ import { puedeVer, esAdmin } from "./permisos";
 import { slaMeli } from "./slaShared";
 import { useClima, textoNivel, Lluvia, CieloFX } from "./Clima";
 import { useTransito, TransitoChip, textoAviso, esFuturo } from "./Transito";
+import AvisoFeriados from "./AvisoFeriados";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -717,6 +718,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         </header>
         {buscarBtn}
         {focoEl}
+        <AvisoFeriados isMobile session={session} />
         {lluviaEl}
         {tiles.length > 0 && <section aria-label="Indicadores" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>{tiles}</section>}
         {arribosEl}
@@ -788,6 +790,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           </div>
         </header>
         {focoEl}
+        <AvisoFeriados isMobile={false} session={session} />
         {lluviaEl}
         {tiles.length > 0 && (<>
           {/* Una sola fila con todos los indicadores; en pantallas angostas pasan a 2×2 (nunca 3 + 1 suelto) */}
