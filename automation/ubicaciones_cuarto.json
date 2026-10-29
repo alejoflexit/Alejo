@@ -1,6 +1,6 @@
 {
   "fecha": "2026-10-29",
-  "nota": "Plano de Alejo 29/10: estanterías A, C y E de 4 pisos (A-1 arriba … A-4 abajo). B = voluminosos (piso), D = problemas, M = mesa con cajas por letra.",
+  "nota": "Plano de Alejo 29/10: estanterías A, C y E de 4 pisos (A-1 arriba … A-4 abajo). B y D son un espacio para una caja cada uno: B = Problemas / A gestionar, D = unistore envios. M = voluminosos (supuesto, a confirmar).",
   "sellers": {
     "Independent Agent SA": "A-1",
     "La Plata Trade SAS": "A-2",
@@ -14,7 +14,13 @@
     "Paperland": "E-2",
     "Cuantoarte": "E-3",
     "Ohpic": "E-4",
-    "Celulares y Etc.": "B"
+    "Celulares y Etc.": "M",
+    "unistore envios": "D"
   },
-  "renombrar_manuales": { "P2": "B", "P1": "B", "PROBLEMAS": "D" }
+  "renombrar_manuales": {
+    "P2": "M",
+    "P1": "M",
+    "PROBLEMAS": "B",
+    "B": "M"
+  }
 }

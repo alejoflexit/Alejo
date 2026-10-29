@@ -237,8 +237,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
   }
   // Lugar de un paquete: el que se le puso a mano (ej. P2 por grande) o el de su seller
   const lugarDe = (c) => c.ubicacion_manual || ubicacionDe(c.cliente, ubic).codigo;
-  // Plano del cuartito (29/10): estanterías A, C y E de 4 pisos; B voluminosos; D problemas; cajas por letra en la mesa M
-  const codigosLugar = useMemo(() => [...new Set([...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", ...Object.values(ubic)])].sort().concat(CAJAS_LETRA.map((l) => `Caja ${l}`)), [ubic]);
+  // Plano del cuartito (29/10): estanterías A, C y E de 4 pisos; B y D una caja cada uno (B = problemas); M voluminosos
+  const codigosLugar = useMemo(() => [...new Set([...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M", ...Object.values(ubic)])].sort().concat(CAJAS_LETRA.map((l) => `Caja ${l}`)), [ubic]);
   async function cambiarLugar(did, codigo) {
     try {
       await guardarGestion([{ did, ubicacion: codigo || null }]);
