@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { armarCadetes, resumen, enMano, quedaronPlanta, gestionados, enAlerta, minSinEntregar, saludDatos, hhmm, hace, INICIO_REPARTO, FIN_REPARTO, BALDE,
-  indexarHistorial, antiguedadDe, textoAntiguedad, nuevosRecientes, normNombre, RECIENTES_DIAS, NUEVO_JORNADAS } from "./monitoreoShared";
+  indexarHistorial, antiguedadDe, mensajeReclamo, textoAntiguedad, nuevosRecientes, normNombre, RECIENTES_DIAS, NUEVO_JORNADAS } from "./monitoreoShared";
 import { slaMeli } from "./slaShared";
 import CierreTurno from "./CierreTurno";
 import { ABRIR_CADETE_KEY, ActivarAvisos } from "./AlertasReparto";
@@ -47,6 +47,8 @@ export default function Monitoreo() {
   const [filtro, setFiltro] = useState("atencion");
   const [busca, setBusca] = useState("");
   const [abierto, setAbierto] = useState(null);
+  const [verCierre, setVerCierre] = useState(false);
+  const [cierreN, setCierreN] = useState(0);
   // Venir desde el pop-up "Ojo, cadete frenado": abrir ese cadete
   const [irA, setIrA] = useState(null);
   useEffect(() => {
@@ -146,15 +148,25 @@ export default function Monitoreo() {
 
   return (
     <div style={{ color: C.ink }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
+        <ChipSalud salud={salud} error={error} datos={datos} ahoraReal={ahoraReal} ahoraDato={ahoraDato} />
+        <ActivarAvisos compacto />
+        <button onClick={() => setVerCierre((v) => !v)} aria-expanded={verCierre} style={{ ...chip, cursor: "pointer", color: verCierre ? C.ink : C.ink2 }}>
+          Cierre de turno{cierreN ? <span style={{ color: C.ink, fontWeight: 600 }}> · {cierreN}</span> : null}
+        </button>
+        <button onClick={cargar} disabled={cargando} style={{ ...chip, cursor: "pointer" }} title="Volver a bajar el dato ahora">
+          {cargando ? "Actualizando…" : "Actualizar"}
+        </button>
+      </div>
+      <CierreTurno cadetes={cadetes.map((c) => c.nombre)} abierto={verCierre} onCerrar={() => setVerCierre(false)} onResumen={setCierreN} />
       <SaludBanner salud={salud} error={error} datos={datos} ahoraReal={ahoraReal} ahoraDato={ahoraDato} />
       <BandaAlerta pausada={datosCaidos} cadetes={cadetes} ahora={ahoraDato} onIr={(n) => { setBusca(""); setFiltro("atencion"); setAbierto(n); setTimeout(() => { const el = document.getElementById("cad-" + n); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 50); }} />
-      <CierreTurno cadetes={cadetes.map((c) => c.nombre)} />
       {nuevosHoy.length > 0 && filtro !== "nuevos" && <AvisoNuevos nuevos={nuevosHoy} onVer={() => { setFiltro("nuevos"); setBusca(""); }} />}
 
       {!datos && !error && <div style={{ color: C.ink2, fontSize: 14, padding: "30px 4px" }}>Bajando el reparto de hoy desde LightData… (puede tardar un minuto)</div>}
 
       {datos && (<>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, margin: "12px 0" }}>
+        <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 4, margin: "12px 0", padding: "6px 4px" }}>
           <Kpi titulo="Entregados" valor={`${num(res.e)}`} extra={`/ ${num(res.total)}`} sub={`${pct}% del día`} barra={pct} />
           {conReglas ? (<>
             <Kpi titulo="Flex en riesgo de demora" valor={num(res.flexRiesgo)} punto={res.flexRiesgo ? "atencion" : "ok"}
@@ -181,11 +193,6 @@ export default function Monitoreo() {
           </div>
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cadete…"
             style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "8px 12px", fontSize: 13, width: 170, maxWidth: "50vw" }} />
-          <ActivarAvisos />
-          <button onClick={cargar} disabled={cargando}
-            style={{ marginLeft: "auto", background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>
-            {cargando ? "Actualizando…" : "Actualizar"}
-          </button>
         </div>
 
         {visibles.length === 0 ? (
@@ -217,8 +224,41 @@ function Punto({ tono }) {
   return <span aria-hidden="true" style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, background: PUNTO[tono] || PUNTO.neutro, flexShrink: 0 }} />;
 }
 
+const chip = { display: "inline-flex", alignItems: "center", gap: 6, background: C.soft, border: `1px solid ${C.line}`, borderRadius: 999, color: C.ink2, padding: "5px 12px", fontSize: 12.5, fontFamily: "inherit" };
+
+// Estado del dato en una línea chica arriba a la derecha; el cartel grande aparece solo si hay problema.
+function ChipSalud({ salud, error, datos, ahoraReal, ahoraDato }) {
+  if (!datos && !error) return null;
+  const viejo = datos && ahoraReal - ahoraDato >= 10;
+  const tono = error || salud.nivel === "crit" ? "critico" : salud.nivel === "warn" || viejo ? "atencion" : "ok";
+  const huecos = salud.huecos || [];
+  const txt = tono === "ok" ? `Datos al día${datos && datos.ultimoEvento !== null && datos.ultimoEvento !== undefined ? ` · ${hhmm(datos.ultimoEvento)}` : ""}` : tono === "critico" ? "Problema con el dato" : "Dato demorado";
+  return (
+    <span style={chip} title={huecos.length ? `Tramos sin datos hoy: ${huecos.map((h) => `${hhmm(h.desde)}–${hhmm(h.hasta)}`).join(" · ")}` : salud.detalle || ""}>
+      <Punto tono={tono} />{txt}{huecos.length ? <span style={{ color: C.ink3 }}> · {huecos.length === 1 ? "1 tramo" : `${huecos.length} tramos`} sin datos hoy</span> : null}
+    </span>
+  );
+}
+
+const iniciales = (n) => String(n || "").trim().split(/\s+/).slice(0, 2).map((x) => x[0] || "").join("").toUpperCase();
+
+// Copia el mensaje de reclamo sin mostrarlo: para pegar directo en el WhatsApp del cadete.
+function CopiarReclamo({ texto }) {
+  const [ok, setOk] = useState(false);
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(texto); setOk(true); setTimeout(() => setOk(false), 1800); } catch (e) {}
+  };
+  return (
+    <button onClick={copiar} title="Copia el mensaje con los pendientes (Flex y particulares) para mandarle por WhatsApp"
+      style={{ background: "none", border: "none", padding: "2px 0", fontSize: 11.5, color: ok ? C.teal : C.ink3, cursor: "pointer", fontFamily: "inherit" }}>
+      {ok ? "Reclamo copiado" : "Copiar reclamo"}
+    </button>
+  );
+}
+
 function SaludBanner({ salud, error, datos, ahoraReal, ahoraDato }) {
   if (!datos && !error) return null;
+  if (!error && salud.nivel === "ok" && !(datos && ahoraReal - ahoraDato >= 10)) return null; // todo bien: alcanza con el chip de arriba
   let tono = salud.nivel === "crit" ? "critico" : salud.nivel === "warn" ? "atencion" : "ok";
   let titulo = salud.titulo, detalle = salud.detalle;
   if (error) {
@@ -228,7 +268,7 @@ function SaludBanner({ salud, error, datos, ahoraReal, ahoraDato }) {
     tono = "atencion"; titulo = "El dato no se está actualizando"; detalle = `Último dato bajado a las ${hhmm(ahoraDato)} (${hace(ahoraReal - ahoraDato)}).`;
   }
   return (
-    <div role="status" style={{ ...card, padding: "11px 14px", display: "flex", gap: 10, alignItems: "baseline" }}>
+    <div role="status" style={{ ...card, padding: "11px 14px", display: "flex", gap: 10, alignItems: "baseline", marginTop: 12 }}>
       <Punto tono={tono} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <span style={{ fontWeight: 600, fontSize: 14 }}>{titulo}</span>
@@ -277,7 +317,7 @@ function Actividad({ datos, huecos, ahora }) {
 
 function Kpi({ titulo, valor, extra, sub, barra, punto }) {
   return (
-    <div style={{ ...card, padding: "12px 14px" }}>
+    <div style={{ padding: "8px 12px" }}>
       <div style={{ fontSize: 12, color: C.ink3, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}><Punto tono={punto} />{titulo}</div>
       <div style={{ fontFamily: C.grotesk, fontSize: 24, fontWeight: 600, letterSpacing: "-0.5px" }}>
         {valor}{extra && <span style={{ fontSize: 15, color: C.ink3, fontWeight: 500 }}> {extra}</span>}
@@ -295,6 +335,7 @@ function Kpi({ titulo, valor, extra, sub, barra, punto }) {
 function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
   const alerta = !sinAlertas && enAlerta(c, ahora);
   const sinEnt = minSinEntregar(c, ahora);
+  const reclamo = mensajeReclamo(c, ahora);
   // Avance = entregados + ya gestionados (Nadie, reprogramado, rechazado…): un Nadie no es un pendiente abierto
   const pct = c.t ? (c.e / c.t) * 100 : 0;
   const pctGest = c.t ? (Math.min(c.t, gestionados(c)) / c.t) * 100 : pct;
@@ -331,6 +372,8 @@ function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
           </div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <span aria-hidden="true" style={{ width: 26, height: 26, borderRadius: 13, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0,
+            background: alerta ? "rgba(232,97,95,0.14)" : C.soft, color: alerta ? C.rojo : C.ink2 }}>{iniciales(c.nombre)}</span>
           <span style={{ fontWeight: 600, fontSize: 14.5 }}>{c.nombre}</span>
           {c.antig && <EtiquetaNuevo a={c.antig} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink2 }}>
@@ -365,6 +408,7 @@ function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
           {dato("Fin estimado", finTxt)}
         </div>
       </button>
+      {reclamo && <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4, marginBottom: -4 }}><CopiarReclamo texto={reclamo} /></div>}
       {abierto && (
         <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10 }}>
           <DetalleEnvios detalle={c.detalle || []} nombre={c.nombre} />

@@ -25,11 +25,14 @@ export function proximoDiaOperativo(hoy) {
 // Medianoche AR de un día, en UTC (AR = UTC-3 sin horario de verano)
 const inicioDiaUTC = (dia) => `${dia}T03:00:00Z`;
 
-export default function CierreTurno({ cadetes = [] }) {
+export default function CierreTurno({ cadetes = [], abierto: abiertoCtl, onCerrar, onResumen }) {
+  // Controlado desde Monitoreo (chip "Cierre de turno" arriba a la derecha): se abre solo al tocarlo.
+  const controlado = abiertoCtl !== undefined;
   const hoy = todayStr();
   const destino = proximoDiaOperativo(hoy);
   const usuario = (getSession() || {}).nombre || "";
-  const [abierto, setAbierto] = useState(() => minutosAR() >= INICIO_TURNO);
+  const [abiertoLocal, setAbierto] = useState(() => minutosAR() >= INICIO_TURNO);
+  const abierto = controlado ? abiertoCtl : abiertoLocal;
   const [deHoy, setDeHoy] = useState([]);       // las que se dejaron este turno
   const [deAnoche, setDeAnoche] = useState([]); // las que dejó el turno anterior (para hoy)
   const [texto, setTexto] = useState("");
@@ -69,19 +72,22 @@ export default function CierreTurno({ cadetes = [] }) {
     try { await sbFetch(`notas_operativas?id=eq.${n.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } }); await cargar(); } catch (e) {}
   };
 
+  useEffect(() => { if (onResumen) onResumen(deHoy.length); }, [deHoy.length, onResumen]);
+  if (controlado && !abierto) return null;
+
   const resueltasAnoche = deAnoche.filter((n) => n.resuelta_at).length;
   const inp = { background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "9px 12px", fontSize: 13.5, fontFamily: "inherit" };
 
   return (
     <div style={{ ...card, padding: "12px 14px", margin: "12px 0" }}>
-      <button onClick={() => setAbierto((v) => !v)} aria-expanded={abierto}
+      <button onClick={() => (controlado ? onCerrar && onCerrar() : setAbierto((v) => !v))} aria-expanded={abierto}
         style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "baseline", gap: 10, width: "100%" }}>
         <span style={{ fontWeight: 600, fontSize: 14, color: C.ink }}>Cierre de turno</span>
         <span style={{ fontSize: 12.5, color: C.ink2, flex: 1 }}>
           {deHoy.length ? `${deHoy.length} novedad${deHoy.length > 1 ? "es" : ""} para ${labelDia(destino, hoy)}` : `las novedades pasan a la Pizarra de ${labelDia(destino, hoy)}`}
           {deAnoche.length ? ` · de anoche: ${resueltasAnoche}/${deAnoche.length} resueltas` : ""}
         </span>
-        <span style={{ fontSize: 12, color: C.ink3 }}>{abierto ? "ocultar" : "abrir"}</span>
+        <span style={{ fontSize: 12, color: C.ink3 }}>{abierto ? (controlado ? "cerrar" : "ocultar") : "abrir"}</span>
       </button>
 
       {abierto && (

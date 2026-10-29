@@ -158,7 +158,7 @@ async function suscribir() {
   });
 }
 
-export function ActivarAvisos() {
+export function ActivarAvisos({ compacto = false } = {}) {
   const [estado, setEstado] = useState("cargando"); // cargando | no | bloqueado | apagado | activo | error
   useEffect(() => {
     if (!soportaPush()) { setEstado("no"); return; }
@@ -179,13 +179,16 @@ export function ActivarAvisos() {
       setEstado("activo");
     } catch (e) { setEstado("error"); }
   };
-  const st = { background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13 };
+  const st = compacto
+    ? { display: "inline-flex", alignItems: "center", gap: 6, background: C.soft, border: `1px solid ${C.line}`, borderRadius: 999, color: C.ink2, padding: "5px 12px", fontSize: 12.5, fontFamily: "inherit" }
+    : { background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13 };
   if (estado === "cargando" || estado === "no") return null;
-  if (estado === "activo") return <span style={{ ...st, color: C.teal }} title="Te llegan los avisos aunque la app esté cerrada">Avisos en esta compu: activados</span>;
-  if (estado === "bloqueado") return <span style={st} title="Habilitalos desde el candado de la barra de direcciones → Notificaciones">Avisos bloqueados en el navegador</span>;
+  if (estado === "activo") return <span style={st} title="Avisos en esta compu activados: te llegan aunque la app esté cerrada">
+    {compacto && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 4, background: C.teal }} />}{compacto ? "Avisos" : "Avisos en esta compu: activados"}</span>;
+  if (estado === "bloqueado") return <span style={st} title="Habilitalos desde el candado de la barra de direcciones → Notificaciones">{compacto ? "Avisos bloqueados" : "Avisos bloqueados en el navegador"}</span>;
   return (
     <button onClick={activar} style={{ ...st, cursor: "pointer" }}>
-      {estado === "error" ? "No se pudo activar · reintentar" : "Activar avisos en la compu"}
+      {estado === "error" ? "No se pudo activar · reintentar" : compacto ? "Activar avisos" : "Activar avisos en la compu"}
     </button>
   );
 }

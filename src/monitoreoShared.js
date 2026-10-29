@@ -214,3 +214,32 @@ export function nuevosRecientes(filas, hoy) {
     .filter((f) => f.primer_dia && diasEntre(f.primer_dia, hoy) <= RECIENTES_DIAS)
     .sort((a, b) => (b.primer_dia || "").localeCompare(a.primer_dia || "") || a.cadete.localeCompare(b.cadete));
 }
+
+// ── Reclamo de pendientes (botón "Copiar reclamo" de cada cadete) ──
+// Mensaje para mandarle al cadete por WhatsApp con lo que todavía tiene que entregar:
+// Flex en riesgo primero (la reputación) y después particulares sin visita. Nadie, reprogramados
+// y Repro 21hs no entran: ya tuvieron intento, no hay nada que reclamarle.
+const lineaDir = (d) => {
+  const t = String(d.dir || "").trim();
+  if (!t) return d.cliente ? `${d.cliente} (sin dirección)` : `#${d.id} (sin dirección)`;
+  const i = t.lastIndexOf(", ");
+  return i > 0 ? `${t.slice(0, i)} — ${t.slice(i + 2)}` : t;
+};
+export function mensajeReclamo(c, ahora) {
+  const det = c.detalle || [];
+  const flex = det.filter((d) => d.tipo === "riesgo");
+  const part = det.filter((d) => d.tipo === "particular");
+  const tot = flex.length + part.length;
+  if (!tot) return null;
+  const nombre = String(c.nombre || "").trim().split(/\s+/)[0] || "";
+  const tarde = ahora !== undefined && ahora !== null && ahora >= CORTE_21;
+  let n = 0;
+  const lista = (xs) => xs.map((d) => `${++n}. ${lineaDir(d)}`);
+  const out = [`Hola${nombre ? " " + nombre : ""}! Te ${tot === 1 ? "queda 1 paquete pendiente" : `quedan ${tot} paquetes pendientes`}.`];
+  if (flex.length) {
+    out.push("", `FLEX (Mercado Libre) — ${flex.length}${tarde ? ", ya pasaron las 21, son urgentes:" : ", tienen que estar entregados antes de las 21:"}`, ...lista(flex));
+  }
+  if (part.length) out.push("", `PARTICULARES — ${part.length}:`, ...lista(part));
+  out.push("", "¿Cómo venís? Avisame si tenés algún problema con alguno.");
+  return out.join("\n");
+}

@@ -142,3 +142,21 @@ test("alerta: antes de las 18 no alerta aunque esté frenado", () => {
   expect(enAlerta(c, H3(16, 15))).toBe(false);
   expect(enAlerta({ ...base, estado: est2(base, H3(18, 5)) }, H3(18, 5))).toBe(true);
 });
+
+import { mensajeReclamo } from "./monitoreoShared";
+test("reclamo: Flex primero, después particulares; sin Nadie ni repro; cambia después de las 21", () => {
+  const c = { nombre: "Juan Fiasche", detalle: [
+    { id: 1, tipo: "particular", dir: "Calle Chile 2373, Balvanera" },
+    { id: 2, tipo: "riesgo", dir: "Calle Libertad 581, San Nicolás" },
+    { id: 3, tipo: "repro21", dir: "Otra 1, X" },
+  ] };
+  const m = mensajeReclamo(c, 20 * 60);
+  expect(m).toBe([
+    "Hola Juan! Te quedan 2 paquetes pendientes.", "",
+    "FLEX (Mercado Libre) — 1, tienen que estar entregados antes de las 21:", "1. Calle Libertad 581 — San Nicolás", "",
+    "PARTICULARES — 1:", "2. Calle Chile 2373 — Balvanera", "",
+    "¿Cómo venís? Avisame si tenés algún problema con alguno.",
+  ].join("\n"));
+  expect(mensajeReclamo(c, 21 * 60 + 30)).toContain("ya pasaron las 21");
+  expect(mensajeReclamo({ nombre: "A", detalle: [{ id: 9, tipo: "repro21" }] }, 0)).toBeNull();
+});
