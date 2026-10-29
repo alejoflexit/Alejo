@@ -1,11 +1,10 @@
 {
   "fecha": "2026-10-29",
-  "nota": "Plano de Alejo 29/10: estanterías A, C y E de 4 pisos (1 arriba, 4 abajo). B y D: una caja cada uno (B = problemas). M = voluminosos, y ahí van también los sellers grandes que pidió Alejo. Sellers sin lugar propio: piso 4 según su letra (A–F A-4, G–M C-4, N–S E-4, T–Z D).",
+  "nota": "Plano de Alejo 29/10: estanterías A, C y E de 4 pisos (1 arriba, 4 abajo). B y D: una caja cada uno (B = problemas). M = voluminosos (Lemirk = Cuantoarte), y ahí van también los sellers grandes que pidió Alejo. Sellers sin lugar propio: piso 4 según su letra (A–F A-4, G–M C-4, N–S E-4, T–Z D).",
   "sellers": {
     "Independent Agent SA": "M",
     "Celulares y Etc.": "M",
     "La Plata Trade SAS": "M",
-    "~lemi": "M",
     "Nitid": "A-1",
     "zafra revistimientos": "A-2",
     "NUEVE.BA": "A-3",
@@ -15,7 +14,7 @@
     "Mo Mascotas": "C-3",
     "Grupo Luma": "C-4",
     "Paperland": "E-1",
-    "Cuantoarte": "E-2",
+    "Cuantoarte": "M",
     "IKORSO": "M",
     "Ohpic": "E-4",
     "unistore envios": "D"
