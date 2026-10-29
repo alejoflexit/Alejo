@@ -347,7 +347,14 @@ async function reasignarDeposito(page) {
 
 // ---------- Carga única del plano del cuartito (ACCION=ubicaciones): reemplaza los lugares por seller ----------
 async function aplicarUbicaciones() {
-  const cfg = require('./ubicaciones_cuarto.json');
+  const cfg = JSON.parse(JSON.stringify(require('./ubicaciones_cuarto.json')));
+  // "~texto": todos los sellers cuyo nombre contiene ese texto (cuando no se sabe cómo está escrito exacto)
+  const encontrados = [];
+  for (const k of Object.keys(cfg.sellers).filter((x) => x.startsWith('~'))) {
+    const rows = await sbTodo(`devoluciones?select=cliente&cliente=ilike.*${encodeURIComponent(k.slice(1))}*`);
+    for (const n of new Set(rows.map((r) => r.cliente).filter(Boolean))) { cfg.sellers[n] = cfg.sellers[k]; encontrados.push(n); }
+    delete cfg.sellers[k];
+  }
   const actuales = await sbTodo('devoluciones_ubicaciones?select=cliente,codigo');
   const sobran = actuales.filter((u) => !cfg.sellers[u.cliente]).map((u) => u.cliente);
   for (const c of sobran) await sb(`devoluciones_ubicaciones?cliente=eq.${encodeURIComponent(c)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
@@ -359,7 +366,7 @@ async function aplicarUbicaciones() {
     const nuevo = cfg.renombrar_manuales[g.ubicacion] ?? (/^[A-Z]-\d$/.test(g.ubicacion) || /^Caja /.test(g.ubicacion) ? g.ubicacion : null);
     if (nuevo !== g.ubicacion) await sb(`devoluciones_gestion?did=eq.${g.did}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ubicacion: nuevo }) });
   }
-  await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ detalle: `ubicaciones cargadas (${filas.length}), borradas ${sobran.length}, manuales revisados ${man.length}` }) });
+  await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ detalle: `ubicaciones cargadas (${filas.length}), borradas ${sobran.length}, manuales revisados ${man.length}; por nombre parecido: ${encontrados.join(', ') || 'ninguno'}` }) });
   console.log('Ubicaciones aplicadas', filas.length, sobran.length, man.length);
 }
 
