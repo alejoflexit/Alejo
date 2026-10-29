@@ -238,7 +238,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   // Lugar de un paquete: el que se le puso a mano (ej. P2 por grande) o el de su seller
   const lugarDe = (c) => c.ubicacion_manual || ubicacionDe(c.cliente, ubic).codigo;
   // Plano del cuartito (29/10): estanterías A, C y E de 4 pisos; B y D una caja cada uno (B = problemas); M voluminosos
-  const codigosLugar = useMemo(() => [...new Set([...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M", ...Object.values(ubic)])].sort().concat(CAJAS_LETRA.map((l) => `Caja ${l}`)), [ubic]);
+  const codigosLugar = useMemo(() => [...new Set([...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M", ...Object.values(ubic)])].sort(), [ubic]);
   async function cambiarLugar(did, codigo) {
     try {
       await guardarGestion([{ did, ubicacion: codigo || null }]);
@@ -1180,7 +1180,7 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
       <div className="dv-modal" style={{ width: "min(560px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ubicaciones del cuartito">
         <div className="dv-modal-cab">
           <div style={{ fontWeight: 700, fontSize: 16 }}>Ubicaciones en el cuartito</div>
-          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Poné el código del estante o caja de cada seller (ej. B3). Los que quedan vacíos van a la caja de su letra. Al escanear un ingreso, la app dice dónde guardarlo.</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Poné el código del estante o caja de cada seller (ej. B3). Los que quedan vacíos van al piso de su letra (A–F → A-4, G–M → C-4, N–S → E-4, T–Z → D). Al escanear un ingreso, la app dice dónde guardarlo.</div>
           <input className="dv-input" style={{ width: "100%", marginTop: 10 }} placeholder="Buscar seller o código" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
@@ -1193,7 +1193,7 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
                   <span style={{ display: "block", fontSize: 12, color: sugerir ? C.ambar : C.ink3 }}>{f.cant} en depósito{sugerir ? " · conviene darle lugar propio" : ""}</span>
                 </span>
                 <input className="dv-input" style={{ width: 110, textAlign: "center", fontFamily: C.grotesk, fontWeight: 700, textTransform: "uppercase" }} maxLength={12}
-                  placeholder={cajaPorLetra(f.cliente).replace("Caja ", "")} value={borr[f.cliente] ?? mapa[f.cliente] ?? ""}
+                  placeholder={cajaPorLetra(f.cliente)} value={borr[f.cliente] ?? mapa[f.cliente] ?? ""}
                   onChange={(e) => setBorr((b) => ({ ...b, [f.cliente]: e.target.value }))} onBlur={() => guardar(f.cliente)}
                   onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} aria-label={`Ubicación de ${f.cliente}`} />
               </div>

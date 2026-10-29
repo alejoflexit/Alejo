@@ -305,14 +305,15 @@ export function listosParaDevolver(casos, enRemito = new Set()) {
   }).sort((a, b) => b.maxDias - a.maxDias || b.casos.length - a.casos.length);
 }
 
-// ---- Ubicación en el cuartito ----
-// Cada seller con lugar propio tiene un código (B3). El resto va a una caja por la primera letra del nombre.
-export const CAJAS_LETRA = ["A-C", "D-F", "G-I", "J-L", "M-O", "P-R", "S-U", "V-Z"];
+// ---- Ubicación en el cuartito (plano 29/10) ----
+// Cada seller con lugar propio tiene su código (A-2). El resto se mezcla en un piso según la primera letra
+// del nombre (Alejo: "no hay problema que se mezclen, que sea fácil de localizar").
+export const LETRAS_LUGAR = [["A", "F", "A-4"], ["G", "M", "C-4"], ["N", "S", "E-4"], ["T", "Z", "D"]];
+export const CAJAS_LETRA = []; // ya no hay cajas por letra
 export function cajaPorLetra(cliente) {
-  const l = String(cliente || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase()[0] || "";
-  if (!/[A-Z]/.test(l)) return "Caja 0-9";
-  const c = CAJAS_LETRA.find((r) => l >= r[0] && l <= r[2]);
-  return `Caja ${c}`;
+  const l = String(cliente || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase()[0] || "";
+  const r = LETRAS_LUGAR.find(([de, a]) => l >= de && l <= a);
+  return r ? r[2] : "D"; // números y símbolos → D
 }
 export function ubicacionDe(cliente, mapa = {}) {
   const k = String(cliente || "");
