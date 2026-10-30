@@ -16,20 +16,24 @@ self.addEventListener('push', (e) => {
     icon: '/flexit-app-icon-192.png',
     badge: '/flexit-app-icon-192.png',
     data: { url: d.url || '/#monitoreo', cadete: d.cadete || null },
+    // Aviso de cadete frenado: un solo botón, copiar el reclamo de pendientes (lo arma la app)
+    actions: d.cadete ? [{ action: 'copiar', title: 'Copiar reclamo' }] : [],
   }));
 });
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const { url, cadete } = e.notification.data || {};
+  const copiar = e.action === 'copiar' && cadete;
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const app = wins.find((w) => w.url.startsWith(self.location.origin));
     if (app) {
       await app.focus();
-      app.postMessage({ tipo: 'fx-abrir-cadete', cadete });
+      app.postMessage({ tipo: copiar ? 'fx-copiar-reclamo' : 'fx-abrir-cadete', cadete });
       return;
     }
-    await self.clients.openWindow(cadete ? `/?cadete=${encodeURIComponent(cadete)}#monitoreo` : (url || '/#monitoreo'));
+    const q = copiar ? `reclamo=${encodeURIComponent(cadete)}` : `cadete=${encodeURIComponent(cadete || '')}`;
+    await self.clients.openWindow(cadete ? `/?${q}#monitoreo` : (url || '/#monitoreo'));
   })());
 });

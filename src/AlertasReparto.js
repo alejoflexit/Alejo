@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { armarCadetes, enAlerta, HORA_ALERTA, saludDatos, minSinEntregar, hace, hhmm } from "./monitoreoShared";
+import { armarCadetes, enAlerta, HORA_ALERTA, saludDatos, minSinEntregar, hace, hhmm, mensajeReclamo } from "./monitoreoShared";
 import { sbFetch } from "./colectasShared";
 import { getSession } from "./auth";
 
@@ -32,6 +32,32 @@ export const ABRIR_CADETE_KEY = "fx_monitoreo_abrir";
 export default function AlertasReparto({ onIrMonitoreo }) {
   const [cola, setCola] = useState([]); // [{ nombre, flex, texto }]
   const tituloOrig = useRef(null);
+  const [aviso, setAviso] = useState(null); // { cadete, texto, copiado } — botón "Copiar reclamo" del aviso de Windows
+
+  // Botón "Copiar reclamo" de la notificación: arma el mensaje con el dato fresco y lo copia.
+  // El portapapeles exige la pestaña enfocada; si el navegador no deja, queda un cartelito con "Copiar".
+  const copiarReclamo = useCallback(async (cadete) => {
+    let texto = null;
+    try {
+      const r = await fetch(BRIDGE_URL, { headers: { "x-bridge-key": BRIDGE_KEY }, cache: "no-store" });
+      const d = await r.json();
+      const c = d && d.porCadete && d.porCadete[cadete];
+      if (c) texto = mensajeReclamo({ ...c, nombre: cadete }, ahoraAR(d.actualizado).min);
+    } catch (e) {}
+    if (!texto) { setAviso({ cadete, texto: null, copiado: false }); return; }
+    for (let i = 0; i < 15; i++) {
+      if (document.hasFocus()) {
+        try { await navigator.clipboard.writeText(texto); setAviso({ cadete, texto, copiado: true }); return; } catch (e) { break; }
+      }
+      await new Promise((ok) => setTimeout(ok, 200));
+    }
+    setAviso({ cadete, texto, copiado: false });
+  }, []);
+  useEffect(() => {
+    if (!aviso || !aviso.copiado) return;
+    const t = setTimeout(() => setAviso(null), 5000);
+    return () => clearTimeout(t);
+  }, [aviso]);
 
   const revisar = useCallback(async () => {
     const a = ahoraAR();
@@ -59,7 +85,13 @@ export default function AlertasReparto({ onIrMonitoreo }) {
     setCola((prev) => [...prev, ...items]);
     // Fuera de la pestaña: notificación del sistema (si el usuario la habilitó)
     if (document.visibilityState !== "visible" && typeof Notification !== "undefined" && Notification.permission === "granted") {
+      const reg = await (navigator.serviceWorker ? navigator.serviceWorker.getRegistration("/sw-avisos.js").catch(() => null) : null);
       items.forEach((it) => {
+        if (reg) { // con el service worker: mismo aviso que el del vigía, con el botón "Copiar reclamo"
+          reg.showNotification(`Ojo, cadete frenado: ${it.nombre}`, { body: it.texto, tag: `fx-frenado-${it.nombre}`, requireInteraction: true,
+            icon: "/flexit-app-icon-192.png", data: { url: "/#monitoreo", cadete: it.nombre }, actions: [{ action: "copiar", title: "Copiar reclamo" }] }).catch(() => {});
+          return;
+        }
         try {
           const n = new Notification(`Ojo, cadete frenado: ${it.nombre}`, { body: it.texto, tag: `fx-frenado-${it.nombre}`, requireInteraction: true });
           n.onclick = () => { window.focus(); try { sessionStorage.setItem(ABRIR_CADETE_KEY, it.nombre); } catch (e) {} onIrMonitoreo && onIrMonitoreo(); window.dispatchEvent(new Event("fx-abrir-cadete")); n.close(); };
@@ -81,12 +113,17 @@ export default function AlertasReparto({ onIrMonitoreo }) {
     try {
       const q = new URLSearchParams(window.location.search).get("cadete");
       if (q) { window.history.replaceState(null, "", window.location.pathname + window.location.hash); ir(q); }
+      const rq = new URLSearchParams(window.location.search).get("reclamo");
+      if (rq) { window.history.replaceState(null, "", window.location.pathname + window.location.hash); copiarReclamo(rq); }
     } catch (e) {}
     if (!("serviceWorker" in navigator)) return;
-    const onMsg = (ev) => { if (ev.data && ev.data.tipo === "fx-abrir-cadete") ir(ev.data.cadete); };
+    const onMsg = (ev) => {
+      if (ev.data && ev.data.tipo === "fx-abrir-cadete") ir(ev.data.cadete);
+      if (ev.data && ev.data.tipo === "fx-copiar-reclamo") copiarReclamo(ev.data.cadete);
+    };
     navigator.serviceWorker.addEventListener("message", onMsg);
     return () => navigator.serviceWorker.removeEventListener("message", onMsg);
-  }, [onIrMonitoreo]);
+  }, [onIrMonitoreo, copiarReclamo]);
 
   // Con alertas sin ver y la pestaña de fondo, el título titila para que se note en la barra
   useEffect(() => {
@@ -100,14 +137,25 @@ export default function AlertasReparto({ onIrMonitoreo }) {
     return () => { clearInterval(t); if (tituloOrig.current !== null) document.title = tituloOrig.current; tituloOrig.current = null; };
   }, [cola.length]);
 
-  if (!cola.length) return null;
+  const cartel = aviso && (
+    <div role="status" style={{ position: "fixed", left: "50%", bottom: 20, transform: "translateX(-50%)", zIndex: 3001, background: C.pop, border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.45)", padding: "10px 14px", color: C.ink, fontSize: 13.5, display: "flex", alignItems: "center", gap: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <span>{aviso.copiado ? <>Reclamo de <b>{aviso.cadete}</b> copiado</> : aviso.texto ? <>Reclamo de <b>{aviso.cadete}</b> listo</> : <>{aviso.cadete} ya no tiene pendientes para reclamar</>}</span>
+      {!aviso.copiado && aviso.texto && (
+        <button onClick={async () => { try { await navigator.clipboard.writeText(aviso.texto); setAviso({ ...aviso, copiado: true }); } catch (e) {} }}
+          style={{ background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.35)", color: C.teal, borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Copiar</button>
+      )}
+      <button onClick={() => setAviso(null)} aria-label="Cerrar" style={{ background: "none", border: "none", color: C.ink3, fontSize: 14, cursor: "pointer" }}>✕</button>
+    </div>
+  );
+  if (!cola.length) return cartel || null;
   const ver = (nombre) => {
     try { sessionStorage.setItem(ABRIR_CADETE_KEY, nombre); } catch (e) {}
     setCola([]);
     onIrMonitoreo && onIrMonitoreo();
     window.dispatchEvent(new Event("fx-abrir-cadete")); // por si Monitoreo ya está abierto
   };
-  return (
+  return (<>
+    {cartel}
     <div role="alertdialog" aria-label="Cadete frenado"
       style={{ position: "fixed", right: 16, bottom: 16, width: 360, maxWidth: "calc(100vw - 32px)", zIndex: 3000, background: C.pop, border: `1px solid rgba(232,97,95,0.5)`, borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.5)", padding: "14px 16px", color: C.ink, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -129,7 +177,7 @@ export default function AlertasReparto({ onIrMonitoreo }) {
         <button onClick={() => setCola([])} style={{ background: C.soft, border: `1px solid ${C.line}`, color: C.ink2, borderRadius: 10, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Entendido</button>
       </div>
     </div>
-  );
+  </>);
 }
 
 // Avisos del sistema (Web Push): llegan aunque la app esté cerrada — Windows / Mac / Android con el
