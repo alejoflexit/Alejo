@@ -155,3 +155,14 @@ test("chofer visible: asignado real, o quien lo trajo si está en 'devuelto depo
   expect(choferDe(armarCaso({ ...base, tipo: "CAMBIO", estado_ld: 5, cadete: "Juan Perez", fecha_retiro: "2026-10-18T10:00:00-03:00" }, {}, AHORA))).toEqual({ nombre: "Juan Perez", trajo: false });
   expect(choferDe(armarCaso({ ...base, tipo: "CAMBIO", estado_ld: 7 }, {}, AHORA))).toBeNull();
 });
+
+test("etiqueta del envío original entregado → encuentra el cambio abierto (venta o dirección)", () => {
+  const { cambiosDeEnvio, etiquetaLegible } = require("./devolucionesShared");
+  const cambio = armarCaso({ ...base, did: 50, tipo: "CAMBIO", cliente: "La Plata Trade SAS", ml_venta_id: "2000111", estado_ld: 7, direccion: "Avenida Doctor Pedro Goyena 1104 / 5C Referencia: x - CP 1424" }, {}, AHORA);
+  const otro = armarCaso({ ...base, did: 51, tipo: "CAMBIO", cliente: "Ohpic", estado_ld: 7, direccion: "Rivadavia 200" }, {}, AHORA);
+  const casos = [cambio, otro];
+  expect(cambiosDeEnvio(casos, { id_interno: 10, id_venta_ml: "2000111" }).map((c) => c.did)).toEqual([50]);
+  expect(cambiosDeEnvio(casos, { id_interno: 10, razon_social: "La Plata Trade SAS", direccion: "Av. Pedro Goyena 1104 / 5C - CP 1424 - Caballito" }).map((c) => c.did)).toEqual([50]);
+  expect(cambiosDeEnvio(casos, { id_interno: 10, razon_social: "Nitid", direccion: "Pedro Goyena 1104" })).toEqual([]);
+  expect(etiquetaLegible('{"local":1,"did":"1065719","cliente":3}')).toBe("envío #1065719");
+});

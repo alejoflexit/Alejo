@@ -292,6 +292,38 @@ export function casoDeEtiqueta(casos, texto) {
   return null;
 }
 
+// Texto legible de lo que leyó el escáner (en vez del JSON crudo del QR)
+export function etiquetaLegible(texto) {
+  const t = String(texto || "").trim();
+  try {
+    const j = JSON.parse(t);
+    if (j && typeof j === "object") {
+      if (j.did != null) return `envío #${j.did}`;
+      if (j.id != null) return `etiqueta ML ${j.id}`;
+    }
+  } catch { /* no es JSON */ }
+  return t.length > 30 ? t.slice(0, 30) + "…" : t;
+}
+// Calle + altura normalizadas ("Av. Dr. Pedro Goyena 1104 / 5C ..." → "pedro goyena 1104")
+export function calleAltura(dir) {
+  const base = String(dir || "").split(/\s\/\s|referencia|- cp|,/i)[0];
+  const n = base.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/\b(avenida|av|doctor|dr|general|gral|presidente|pres|calle)\b\.?/g, " ").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  return /\d/.test(n) ? n : "";
+}
+const sinTilde = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+// Paquete con la etiqueta del envío ORIGINAL (ya entregado) → el cambio abierto de esa venta o de ese comprador.
+// 1º misma venta de ML; 2º mismo seller + misma calle y altura. Devuelve la lista de candidatos (0, 1 o varios).
+export function cambiosDeEnvio(casos, envio) {
+  const abiertos = casos.filter((c) => c.tipo === "CAMBIO" && c.etapa !== "devuelto" && !c.cerrado && Number(c.did) !== Number(envio.id_interno));
+  const venta = String(envio.id_venta_ml || "").trim();
+  if (venta) { const x = abiertos.filter((c) => String(c.ml_venta_id || "") === venta); if (x.length) return x; }
+  const dir = calleAltura(envio.direccion);
+  if (!dir) return [];
+  const cli = sinTilde(envio.razon_social);
+  return abiertos.filter((c) => calleAltura(c.direccion) === dir && (!cli || sinTilde(c.cliente) === cli));
+}
+
 // ---- "Listos para devolver": lo que está en depósito, sin remito, por seller, el más viejo primero ----
 export function listosParaDevolver(casos, enRemito = new Set()) {
   const m = new Map();

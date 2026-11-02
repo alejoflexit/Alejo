@@ -8,6 +8,7 @@ import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
   progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
+  etiquetaLegible, cambiosDeEnvio,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -254,10 +255,15 @@ export default function Devoluciones({ abrirEnvio = null }) {
       const cods = codigosDeEtiqueta(texto).filter((x) => /^[\w-]{4,}$/.test(x)).slice(0, 6);
       if (!cods.length) return null;
       const lista = cods.map((x) => encodeURIComponent(x)).join(",");
-      const rows = await sbFetch(`envios_busqueda?or=(tracking.in.(${lista}),id_venta_ml.in.(${lista}),id_interno.in.(${lista}))&select=id_interno,razon_social,direccion,estado&limit=1`);
+      const rows = await sbFetch(`envios_busqueda?or=(tracking.in.(${lista}),id_venta_ml.in.(${lista}),id_interno.in.(${lista}))&select=id_interno,razon_social,direccion,estado,id_venta_ml&limit=1`);
       const e = rows && rows[0];
       if (!e) return null;
       const did = Number(e.id_interno);
+      // Etiqueta de un envío que ya se entregó: es el paquete de un cambio → buscar el cambio abierto de esa venta / comprador
+      if (/entregad/i.test(e.estado || "")) {
+        const cand = cambiosDeEnvio(casos, e);
+        return { entregado: true, did, cliente: e.razon_social, direccion: e.direccion, candidatos: cand.slice(0, 3) };
+      }
       const g = (datos.gest || []).find((x) => Number(x.did) === did);
       if (g && g.ingreso_deposito_at) return { ya: true, did, cliente: e.razon_social, direccion: e.direccion };
       await guardarGestion([{ did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
@@ -266,10 +272,11 @@ export default function Devoluciones({ abrirEnvio = null }) {
       return { ok: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado };
     } catch { return null; }
   }
-  async function ingresoEscaneado(c) {
+  async function ingresoEscaneado(c, como = "") {
     try {
-      await guardarGestion([{ did: c.did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
-      registrar("ingreso", 1, null, { dids: [c.did], via: "escaner" });
+      const at = new Date().toISOString();
+      await guardarGestion([{ did: c.did, ingreso_deposito_at: at, ingreso_por: yo(), ...(como ? { notas: [...(c.notas || []), { texto: `Ingresó escaneando ${como}`, por: yo(), at }] } : {}) }]);
+      registrar("ingreso", 1, null, { dids: [c.did], via: "escaner", ...(como ? { localizado: como } : {}) });
       return true;
     } catch { return false; }
   }
@@ -1250,18 +1257,30 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
     let l;
     let otro = null;
     if (!c && onIngresarOtro) otro = await onIngresarOtro(texto); // cualquier envío que vuelve (ej. nadie en domicilio varias veces)
-    if (!c && otro && otro.ok) l = { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, otro.estado, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo };
+    const leido = etiquetaLegible(texto);
+    if (!c && otro && otro.entregado && otro.candidatos.length === 1) return procesarCaso(otro.candidatos[0], ahora, `por la etiqueta del envío original #${otro.did}`);
+    if (!c && otro && otro.entregado && otro.candidatos.length > 1) l = { tipo: "elegir", titulo: `${otro.cliente || "Envío"} · ¿cuál de estos cambios es?`, sub: `La etiqueta es del envío original #${otro.did} (entregado)`, candidatos: otro.candidatos };
+    else if (!c && otro && otro.entregado) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `Es la etiqueta del envío original #${otro.did} y no encontré un cambio abierto de esa venta ni de esa dirección. Cargalo en “A gestionar”.` };
+    else if (!c && otro && otro.ok) l = { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, otro.estado, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo };
     else if (!c && otro && otro.ya) l = { tipo: "ya", titulo: `${otro.cliente || "Envío"} · ya estaba ingresado`, sub: otro.direccion || "" };
-    else if (!c) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: "No lo encontré en el sistema", sub: `Leído: ${String(texto).slice(0, 40)}. Si es de hoy puede que todavía no esté en el buscador; cargalo en “A gestionar”.` };
-    else if (hechos.current.has(c.did) || c.etapa === "deposito") l = { tipo: "ya", titulo: `${c.cliente} · ya estaba en depósito`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
+    else if (!c) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: "No lo encontré en el sistema", sub: `Leí ${leido}. Si se cargó hoy puede que todavía no esté; cargalo en “A gestionar”.` };
+    else return procesarCaso(c, ahora);
+    avisar(l, ahora);
+  }
+  async function procesarCaso(c, ahora = Date.now(), como = "") {
+    let l;
+    if (hechos.current.has(c.did) || c.etapa === "deposito") l = { tipo: "ya", titulo: `${c.cliente} · ya estaba en depósito`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
     else if (c.etapa === "devuelto" || c.cerrado) l = { tipo: "ya", titulo: `${c.cliente} · ${c.etapa === "devuelto" ? "ya fue devuelto al seller" : "está cerrado"}`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
     else {
       hechos.current.add(c.did);
-      const ok = await onIngresar(c);
-      l = ok ? { tipo: "ok", did: c.did, titulo: `${c.cliente} · ${tipoTxt(c.tipo).toLowerCase()}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · "), donde: ubicacionDe(c.cliente, ubic).codigo }
+      const ok = await onIngresar(c, como);
+      l = ok ? { tipo: "ok", did: c.did, titulo: `${c.cliente} · ${tipoTxt(c.tipo).toLowerCase()}`, sub: [como ? `Cambio #${c.did} encontrado ${como}` : null, c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · "), donde: ubicacionDe(c.cliente, ubic).codigo }
         : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" };
       if (!ok) hechos.current.delete(c.did);
     }
+    avisar(l, ahora);
+  }
+  function avisar(l, ahora) {
     try { navigator.vibrate && navigator.vibrate(l.tipo === "ok" ? 60 : [40, 60, 40]); } catch {}
     setFlash(l); setTimeout(() => setFlash((f) => (f === l ? null : f)), 2200);
     setLecturas((x) => [{ ...l, id: ahora, dondeSeller: l.donde }, ...x].slice(0, 60));
@@ -1321,8 +1340,15 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
           <div className="dv-ing-lista">
             {lecturas.slice(0, 6).map((l) => (
               <div key={l.id} className="dv-ing-fila">
-                <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "✕" : "·"}</span>
-                <span style={{ minWidth: 0 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b><span style={{ display: "block", fontSize: 11.5, opacity: .7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.sub}</span></span>
+                <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "!" : l.tipo === "elegir" ? "?" : "·"}</span>
+                <span style={{ minWidth: 0, flex: 1 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b>
+                  <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 11.5, opacity: .75, overflow: "hidden", lineHeight: 1.35 }}>{l.sub}</span>
+                  {l.candidatos && l.candidatos.map((k) => (
+                    <button key={k.did} className="dv-btn" style={{ display: "block", width: "100%", textAlign: "left", marginTop: 6, background: "rgba(0,0,0,.5)", fontSize: 12 }}
+                      onClick={() => { setLecturas((x) => x.filter((y) => y.id !== l.id)); procesarCaso(k, Date.now(), `por la etiqueta del envío original`); }}>
+                      Es este: #{k.did} · {String(k.direccion || "").split(/\s\/\s|Referencia/)[0]}
+                    </button>))}
+                </span>
                 {l.tipo === "ok" && l.did && onLugar && (
                   <select className="dv-input" aria-label="Cambiar el lugar" style={{ flexShrink: 0, height: 32, maxWidth: 110, background: "rgba(0,0,0,.55)", color: "#fff" }} value={l.manual || ""}
                     onChange={(e) => { const v = e.target.value; onLugar(l.did, v); setLecturas((x) => x.map((y) => (y.id === l.id ? { ...y, manual: v, donde: v || y.dondeSeller || y.donde } : y))); }}>
