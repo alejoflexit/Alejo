@@ -77,13 +77,14 @@ async function fichas(page, dids) {
             const r = await fetch('/modules/envios/alta/controlador.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: `operador=get&did=${id}`, signal: AbortSignal.timeout(25000) });
             if (!r.ok) continue;
             const p = await r.json();
-            res[id] = { historial: p.historial || [], asignaciones: enOrden(p.asignaciones), header: { valor_declarado: p.header && p.header.valor_declarado, estado_envio: p.header && p.header.estado_envio, destination_shipping_address_line: p.header && p.header.destination_shipping_address_line, destination_city_name: p.header && p.header.destination_city_name } };
+            res[id] = { historial: p.historial || [], asignaciones: p.asignaciones || [], header: { valor_declarado: p.header && p.header.valor_declarado, estado_envio: p.header && p.header.estado_envio, destination_shipping_address_line: p.header && p.header.destination_shipping_address_line, destination_city_name: p.header && p.header.destination_city_name } };
           } catch { /* una ficha suelta no corta la corrida */ }
         }
       };
       await Promise.all(Array.from({ length: Math.min(8, ids.length) }, worker));
       return res;
     }, parte);
+    for (const f of Object.values(res)) f.asignaciones = enOrden(f.asignaciones);
     Object.assign(out, res);
     console.log(`  fichas ${Math.min(i + 300, dids.length)}/${dids.length}`);
   }
