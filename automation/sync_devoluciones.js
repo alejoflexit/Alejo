@@ -330,6 +330,7 @@ async function reasignarDeposito(page) {
     let j = null; try { j = JSON.parse(r.texto); } catch { /* */ }
     const fallidos = new Set([...(j && j.enviosNoAsignados) || [], ...(j && j.enviosNoProcesados) || []].map((x) => Number(typeof x === 'object' ? (x.idPaquete || x.did || x.id) : x)));
     console.log(`Reasignar ${parte.length} a devuelto deposito → HTTP ${r.status} ${String(r.texto).slice(0, 200)}`);
+    console.log(`::notice title=Reasignar::${parte.length} envíos → HTTP ${r.status} ${String(r.texto).replace(/\s+/g, ' ').slice(0, 300)}`);
     // Verificar con la ficha: la última asignación tiene que ser "devuelto deposito"
     const fx = await fichas(page, parte);
     const ok = [], mal = [];
@@ -390,8 +391,10 @@ async function main() {
     if (ACCION !== 'procesar') { const s = await sync(page); detalle += `devoluciones ${s.total}, fichas ${s.fichas}`; }
     await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultima_at: new Date().toISOString(), ok: true, detalle }) });
     console.log('Listo:', detalle);
+    console.log(`::notice title=Devoluciones::${detalle.replace(/\n/g, ' ')}`); // visible en las anotaciones del run
   } catch (e) {
     await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultima_at: new Date().toISOString(), ok: false, detalle: String(e.message).slice(0, 300) }) }).catch(() => {});
+    console.log(`::error title=Devoluciones::${String(e.message).slice(0, 300)}`);
     throw e;
   } finally { await browser.close(); }
 }
