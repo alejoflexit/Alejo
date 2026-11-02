@@ -388,6 +388,25 @@ async function aplicarUbicaciones() {
 
 async function main() {
   if (ACCION === 'ubicaciones') { await aplicarUbicaciones(); return; }
+  if (ACCION.startsWith('buscar:')) { // diagnóstico de un envío puntual (resultado en las anotaciones del run)
+    const q = ACCION.slice(7).trim();
+    const n = (t, m) => console.log(`::notice title=${t}::${String(m).replace(/\s+/g, ' ').slice(0, 3500)}`);
+    const dev = await sbTodo(`devoluciones?select=*&or=(tracking.eq.${q},ml_venta_id.eq.${q},did.eq.${/^\d{1,9}$/.test(q) ? q : 0})`);
+    n('devoluciones (app)', JSON.stringify(dev));
+    const bus = await sbTodo(`envios_busqueda?select=id_interno,razon_social,estado,fecha_estado,cadete,id_venta_ml,tracking,direccion,origen,fecha_flexit&or=(tracking.eq.${q},id_venta_ml.eq.${q},id_interno.eq.${q})`);
+    n('envios_busqueda', JSON.stringify(bus));
+    const { browser, page } = await login();
+    try {
+      const ids = [...new Set([...dev.map((d) => d.did), ...bus.map((b) => b.id_interno)].map(Number).filter(Boolean))];
+      const fx = ids.length ? await fichas(page, ids) : {};
+      for (const id of ids) n(`ficha ${id}`, JSON.stringify({ estado: fx[id] && fx[id].header && fx[id].header.estado_envio, hist: fx[id] && fx[id].historial.slice(-6), asig: fx[id] && fx[id].asignaciones.slice(-4) }));
+      const l = await listado(page, { tracking: q });
+      n('listado devoluciones LD (tracking)', JSON.stringify(l).slice(0, 2000));
+      const l2 = await listado(page, { mlid: q });
+      n('listado devoluciones LD (mlid)', JSON.stringify(l2).slice(0, 2000));
+    } finally { await browser.close(); }
+    return;
+  }
   // Si algo se cuelga igual, cortar a los 15 min dejando el error registrado (la app lo muestra) en vez de
   // que GitHub mate la corrida a los 20 sin avisar y las siguientes queden en cola.
   const guardia = setTimeout(async () => {
