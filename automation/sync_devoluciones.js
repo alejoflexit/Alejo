@@ -321,6 +321,10 @@ async function reasignarDeposito(page) {
     const hace7 = new Date(Date.now() - 7 * 864e5).toISOString();
     const ult = await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at,ingreso_por,ld_reasignado_at,ld_reasignado_error&ingreso_deposito_at=gte.${encodeURIComponent(hace7)}&order=ingreso_deposito_at.desc`);
     const dv = ult.length ? new Map((await sbTodo(`devoluciones?select=did,estado_ld,en_deposito_ld,cadete&did=in.(${ult.slice(0, 150).map((p) => p.did).join(',')})`)).map((d) => [Number(d.did), d])) : new Map();
+    const sin = ult.filter((g) => !g.ld_reasignado_at);
+    const porMotivo = {};
+    sin.forEach((g) => { const d = dv.get(Number(g.did)) || {}; const k = g.ld_reasignado_error ? 'error' : Number(d.estado_ld) === 14 ? 'ya devuelto al cliente' : d.en_deposito_ld ? 'ya estaba en devuelto deposito' : 'pendiente'; porMotivo[k] = (porMotivo[k] || 0) + 1; });
+    console.log(`::notice title=Ingresos 7d sin reasignar::${sin.length} de ${ult.length} · ${JSON.stringify(porMotivo)} · ${sin.filter((g) => !(dv.get(Number(g.did)) || {}).en_deposito_ld).slice(0, 12).map((g) => `${g.did}:${String(g.ingreso_deposito_at).slice(5, 16)} ${g.ingreso_por || ''}${g.ld_reasignado_error ? ' err=' + g.ld_reasignado_error : ''}`).join(' | ')}`);
     const resumen = ult.slice(0, 15).map((g) => { const d = dv.get(Number(g.did)) || {}; return `${g.did}:${String(g.ingreso_deposito_at).slice(5, 16)} ${g.ingreso_por || ''} reasig=${g.ld_reasignado_at ? 'si' : 'no'}${g.ld_reasignado_error ? ' err=' + g.ld_reasignado_error : ''} dep=${d.en_deposito_ld} est=${d.estado_ld} ch=${d.cadete}`; });
     console.log(`::notice title=Ingresos 7d (${ult.length}, pendientes ${pend.length})::${resumen.join(' | ').slice(0, 3500)}`);
   }
