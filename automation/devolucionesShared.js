@@ -42,7 +42,9 @@ function tipoDe(linea) {
 // Ficha → fechas clave. historial: [{estado, fecha}], asignaciones: [{operador, fecha}]
 function datosFicha(ficha) {
   const hist = Array.isArray(ficha && ficha.historial) ? ficha.historial : [];
-  const asig = Array.isArray(ficha && ficha.asignaciones) ? ficha.asignaciones : [];
+  // ordenadas por fecha (LightData a veces las devuelve con la más nueva primero)
+  const asig = (Array.isArray(ficha && ficha.asignaciones) ? ficha.asignaciones : []).map((a, i) => ({ a, i, t: Date.parse(fechaLD(a.fecha) || '') || 0 }))
+    .sort((x, y) => x.t - y.t || x.i - y.i).map((x) => x.a);
   const ultimo = (pred, arr) => arr.filter(pred).map((x) => fechaLD(x.fecha)).filter(Boolean).sort().pop() || null;
   const ultAsig = asig.length ? asig[asig.length - 1] : null;
   // Quién lo devolvió: el último chofer "real" antes de la última asignación a "devuelto deposito"

@@ -77,7 +77,7 @@ async function fichas(page, dids) {
             const r = await fetch('/modules/envios/alta/controlador.php', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' }, body: `operador=get&did=${id}`, signal: AbortSignal.timeout(25000) });
             if (!r.ok) continue;
             const p = await r.json();
-            res[id] = { historial: p.historial || [], asignaciones: p.asignaciones || [], header: { valor_declarado: p.header && p.header.valor_declarado, estado_envio: p.header && p.header.estado_envio, destination_shipping_address_line: p.header && p.header.destination_shipping_address_line, destination_city_name: p.header && p.header.destination_city_name } };
+            res[id] = { historial: p.historial || [], asignaciones: enOrden(p.asignaciones), header: { valor_declarado: p.header && p.header.valor_declarado, estado_envio: p.header && p.header.estado_envio, destination_shipping_address_line: p.header && p.header.destination_shipping_address_line, destination_city_name: p.header && p.header.destination_city_name } };
           } catch { /* una ficha suelta no corta la corrida */ }
         }
       };
@@ -349,6 +349,12 @@ async function sumarNoEntregados(page) {
   return nuevos.length;
 }
 
+// LightData devuelve las asignaciones desordenadas (a veces la más nueva primero): ordenarlas por fecha
+function enOrden(asig) {
+  return (Array.isArray(asig) ? asig : []).map((a, i) => ({ a, i, t: Date.parse(fechaLD(a.fecha) || '') || 0 }))
+    .sort((x, y) => x.t - y.t || x.i - y.i).map((x) => x.a);
+}
+
 async function reasignarDeposito(page) {
   // Reintenta los que fallaron (LightData a veces corta con "Asignacion interrumpida"): hasta 4 intentos en total.
   const intentos = (e) => { const m = /^\[(\d+)\]/.exec(String(e || '')); return e ? (m ? Number(m[1]) : 1) : 0; };
@@ -368,6 +374,13 @@ async function reasignarDeposito(page) {
   }
   if (!pend.length) return 0;
   const devs = new Map((await sbTodo(`devoluciones?select=did,estado_ld,en_deposito_ld&did=in.(${pend.map((p) => p.did).join(',')})`)).map((d) => [Number(d.did), d]));
+  // Los que LightData ya tiene con "devuelto deposito" (ej. falso error por asignaciones desordenadas): darlos por hechos
+  const yaEstan = pend.map((p) => Number(p.did)).filter((d) => (devs.get(d) || {}).en_deposito_ld);
+  if (yaEstan.length) {
+    await sb(`devoluciones_gestion?did=in.(${yaEstan.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_at: new Date().toISOString(), ld_reasignado_error: null }) });
+    await sb(`devoluciones?did=in.(${yaEstan.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ detalle_at: null }) });
+    console.log(`::notice title=Ya en devuelto deposito::${yaEstan.length} marcados como reasignados`);
+  }
   const dids = pend.map((p) => Number(p.did)).filter((d) => { const x = devs.get(d); return x && !x.en_deposito_ld && Number(x.estado_ld) !== ESTADO.DEVUELTO_CLIENTE; });
   if (!dids.length) return 0;
   const chofer = Number(await choferDeposito(page));
