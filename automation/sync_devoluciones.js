@@ -316,7 +316,11 @@ async function empresaLD(page) {
   return e;
 }
 async function reasignarDeposito(page) {
-  const pend = await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}&ld_reasignado_at=is.null&ld_reasignado_error=is.null&order=ingreso_deposito_at`);
+  // Reintenta los que fallaron (LightData a veces corta con "Asignacion interrumpida"): hasta 4 intentos en total.
+  const intentos = (e) => { const m = /^\[(\d+)\]/.exec(String(e || '')); return e ? (m ? Number(m[1]) : 1) : 0; };
+  const pend = (await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at,ld_reasignado_error&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}&ld_reasignado_at=is.null&order=ingreso_deposito_at`))
+    .filter((p) => intentos(p.ld_reasignado_error) < 4);
+  const errPrev = new Map(pend.map((p) => [Number(p.did), p.ld_reasignado_error]));
   { // diagnóstico: qué pasó con los ingresos de los últimos 7 días
     const hace7 = new Date(Date.now() - 7 * 864e5).toISOString();
     const ult = await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at,ingreso_por,ld_reasignado_at,ld_reasignado_error&ingreso_deposito_at=gte.${encodeURIComponent(hace7)}&order=ingreso_deposito_at.desc`);
@@ -335,8 +339,8 @@ async function reasignarDeposito(page) {
   const chofer = Number(await choferDeposito(page));
   const empresa = await empresaLD(page);
   const ahora = new Date().toISOString();
-  for (let i = 0; i < dids.length; i += 100) {
-    const parte = dids.slice(i, i + 100);
+  for (let i = 0; i < dids.length; i += 20) {
+    const parte = dids.slice(i, i + 20);
     const r = await postLD(page, 'modules/envios/alta/controlador.php', [['operador', 'setOperadorExcel'], ['empresaID', empresa], ['userId', 5], ['perfil', 1], ['data', JSON.stringify([{ chofer, idpaquetes: parte.join(',') }])]]);
     let j = null; try { j = JSON.parse(r.texto); } catch { /* */ }
     const fallidos = new Set([...(j && j.enviosNoAsignados) || [], ...(j && j.enviosNoProcesados) || []].map((x) => Number(typeof x === 'object' ? (x.idPaquete || x.did || x.id) : x)));
@@ -351,7 +355,7 @@ async function reasignarDeposito(page) {
       (CHOFER_DEPOSITO.test(ult) && !fallidos.has(did) ? ok : mal).push(did);
     }
     if (ok.length) await sb(`devoluciones_gestion?did=in.(${ok.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_at: ahora }) });
-    for (const did of mal) await sb(`devoluciones_gestion?did=eq.${did}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_error: (j && j.mensaje ? String(j.mensaje) : `HTTP ${r.status}`).slice(0, 200) }) });
+    for (const did of mal) await sb(`devoluciones_gestion?did=eq.${did}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_error: `[${intentos(errPrev.get(did)) + 1}] ${(j && j.mensaje ? String(j.mensaje) : `HTTP ${r.status}`).replace(/^\[\d+\]\s*/, '')}`.slice(0, 200) }) });
     if (ok.length) await sb(`devoluciones?did=in.(${ok.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ en_deposito_ld: true, detalle_at: null }) }); // detalle_at null = releer la ficha (chofer, quién lo trajo)
   }
   return dids.length;
