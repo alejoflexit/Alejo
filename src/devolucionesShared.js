@@ -28,13 +28,15 @@ export function diasDesde(iso, ahora = Date.now()) {
   return Number.isFinite(t) ? Math.max(0, Math.floor((ahora - t) / DIA)) : null;
 }
 
+// Nombre corto del tipo para mostrar
+export const tipoTxt = (t) => (t === "CAMBIO" ? "Cambio" : t === "NO_ENTREGADO" ? "No entregado" : t ? "Cancelado" : "—");
 export function armarCaso(d, g = {}, ahora = Date.now()) {
   const tipo = g.tipo_override || d.tipo;
   if (tipo === "NO_ES") return null;
   let etapa, desde;
   if (d.estado_ld === 14) {
     etapa = "devuelto"; desde = d.fecha_devuelto_cliente || d.fecha_dev_ld;
-  } else if (tipo === "CANCELADO") {
+  } else if (tipo === "CANCELADO" || tipo === "NO_ENTREGADO") {
     // En depósito: asignado a "devuelto deposito" en LightData, o marcado "Ingresó a depósito" en la app
     if (d.en_deposito_ld || g.ingreso_deposito_at) { etapa = "deposito"; desde = (d.en_deposito_ld && d.fecha_deposito) || g.ingreso_deposito_at || d.fecha_cancelado || d.fecha_alta; }
     else { etapa = "calle"; desde = d.fecha_cancelado || d.fecha_alta; }

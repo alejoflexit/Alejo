@@ -7,7 +7,7 @@ import { sbFetch } from "./colectasShared";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
-  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, CAJAS_LETRA, casoDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
+  progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -69,7 +69,8 @@ const AYUDA = {
 };
 const COL_FECHA = { calle: "Cancelados: cuándo se cancelaron. Cambios: cuándo se retiró el producto al comprador.", deposito: "Cuándo ingresó al depósito.", retiro: "Cuándo se cargó el cambio en LightData.", devuelto: "Cuándo se devolvió al cliente.", marcados: "La fecha de la etapa en la que está cada envío.", extraviados: "La fecha de la etapa en la que estaba cuando se perdió." };
 const NOMBRE_ETAPA = { calle: "En la calle", deposito: "En depósito", retiro: "Cambios por retirar", devuelto: "Devueltos al cliente", marcados: "Etiquetados", extraviados: "Extraviados", gestionar: "A gestionar" };
-const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"]];
+const ESTADO_TXT = { 1: "En planta", 2: "En camino", 5: "Entregado", 6: "Nadie en domicilio", 7: "A retirar", 8: "Cancelado", 9: "Entregado 2da visita", 10: "Nadie 2da visita", 13: "No entregado", 14: "Devuelto al cliente", 15: "Rechazado", 30: "Reprogramado", 31: "Reprogramado" };
+const TIPOS = [["todos", "Todo"], ["CANCELADO", "Cancelados"], ["CAMBIO", "Cambios"], ["NO_ENTREGADO", "No entregados"]];
 
 export default function Devoluciones({ abrirEnvio = null }) {
   const [datos, setDatos] = useState(null);
@@ -244,6 +245,26 @@ export default function Devoluciones({ abrirEnvio = null }) {
       await guardarGestion([{ did, ubicacion: codigo || null }]);
       setDatos((d) => ({ ...d, gest: d.gest.some((g) => Number(g.did) === Number(did)) ? d.gest.map((g) => (Number(g.did) === Number(did) ? { ...g, ubicacion: codigo || null } : g)) : [...d.gest, { did, ubicacion: codigo || null }] }));
     } catch (e) { toast("No se pudo cambiar el lugar: " + String(e.message || e).slice(0, 60)); }
+  }
+  // Escaneo de un envío que no es cancelado ni cambio (ej. "nadie en domicilio" varias veces): se busca en el
+  // buscador de envíos y se ingresa igual; la sincronización lo agrega como "No entregado" y lo pasa a
+  // "devuelto deposito" en LightData.
+  async function ingresoOtro(texto) {
+    try {
+      const cods = codigosDeEtiqueta(texto).filter((x) => /^[\w-]{4,}$/.test(x)).slice(0, 6);
+      if (!cods.length) return null;
+      const lista = cods.map((x) => encodeURIComponent(x)).join(",");
+      const rows = await sbFetch(`envios_busqueda?or=(tracking.in.(${lista}),id_venta_ml.in.(${lista}),id_interno.in.(${lista}))&select=id_interno,razon_social,direccion,estado&limit=1`);
+      const e = rows && rows[0];
+      if (!e) return null;
+      const did = Number(e.id_interno);
+      const g = (datos.gest || []).find((x) => Number(x.did) === did);
+      if (g && g.ingreso_deposito_at) return { ya: true, did, cliente: e.razon_social, direccion: e.direccion };
+      await guardarGestion([{ did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
+      setDatos((d) => ({ ...d, gest: [...d.gest.filter((x) => Number(x.did) !== did), { ...(g || {}), did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }] }));
+      registrar("ingreso", 1, null, { dids: [did], via: "escaner", no_entregado: true });
+      return { ok: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado };
+    } catch { return null; }
   }
   async function ingresoEscaneado(c) {
     try {
@@ -463,7 +484,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
 
       {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
-      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
@@ -583,7 +604,7 @@ function Fila({ c, remito, ubicacion, codigosLugar = [], onLugar, lugarSeller, a
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontWeight: 600, fontSize: 14 }}>{c.cliente || "Sin cliente"}</span>
-            <span className="dv-tag">{c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"}</span>
+            <span className="dv-tag">{tipoTxt(c.tipo)}</span>
             {c.marca && <span className="dv-tag mk">{MARCAS[c.marca]}</span>}
             {remito && <span className="dv-tag">{remito.codigo}</span>}
             {ubicacion && c.etapa === "deposito" && <span className="dv-tag ub" title="Dónde está guardado en el cuartito">📍 {ubicacion}</span>}
@@ -620,7 +641,7 @@ function Fila({ c, remito, ubicacion, codigosLugar = [], onLugar, lugarSeller, a
                 </select>
               </span>} />}
             <Dato k="Cargado en LightData" v={fecha(c.fecha_alta)} />
-            {c.tipo === "CANCELADO" ? <Dato k="Cancelado" v={fecha(c.fecha_cancelado)} /> : <Dato k="Retirado al comprador" v={fecha(c.fecha_retiro)} />}
+            {c.tipo === "NO_ENTREGADO" ? <Dato k="Último estado" v={`${ESTADO_TXT[c.estado_ld] || c.estado_ld || "—"}`} /> : c.tipo === "CANCELADO" ? <Dato k="Cancelado" v={fecha(c.fecha_cancelado)} /> : <Dato k="Retirado al comprador" v={fecha(c.fecha_retiro)} />}
             <Dato k="Ingresó a depósito" v={c.ingreso_deposito_at ? `${fecha(c.ingreso_deposito_at)} · ${c.ingreso_por}` : fecha(c.fecha_deposito)} />
             <Dato k="Devuelto al cliente" v={fecha(c.fecha_devuelto_cliente || c.fecha_dev_ld)} />
             <Dato k="Tracking" v={c.tracking || "—"} />
@@ -1152,7 +1173,7 @@ function VincularEnvio({ item, casos, onElegir, onCerrar }) {
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
           {enDev.length > 0 && <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em", padding: "8px 8px 2px" }}>En devoluciones</div>}
-          {enDev.map((c) => <Fila key={c.did} did={c.did} titulo={c.cliente} sub={[c.direccion, c.localidad, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ")} extra={`${c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"} · ${NOMBRE_ETAPA[c.etapa] || c.etapa}`} />)}
+          {enDev.map((c) => <Fila key={c.did} did={c.did} titulo={c.cliente} sub={[c.direccion, c.localidad, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ")} extra={`${tipoTxt(c.tipo)} · ${NOMBRE_ETAPA[c.etapa] || c.etapa}`} />)}
           {otros.length > 0 && <div style={{ fontSize: 11, color: C.ink3, textTransform: "uppercase", letterSpacing: ".06em", padding: "8px 8px 2px" }}>Otros envíos</div>}
           {otros.map((r) => <Fila key={r.id_interno} did={r.id_interno} titulo={r.razon_social || "—"} sub={[r.direccion, r.localidad, r.nombre].filter(Boolean).join(" · ")} extra={r.estado || ""} />)}
           {q.trim().length >= 3 && !enDev.length && !otros.length && <div style={{ padding: 20, textAlign: "center", color: C.ink3, fontSize: 13 }}>{buscando ? "Buscando…" : "No encontré nada con eso."}</div>}
@@ -1211,7 +1232,7 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
 // ---------------- Ingreso a depósito escaneando la etiqueta del paquete ----------------
 // Continuo (acá no hace falta foto de prueba): lee el QR/código de barras de la etiqueta de ML o de LightData,
 // busca la devolución y la pasa a depósito al toque. Se puede tipear la venta/tracking si la etiqueta está rota.
-function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar, onGestionar, codigosLugar = [], onLugar }) {
+function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar, onGestionar, codigosLugar = [], onLugar }) {
   const video = useRef();
   const casosRef = useRef(casos); casosRef.current = casos;
   const ultimo = useRef({ t: "", at: 0 });
@@ -1227,13 +1248,17 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onCerrar, onGestionar, c
     ultimo.current = { t: texto, at: ahora };
     const c = casoDeEtiqueta(casosRef.current, texto);
     let l;
-    if (!c) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: "No es una devolución abierta", sub: `Leído: ${String(texto).slice(0, 40)}. Si se canceló hace menos de 1 hora, todavía no llegó de LightData.` };
+    let otro = null;
+    if (!c && onIngresarOtro) otro = await onIngresarOtro(texto); // cualquier envío que vuelve (ej. nadie en domicilio varias veces)
+    if (!c && otro && otro.ok) l = { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, otro.estado, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo };
+    else if (!c && otro && otro.ya) l = { tipo: "ya", titulo: `${otro.cliente || "Envío"} · ya estaba ingresado`, sub: otro.direccion || "" };
+    else if (!c) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: "No lo encontré en el sistema", sub: `Leído: ${String(texto).slice(0, 40)}. Si es de hoy puede que todavía no esté en el buscador; cargalo en “A gestionar”.` };
     else if (hechos.current.has(c.did) || c.etapa === "deposito") l = { tipo: "ya", titulo: `${c.cliente} · ya estaba en depósito`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
     else if (c.etapa === "devuelto" || c.cerrado) l = { tipo: "ya", titulo: `${c.cliente} · ${c.etapa === "devuelto" ? "ya fue devuelto al seller" : "está cerrado"}`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
     else {
       hechos.current.add(c.did);
       const ok = await onIngresar(c);
-      l = ok ? { tipo: "ok", did: c.did, titulo: `${c.cliente} · ${c.tipo === "CAMBIO" ? "cambio" : "cancelado"}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · "), donde: ubicacionDe(c.cliente, ubic).codigo }
+      l = ok ? { tipo: "ok", did: c.did, titulo: `${c.cliente} · ${tipoTxt(c.tipo).toLowerCase()}`, sub: [c.direccion, c.cadete ? `lo trajo ${c.cadete}` : null].filter(Boolean).join(" · "), donde: ubicacionDe(c.cliente, ubic).codigo }
         : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" };
       if (!ok) hechos.current.delete(c.did);
     }
@@ -1492,7 +1517,7 @@ function RemitoDigital({ rem, casos, resaltar = "" }) {
             <span style={{ color: C.ink3 }}>{n}</span>
             <span style={{ minWidth: 0 }}><b style={{ fontWeight: 600 }}>{c.ml_venta_id || c.tracking || "—"}</b><small>#{c.did}{c.ml_venta_id && c.tracking ? ` · ${c.tracking}` : ""}</small></span>
             <span style={{ minWidth: 0 }}>{c.direccion || "—"}<small>{c.localidad || ""}</small></span>
-            <span>{c.tipo === "CAMBIO" ? "Cambio" : c.tipo ? "Cancelado" : "—"}</span>
+            <span>{tipoTxt(c.tipo)}</span>
             <span className="dv-r">{c.valor ? plata(c.valor) : "—"}</span>
           </div>
         ))}
@@ -2288,7 +2313,7 @@ async function imprimirRemitos(remitos, ventana) {
   const hojas = [];
   for (const rem of remitos) {
     const qr = await QRCode.toDataURL(QR_PREFIJO + rem.codigo, { margin: 1, width: 320, errorCorrectionLevel: "M" });
-    const filas = rem.casos.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.ml_venta_id || c.tracking || "—")}</td><td>${esc([c.direccion, c.localidad].filter(Boolean).join(", ") || "—")}</td><td>${c.tipo === "CAMBIO" ? "Cambio" : "Cancelado"}${c.tipo === "CAMBIO" && c.li_texto ? `<small>${esc(c.li_texto)}</small>` : ""}</td></tr>`).join("");
+    const filas = rem.casos.map((c, i) => `<tr><td>${i + 1}</td><td>${esc(c.ml_venta_id || c.tracking || "—")}</td><td>${esc([c.direccion, c.localidad].filter(Boolean).join(", ") || "—")}</td><td>${tipoTxt(c.tipo)}${c.tipo === "CAMBIO" && c.li_texto ? `<small>${esc(c.li_texto)}</small>` : ""}</td></tr>`).join("");
     const tabla = `<table><thead><tr><th>#</th><th>Venta / tracking</th><th>Dirección</th><th>Tipo</th></tr></thead><tbody>${filas}</tbody></table>`;
     const chofer = rem.chofer ? `<b>${esc(rem.chofer)}</b>` : `<b class="vacio"></b>`;
     const meta = `<div class="meta"><div><span>Seller</span><b>${esc(rem.cliente)}</b></div><div><span>Fecha</span><b>${fmtDia(rem.creado_at)}</b></div><div><span>Paquetes</span><b>${rem.casos.length}</b></div><div class="ch"><span>Chofer</span>${chofer}</div>${rem.ubicacion ? `<div><span>Ubicación</span><b>${esc(rem.ubicacion)}</b></div>` : ""}</div>`;

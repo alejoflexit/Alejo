@@ -315,6 +315,40 @@ async function empresaLD(page) {
   if (!e) throw new Error('No encontré el id de empresa de LightData');
   return e;
 }
+// ---------- No entregados: envíos que no son cancelado ni cambio pero se ingresaron al depósito en la app ----------
+// (ej. "nadie en domicilio" varias veces). LightData no los lista en Devoluciones, así que se arman con la ficha
+// y el buscador de envíos, y se guardan con tipo NO_ENTREGADO. Los que ya están se refrescan en cada corrida.
+async function sumarNoEntregados(page) {
+  const gest = await sbTodo(`devoluciones_gestion?select=did&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}`);
+  const existentes = new Set((await sbTodo('devoluciones?select=did')).map((d) => Number(d.did)));
+  // También los que en LightData ya pasaron a "devuelto deposito" a mano (ej. "Nadie 2da visita"), según el buscador de envíos
+  const enDep = (await sbTodo('envios_busqueda?select=id_interno,estado,fecha_flexit&cadete=ilike.*devuelto*deposito*'))
+    .filter((b) => !/entregado|devuelto al cliente|cancelado/i.test(b.estado || '') && (fechaLD(b.fecha_flexit) || '') >= '2026-10-01');
+  const nuevos = [...new Set([...gest.map((g) => Number(g.did)), ...enDep.map((b) => Number(b.id_interno))])].filter((d) => d && !existentes.has(d));
+  const abiertos = (await sbTodo('devoluciones?select=did&tipo=eq.NO_ENTREGADO&estado_ld=neq.14')).map((d) => Number(d.did));
+  const dids = [...new Set([...nuevos, ...abiertos])];
+  if (!dids.length) return 0;
+  const bus = new Map((await sbTodo(`envios_busqueda?select=id_interno,razon_social,tracking,id_venta_ml,cp,direccion,localidad,fecha_flexit&id_interno=in.(${dids.join(',')})`)).map((b) => [Number(b.id_interno), b]));
+  const fx = await fichas(page, dids);
+  const ahora = new Date().toISOString();
+  const filas = [];
+  for (const did of dids) {
+    const f = fx[did]; const b = bus.get(did) || {};
+    if (!f) continue;
+    const dfx = datosFicha(f);
+    const asig = f.asignaciones || [];
+    const ult = asig.length ? String(asig[asig.length - 1].operador || '') : '';
+    filas.push({
+      did, tipo: 'NO_ENTREGADO', cliente: String(b.razon_social || '').trim() || null, tracking: b.tracking || null, ml_venta_id: b.id_venta_ml || null, cp: b.cp || null,
+      estado_ld: Number(f.header && f.header.estado_envio) || null, en_deposito_ld: CHOFER_DEPOSITO.test(ult), fecha_alta: fechaLD(b.fecha_flexit),
+      ...dfx, direccion: dfx.direccion || b.direccion || null, localidad: dfx.localidad || b.localidad || null, detalle_at: ahora, actualizado_at: ahora,
+    });
+  }
+  if (filas.length) await sb('devoluciones?on_conflict=did', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(filas) });
+  console.log(`::notice title=No entregados::nuevos ${nuevos.length}, refrescados ${abiertos.length}, guardados ${filas.length}`);
+  return nuevos.length;
+}
+
 async function reasignarDeposito(page) {
   // Reintenta los que fallaron (LightData a veces corta con "Asignacion interrumpida"): hasta 4 intentos en total.
   const intentos = (e) => { const m = /^\[(\d+)\]/.exec(String(e || '')); return e ? (m ? Number(m[1]) : 1) : 0; };
@@ -421,6 +455,7 @@ async function main() {
   try {
     try { const n = await importarSanti(); if (n) detalle += `importados de Santi ${n}; `; } catch (e) { console.error(e.message); detalle += `importación Santi falló: ${String(e.message).slice(0, 120)}; `; }
     if (ACCION !== 'sync') { const n = await procesarRemitos(page); detalle += `remitos ${n}; `; }
+    if (ACCION !== 'procesar') { try { const n = await sumarNoEntregados(page); if (n) detalle += `no entregados sumados ${n}; `; } catch (e) { console.log(`::error title=No entregados::${String(e.message).slice(0, 300)}`); detalle += `no entregados falló: ${String(e.message).slice(0, 100)}; `; } }
     if (ACCION !== 'procesar') { try { const n = await reasignarDeposito(page); if (n) detalle += `reasignados a depósito ${n}; `; } catch (e) { console.error(e.message); detalle += `reasignar falló: ${String(e.message).slice(0, 100)}; `; } }
     if (ACCION !== 'procesar') { const s = await sync(page); detalle += `devoluciones ${s.total}, fichas ${s.fichas}`; }
     await sb('devoluciones_sync?id=eq.1', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ultima_at: new Date().toISOString(), ok: true, detalle }) });

@@ -39,7 +39,7 @@ function DevolucionInfo({ did, verDevolucion }) {
   const color = c.etapa === 'devuelto' ? '#2ECFAA' : c.vencido ? '#FFB020' : '#9fb0ff';
   const trajo = quienTrajo(c);
   const filas = [
-    ['Tipo', c.tipo === 'CAMBIO' ? `Cambio${c.li_texto ? ` · “${c.li_texto}”` : ''}` : 'Cancelado'],
+    ['Tipo', c.tipo === 'CAMBIO' ? `Cambio${c.li_texto ? ` · “${c.li_texto}”` : ''}` : c.tipo === 'NO_ENTREGADO' ? 'No entregado (volvió al depósito)' : 'Cancelado'],
     c.tipo === 'CANCELADO' ? ['Cancelado', fechaCorta(c.fecha_cancelado)] : ['Retirado al comprador', fechaCorta(c.fecha_retiro)],
     ['Ingresó a depósito', c.ingreso_deposito_at ? `${fechaCorta(c.ingreso_deposito_at)} · ${c.ingreso_por}` : fechaCorta(c.fecha_deposito)],
     trajo && ['Lo trajo', trajo],
