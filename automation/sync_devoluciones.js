@@ -359,8 +359,8 @@ function enOrden(asig) {
 async function reasignarDeposito(page) {
   // Reintenta los que fallaron (LightData a veces corta con "Asignacion interrumpida"): hasta 4 intentos en total.
   const intentos = (e) => { const m = /^\[(\d+)\]/.exec(String(e || '')); return e ? (m ? Number(m[1]) : 1) : 0; };
-  const pend = (await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at,ld_reasignado_error&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}&ld_reasignado_at=is.null&order=ingreso_deposito_at`))
-    .filter((p) => intentos(p.ld_reasignado_error) < 4);
+  const sinReasig = await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at,ld_reasignado_error&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}&ld_reasignado_at=is.null&order=ingreso_deposito_at`);
+  const pend = sinReasig.filter((p) => intentos(p.ld_reasignado_error) < 6);
   const errPrev = new Map(pend.map((p) => [Number(p.did), p.ld_reasignado_error]));
   { // diagnóstico: qué pasó con los ingresos de los últimos 7 días
     const hace7 = new Date(Date.now() - 7 * 864e5).toISOString();
@@ -373,10 +373,10 @@ async function reasignarDeposito(page) {
     const resumen = ult.slice(0, 15).map((g) => { const d = dv.get(Number(g.did)) || {}; return `${g.did}:${String(g.ingreso_deposito_at).slice(5, 16)} ${g.ingreso_por || ''} reasig=${g.ld_reasignado_at ? 'si' : 'no'}${g.ld_reasignado_error ? ' err=' + g.ld_reasignado_error : ''} dep=${d.en_deposito_ld} est=${d.estado_ld} ch=${d.cadete}`; });
     console.log(`::notice title=Ingresos 7d (${ult.length}, pendientes ${pend.length})::${resumen.join(' | ').slice(0, 3500)}`);
   }
-  if (!pend.length) return 0;
-  const devs = new Map((await sbTodo(`devoluciones?select=did,estado_ld,en_deposito_ld&did=in.(${pend.map((p) => p.did).join(',')})`)).map((d) => [Number(d.did), d]));
+  if (!sinReasig.length) return 0;
+  const devs = new Map((await sbTodo(`devoluciones?select=did,estado_ld,en_deposito_ld&did=in.(${sinReasig.map((p) => p.did).join(',')})`)).map((d) => [Number(d.did), d]));
   // Los que LightData ya tiene con "devuelto deposito" (ej. falso error por asignaciones desordenadas): darlos por hechos
-  const yaEstan = pend.map((p) => Number(p.did)).filter((d) => (devs.get(d) || {}).en_deposito_ld);
+  const yaEstan = sinReasig.map((p) => Number(p.did)).filter((d) => (devs.get(d) || {}).en_deposito_ld);
   if (yaEstan.length) {
     await sb(`devoluciones_gestion?did=in.(${yaEstan.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ld_reasignado_at: new Date().toISOString(), ld_reasignado_error: null }) });
     await sb(`devoluciones?did=in.(${yaEstan.join(',')})`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ detalle_at: null }) });
