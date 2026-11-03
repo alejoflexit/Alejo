@@ -1,7 +1,7 @@
 // src/LiqWhatsapp.js — Liquidaciones › "Enviar por WhatsApp" (2026-11-02)
 // Manda el mensaje de liquidación ("Buen día X, tengo N envíos entregados…") desde el WhatsApp
 // PERSONAL de Alejo. La app NO manda nada sola: Alejo revisa la tanda, toca "Mandar" y confirma.
-// La base (liq_wa_encolar) los escalona 25–60 s y el worker del VPS (vps/flexit-liq-wa.py) los
+// La base (liq_wa_encolar) los escalona 25–35 s y el worker del VPS (vps/flexit-liq-wa.py) los
 // manda por OpenWA. Al salir bien, la fila queda "✓ Avisado" (pagos_avisos) como con el 💬.
 // Todo lo de acá es solo admin (RLS por email): el QR da acceso completo a tu WhatsApp.
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -340,8 +340,8 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
           ) : (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, flex: '1 1 260px' }}>
-                Se mandan <b>{aMandar.length}</b> mensaje{aMandar.length === 1 ? '' : 's'} desde <b>tu WhatsApp</b>, de a uno cada 25–60 s
-                (~{Math.max(1, Math.round(aMandar.length * 42.5 / 60))} min). Solo entre las 8 y las 21.
+                Se mandan <b>{aMandar.length}</b> mensaje{aMandar.length === 1 ? '' : 's'} desde <b>tu WhatsApp</b>, de a uno cada ~30 s
+                (~{Math.max(1, Math.round(aMandar.length * 30 / 60 + 1))} min). Solo entre las 8 y las 21.
               </span>
               <button disabled={busy} onClick={() => setConfirmar(false)} style={btn(false, busy)}>Volver</button>
               <button disabled={busy} onClick={mandar} style={btn(true, busy)}>{busy ? 'Encolando…' : 'OK, mandar'}</button>

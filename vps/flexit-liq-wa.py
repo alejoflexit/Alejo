@@ -6,7 +6,7 @@ Corre cada minuto (/etc/cron.d/flexit-liq-wa) y dura ~55 s. Qué hace:
   * Si hay: enciende la sesión OpenWA de Alejo (id en /root/flexit/liq-wa.sid). Si WhatsApp pide QR,
     lo publica en Supabase cada ~12 s (lo ve solo admin@flexit.app en Liquidaciones).
   * Con la sesión lista: sube los contactos (nombre + número, cada 6 h) y manda la cola de a UN
-    mensaje, respetando el horario escalonado que puso la base (25–60 s entre cada uno).
+    mensaje, respetando el horario escalonado que puso la base (25–35 s entre cada uno; mínimo 25 s real).
   * Si no hay nada que hacer: APAGA la sesión. Así Chrome no queda abierto con tus chats toda la
     semana ni come memoria del VPS.
 Nunca reinicia el container (eso es del guardián del bot) y nunca reintenta un envío dudoso.

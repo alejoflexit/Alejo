@@ -11,7 +11,7 @@ Los lunes, mandar a cada cadete el mensaje de liquidación ("Buen día X, tengo 
 ## Cómo funciona
 1. Liquidaciones › Semana › botón **Enviar por WhatsApp** (solo admin). Toma los cadetes de la vista (respeta el filtro de Método: transferencias primero).
 2. Cada cadete necesita su celular (`cadetes_tarifas.whatsapp`, formato `549XXXXXXXXXX@c.us`). Se carga ahí mismo; si tu WhatsApp está vinculado, sugiere el contacto que coincide con el nombre ("Usar").
-3. Por defecto quedan elegidos los que **no** están avisados y tienen número. **Mandar N mensajes… → OK, mandar** → `rpc/liq_wa_encolar` deja una fila por cadete en `liq_envios`, escalonadas **25–60 s al azar**.
+3. Por defecto quedan elegidos los que **no** están avisados y tienen número. **Mandar N mensajes… → OK, mandar** → `rpc/liq_wa_encolar` deja una fila por cadete en `liq_envios`, escalonadas **25–35 s al azar** (~30 s; 65 cadetes ≈ 35 min). La base además exige 25 s reales desde el último enviado, así si la sesión tarda en prender no salen de golpe.
 4. VPS: `/usr/local/bin/flexit-liq-wa.py` (cron cada minuto). Si hay cola o la app pidió conectar, **prende** la sesión OpenWA `alejo-liquidaciones` (id en `/root/flexit/liq-wa.sid`), manda de a uno (`liq_wa_tomar` → OpenWA `send-text` → `liq_wa_resultado`). Sin trabajo, la **apaga** (Chrome no queda abierto con tus chats ni come RAM).
 5. Envío OK → la fila queda **✓ Avisado** (`pagos_avisos`), igual que con el 💬.
 6. Si WhatsApp pide vincular, el QR aparece en el panel (solo admin). Escanear desde **la compu** con el celular: WhatsApp › Dispositivos vinculados.

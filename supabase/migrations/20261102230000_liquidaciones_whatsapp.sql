@@ -2,7 +2,7 @@
 --
 -- Flujo: en Liquidaciones › Semana, Alejo abre "Enviar por WhatsApp", revisa la tanda (texto por
 -- cadete, número), pone OK → liq_wa_encolar() deja una fila por cadete en liq_envios, escalonadas
--- 25–60 s al azar. El worker del VPS (vps/flexit-liq-wa.sh, cron cada minuto) enciende la sesión
+-- 25–35 s al azar (~30 s: 65 cadetes ≈ 35 min). El worker del VPS (vps/flexit-liq-wa.sh, cron cada minuto) enciende la sesión
 -- OpenWA vinculada al WhatsApp PERSONAL de Alejo, toma de a una (liq_wa_tomar) y reporta
 -- (liq_wa_resultado). Al salir bien, la fila de Liquidaciones queda "✓ Avisado" (pagos_avisos).
 --
@@ -115,7 +115,7 @@ begin
     insert into liq_envios (semana_label, cadete, chat_id, texto, enviar_desde, creado_por)
     values (p_semana, v_cadete, v_chat, v_texto, t, auth.jwt() ->> 'email');
     n := n + 1; ult := t;
-    t := t + make_interval(secs => 25 + floor(random() * 36)::int);   -- 25–60 s entre mensajes
+    t := t + make_interval(secs => 25 + floor(random() * 11)::int);   -- 25–35 s entre mensajes
   end loop;
 
   if n > 0 then
@@ -186,6 +186,11 @@ begin
   end if;
   if exists (select 1 from liq_envios where estado = 'enviando') then
     return json_build_object('ok', true, 'motivo', 'hay uno en curso');
+  end if;
+  -- pausa mínima REAL entre envíos: si la sesión tardó en prender y se juntaron varios
+  -- "en hora", no salen de golpe sino de a uno cada 25 s
+  if exists (select 1 from liq_envios where estado = 'enviado' and enviado_at > now() - interval '25 seconds') then
+    return json_build_object('ok', true, 'motivo', 'pausa');
   end if;
   select * into r from liq_envios where estado = 'en_cola' and enviar_desde <= now()
    order by enviar_desde, id limit 1 for update skip locked;
