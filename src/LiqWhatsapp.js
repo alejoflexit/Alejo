@@ -238,6 +238,9 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8, fontSize: 12.5 }}>
             <span style={{ color: BRAND.muted }}>Tu WhatsApp:</span>
             <span style={{ color: chipEstado.c, fontWeight: 700 }}>{chipEstado.t}</span>
+            {salud && salud.estado && !conectado && (
+              <span style={{ color: BRAND.muted, fontSize: 11.5 }}>servidor: {salud.estado}{salud.estado_at ? ` · ${hora(salud.estado_at)}` : ''}{salud.ultimo_error ? ` · ${salud.ultimo_error}` : ''}</span>
+            )}
             {!conectado && !qrFresco && <button disabled={busy} onClick={conectar} style={{ ...btn(false, busy), padding: '4px 10px', fontSize: 12 }}>{salud && salud.estado ? 'Conectar ahora' : 'Vincular mi WhatsApp'}</button>}
             {conectado && <button disabled={busy} onClick={conectar} title="vuelve a leer tus contactos para sugerir números" style={{ ...btn(false, busy), padding: '4px 10px', fontSize: 12 }}>Actualizar contactos</button>}
           </div>
