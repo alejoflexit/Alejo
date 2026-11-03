@@ -56,7 +56,19 @@ function sugerirContacto(nombre, contactos) {
 
 function hora(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false });
+  const d = new Date(iso);
+  const tz = { timeZone: 'America/Argentina/Buenos_Aires' };
+  const hm = d.toLocaleTimeString('es-AR', { ...tz, hour: '2-digit', minute: '2-digit', hour12: false });
+  const dia = x => x.toLocaleDateString('es-AR', { ...tz, day: '2-digit', month: '2-digit' });
+  return dia(d) === dia(new Date()) ? hm : `${dia(d)} ${hm}`; // otro día: "04/11 08:30"
+}
+
+// próximo 8:30 (hoy si todavía no pasó, si no mañana) en formato de <input type="datetime-local">
+function proximas830() {
+  const d = new Date(); const t = new Date(d); t.setHours(8, 30, 0, 0);
+  if (t <= d) t.setDate(t.getDate() + 1);
+  const p = n => String(n).padStart(2, '0');
+  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}T${p(t.getHours())}:${p(t.getMinutes())}`;
 }
 
 function QrImagen({ valor }) {
@@ -77,6 +89,8 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
   const [numeros, setNumeros] = useState({});     // key → texto que está escribiendo
   const [elegidos, setElegidos] = useState(null); // Set de keys (null = todavía sin default)
   const [confirmar, setConfirmar] = useState(false);
+  const [programar, setProgramar] = useState(false); // false = ahora; true = a la hora de 'cuando'
+  const [cuando, setCuando] = useState(proximas830);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -114,6 +128,8 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
   }, [envios, norm]);
 
   const activos = envios.filter(e => e.estado === 'en_cola' || e.estado === 'enviando');
+  // los que tienen que salir ya (no los programados para más tarde): solo esos prenden tu WhatsApp
+  const activosYa = activos.filter(e => e.estado === 'enviando' || new Date(e.enviar_desde).getTime() <= Date.now() + 3 * 60 * 1000);
   const qrFresco = salud && salud.qr && salud.qr_at && (Date.now() - new Date(salud.qr_at).getTime()) < 2 * 60 * 1000;
   const conectado = salud && ['ready', 'connected', 'authenticated'].includes(salud.estado);
   const pidioEncender = salud && salud.encender_hasta && new Date(salud.encender_hasta) > new Date();
@@ -185,8 +201,10 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
   async function mandar() {
     setBusy(true); setErr(''); setMsg('');
     try {
+      const desde = programar ? new Date(cuando).toISOString() : null;
+      if (programar && !(new Date(cuando) > new Date())) { setErr('Elegí una hora que no haya pasado.'); return; }
       const items = aMandar.map(x => ({ cadete: x.f.nombre, chat_id: x.guardado, texto: x.texto }));
-      const r = await sb('rpc/liq_wa_encolar', { method: 'POST', body: JSON.stringify({ p_semana: semanaLunes, p_items: items }) });
+      const r = await sb('rpc/liq_wa_encolar', { method: 'POST', body: JSON.stringify({ p_semana: semanaLunes, p_items: items, p_desde: desde }) });
       const salteados = (r && r.salteados) || [];
       setMsg(`${r.encolados} mensaje${r.encolados === 1 ? '' : 's'} en cola` + (r.termina_aprox ? ` · el último sale ~${hora(r.termina_aprox)}` : '') +
         (salteados.length ? ` · salteados: ${salteados.map(s => `${s.cadete} (${s.motivo})`).join(', ')}` : ''));
@@ -221,10 +239,11 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
     if (qrFresco) return { t: 'Pide vincular (QR)', c: BRAND.amber };
     if (salud.estado === 'no_existe' || salud.estado === 'container_caido') return { t: 'Servidor sin configurar', c: BRAND.amber };
     if (!salud.estado) return { t: 'Nunca conectado', c: BRAND.muted };
-    if (pidioEncender || activos.length) return { t: 'Conectando…', c: BRAND.muted };
+    if (pidioEncender || activosYa.length) return { t: 'Conectando…', c: BRAND.muted };
+    if (activos.length) return { t: `Apagado · se prende para el envío programado (${hora(activos[0].enviar_desde)})`, c: BRAND.muted };
     return { t: 'Apagado · se prende solo al mandar', c: BRAND.muted };
   })();
-  const sinSenal = salud && salud.estado_at && (Date.now() - new Date(salud.estado_at).getTime()) > 5 * 60 * 1000 && (activos.length || pidioEncender);
+  const sinSenal = salud && salud.estado_at && (Date.now() - new Date(salud.estado_at).getTime()) > 5 * 60 * 1000 && (activosYa.length || pidioEncender);
 
   return (
     <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(6,6,26,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
@@ -342,12 +361,20 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, flex: '1 1 260px' }}>
-                Se mandan <b>{aMandar.length}</b> mensaje{aMandar.length === 1 ? '' : 's'} desde <b>tu WhatsApp</b>, de a uno cada ~30 s
-                (~{Math.max(1, Math.round(aMandar.length * 30 / 60 + 1))} min). Solo entre las 8 y las 23.
-              </span>
+              <div style={{ flex: '1 1 300px', fontSize: 13 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+                  <button onClick={() => setProgramar(false)} style={{ ...btn(!programar, false), padding: '4px 11px', fontSize: 12 }}>Ahora</button>
+                  <button onClick={() => setProgramar(true)} style={{ ...btn(programar, false), padding: '4px 11px', fontSize: 12 }}>Programar</button>
+                  {programar && (
+                    <input type="datetime-local" value={cuando} onChange={e => setCuando(e.target.value)}
+                      style={{ padding: '4px 8px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.navy, color: BRAND.white, colorScheme: 'dark' }} />
+                  )}
+                </div>
+                Se mandan <b>{aMandar.length}</b> mensaje{aMandar.length === 1 ? '' : 's'} desde <b>tu WhatsApp</b>{programar && cuando ? <>, desde el <b>{hora(new Date(cuando).toISOString())}</b></> : ' ya'}, de a uno cada ~30 s
+                (~{Math.max(1, Math.round(aMandar.length * 30 / 60 + 1))} min).
+              </div>
               <button disabled={busy} onClick={() => setConfirmar(false)} style={btn(false, busy)}>Volver</button>
-              <button disabled={busy} onClick={mandar} style={btn(true, busy)}>{busy ? 'Encolando…' : 'OK, mandar'}</button>
+              <button disabled={busy || (programar && !cuando)} onClick={mandar} style={btn(true, busy)}>{busy ? 'Encolando…' : programar ? 'OK, programar' : 'OK, mandar'}</button>
             </div>
           )}
         </div>

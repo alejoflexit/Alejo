@@ -11,7 +11,8 @@
 --  * Un mensaje por cadete por semana. Lo enviado no se reenvía; lo que falló se puede reintentar.
 --  * Si un envío queda "enviando" > 5 min (no sabemos si salió), pasa a error y NO se reintenta solo
 --    (misma lección que el bot de colectas: reintentar a ciegas duplica).
---  * Ventana 8:00–23:00 AR y tope de 150 por día (antispam: OpenWA no es API oficial).
+--  * Sin franja horaria: sale cuando Alejo aprieta, o a la hora que programe (p_desde). Tope 150 por día
+--    (antispam: OpenWA no es API oficial).
 --  * El worker se autentica con la misma clave que el guardián del bot (/root/flexit/bot-wa.key,
 --    hash en bot_secreto). La app solo con admin@flexit.app.
 
@@ -86,7 +87,9 @@ revoke all on function public.liq_wa_clave_ok(text) from public, anon, authentic
 -- ───────────────────────── App (admin) ─────────────────────────
 
 -- Encolar la tanda. p_items = [{cadete, chat_id, texto}]. Devuelve cuántos encoló y a quién salteó.
-create or replace function public.liq_wa_encolar(p_semana text, p_items json)
+-- p_desde: programar para más tarde (null = ahora)
+drop function if exists public.liq_wa_encolar(text, json);
+create or replace function public.liq_wa_encolar(p_semana text, p_items json, p_desde timestamptz default null)
 returns json language plpgsql volatile security definer set search_path = public as $$
 declare
   it json; base timestamptz; t timestamptz; ult timestamptz; n int := 0; salteados json[] := '{}';
@@ -96,7 +99,8 @@ begin
   if p_semana !~ '^\d{4}-\d{2}-\d{2}$' then raise exception 'semana inválida'; end if;
   if json_array_length(p_items) > 150 then raise exception 'máximo 150 mensajes por tanda'; end if;
 
-  select greatest(now() + interval '5 seconds', coalesce(max(enviar_desde), now()))
+  if p_desde is not null and p_desde > now() + interval '30 days' then raise exception 'fecha programada muy lejana'; end if;
+  select greatest(now() + interval '5 seconds', coalesce(p_desde, now()), coalesce(max(enviar_desde), now()))
     into base from liq_envios where estado = 'en_cola';
   t := base;
 
@@ -118,13 +122,13 @@ begin
     t := t + make_interval(secs => 25 + floor(random() * 11)::int);   -- 25–35 s entre mensajes
   end loop;
 
-  if n > 0 then
+  if n > 0 and base <= now() + interval '5 minutes' then   -- programado: el worker prende la sesión cerca de la hora
     update liq_wa_salud set encender_hasta = greatest(coalesce(encender_hasta, now()), now() + interval '20 minutes') where id = 1;
   end if;
   return json_build_object('encolados', n, 'salteados', to_json(salteados), 'termina_aprox', ult);
 end $$;
-revoke all on function public.liq_wa_encolar(text, json) from public, anon;
-grant execute on function public.liq_wa_encolar(text, json) to authenticated;
+revoke all on function public.liq_wa_encolar(text, json, timestamptz) from public, anon;
+grant execute on function public.liq_wa_encolar(text, json, timestamptz) to authenticated;
 
 -- Frenar lo que falta mandar (todo, o solo de una semana)
 create or replace function public.liq_wa_cancelar(p_semana text default null)
@@ -164,7 +168,8 @@ begin
   select * into s from liq_wa_salud where id = 1;
   return json_build_object('ok', true,
     'encender', coalesce(s.encender_hasta > now(), false)
-                or exists (select 1 from liq_envios where estado in ('en_cola', 'enviando')),
+                or exists (select 1 from liq_envios where estado = 'enviando'
+                           or (estado = 'en_cola' and enviar_desde <= now() + interval '3 minutes')),
     'contactos', s.contactos_at is null or s.contactos_at < now() - interval '6 hours');
 end $$;
 revoke all on function public.liq_wa_plan(text) from public;
@@ -173,13 +178,12 @@ grant execute on function public.liq_wa_plan(text) to anon, authenticated;
 -- Tomar el próximo mensaje que ya puede salir (o nada)
 create or replace function public.liq_wa_tomar(p_clave text)
 returns json language plpgsql volatile security definer set search_path = public as $$
-declare r record; hora int := extract(hour from ar_now());
+declare r record;
 begin
   if not liq_wa_clave_ok(p_clave) then return json_build_object('ok', false); end if;
   -- lo que quedó colgado "enviando": no sabemos si salió → error, sin reintento automático
   update liq_envios set estado = 'error', error = 'sin confirmación del envío (revisá en el celu si llegó)'
    where estado = 'enviando' and tomado_at < now() - interval '5 minutes';
-  if hora < 8 or hora >= 23 then return json_build_object('ok', true, 'motivo', 'fuera de horario'); end if;
   if (select count(*) from liq_envios where estado = 'enviado'
         and enviado_at >= (ar_now()::date::timestamp at time zone 'America/Argentina/Buenos_Aires')) >= 150 then
     return json_build_object('ok', true, 'motivo', 'tope diario');
