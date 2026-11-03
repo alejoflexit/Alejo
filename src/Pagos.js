@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { login, logout, getSession, authedFetch } from './auth';
 import PagosPagador from './PagosPagador';
+import LiqWhatsapp from './LiqWhatsapp';
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -1397,6 +1398,7 @@ function PagosInner({ session }) {
   const [histBusy, setHistBusy] = useState(false);
   const [hoverKey, setHoverKey] = useState(null); // Tarea 3: fila bajo el mouse
   const [copiadoKey, setCopiadoKey] = useState(null);
+  const [waOpen, setWaOpen] = useState(false); // panel "Enviar por WhatsApp" (LiqWhatsapp)
   const [colCopiadoKey, setColCopiadoKey] = useState(null); // fila cuyo detalle de colectas se acaba de copiar // fila cuyo mensaje se acaba de copiar
   const [divKey, setDivKey] = useState(null);         // fila con el divisor de pago abierto
   const [divFactura, setDivFactura] = useState('');   // monto de la primera parte
@@ -1406,15 +1408,17 @@ function PagosInner({ session }) {
   // El banco (Galicia/MP) ya NO se elige acá: Alejo solo divide montos y el banco lo
   // decide Adrián en Pagar al pagar esa parte (pedido de Alejo, 2026-08-06).
 
-  // mensaje para mandarle al cadete por WhatsApp y chequear diferencias
-  function copiarMensaje(f) {
+  // mensaje para mandarle al cadete por WhatsApp y chequear diferencias.
+  // Lo usan el 💬 (copiar) y "Enviar por WhatsApp" (LiqWhatsapp): un solo texto para los dos.
+  const armarMensaje = useCallback((f) => {
     const nombrePila = (f.nombre || '').trim().split(/\s+/)[0];
-    let msg;
     if (f.esFletero) {
-      msg = `Buen día ${nombrePila}, tengo ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.`;
-    } else {
-      msg = `Buen día ${nombrePila}, tengo ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.`;
+      return `Buen día ${nombrePila}, tengo ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.`;
     }
+    return `Buen día ${nombrePila}, tengo ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.`;
+  }, []);
+  function copiarMensaje(f) {
+    const msg = armarMensaje(f);
     navigator.clipboard.writeText(msg).then(() => {
       setCopiadoKey(f.key);
       setTimeout(() => setCopiadoKey(k => (k === f.key ? null : k)), 1500);
@@ -1857,6 +1861,13 @@ function PagosInner({ session }) {
     finally { setBusyAccion(false); }
   }
 
+  // Los envíos por WhatsApp marcan "Avisado" desde la base (liq_wa_resultado): releerlos.
+  const recargarAvisados = useCallback(() => {
+    if (!semanaLunes) return;
+    sbAll(`pagos_avisos?select=cadete&semana_label=eq.${semanaLunes}`)
+      .then(av => setAvisados(new Set((av || []).map(r => norm(r.cadete))))).catch(() => {});
+  }, [semanaLunes]);
+
   // Marcador interno: "ya le mandé el mensaje al chofer" (pagos_avisos, por fila). No afecta el pago.
   async function toggleAviso(f) {
     const key = norm(f.nombre);
@@ -2124,6 +2135,16 @@ function PagosInner({ session }) {
             </div>
           )}
 
+          {waOpen && isAdmin && (
+            <LiqWhatsapp
+              semanaLunes={semanaLunes} semanaTxt={fmtSemanaLabel(semanaLunes)}
+              filas={filasPorMetodo} tarifas={tarifas} avisados={avisados}
+              armarMensaje={armarMensaje} sb={sb} norm={norm} BRAND={BRAND} alcanceLbl={alcanceLbl}
+              onCerrar={() => setWaOpen(false)}
+              onAvisadosCambio={recargarAvisados}
+              onTarifasCambio={(id, chat) => setTarifas(prev => prev.map(t => t.id === id ? { ...t, whatsapp: chat } : t))} />
+          )}
+
           {/* Modal de historial de ajustes de la semana */}
           {histOpen && (
             <div onClick={() => setHistOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(6,6,26,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -2174,6 +2195,10 @@ function PagosInner({ session }) {
                       title={filtroMetodo === k ? 'tocá de nuevo para ver todos los métodos' : ''}
                       style={btnPill(filtroMetodo === k)}>{l}</button>
                   ))}
+                  {isAdmin && (
+                    <button onClick={() => setWaOpen(true)} title="mandar el mensaje de liquidación desde tu WhatsApp a los cadetes de esta vista"
+                      style={{ ...btnPill(false), marginLeft: 'auto', color: BRAND.white }}>Enviar por WhatsApp</button>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
