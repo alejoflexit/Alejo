@@ -344,7 +344,7 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, flex: '1 1 260px' }}>
                 Se mandan <b>{aMandar.length}</b> mensaje{aMandar.length === 1 ? '' : 's'} desde <b>tu WhatsApp</b>, de a uno cada ~30 s
-                (~{Math.max(1, Math.round(aMandar.length * 30 / 60 + 1))} min). Solo entre las 8 y las 21.
+                (~{Math.max(1, Math.round(aMandar.length * 30 / 60 + 1))} min). Solo entre las 8 y las 23.
               </span>
               <button disabled={busy} onClick={() => setConfirmar(false)} style={btn(false, busy)}>Volver</button>
               <button disabled={busy} onClick={mandar} style={btn(true, busy)}>{busy ? 'Encolando…' : 'OK, mandar'}</button>

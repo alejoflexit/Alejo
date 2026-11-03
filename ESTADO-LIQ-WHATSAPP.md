@@ -20,7 +20,7 @@ Los lunes, mandar a cada cadete el mensaje de liquidación ("Buen día X, tengo 
 - Nada sale sin OK de Alejo. No hay pg_cron que encole.
 - Un mensaje por cadete por semana (índice único). Lo enviado no se reenvía; lo que falló se puede volver a elegir.
 - "Enviando" > 5 min sin respuesta → error "revisá en el celu si llegó" y **no** se reintenta solo (lección del bot de colectas: reintentar a ciegas duplica).
-- Ventana 8:00–21:00 AR, tope 150 por día.
+- Ventana 8:00–23:00 AR, tope 150 por día.
 - La sesión personal **no puede tener webhooks** (si no, n8n/agente verían tus chats). El setup los borra.
 - El worker nunca reinicia el container (eso es del guardián del bot). Ojo: si el guardián reinicia `openwa-api`, también corta esta sesión; el worker la vuelve a prender si hay trabajo.
 - Clave del worker = la del guardián (`/root/flexit/bot-wa.key`, hash en `bot_secreto`).

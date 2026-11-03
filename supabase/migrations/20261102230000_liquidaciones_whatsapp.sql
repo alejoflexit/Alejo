@@ -11,7 +11,7 @@
 --  * Un mensaje por cadete por semana. Lo enviado no se reenvía; lo que falló se puede reintentar.
 --  * Si un envío queda "enviando" > 5 min (no sabemos si salió), pasa a error y NO se reintenta solo
 --    (misma lección que el bot de colectas: reintentar a ciegas duplica).
---  * Ventana 8:00–21:00 AR y tope de 150 por día (antispam: OpenWA no es API oficial).
+--  * Ventana 8:00–23:00 AR y tope de 150 por día (antispam: OpenWA no es API oficial).
 --  * El worker se autentica con la misma clave que el guardián del bot (/root/flexit/bot-wa.key,
 --    hash en bot_secreto). La app solo con admin@flexit.app.
 
@@ -179,7 +179,7 @@ begin
   -- lo que quedó colgado "enviando": no sabemos si salió → error, sin reintento automático
   update liq_envios set estado = 'error', error = 'sin confirmación del envío (revisá en el celu si llegó)'
    where estado = 'enviando' and tomado_at < now() - interval '5 minutes';
-  if hora < 8 or hora >= 21 then return json_build_object('ok', true, 'motivo', 'fuera de horario'); end if;
+  if hora < 8 or hora >= 23 then return json_build_object('ok', true, 'motivo', 'fuera de horario'); end if;
   if (select count(*) from liq_envios where estado = 'enviado'
         and enviado_at >= (ar_now()::date::timestamp at time zone 'America/Argentina/Buenos_Aires')) >= 150 then
     return json_build_object('ok', true, 'motivo', 'tope diario');
