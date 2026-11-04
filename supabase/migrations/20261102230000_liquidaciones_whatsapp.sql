@@ -162,7 +162,7 @@ grant execute on function public.liq_wa_encender(int) to authenticated;
 -- ¿Qué tiene que hacer el worker? (sin efectos)
 -- Ojo (04/11): leer contactos puede tardar > 1 min en una cuenta grande. Si se pide en cada corrida,
 -- el worker se queda sin tiempo y la cola NUNCA sale. Por eso: contactos solo si no hay mensajes
--- por salir, y como mucho un intento por hora (contactos_intento_at), salga bien o mal.
+-- por salir, solo a pedido, y como mucho un intento por hora (contactos_intento_at), salga bien o mal.
 alter table public.liq_wa_salud add column if not exists contactos_intento_at timestamptz;
 create or replace function public.liq_wa_plan(p_clave text)
 returns json language plpgsql volatile security definer set search_path = public as $$
@@ -172,8 +172,10 @@ begin
   select * into s from liq_wa_salud where id = 1;
   hay_cola := exists (select 1 from liq_envios where estado = 'enviando'
                         or (estado = 'en_cola' and enviar_desde <= now() + interval '3 minutes'));
+  -- Contactos SOLO a pedido ("Actualizar contactos" / primera vinculación → contactos_at = null).
+  -- Pedirlos seguido colgaba WhatsApp Web en el VPS (Runtime.callFunctionOn timeout, 04/11).
   pedir_contactos := not hay_cola
-    and (s.contactos_at is null or s.contactos_at < now() - interval '6 hours')
+    and s.contactos_at is null
     and (s.contactos_intento_at is null or s.contactos_intento_at < now() - interval '1 hour');
   if pedir_contactos then update liq_wa_salud set contactos_intento_at = now() where id = 1; end if;
   return json_build_object('ok', true,

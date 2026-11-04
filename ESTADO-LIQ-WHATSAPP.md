@@ -23,7 +23,7 @@ Los lunes, mandar a cada cadete el mensaje de liquidación ("Buen día X, tengo 
 - Sin franja horaria: sale cuando Alejo aprieta OK, o a la hora que programe ("Programar" → p_desde). Lo programado prende la sesión recién 3 min antes. Tope 150 por día.
 - La sesión personal **no puede tener webhooks** (si no, n8n/agente verían tus chats). El setup los borra.
 - El worker nunca reinicia el container (eso es del guardián del bot). Ojo: si el guardián reinicia `openwa-api`, también corta esta sesión; el worker la vuelve a prender si hay trabajo.
-- Contactos (04/11): leerlos puede tardar > 1 min; antes se pedían en cada corrida y la cola nunca salía. Ahora: primero la cola, contactos solo sin cola y como mucho un intento por hora (contactos_intento_at).
+- Contactos (04/11): leerlos puede tardar > 1 min; antes se pedían en cada corrida y la cola nunca salía. Ahora: primero la cola; contactos SOLO a pedido ("Actualizar contactos"), sin cola y 1 intento por hora. Pedirlos seguido colgaba WhatsApp Web (Runtime.callFunctionOn timeout).
 - Clave del worker = la del guardián (`/root/flexit/bot-wa.key`, hash en `bot_secreto`).
 - El texto del mensaje sale de `armarMensaje` en Pagos.js: el mismo para el 💬 y para el envío.
 
