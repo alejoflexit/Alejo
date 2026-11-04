@@ -145,7 +145,10 @@ def mandar_cola(sid, clave):
             code, d = wa("POST", f"/sessions/{sid}/messages/send-text",
                          {"chatId": t["chat_id"], "text": t["texto"]}, timeout=45)
             ok = 200 <= code < 300
-            err = None if ok else f"OpenWA {code}: {json.dumps(d)[:200] if not isinstance(d, str) else d[:200]}"
+            if code == 0:  # curl sin respuesta (timeout): no sabemos si salió
+                err = "WhatsApp no respondió a tiempo — revisá en el celu si llegó antes de reenviar"
+            else:
+                err = None if ok else f"OpenWA {code}: {json.dumps(d)[:200] if not isinstance(d, str) else d[:200]}"
         except Exception as e:  # timeout: no sabemos si salió → error, sin reintento
             ok, err = False, f"sin respuesta de OpenWA ({type(e).__name__}) — revisá en el celu si llegó"
         rpc("liq_wa_resultado", p_clave=clave, p_id=t["id"], p_ok=ok, p_error=err)
