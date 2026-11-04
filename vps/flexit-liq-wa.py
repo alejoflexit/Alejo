@@ -186,12 +186,13 @@ def main():
 
     if e in LISTO:
         rpc("liq_wa_reportar", p_clave=clave, p_estado=e)
+        # PRIMERO la cola: leer contactos puede tardar > 1 min y dejaba la cola sin salir (04/11)
+        mandar_cola(sid, clave)
         if plan.get("contactos"):
             try:
                 contactos(sid, clave)
             except Exception as ex:
                 log(f"contactos falló: {ex}")
-        mandar_cola(sid, clave)
         return
 
     if e == "no_existe":

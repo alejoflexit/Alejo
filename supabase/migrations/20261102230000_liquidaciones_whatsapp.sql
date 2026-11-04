@@ -160,17 +160,25 @@ grant execute on function public.liq_wa_encender(int) to authenticated;
 -- ───────────────────────── Worker del VPS (clave) ─────────────────────────
 
 -- ¿Qué tiene que hacer el worker? (sin efectos)
+-- Ojo (04/11): leer contactos puede tardar > 1 min en una cuenta grande. Si se pide en cada corrida,
+-- el worker se queda sin tiempo y la cola NUNCA sale. Por eso: contactos solo si no hay mensajes
+-- por salir, y como mucho un intento por hora (contactos_intento_at), salga bien o mal.
+alter table public.liq_wa_salud add column if not exists contactos_intento_at timestamptz;
 create or replace function public.liq_wa_plan(p_clave text)
-returns json language plpgsql stable security definer set search_path = public as $$
-declare s record;
+returns json language plpgsql volatile security definer set search_path = public as $$
+declare s record; hay_cola boolean; pedir_contactos boolean;
 begin
   if not liq_wa_clave_ok(p_clave) then return json_build_object('ok', false); end if;
   select * into s from liq_wa_salud where id = 1;
+  hay_cola := exists (select 1 from liq_envios where estado = 'enviando'
+                        or (estado = 'en_cola' and enviar_desde <= now() + interval '3 minutes'));
+  pedir_contactos := not hay_cola
+    and (s.contactos_at is null or s.contactos_at < now() - interval '6 hours')
+    and (s.contactos_intento_at is null or s.contactos_intento_at < now() - interval '1 hour');
+  if pedir_contactos then update liq_wa_salud set contactos_intento_at = now() where id = 1; end if;
   return json_build_object('ok', true,
-    'encender', coalesce(s.encender_hasta > now(), false)
-                or exists (select 1 from liq_envios where estado = 'enviando'
-                           or (estado = 'en_cola' and enviar_desde <= now() + interval '3 minutes')),
-    'contactos', s.contactos_at is null or s.contactos_at < now() - interval '6 hours');
+    'encender', coalesce(s.encender_hasta > now(), false) or hay_cola,
+    'contactos', pedir_contactos);
 end $$;
 revoke all on function public.liq_wa_plan(text) from public;
 grant execute on function public.liq_wa_plan(text) to anon, authenticated;
