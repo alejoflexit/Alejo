@@ -82,7 +82,7 @@ function QrImagen({ valor }) {
   return <img src={img} alt="QR para vincular tu WhatsApp" width={260} height={260} style={{ background: '#fff', borderRadius: 8, padding: 6 }} />;
 }
 
-export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, avisados, armarMensaje, sb, norm, BRAND, alcanceLbl, onCerrar, onAvisadosCambio, onTarifasCambio }) {
+export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, filas, tarifas, avisados, armarMensaje, sb, norm, BRAND, alcanceLbl, onCerrar, onAvisadosCambio, onTarifasCambio }) {
   const [salud, setSalud] = useState(null);
   const [envios, setEnvios] = useState([]);
   const [contactos, setContactos] = useState([]);
@@ -313,6 +313,14 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
                     {x.guardado && escribiendo === undefined && (
                       <button onClick={() => setNumeros(p => ({ ...p, [x.f.key]: mostrarWhatsapp(x.guardado) }))} title="cambiar número"
                         style={{ background: 'none', border: 'none', padding: 0, color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline dotted' }}>{mostrarWhatsapp(x.guardado)}</button>
+                    )}
+                    {x.guardado && escribiendo === undefined && est !== 'enviado' && (
+                      // Plan B sin servidor: abre tu WhatsApp con el mensaje escrito; vos tocás enviar. Marca "Avisado".
+                      <a href={`https://wa.me/${x.guardado.replace(/@c\.us$/, '')}?text=${encodeURIComponent(x.texto)}`}
+                        target="_blank" rel="noopener noreferrer" onClick={() => onAbrirWhatsapp && onAbrirWhatsapp(x.f)}
+                        style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, border: `1px solid ${BRAND.border}`, borderRadius: 7, padding: '2px 8px', textDecoration: 'none' }}>
+                        Abrir en WhatsApp
+                      </a>
                     )}
                     {est === 'enviado' && <span style={{ fontSize: 12, color: BRAND.teal }}>✓ enviado {hora(x.env.enviado_at)}</span>}
                     {est === 'en_cola' && <span style={{ fontSize: 12, color: BRAND.muted }}>en cola · ~{hora(x.env.enviar_desde)}</span>}

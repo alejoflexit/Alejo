@@ -2140,6 +2140,7 @@ function PagosInner({ session }) {
               semanaLunes={semanaLunes} semanaTxt={fmtSemanaLabel(semanaLunes)}
               filas={filasPorMetodo} tarifas={tarifas} avisados={avisados}
               armarMensaje={armarMensaje} sb={sb} norm={norm} BRAND={BRAND} alcanceLbl={alcanceLbl}
+              onAbrirWhatsapp={f => { if (!avisados.has(norm(f.nombre))) toggleAviso(f); }}
               onCerrar={() => setWaOpen(false)}
               onAvisadosCambio={recargarAvisados}
               onTarifasCambio={(id, chat) => setTarifas(prev => prev.map(t => t.id === id ? { ...t, whatsapp: chat } : t))} />
