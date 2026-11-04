@@ -204,7 +204,11 @@ export default function LiqWhatsapp({ semanaLunes, semanaTxt, filas, tarifas, av
       const desde = programar ? new Date(cuando).toISOString() : null;
       if (programar && !(new Date(cuando) > new Date())) { setErr('Elegí una hora que no haya pasado.'); return; }
       const items = aMandar.map(x => ({ cadete: x.f.nombre, chat_id: x.guardado, texto: x.texto }));
-      const r = await sb('rpc/liq_wa_encolar', { method: 'POST', body: JSON.stringify({ p_semana: semanaLunes, p_items: items, p_desde: desde }) });
+      const r = await sb('rpc/liq_wa_encolar', { method: 'POST', body: JSON.stringify(desde ? { p_semana: semanaLunes, p_items: items, p_desde: desde } : { p_semana: semanaLunes, p_items: items }) })
+        .catch(ex => { // base sin la versión con "Programar": avisar claro en vez del error crudo de Supabase
+          if (desde && /PGRST202|p_desde/.test(ex.message)) throw new Error('Para programar falta correr la última versión de liquidaciones-whatsapp-migracion.sql en Supabase. "Ahora" funciona igual.');
+          throw ex;
+        });
       const salteados = (r && r.salteados) || [];
       setMsg(`${r.encolados} mensaje${r.encolados === 1 ? '' : 's'} en cola` + (r.termina_aprox ? ` · el último sale ~${hora(r.termina_aprox)}` : '') +
         (salteados.length ? ` · salteados: ${salteados.map(s => `${s.cadete} (${s.motivo})`).join(', ')}` : ''));
