@@ -39,7 +39,8 @@ NET=$(docker inspect "$VIEJO" -f '{{range $k, $v := .NetworkSettings.Networks}}{
 echo "red del bot: $NET"
 if [ -n "$SQLITE_DRV" ]; then
   DBENV=(-e DATABASE_TYPE=$SQLITE_DRV -e DATABASE_NAME=/app/data/openwa.sqlite)
-  echo "base: $SQLITE_DRV propia en el volumen"
+  NET=bridge   # SQLite: no necesita la red del bot (que puede ser interna, SIN internet → Baileys "failed", 04/11)
+  echo "base: $SQLITE_DRV propia en el volumen · red: bridge (con internet)"
 else
   case "$TIPO_BOT" in postgres|postgresql) ;; *) falla "no hay driver SQLite y la base del bot es '${TIPO_BOT:-desconocida}' (ver diagnóstico arriba)";; esac
   H=$(EFE DATABASE_HOST); PT=$(EFE DATABASE_PORT); U=$(EFE DATABASE_USERNAME); PW=$(EFE DATABASE_PASSWORD); DBN=$(EFE DATABASE_NAME)
@@ -58,6 +59,11 @@ const c = new Client({ host: process.env.PGH, port: +process.env.PGP, user: proc
 })().catch(e => { console.error("ERROR pg:", e.message); process.exit(1); });' || falla "no pude crear la base openwa_liq"
 fi
 [ -s $F/bot-wa.key ] || falla "falta $F/bot-wa.key"
+if [ "$NET" != "bridge" ] && [ "$(docker network inspect "$NET" -f '{{.Internal}}' 2>/dev/null)" = "true" ]; then
+  EXTRA_NET=bridge   # postgres en red interna: se agrega bridge para salir a internet
+else
+  EXTRA_NET=""
+fi
 
 echo "== 2) contenedor $NUEVO (Baileys, base propia, 512 MB)"
 if docker inspect "$NUEVO" >/dev/null 2>&1; then
@@ -72,9 +78,11 @@ else
     -e SESSION_DATA_PATH=/app/data/sessions -e PLUGINS_ENABLED=false \
     -e API_MASTER_KEY="$KEY" -e PORT=2785 -e NODE_ENV=production -e LOG_LEVEL=warn \
     -v openwa-liq-data:/app/data "$IMG" >/dev/null || falla "docker run falló"
+  [ -n "$EXTRA_NET" ] && docker network connect "$EXTRA_NET" "$NUEVO"
 fi
 
 echo "== 3) esperando que levante la API"
+echo "internet desde $NUEVO: $(docker exec "$NUEVO" sh -c 'curl -s -m 10 -o /dev/null -w "%{http_code}" https://web.whatsapp.com' 2>/dev/null || echo SIN_INTERNET)"
 OK=""
 for i in $(seq 1 40); do
   for K in "$KEY" "$(docker exec $NUEVO cat /app/data/.api-key 2>/dev/null)"; do
