@@ -47,3 +47,9 @@ Los lunes, mandar a cada cadete el mensaje de liquidación ("Buen día X, tengo 
 ## Riesgos conocidos
 - OpenWA no es la API oficial: ban posible del número personal. Mitigado con pausas al azar, textos distintos por cadete, contactos que ya te conocen, tope diario y sesión apagada fuera de uso.
 - Mientras la sesión está prendida, el servidor tiene acceso a tu WhatsApp (por eso se apaga sola).
+
+## 04/11 — Contenedor propio con Baileys (sin Chrome)
+- Problema: con el motor whatsapp-web.js la cuenta personal de Alejo ocupaba **1,1 GB** de Chrome dentro de `openwa-api` (límite 2 GB, compartido con el bot). OOM-kill el 03/11 06:58 → sesión colgada (`lastActive` 03/11 03:22) aunque figuraba "ready"; `Runtime.callFunctionOn timed out` en getContacts y send-text. Arrancar tardaba ~7 min.
+- En OpenWA 0.8.1 el motor es GLOBAL (`ENGINE_TYPE`), no por sesión → cambiarlo afectaba al bot.
+- Solución: `vps/setup-liq-wa-lite.sh` crea el contenedor **`openwa-liq`** (misma imagen, `ENGINE_TYPE=baileys`, `BAILEYS_SYNC_FULL_HISTORY=false`, SQLite propia en el volumen `openwa-liq-data`, sin Redis, 512 MB, sin puertos ni webhooks), crea la sesión, guarda `/root/flexit/liq-wa.{container,apikey,sid}` y borra la sesión personal vieja de `openwa-api` (solo si se llama `alejo-liquidaciones`). Hay que volver a escanear el QR una vez.
+- Worker: lee contenedor y clave de esos archivos (si no están, usa `openwa-api` como antes). En Baileys manda a `549…@s.whatsapp.net`; si OpenWA lo rechaza por formato (400/404/422, seguro que no salió) reintenta con `@c.us`. Contactos `@s.whatsapp.net` se guardan como `@c.us`.

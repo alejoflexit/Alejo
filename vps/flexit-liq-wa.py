@@ -22,6 +22,10 @@ API = "http://localhost:2785/api"
 R = os.environ.get("LIQ_WA_ROOT", "")  # solo para pruebas
 CLAVE_F = R + "/root/flexit/bot-wa.key"
 SID_F = R + "/root/flexit/liq-wa.sid"
+# Desde 04/11 la sesión vive en un contenedor propio y liviano (motor Baileys, sin Chrome): openwa-liq.
+# Si estos archivos no existen, cae al contenedor compartido del bot (comportamiento viejo).
+CONT_F = R + "/root/flexit/liq-wa.container"
+APIKEY_F = R + "/root/flexit/liq-wa.apikey"
 LOG = R + "/var/log/flexit-liq-wa.log"
 ULT_START = R + "/var/lib/flexit-liq-wa.ultimo-start"
 DURACION = int(os.environ.get("LIQ_WA_DURACION", "52"))  # segundos por corrida (el cron vuelve a llamar al minuto)
@@ -46,8 +50,25 @@ def rpc(fn, **args):
         return json.loads(t) if t else None
 
 
+def contenedor():
+    try:
+        return open(CONT_F).read().strip() or "openwa-api"
+    except OSError:
+        return "openwa-api"
+
+
+def es_baileys():
+    return contenedor() != "openwa-api"
+
+
 def okey():
-    r = subprocess.run(["docker", "exec", "openwa-api", "cat", "/app/data/.api-key"], capture_output=True, text=True, timeout=20)
+    try:
+        k = open(APIKEY_F).read().strip()
+        if k:
+            return k
+    except OSError:
+        pass
+    r = subprocess.run(["docker", "exec", contenedor(), "cat", "/app/data/.api-key"], capture_output=True, text=True, timeout=20)
     if r.returncode != 0 or not r.stdout.strip():
         raise RuntimeError("container openwa-api no responde")
     return r.stdout.strip()
@@ -55,7 +76,7 @@ def okey():
 
 def wa(metodo, ruta, body=None, timeout=30):
     """Llama a OpenWA desde adentro del container (igual que el guardián). Devuelve (código, json|texto)."""
-    cmd = ["docker", "exec", "-i", "openwa-api", "curl", "-s", "-m", str(timeout), "-w", "\n%{http_code}",
+    cmd = ["docker", "exec", "-i", contenedor(), "curl", "-s", "-m", str(timeout), "-w", "\n%{http_code}",
            "-X", metodo, "-H", f"X-API-Key: {okey()}", f"{API}{ruta}"]
     if body is not None:
         cmd[5:5] = ["-H", "Content-Type: application/json", "--data-binary", "@-"]
@@ -113,6 +134,8 @@ def contactos(sid, clave):
         if isinstance(cid, dict):
             cid = cid.get("_serialized")
         nombre = c.get("name") or c.get("pushname") or c.get("shortName") or ""
+        if isinstance(cid, str) and cid.endswith("@s.whatsapp.net"):  # Baileys → formato de la base
+            cid = cid.split("@")[0].split(":")[0] + "@c.us"
         if isinstance(cid, str) and cid.endswith("@c.us") and nombre and c.get("isGroup") is not True:
             items.append({"chat_id": cid, "nombre": nombre})
     if items:  # nunca vaciar la lista por una respuesta rara
@@ -142,8 +165,13 @@ def mandar_cola(sid, clave):
             time.sleep(6)
             continue
         try:
-            code, d = wa("POST", f"/sessions/{sid}/messages/send-text",
-                         {"chatId": t["chat_id"], "text": t["texto"]}, timeout=45)
+            chat = t["chat_id"]
+            if es_baileys():
+                chat = chat.replace("@c.us", "@s.whatsapp.net")
+            code, d = wa("POST", f"/sessions/{sid}/messages/send-text", {"chatId": chat, "text": t["texto"]}, timeout=45)
+            if es_baileys() and code in (400, 404, 422):  # rechazo de formato: seguro que no salió → probar @c.us
+                log(f"envío #{t['id']}: {code} con {chat}, pruebo @c.us")
+                code, d = wa("POST", f"/sessions/{sid}/messages/send-text", {"chatId": t["chat_id"], "text": t["texto"]}, timeout=45)
             ok = 200 <= code < 300
             if code == 0:  # curl sin respuesta (timeout): no sabemos si salió
                 err = "WhatsApp no respondió a tiempo — revisá en el celu si llegó antes de reenviar"
