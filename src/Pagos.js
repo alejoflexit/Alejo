@@ -2138,8 +2138,8 @@ function PagosInner({ session }) {
           {waOpen && isAdmin && (
             <LiqWhatsapp
               semanaLunes={semanaLunes} semanaTxt={fmtSemanaLabel(semanaLunes)}
-              filas={filasPorMetodo} tarifas={tarifas} avisados={avisados}
-              armarMensaje={armarMensaje} sb={sb} norm={norm} BRAND={BRAND} alcanceLbl={alcanceLbl}
+              filas={filasOrdenadas} metodoInicial={filtroMetodo} tarifas={tarifas} avisados={avisados}
+              armarMensaje={armarMensaje} sb={sb} norm={norm} BRAND={BRAND}
               onAbrirWhatsapp={f => { if (!avisados.has(norm(f.nombre))) toggleAviso(f); }}
               onCerrar={() => setWaOpen(false)}
               onAvisadosCambio={recargarAvisados}

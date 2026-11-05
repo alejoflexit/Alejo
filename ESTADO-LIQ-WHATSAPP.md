@@ -53,3 +53,10 @@ Los lunes, mandar a cada cadete el mensaje de liquidación ("Buen día X, tengo 
 - En OpenWA 0.8.1 el motor es GLOBAL (`ENGINE_TYPE`), no por sesión → cambiarlo afectaba al bot.
 - Solución: `vps/setup-liq-wa-lite.sh` crea el contenedor **`openwa-liq`** (misma imagen, `ENGINE_TYPE=baileys`, `BAILEYS_SYNC_FULL_HISTORY=false`, base propia (SQLite si se puede; si no, base Postgres NUEVA `openwa_liq` en el mismo servidor del bot, sin compartir tablas; la crea con el driver pg de OpenWA), red `bridge` con internet (la red del bot `openwa-internal-docker` es interna: sin internet Baileys queda "failed"), volumen `openwa-liq-data`, sin Redis, 512 MB, sin puertos ni webhooks), crea la sesión, guarda `/root/flexit/liq-wa.{container,apikey,sid}` y borra la sesión personal vieja de `openwa-api` (solo si se llama `alejo-liquidaciones`). Hay que volver a escanear el QR una vez.
 - Worker: lee contenedor y clave de esos archivos (si no están, usa `openwa-api` como antes). En Baileys manda a `549…@s.whatsapp.net`; si OpenWA lo rechaza por formato (400/404/422, seguro que no salió) reintenta con `@c.us`. Contactos `@s.whatsapp.net` se guardan como `@c.us`.
+
+## 04/11 — Panel por método + sin preselección
+- Funcionando en producción con Baileys (`openwa-liq`): QR escaneado 04/11 ~21:25.
+- Panel con pestañas **🏦 Transferencia / 💵 Efectivo** (cada una es una tanda; cambiar de pestaña limpia lo elegido). Arranca en la pestaña del filtro de la tabla (o Transferencia).
+- Secciones: **Por avisar** (con número, "Elegir todos"), **Sin número** (cargar / "Usar" sugerencia), **Ya avisados** plegado.
+- **Nadie viene marcado** al abrir (antes se marcaban solos los no avisados con número; Alejo lo vio como un bug). Tocar la fila también marca.
+- El panel recibe TODAS las filas (`filasOrdenadas`) y filtra por `f.factura` (transferencia = factura).

@@ -82,12 +82,15 @@ function QrImagen({ valor }) {
   return <img src={img} alt="QR para vincular tu WhatsApp" width={260} height={260} style={{ background: '#fff', borderRadius: 8, padding: 6 }} />;
 }
 
-export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, filas, tarifas, avisados, armarMensaje, sb, norm, BRAND, alcanceLbl, onCerrar, onAvisadosCambio, onTarifasCambio }) {
+export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, filas, metodoInicial, tarifas, avisados, armarMensaje, sb, norm, BRAND, onCerrar, onAvisadosCambio, onTarifasCambio }) {
   const [salud, setSalud] = useState(null);
   const [envios, setEnvios] = useState([]);
   const [contactos, setContactos] = useState([]);
   const [numeros, setNumeros] = useState({});     // key → texto que está escribiendo
-  const [elegidos, setElegidos] = useState(null); // Set de keys (null = todavía sin default)
+  const [elegidos, setElegidos] = useState(() => new Set()); // nadie marcado de entrada: elige Alejo (04/11)
+  // Los lunes: primero transferencias, después efectivo. Cada pestaña es una tanda aparte.
+  const [metodo, setMetodo] = useState(metodoInicial === 'efectivo' ? 'efectivo' : 'transferencia');
+  const [verAvisados, setVerAvisados] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
   const [programar, setProgramar] = useState(false); // false = ahora; true = a la hora de 'cuando'
   const [cuando, setCuando] = useState(proximas830);
@@ -159,19 +162,25 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
     return { f, t, guardado, sug, env, texto: armarMensaje(f), avisado: avisados.has(norm(f.nombre)) };
   }), [filas, tarifaById, contactos, envioPorCadete, armarMensaje, avisados, norm]);
 
-  // por defecto: los que no avisaste, tienen número y no salieron/están en cola
-  useEffect(() => {
-    if (elegidos !== null || !filasInfo.length) return;
-    setElegidos(new Set(filasInfo.filter(x => !x.avisado && x.guardado && !(x.env && ['en_cola', 'enviando', 'enviado'].includes(x.env.estado))).map(x => x.f.key)));
-  }, [filasInfo, elegidos]);
-
-  const sel = elegidos || new Set();
+  const sel = elegidos;
   const puedeElegir = x => !!x.guardado && !(x.env && ['en_cola', 'enviando', 'enviado'].includes(x.env.estado));
-  const aMandar = filasInfo.filter(x => sel.has(x.f.key) && puedeElegir(x));
-  const sinNumero = filasInfo.filter(x => !x.guardado && !(x.env && x.env.estado === 'enviado'));
+  const yaAvisado = x => x.avisado || (x.env && x.env.estado === 'enviado');
+  const deMetodo = (x, m) => (m === 'transferencia' ? !!x.f.factura : !x.f.factura);
+  const filasTab = filasInfo.filter(x => deMetodo(x, metodo));
+  const porAvisar = filasTab.filter(x => !yaAvisado(x));
+  const conNumero = porAvisar.filter(x => x.guardado);
+  const sinNumero = porAvisar.filter(x => !x.guardado);
+  const avisadosTab = filasTab.filter(yaAvisado);
+  const pendientesDe = m => filasInfo.filter(x => deMetodo(x, m) && !yaAvisado(x)).length;
+  const aMandar = filasTab.filter(x => sel.has(x.f.key) && puedeElegir(x));
+
+  function cambiarMetodo(m) {
+    if (m === metodo) return;
+    setMetodo(m); setElegidos(new Set()); setConfirmar(false); setVerAvisados(false);
+  }
 
   function toggle(key) {
-    setElegidos(prev => { const n = new Set(prev || []); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+    setElegidos(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   }
 
   async function guardarNumero(x, valor) {
@@ -183,9 +192,6 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
       await sb(`cadetes_tarifas?id=eq.${x.t.id}`, { method: 'PATCH', body: JSON.stringify({ whatsapp: chat }) });
       setNumeros(p => { const n = { ...p }; delete n[x.f.key]; return n; });
       onTarifasCambio && onTarifasCambio(x.t.id, chat);
-      if (chat && !(x.env && ['en_cola', 'enviando', 'enviado'].includes(x.env.estado)) && !x.avisado) {
-        setElegidos(prev => new Set([...(prev || []), x.f.key]));
-      }
     } catch (ex) {
       setErr(/whatsapp/.test(ex.message) ? 'Falta correr la migración de WhatsApp en Supabase.' : ex.message);
     }
@@ -249,13 +255,75 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
   })();
   const sinSenal = salud && salud.estado_at && (Date.now() - new Date(salud.estado_at).getTime()) > 5 * 60 * 1000 && (activosYa.length || pidioEncender);
 
+  const renderFila = x => {
+    const est = x.env && x.env.estado;
+    const elegible = puedeElegir(x);
+    const marcado = sel.has(x.f.key) && elegible;
+    const escribiendo = numeros[x.f.key];
+    return (
+      <div key={x.f.key} onClick={e => { if (elegible && !e.target.closest('a,button,input')) toggle(x.f.key); }}
+        style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 10px', marginTop: 6, borderRadius: 10, cursor: elegible ? 'pointer' : 'default',
+          border: `1px solid ${marcado ? BRAND.teal : BRAND.border}`, background: marcado ? 'rgba(46,207,170,0.07)' : 'transparent' }}>
+        <input type="checkbox" checked={marcado} disabled={!elegible} onChange={() => toggle(x.f.key)}
+          style={{ width: 20, height: 20, marginTop: 2, flex: '0 0 auto', accentColor: BRAND.teal }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{x.f.nombre}</span>
+            {x.guardado && escribiendo === undefined && (
+              <button onClick={() => setNumeros(p => ({ ...p, [x.f.key]: mostrarWhatsapp(x.guardado) }))} title="cambiar número"
+                style={{ background: 'none', border: 'none', padding: 0, color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline dotted' }}>{mostrarWhatsapp(x.guardado)}</button>
+            )}
+            {x.guardado && escribiendo === undefined && est !== 'enviado' && (
+              // Plan B sin servidor: abre tu WhatsApp con el mensaje escrito; vos tocás enviar. Marca "Avisado".
+              <a href={`https://wa.me/${x.guardado.replace(/@c\.us$/, '')}?text=${encodeURIComponent(x.texto)}`}
+                target="_blank" rel="noopener noreferrer" onClick={() => onAbrirWhatsapp && onAbrirWhatsapp(x.f)}
+                style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, border: `1px solid ${BRAND.border}`, borderRadius: 7, padding: '2px 8px', textDecoration: 'none' }}>
+                Abrir en WhatsApp
+              </a>
+            )}
+            {est === 'enviado' && <span style={{ fontSize: 12, color: BRAND.teal }}>✓ enviado {hora(x.env.enviado_at)}</span>}
+            {est === 'en_cola' && <span style={{ fontSize: 12, color: BRAND.muted }}>en cola · ~{hora(x.env.enviar_desde)}</span>}
+            {est === 'enviando' && <span style={{ fontSize: 12, color: BRAND.muted }}>enviando…</span>}
+            {est === 'error' && <span style={{ fontSize: 12, color: BRAND.amber }} title={x.env.error || ''}>no salió: {x.env.error}</span>}
+            {!est && x.avisado && <span style={{ fontSize: 12, color: BRAND.muted }}>ya avisado a mano</span>}
+          </div>
+          {(!x.guardado || escribiendo !== undefined) && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+              <input type="tel" inputMode="tel" placeholder="Celular, ej. 11 2233 4455" value={escribiendo || ''}
+                onChange={e => setNumeros(p => ({ ...p, [x.f.key]: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') guardarNumero(x, escribiendo); }}
+                style={{ width: 190, padding: '6px 9px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.navy, color: BRAND.white }} />
+              <button disabled={!escribiendo} onClick={() => guardarNumero(x, escribiendo)} style={{ ...btn(false, !escribiendo), padding: '5px 10px', fontSize: 12 }}>Guardar</button>
+              {escribiendo && normalizarWhatsapp(escribiendo) && <span style={{ fontSize: 11.5, color: BRAND.muted }}>{mostrarWhatsapp(normalizarWhatsapp(escribiendo))}</span>}
+              {x.guardado && <button onClick={() => setNumeros(p => { const n = { ...p }; delete n[x.f.key]; return n; })} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer' }}>cancelar</button>}
+              {x.sug && !x.sug.ambiguo && escribiendo === undefined && (
+                <span style={{ fontSize: 12, color: BRAND.muted }}>
+                  ¿Es <b style={{ color: BRAND.white }}>{x.sug.nombre}</b> {mostrarWhatsapp(x.sug.chat_id)}?{' '}
+                  <button onClick={() => guardarNumero(x, x.sug.chat_id)} style={{ ...btn(false, false), padding: '3px 9px', fontSize: 12 }}>Usar</button>
+                </span>
+              )}
+              {x.sug && x.sug.ambiguo && escribiendo === undefined && (
+                <span style={{ fontSize: 12, color: BRAND.muted }}>
+                  Coinciden: {x.sug.opciones.map(o => (
+                    <button key={o.chat_id} onClick={() => guardarNumero(x, o.chat_id)} style={{ ...btn(false, false), padding: '3px 9px', fontSize: 12, marginLeft: 4 }}>{o.nombre}</button>
+                  ))}
+                </span>
+              )}
+            </div>
+          )}
+          <div style={{ marginTop: 5, fontSize: 12.5, color: BRAND.muted, whiteSpace: 'pre-wrap' }}>{x.texto}</div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(6,6,26,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 820, maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14 }}>
         {/* encabezado */}
         <div style={{ padding: '16px 18px 12px', borderBottom: `1px solid ${BRAND.border}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>Enviar por WhatsApp · {semanaTxt}{alcanceLbl ? <span style={{ color: BRAND.muted, fontWeight: 500 }}> · solo {alcanceLbl}</span> : null}</div>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>Enviar por WhatsApp <span style={{ color: BRAND.muted, fontWeight: 500 }}>· {semanaTxt}</span></div>
             <button onClick={onCerrar} aria-label="cerrar" style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 18, padding: 4 }}>✕</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8, fontSize: 12.5 }}>
@@ -269,6 +337,20 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
           </div>
           {sinSenal ? <div style={{ marginTop: 8, fontSize: 12, color: BRAND.amber }}>El servidor no reporta desde las {hora(salud.estado_at)}. Si sigue así, avisale a Hermes.</div> : null}
           {salud && salud.estado === 'no_existe' && <div style={{ marginTop: 8, fontSize: 12, color: BRAND.amber }}>Falta instalar el envío en el VPS (vps/setup-liq-wa.sh).</div>}
+          {/* pestañas por método: los lunes van primero las transferencias */}
+          <div style={{ display: 'flex', gap: 4, marginTop: 12, padding: 3, borderRadius: 10, background: BRAND.faint, border: `1px solid ${BRAND.border}` }}>
+            {[['transferencia', '🏦 Transferencia'], ['efectivo', '💵 Efectivo']].map(([m, l]) => {
+              const on = metodo === m; const n = pendientesDe(m);
+              return (
+                <button key={m} onClick={() => cambiarMetodo(m)}
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                    background: on ? BRAND.navyCard : 'transparent', color: on ? BRAND.white : BRAND.muted, boxShadow: on ? '0 1px 3px rgba(0,0,0,.35)' : 'none' }}>
+                  <div>{l}</div>
+                  <div style={{ fontSize: 11.5, fontWeight: 500, marginTop: 1, color: on ? BRAND.teal : BRAND.muted }}>{n ? `${n} por avisar` : 'todos avisados ✓'}</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div style={{ overflowY: 'auto', padding: '12px 18px', flex: 1 }}>
@@ -292,72 +374,32 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
             </div>
           )}
 
+          {/* Por avisar: con número (para elegir) y sin número (cargarlo) */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, margin: '4px 0 2px' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: BRAND.muted }}>Por avisar · {conNumero.length}</div>
+            {conNumero.some(puedeElegir) && <button onClick={() => setElegidos(new Set(conNumero.filter(puedeElegir).map(x => x.f.key)))}
+              style={{ background: 'none', border: 'none', color: BRAND.teal, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Elegir todos</button>}
+          </div>
+          {conNumero.map(renderFila)}
+          {!conNumero.length && <div style={{ color: BRAND.muted, fontSize: 13, padding: '10px 0' }}>{porAvisar.length ? 'Cargá los números de abajo para poder elegirlos.' : 'No queda nadie por avisar en ' + (metodo === 'transferencia' ? 'transferencias' : 'efectivo') + '. 🎉'}</div>}
+
           {sinNumero.length > 0 && (
-            <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 8 }}>
-              {sinNumero.length} sin número cargado.{contactos.length ? ' Donde aparece una sugerencia de tus contactos, tocá "Usar".' : conectado ? '' : ' Vinculá tu WhatsApp y te sugiero los números de tus contactos.'}
-            </div>
+            <>
+              <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: BRAND.muted, margin: '18px 0 2px' }}>Sin número · {sinNumero.length}</div>
+              <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 4 }}>{contactos.length ? 'Si aparece una sugerencia de tus contactos, tocá "Usar".' : 'Escribí el celular y tocá Guardar.'}</div>
+              {sinNumero.map(renderFila)}
+            </>
           )}
 
-          {filasInfo.map(x => {
-            const est = x.env && x.env.estado;
-            const elegible = puedeElegir(x);
-            const marcado = sel.has(x.f.key) && elegible;
-            const escribiendo = numeros[x.f.key];
-            return (
-              <div key={x.f.key} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '9px 0', borderTop: `1px solid ${BRAND.border}` }}>
-                <input type="checkbox" checked={marcado} disabled={!elegible} onChange={() => toggle(x.f.key)}
-                  style={{ width: 20, height: 20, marginTop: 2, flex: '0 0 auto', accentColor: BRAND.teal }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: 13.5 }}>{x.f.nombre}</span>
-                    {x.guardado && escribiendo === undefined && (
-                      <button onClick={() => setNumeros(p => ({ ...p, [x.f.key]: mostrarWhatsapp(x.guardado) }))} title="cambiar número"
-                        style={{ background: 'none', border: 'none', padding: 0, color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline dotted' }}>{mostrarWhatsapp(x.guardado)}</button>
-                    )}
-                    {x.guardado && escribiendo === undefined && est !== 'enviado' && (
-                      // Plan B sin servidor: abre tu WhatsApp con el mensaje escrito; vos tocás enviar. Marca "Avisado".
-                      <a href={`https://wa.me/${x.guardado.replace(/@c\.us$/, '')}?text=${encodeURIComponent(x.texto)}`}
-                        target="_blank" rel="noopener noreferrer" onClick={() => onAbrirWhatsapp && onAbrirWhatsapp(x.f)}
-                        style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, border: `1px solid ${BRAND.border}`, borderRadius: 7, padding: '2px 8px', textDecoration: 'none' }}>
-                        Abrir en WhatsApp
-                      </a>
-                    )}
-                    {est === 'enviado' && <span style={{ fontSize: 12, color: BRAND.teal }}>✓ enviado {hora(x.env.enviado_at)}</span>}
-                    {est === 'en_cola' && <span style={{ fontSize: 12, color: BRAND.muted }}>en cola · ~{hora(x.env.enviar_desde)}</span>}
-                    {est === 'enviando' && <span style={{ fontSize: 12, color: BRAND.muted }}>enviando…</span>}
-                    {est === 'error' && <span style={{ fontSize: 12, color: BRAND.amber }} title={x.env.error || ''}>no salió: {x.env.error}</span>}
-                    {!est && x.avisado && <span style={{ fontSize: 12, color: BRAND.muted }}>ya avisado a mano</span>}
-                  </div>
-                  {(!x.guardado || escribiendo !== undefined) && (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-                      <input type="tel" inputMode="tel" placeholder="Celular, ej. 11 2233 4455" value={escribiendo || ''}
-                        onChange={e => setNumeros(p => ({ ...p, [x.f.key]: e.target.value }))}
-                        onKeyDown={e => { if (e.key === 'Enter') guardarNumero(x, escribiendo); }}
-                        style={{ width: 190, padding: '6px 9px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.navy, color: BRAND.white }} />
-                      <button disabled={!escribiendo} onClick={() => guardarNumero(x, escribiendo)} style={{ ...btn(false, !escribiendo), padding: '5px 10px', fontSize: 12 }}>Guardar</button>
-                      {escribiendo && normalizarWhatsapp(escribiendo) && <span style={{ fontSize: 11.5, color: BRAND.muted }}>{mostrarWhatsapp(normalizarWhatsapp(escribiendo))}</span>}
-                      {x.guardado && <button onClick={() => setNumeros(p => { const n = { ...p }; delete n[x.f.key]; return n; })} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer' }}>cancelar</button>}
-                      {x.sug && !x.sug.ambiguo && escribiendo === undefined && (
-                        <span style={{ fontSize: 12, color: BRAND.muted }}>
-                          ¿Es <b style={{ color: BRAND.white }}>{x.sug.nombre}</b> {mostrarWhatsapp(x.sug.chat_id)}?{' '}
-                          <button onClick={() => guardarNumero(x, x.sug.chat_id)} style={{ ...btn(false, false), padding: '3px 9px', fontSize: 12 }}>Usar</button>
-                        </span>
-                      )}
-                      {x.sug && x.sug.ambiguo && escribiendo === undefined && (
-                        <span style={{ fontSize: 12, color: BRAND.muted }}>
-                          Coinciden: {x.sug.opciones.map(o => (
-                            <button key={o.chat_id} onClick={() => guardarNumero(x, o.chat_id)} style={{ ...btn(false, false), padding: '3px 9px', fontSize: 12, marginLeft: 4 }}>{o.nombre}</button>
-                          ))}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div style={{ marginTop: 5, fontSize: 12.5, color: BRAND.muted, whiteSpace: 'pre-wrap' }}>{x.texto}</div>
-                </div>
-              </div>
-            );
-          })}
-          {!filasInfo.length && <div style={{ color: BRAND.muted, fontSize: 13, padding: '12px 0' }}>No hay cadetes en esta vista.</div>}
+          {avisadosTab.length > 0 && (
+            <>
+              <button onClick={() => setVerAvisados(v => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', margin: '18px 0 2px', padding: '6px 0', background: 'none', border: 'none', cursor: 'pointer', color: BRAND.muted, fontSize: 11.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+                <span style={{ display: 'inline-block', width: 10 }}>{verAvisados ? '▾' : '▸'}</span> Ya avisados · {avisadosTab.length}
+              </button>
+              {verAvisados && avisadosTab.map(renderFila)}
+            </>
+          )}
         </div>
 
         {/* pie */}
@@ -366,9 +408,8 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
           {msg && !err && <div style={{ fontSize: 12.5, color: BRAND.muted, marginBottom: 8 }}>{msg}</div>}
           {!confirmar ? (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12.5, color: BRAND.muted }}>{aMandar.length} elegido{aMandar.length === 1 ? '' : 's'}</span>
-              <button onClick={() => setElegidos(new Set(filasInfo.filter(x => puedeElegir(x) && !x.avisado).map(x => x.f.key)))} style={{ ...btn(false, false), padding: '5px 10px', fontSize: 12 }}>Elegir los no avisados</button>
-              <button onClick={() => setElegidos(new Set())} style={{ ...btn(false, false), padding: '5px 10px', fontSize: 12 }}>Ninguno</button>
+              <span style={{ fontSize: 12.5, color: BRAND.muted }}>{aMandar.length} elegido{aMandar.length === 1 ? '' : 's'} · {metodo === 'transferencia' ? 'transferencia' : 'efectivo'}</span>
+              {aMandar.length > 0 && <button onClick={() => setElegidos(new Set())} style={{ ...btn(false, false), padding: '5px 10px', fontSize: 12 }}>Desmarcar</button>}
               <button disabled={!aMandar.length || busy} onClick={() => setConfirmar(true)} style={{ ...btn(true, !aMandar.length || busy), marginLeft: 'auto' }}>{aMandar.length ? `Mandar ${aMandar.length} mensaje${aMandar.length === 1 ? '' : 's'}…` : 'Mandar mensajes…'}</button>
             </div>
           ) : (
