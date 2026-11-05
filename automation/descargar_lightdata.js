@@ -464,6 +464,7 @@ async function reauditarDia(fecha, zonaDe, ldCookies) {
       if (!d || !d.id) continue; revDem++;
       const h = await hist(String(d.id));
       if (h.length && historialExcluyeDemora(h, fechasOk)) dem.push({ id: String(d.id), cadete: f.cadete, zona: zonaDe[String(d.id)] || "" });
+      else if (process.env.DIAG_DEMORADOS) console.log(`  DIAG sigue demorado ${d.id} | ${f.cadete} | ${d.dir} | hist=${JSON.stringify(h.slice(-8).map(x => ({ e: x.estado, n: x.nombre || x.estadoNombre || x.descripcion, f: x.fecha })))}`);
     }
     for (const d of (f.dem21_detalle || [])) {
       if (!d || !d.id) continue; revD21++;

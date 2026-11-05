@@ -54,6 +54,7 @@ jobs:
           BACKFILL_DESDE: ${{ inputs.backfill_desde }}
           BACKFILL_HASTA: ${{ inputs.backfill_hasta }}
           RUN_SOURCE: ${{ github.event_name }}
+          DIAG_DEMORADOS: '1'
         run: |
           set -o pipefail
           cd automation && node descargar_lightdata.js 2>&1 | tee /tmp/carga.log
