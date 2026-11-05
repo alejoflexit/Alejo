@@ -60,6 +60,8 @@ export default function Monitoreo() {
   const [, setTick] = useState(0);
   const [hist, setHist] = useState(null); // historial por cadete (vista cadetes_antiguedad) para detectar nuevos
   const enCurso = useRef(false);
+  const hayDatos = useRef(false);
+  const cargarRef = useRef(null);
 
   const cargar = useCallback(async () => {
     if (enCurso.current) return;
@@ -69,11 +71,14 @@ export default function Monitoreo() {
       if (r.status === 404) { setSinEndpoint(true); return; }
       const j = await r.json().catch(() => null);
       if (!r.ok || !j || !j.porCadete) throw new Error((j && j.error) || `bridge → ${r.status}`);
-      setSinEndpoint(false); setDatos(j); setError(null);
+      setSinEndpoint(false); setDatos(j); setError(null); hayDatos.current = true;
     } catch (e) {
       setError({ msg: String(e.message || e) }); // conserva el último dato bueno
+      // Primera carga del día: el bridge sigue calculando en segundo plano → reintentar pronto, no a los 3'
+      if (!hayDatos.current) setTimeout(() => cargarRef.current && cargarRef.current(), 20000);
     } finally { enCurso.current = false; setCargando(false); }
   }, []);
+  cargarRef.current = cargar;
 
   // Historial de Métricas: cambia una vez por día (la carga nocturna), alcanza con traerlo cada 30'
   useEffect(() => {
