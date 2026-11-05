@@ -151,8 +151,15 @@ def arrancar(sid):
     except OSError:
         pass
     open(ULT_START, "w").close()
-    code, _ = wa("POST", f"/sessions/{sid}/start", timeout=60)
+    code, d = wa("POST", f"/sessions/{sid}/start", timeout=60)
     log(f"start sesión → {code}")
+    # "failed" (p. ej. reconnect attempts exhausted): OpenWA la da por "ya iniciada" y rechaza el start
+    # con 400 → hay que frenarla y volver a arrancarla (04/11)
+    if code == 400 and "already started" in json.dumps(d):
+        c1, _ = wa("POST", f"/sessions/{sid}/stop", timeout=60)
+        time.sleep(3)
+        c2, _ = wa("POST", f"/sessions/{sid}/start", timeout=60)
+        log(f"sesión trabada: stop → {c1}, start → {c2}")
 
 
 def mandar_cola(sid, clave):
