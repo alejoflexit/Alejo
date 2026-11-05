@@ -23,7 +23,9 @@ function historialExcluyeDemora(historial, fechasOkISO) {
   // Excel exportado haya quedado atrasado y todavia diga En camino/En planta.
   // 31 = "reprogramado por meli" tal como lo registra hoy LightData (lo pone
   // "Sistema"); se trata igual que el 11.
-  const ESTADOS_NO_DEMORA = new Set(["5", "6", "8", "11", "12", "31"]);
+  // 30 = "reprogramado por comprador" como lo registra hoy LightData (antes 12).
+  // 05/11/2026: caso 1080882 (Fournier 3663, Munro): 30 a las 18:29 y quedaba demorado.
+  const ESTADOS_NO_DEMORA = new Set(["5", "6", "8", "11", "12", "30", "31"]);
   return historial.some(h => {
     const codigoEstado = String(h.estado);
     if (!ESTADOS_NO_DEMORA.has(codigoEstado)) return false;
@@ -42,7 +44,7 @@ function historialExcluyeDem21(historial, fechaISO) {
   // el intento real haya ocurrido antes (por ejemplo Nadie 18:26 -> Repro 23:10).
   // En ese caso no corresponde penalizar dem21: manda el primer intento válido
   // del mismo día, no la hora en que Meli actualizó automáticamente el estado.
-  const ESTADOS_INTENTO = new Set(["6", "11", "12", "31"]);
+  const ESTADOS_INTENTO = new Set(["6", "11", "12", "30", "31"]);
   return historial.some(h => {
     if (!ESTADOS_INTENTO.has(String(h.estado))) return false;
     if (fechaEstadoADia(h.fecha) !== fechaISO) return false;

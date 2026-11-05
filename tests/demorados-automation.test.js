@@ -143,3 +143,16 @@ test("caso 1045928 (19/10): 31 pegado al En camino antes de planta excusa demora
   assert.equal(historialExcluyeDemora(h, new Set(["2026-10-19", "2026-10-18"])), true);
   assert.equal(historialExcluyeDem21(h, "2026-10-19"), true);
 });
+
+test("30 = reprogramado por comprador (código nuevo de LightData) excusa antes de las 21", () => {
+  // Caso 1080882, Fournier 3663 (04/11/2026): En camino, repro comprador 18:29, En camino 18:43.
+  const h = [
+    { estado: "1", fecha: "04/11/2026 14:09" },
+    { estado: "2", fecha: "04/11/2026 17:57" },
+    { estado: "30", fecha: "04/11/2026 18:29" },
+    { estado: "2", fecha: "04/11/2026 18:43" },
+  ];
+  assert.equal(historialExcluyeDemora(h, new Set(["2026-11-04", "2026-11-03"])), true);
+  assert.equal(historialExcluyeDem21(h, "2026-11-04"), true);
+  assert.equal(historialExcluyeDemora([{ estado: "30", fecha: "03/11/2026 21:03" }], new Set(["2026-11-03"])), false);
+});
