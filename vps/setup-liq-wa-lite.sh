@@ -1,6 +1,7 @@
 #!/bin/bash
 # Pasa la sesión de WhatsApp PERSONAL de Alejo (mensajes de liquidación) a un contenedor propio y
-# liviano: OpenWA con motor Baileys (sin Chrome, ~decenas de MB en vez de 1,1 GB), base SQLite propia,
+# liviano: OpenWA con motor Baileys (sin Chrome, ~decenas de MB en vez de 1,1 GB), base propia (SQLite
+# o una base Postgres NUEVA openwa_liq en el mismo servidor del bot, sin compartir tablas),
 # tope de 512 MB. El contenedor del bot (openwa-api) NO se toca, salvo borrar la sesión personal vieja.
 #
 # Uso (root, desde la carpeta del repo):  bash vps/setup-liq-wa-lite.sh
@@ -19,18 +20,46 @@ IMG=$(docker inspect "$VIEJO" -f '{{.Config.Image}}' 2>/dev/null) || falla "no e
 echo "imagen: $IMG"
 TIPOS=$(docker exec "$VIEJO" sh -c "grep -o \"DATABASE_TYPE'[^)]*\" /app/dist/config/env.validation.js" 2>/dev/null)
 echo "tipos de base admitidos: $TIPOS"
-echo "$TIPOS" | grep -q sqlite || falla "esta versión de OpenWA no acepta sqlite; no armo una base compartida con el bot"
+# Base propia: SQLite si la versión la acepta; si no, una base NUEVA (openwa_liq) en el mismo servidor
+# Postgres del bot — mismas credenciales, otra base: no comparte ninguna tabla con el bot.
+DBENV=()
+NET=$(docker inspect "$VIEJO" -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')
+echo "red del bot: $NET"
+if echo "$TIPOS" | grep -q sqlite; then
+  DBENV=(-e DATABASE_TYPE=sqlite -e DATABASE_NAME=/app/data/openwa.sqlite)
+  echo "base: sqlite propia"
+else
+  TIPO=$(docker exec "$VIEJO" printenv DATABASE_TYPE)
+  case "$TIPO" in postgres|postgresql) ;; *) falla "tipo de base '$TIPO' no contemplado";; esac
+  for V in DATABASE_HOST DATABASE_PORT DATABASE_USERNAME DATABASE_PASSWORD; do
+    DBENV+=(-e "$V=$(docker exec "$VIEJO" printenv $V)")
+  done
+  DBENV+=(-e DATABASE_TYPE="$TIPO" -e DATABASE_NAME=openwa_liq)
+  echo "base: postgres, base nueva openwa_liq en $(docker exec "$VIEJO" printenv DATABASE_HOST)"
+  # crear la base con el driver pg que ya trae OpenWA (no hace falta otra imagen)
+  docker exec "$VIEJO" node -e '
+const { Client } = require("/app/node_modules/pg");
+const c = new Client({ host: process.env.DATABASE_HOST, port: +process.env.DATABASE_PORT || 5432,
+  user: process.env.DATABASE_USERNAME, password: process.env.DATABASE_PASSWORD, database: process.env.DATABASE_NAME });
+(async () => {
+  await c.connect();
+  const r = await c.query("select 1 from pg_database where datname = $1", ["openwa_liq"]);
+  if (!r.rowCount) { await c.query("create database openwa_liq"); console.log("base openwa_liq creada"); }
+  else console.log("base openwa_liq ya existía");
+  await c.end();
+})().catch(e => { console.error("ERROR pg:", e.message); process.exit(1); });' || falla "no pude crear la base openwa_liq"
+fi
 [ -s $F/bot-wa.key ] || falla "falta $F/bot-wa.key"
 
-echo "== 2) contenedor $NUEVO (Baileys, SQLite, 512 MB)"
+echo "== 2) contenedor $NUEVO (Baileys, base propia, 512 MB)"
 if docker inspect "$NUEVO" >/dev/null 2>&1; then
   echo "ya existe, lo reutilizo"; docker start "$NUEVO" >/dev/null
   KEY=$(cat $F/liq-wa.apikey 2>/dev/null)
 else
   KEY=$(openssl rand -hex 24)
-  docker run -d --name "$NUEVO" --restart unless-stopped --memory 512m --memory-swap 768m \
+  docker run -d --name "$NUEVO" --restart unless-stopped --memory 512m --memory-swap 768m --network "$NET" \
     -e ENGINE_TYPE=baileys -e BAILEYS_SYNC_FULL_HISTORY=false \
-    -e DATABASE_TYPE=sqlite -e DATABASE_NAME=/app/data/openwa.sqlite -e DATABASE_SYNCHRONIZE=true \
+    "${DBENV[@]}" -e DATABASE_SYNCHRONIZE=true \
     -e REDIS_ENABLED=false -e STORAGE_TYPE=local -e STORAGE_LOCAL_PATH=/app/data/storage \
     -e SESSION_DATA_PATH=/app/data/sessions -e PLUGINS_ENABLED=false \
     -e API_MASTER_KEY="$KEY" -e PORT=2785 -e NODE_ENV=production -e LOG_LEVEL=warn \
