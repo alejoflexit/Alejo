@@ -18,29 +18,37 @@ falla() { echo "ERROR: $*"; echo "No se cambió nada del bot. La sesión vieja s
 echo "== 1) chequeos"
 IMG=$(docker inspect "$VIEJO" -f '{{.Config.Image}}' 2>/dev/null) || falla "no encuentro el contenedor $VIEJO"
 echo "imagen: $IMG"
-TIPOS=$(docker exec "$VIEJO" sh -c "grep -o \"DATABASE_TYPE'[^)]*\" /app/dist/config/env.validation.js" 2>/dev/null)
-echo "tipos de base admitidos: $TIPOS"
-# Base propia: SQLite si la versión la acepta; si no, una base NUEVA (openwa_liq) en el mismo servidor
-# Postgres del bot — mismas credenciales, otra base: no comparte ninguna tabla con el bot.
+# ── Base propia para la sesión personal ─────────────────────────────────────────────────────────
+# Se averigua la base REAL que usa el bot (variable o, si está vacía, el default de OpenWA) y qué
+# drivers trae la imagen. Preferencia: SQLite (aislada del todo); si no hay driver, una base Postgres
+# NUEVA (openwa_liq) en el mismo servidor del bot: mismas credenciales, otra base, ninguna tabla compartida.
+echo "--- diagnóstico de base (para el pase) ---"
+docker exec "$VIEJO" sh -c 'env | grep "^DATABASE_" | sed "s/PASSWORD=.*/PASSWORD=***/"; echo "-- config:"; grep -n -i -E "DATABASE_|sqlite|postgres|mysql" /app/dist/config/configuration.js /app/dist/config/env.validation.js | head -25; echo "-- drivers:"; ls -d /app/node_modules/sqlite3 /app/node_modules/better-sqlite3 /app/node_modules/sql.js /app/node_modules/pg /app/node_modules/mysql2 2>/dev/null'
+echo "------------------------------------------"
+VAL() { docker exec "$VIEJO" printenv "$1" 2>/dev/null; }
+DEF() { docker exec "$VIEJO" sh -c "grep -o -E \"process.env.$1 *(\\|\\||\\?\\?) *['\\\"][^'\\\"]*['\\\"]\" /app/dist/config/configuration.js | head -1 | sed -E \"s/.*['\\\"]([^'\\\"]*)['\\\"]$/\\1/\"" 2>/dev/null; }
+EFE() { local v; v=$(VAL "$1"); [ -n "$v" ] && echo "$v" || DEF "$1"; }
+TIPO_BOT=$(EFE DATABASE_TYPE)
+echo "base del bot (efectiva): ${TIPO_BOT:-desconocida}"
+SQLITE_DRV=""
+if docker exec "$VIEJO" test -d /app/node_modules/better-sqlite3 && docker exec "$VIEJO" grep -q "better-sqlite3" /app/dist/config/configuration.js /app/dist/config/env.validation.js 2>/dev/null; then SQLITE_DRV=better-sqlite3
+elif docker exec "$VIEJO" test -d /app/node_modules/sqlite3 && docker exec "$VIEJO" grep -q "sqlite" /app/dist/config/configuration.js /app/dist/config/env.validation.js 2>/dev/null; then SQLITE_DRV=sqlite
+fi
 DBENV=()
 NET=$(docker inspect "$VIEJO" -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | awk '{print $1}')
 echo "red del bot: $NET"
-if echo "$TIPOS" | grep -q sqlite; then
-  DBENV=(-e DATABASE_TYPE=sqlite -e DATABASE_NAME=/app/data/openwa.sqlite)
-  echo "base: sqlite propia"
+if [ -n "$SQLITE_DRV" ]; then
+  DBENV=(-e DATABASE_TYPE=$SQLITE_DRV -e DATABASE_NAME=/app/data/openwa.sqlite)
+  echo "base: $SQLITE_DRV propia en el volumen"
 else
-  TIPO=$(docker exec "$VIEJO" printenv DATABASE_TYPE)
-  case "$TIPO" in postgres|postgresql) ;; *) falla "tipo de base '$TIPO' no contemplado";; esac
-  for V in DATABASE_HOST DATABASE_PORT DATABASE_USERNAME DATABASE_PASSWORD; do
-    DBENV+=(-e "$V=$(docker exec "$VIEJO" printenv $V)")
-  done
-  DBENV+=(-e DATABASE_TYPE="$TIPO" -e DATABASE_NAME=openwa_liq)
-  echo "base: postgres, base nueva openwa_liq en $(docker exec "$VIEJO" printenv DATABASE_HOST)"
-  # crear la base con el driver pg que ya trae OpenWA (no hace falta otra imagen)
-  docker exec "$VIEJO" node -e '
+  case "$TIPO_BOT" in postgres|postgresql) ;; *) falla "no hay driver SQLite y la base del bot es '${TIPO_BOT:-desconocida}' (ver diagnóstico arriba)";; esac
+  H=$(EFE DATABASE_HOST); PT=$(EFE DATABASE_PORT); U=$(EFE DATABASE_USERNAME); PW=$(EFE DATABASE_PASSWORD); DBN=$(EFE DATABASE_NAME)
+  [ -n "$H" ] && [ -n "$U" ] || falla "no pude leer host/usuario de la base del bot (ver diagnóstico arriba)"
+  DBENV=(-e DATABASE_TYPE="$TIPO_BOT" -e DATABASE_HOST="$H" -e DATABASE_PORT="${PT:-5432}" -e DATABASE_USERNAME="$U" -e DATABASE_PASSWORD="$PW" -e DATABASE_NAME=openwa_liq)
+  echo "base: postgres, base nueva openwa_liq en $H"
+  docker exec -e PGH="$H" -e PGP="${PT:-5432}" -e PGU="$U" -e PGW="$PW" -e PGD="${DBN:-postgres}" "$VIEJO" node -e '
 const { Client } = require("/app/node_modules/pg");
-const c = new Client({ host: process.env.DATABASE_HOST, port: +process.env.DATABASE_PORT || 5432,
-  user: process.env.DATABASE_USERNAME, password: process.env.DATABASE_PASSWORD, database: process.env.DATABASE_NAME });
+const c = new Client({ host: process.env.PGH, port: +process.env.PGP, user: process.env.PGU, password: process.env.PGW, database: process.env.PGD });
 (async () => {
   await c.connect();
   const r = await c.query("select 1 from pg_database where datname = $1", ["openwa_liq"]);
