@@ -22,6 +22,7 @@ const Monitoreo = lazy(() => import("./Monitoreo"));
 const AlertasReparto = lazy(() => import("./AlertasReparto"));
 const Pizarra = lazy(() => import("./Pizarra"));
 const Devoluciones = lazy(() => import("./Devoluciones"));
+const DobleBulto = lazy(() => import("./DobleBulto"));
 const Usuarios = lazy(() => import("./Usuarios"));
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -151,6 +152,7 @@ function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
     { id: "envio", icon: "ti ti-search", label: "Buscar envío" },
     { id: "pendientes", icon: "ti ti-history", label: "Pendientes históricos" },
     { id: "devoluciones", icon: "ti ti-arrow-back-up", label: "Devoluciones" },
+    { id: "doblebulto", icon: "ti ti-packages", label: "Doble bulto" },
     ...(getSession() && esAdmin() ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
   ].filter(it => puedeVer(it.id));
   return (
@@ -834,7 +836,7 @@ export default function App() {
     // Deep-link por hash (#colectas, #metricas…): lo usan los atajos del widget de Paco
     if (envioQ) return "envio";
     const h = (window.location.hash || "").replace("#", "");
-    return ["metricas", "colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "devoluciones", "pagos", "usuarios", "home"].includes(h) ? h : "home";
+    return ["metricas", "colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "devoluciones", "doblebulto", "pagos", "usuarios", "home"].includes(h) ? h : "home";
   });
   const [session, setSession] = useState(() => getSession());
   useEffect(() => {
@@ -882,7 +884,7 @@ export default function App() {
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
-    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", monitoreo: "Monitoreo", pizarra: "Pizarra", tiquetera: "Tiquetera", envio: "Buscar envío", pendientes: "Pendientes históricos", devoluciones: "Devoluciones", pagos: "Liquidaciones", usuarios: "Usuarios" };
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", monitoreo: "Monitoreo", pizarra: "Pizarra", tiquetera: "Tiquetera", envio: "Buscar envío", pendientes: "Pendientes históricos", devoluciones: "Devoluciones", doblebulto: "Doble bulto", pagos: "Liquidaciones", usuarios: "Usuarios" };
     const base = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
     document.title = (comNuevos > 0 && seccion !== "pizarra") ? `(${comNuevos}) ${base}` : base;
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
@@ -1150,8 +1152,8 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{enDividida ? "Devoluciones · Arribos" : seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{enDividida ? "Las dos pantallas a la vez · cada lado se mueve por separado" : seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "devoluciones" ? "Cancelados y cambios · calle, depósito y cliente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{enDividida ? "Devoluciones · Arribos" : seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "doblebulto" ? "Doble bulto" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{enDividida ? "Las dos pantallas a la vez · cada lado se mueve por separado" : seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "devoluciones" ? "Cancelados y cambios · calle, depósito y cliente" : seccion === "doblebulto" ? "Paquetes de más de un bulto para cobrar al cliente" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
@@ -1209,6 +1211,8 @@ export default function App() {
 
       {vista === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
       {!enDividida && vista === "devoluciones" && <Suspense fallback={<VistaSkeleton />}><Devoluciones abrirEnvio={puedeVer("envio") ? abrirEnvio : null} /></Suspense>}
+
+      {vista === "doblebulto" && <Suspense fallback={<VistaSkeleton />}><DobleBulto /></Suspense>}
 
       {vista === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
 
