@@ -2055,8 +2055,17 @@ function PagosInner({ session }) {
 
       {vista === 'tabla' && (
         <>
+          {/* Celu (09/11): semana a lo ancho, acciones en una fila pareja y filtros en una línea que se desliza */}
+          <style>{`@media (max-width:700px){
+.pg-barra select{flex:1 1 calc(100% - 80px);min-width:0}
+.pg-acciones{margin-left:0!important;width:100%}
+.pg-acciones>button{flex:1;justify-content:center;min-height:40px}
+.pg-filtro{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+.pg-filtro::-webkit-scrollbar{display:none}
+.pg-filtro>*{flex-shrink:0;white-space:nowrap}
+.pg-filtro>span:first-child{min-width:0!important}}`}</style>
           {/* Selector de semana */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div className="pg-barra" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
             <select value={semanaLunes || ''} onChange={e => onSemana(e.target.value)} style={selSt}>
               {semanasOpts.map(lu => <option key={lu} value={lu}>{fmtSemanaLabel(lu)}</option>)}
@@ -2092,7 +2101,13 @@ function PagosInner({ session }) {
               &#128340; Historial
             </button>
 
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div className="pg-acciones" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+              {isAdmin && (
+                <button onClick={() => setWaOpen(true)} title="mandar el mensaje de liquidación desde tu WhatsApp a los cadetes de esta vista"
+                  style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.border}`, borderRadius: 8, cursor: 'pointer', background: BRAND.faint, color: BRAND.white, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ti ti-brand-whatsapp" style={{ fontSize: 15 }} /> Enviar por WhatsApp
+                </button>
+              )}
               <button
                 disabled={exportando || cargando}
                 onClick={async () => {
@@ -2189,19 +2204,15 @@ function PagosInner({ session }) {
                   Sin chips "Todos": tocar de nuevo el filtro activo lo apaga (= ver todo).
                   "Falta confirmar" va en ámbar porque es la cola de trabajo de Alejo. */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="pg-filtro" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Método</span>
                   {[['transferencia', 'Transferencia'], ['efectivo', 'Efectivo']].map(([k, l]) => (
                     <button key={k} onClick={() => setFiltroMetodo(filtroMetodo === k ? 'todos' : k)}
                       title={filtroMetodo === k ? 'tocá de nuevo para ver todos los métodos' : ''}
                       style={btnPill(filtroMetodo === k)}>{l}</button>
                   ))}
-                  {isAdmin && (
-                    <button onClick={() => setWaOpen(true)} title="mandar el mensaje de liquidación desde tu WhatsApp a los cadetes de esta vista"
-                      style={{ ...btnPill(false), marginLeft: 'auto', color: BRAND.white }}>Enviar por WhatsApp</button>
-                  )}
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="pg-filtro" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 56 }}>Estado</span>
                   {(() => {
                     // El conteo respeta el filtro de método: si estás mirando Transferencia,
