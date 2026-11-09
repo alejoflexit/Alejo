@@ -114,6 +114,12 @@ export default function DobleBulto() {
     }
   }, [rango]);
 
+  // Acceso directo del celu (doble-bulto.html / atajo del ícono): llega con ?escanear=1 y abre la cámara directo
+  useEffect(() => {
+    if (!/[?&]escanear=1/.test(window.location.search)) return;
+    window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+    setEscaner(true);
+  }, []);
   useEffect(() => { setFilas(null); cargar(); const t = setInterval(() => cargar(), REFRESH_MS); return () => clearInterval(t); }, [cargar]);
   useEffect(() => { if (!aviso) return; const t = setTimeout(() => setAviso(null), 2600); return () => clearTimeout(t); }, [aviso]);
   useEffect(() => { if (armado == null) return; const t = setTimeout(() => setArmado(null), 3000); return () => clearTimeout(t); }, [armado]);
@@ -338,7 +344,7 @@ function Escaner({ onCerrar }) {
   const totalBultos = cargados.reduce((s, x) => s + x.bultos, 0);
 
   return createPortal(
-    <div className="db-esc">
+    <div className="db-esc" onPointerDown={prepararAudio}>
       <style>{CSS}</style>
       <video ref={video} playsInline muted className="db-esc-video" />
       <div className={"db-esc-marco" + (card ? " ok" : "")} />

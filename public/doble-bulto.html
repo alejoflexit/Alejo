@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Doble bulto</title>
+<!-- Acceso directo a Doble bulto (09/11/2026). Desde Safari/Chrome se agrega a la pantalla de inicio
+     con su propio ícono y nombre; al abrirlo desde ese ícono va directo al escáner de la app. -->
+<link rel="manifest" href="/doble-bulto.webmanifest" />
+<link rel="apple-touch-icon" href="/doble-bulto-180.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Doble bulto" />
+<meta name="theme-color" content="#0D0D2B" />
+<script>
+  // Abierto desde el ícono (modo app) → directo al escáner. En el navegador se muestran las instrucciones.
+  var app = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  if (app || /[?&]ir=1/.test(location.search)) location.replace("/?escanear=1#doblebulto");
+</script>
+<style>
+  body{margin:0;min-height:100vh;background:#0D0D2B;color:#f4f5fa;font-family:-apple-system,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+  .c{max-width:380px;width:100%;text-align:center}
+  img{width:88px;height:88px;border-radius:20px}
+  h1{font-size:22px;margin:16px 0 6px}
+  p{color:#a7adc2;font-size:14.5px;line-height:1.5;margin:0 0 18px}
+  ol{text-align:left;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px 16px 16px 36px;margin:0 0 18px;font-size:15px;line-height:1.6}
+  b{color:#2ee6b6}
+  a{display:inline-block;color:#2ee6b6;font-size:14px}
+</style>
+</head>
+<body>
+  <div class="c">
+    <img src="/doble-bulto-180.png" alt="" />
+    <h1>Doble bulto</h1>
+    <p>Agregá este acceso a la pantalla de inicio: un toque y se abre la cámara para escanear.</p>
+    <ol>
+      <li>iPhone: tocá <b>Compartir</b> (el cuadrado con la flecha) y después <b>Agregar a inicio</b>.</li>
+      <li>Android: tocá <b>⋮</b> y después <b>Agregar a la pantalla principal</b>.</li>
+    </ol>
+    <a href="/?escanear=1#doblebulto">Ir a Doble bulto ahora →</a>
+  </div>
+</body>
+</html>

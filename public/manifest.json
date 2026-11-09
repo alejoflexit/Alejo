@@ -31,6 +31,17 @@
   },
   "shortcuts": [
     {
+      "name": "Doble bulto",
+      "short_name": "Doble bulto",
+      "url": "/?escanear=1#doblebulto",
+      "icons": [
+        {
+          "src": "doble-bulto-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
       "name": "Buscar envío",
       "short_name": "Buscar envío",
       "url": "/#envio",

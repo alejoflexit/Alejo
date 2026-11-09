@@ -1,0 +1,13 @@
+{
+  "name": "Doble bulto · Flexit",
+  "short_name": "Doble bulto",
+  "start_url": "/doble-bulto.html",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#0D0D2B",
+  "background_color": "#0D0D2B",
+  "icons": [
+    { "src": "/doble-bulto-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/doble-bulto-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" }
+  ]
+}
