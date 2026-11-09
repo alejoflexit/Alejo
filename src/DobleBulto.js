@@ -267,31 +267,32 @@ function Escaner({ onCerrar }) {
     pausa.current = false;
   }
 
-  async function confirmar() {
+  // Opción C (09/11): tocar el número guarda directo y la cámara sigue con el próximo paquete
+  async function guardar(n) {
     const c = cardRef.current;
     if (!c || c.cargando || c.guardando || c.error) return;
-    if (c.ex && c.ex.bultos === c.bultos) { soltar(); return; } // ya estaba igual: no hay nada que guardar
-    setCard({ ...c, guardando: true });
+    if (c.ex && c.ex.bultos === n) { soltar(); setFlash({ tipo: "ok", txt: `Sin cambios · ${n} bultos` }); return; }
+    setCard({ ...c, bultos: n, guardando: true, errGuardar: null });
     try {
-      if (c.ex) await actualizarFila(c.ex.id, { bultos: c.bultos });
+      if (c.ex) await actualizarFila(c.ex.id, { bultos: n });
       else {
         const fila = {
-          codigo: c.l.codigo, qr: c.l.qr.slice(0, 500), sender_id: c.l.sender_id, bultos: c.bultos, escaneado_por: yo(),
+          codigo: c.l.codigo, qr: c.l.qr.slice(0, 500), sender_id: c.l.sender_id, bultos: n, escaneado_por: yo(),
           ...(c.env ? { ...datosDeEnvio(c.env), cruzado_at: new Date().toISOString() } : { cliente: c.cliente || null }),
         };
         try { await sbFetch("doble_bultos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(fila) }); }
         catch (e) {
           if (!/duplicate|23505|409/i.test(String(e.message))) throw e;
           const ya = await buscarExistente(c.l.codigo); // lo cargó otro recién: solo se actualizan los bultos
-          if (ya) await actualizarFila(ya.id, { bultos: c.bultos });
+          if (ya) await actualizarFila(ya.id, { bultos: n });
         }
         if (c.env) aprenderVendedor(c.l.sender_id, c.env.razon_social);
       }
-      setCargados((xs) => [{ codigo: c.l.codigo, cliente: c.cliente, bultos: c.bultos, cambio: !!c.ex, at: Date.now() }, ...xs.filter((x) => x.codigo !== c.l.codigo)]);
-      setFlash({ tipo: "ok", txt: `✓ ${c.ex ? "Actualizado" : "Guardado"} · ${c.bultos} bultos` });
+      setCargados((xs) => [{ codigo: c.l.codigo, cliente: c.cliente, bultos: n, cambio: !!c.ex, at: Date.now() }, ...xs.filter((x) => x.codigo !== c.l.codigo)]);
+      setFlash({ tipo: "ok", txt: `✓ ${c.ex ? "Actualizado" : "Guardado"} · ${n} bultos` });
       soltar();
     } catch {
-      setCard({ ...c, guardando: false, error: "No se pudo guardar. Probá de nuevo." });
+      setCard({ ...c, guardando: false, errGuardar: "No se pudo guardar. Tocá el número de nuevo." });
     }
   }
 
@@ -327,11 +328,11 @@ function Escaner({ onCerrar }) {
     return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
   }, [procesar]);
 
-  // Desktop: Enter confirma, Escape descarta
+  // Desktop: tocar 2–6 guarda, Escape descarta
   useEffect(() => {
     const k = (e) => {
       if (!cardRef.current || e.target.tagName === "INPUT") return;
-      if (e.key === "Enter") { e.preventDefault(); confirmar(); }
+      if (/^[2-6]$/.test(e.key) && !cardRef.current.mas) { e.preventDefault(); guardar(Number(e.key)); }
       if (e.key === "Escape") soltar();
     };
     window.addEventListener("keydown", k);
@@ -340,59 +341,77 @@ function Escaner({ onCerrar }) {
 
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 1800); return () => clearTimeout(t); }, [flash]);
 
-  const setBultos = (n) => setCard((c) => (c ? { ...c, bultos: Math.max(2, Math.min(50, n)) } : c));
+  const setMas = (n) => setCard((c) => (c ? { ...c, mas: n ? Math.max(2, Math.min(50, n)) : 0 } : c));
   const totalBultos = cargados.reduce((s, x) => s + x.bultos, 0);
+  const bloqueado = !card || card.cargando || card.guardando || !!card.error;
+  const actual = card && card.ex ? card.ex.bultos : null;
 
   return createPortal(
     <div className="db-esc" onPointerDown={prepararAudio}>
       <style>{CSS}</style>
       <video ref={video} playsInline muted className="db-esc-video" />
-      <div className={"db-esc-marco" + (card ? " ok" : "")} />
+      <div className={"db-esc-marco" + (card ? " ok" : "")}><i /><i /><i /><i /></div>
       <div className="db-esc-arriba">
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700 }}>Doble bulto</div>
-          <div style={{ fontSize: 12.5, opacity: 0.8, marginTop: 2 }}>{cargados.length ? `${cargados.length} paquete${cargados.length === 1 ? "" : "s"} · ${totalBultos} bultos` : "Apuntá al QR de la etiqueta"}</div>
+        <div className="db-esc-total">
+          {cargados.length
+            ? <><b>{totalBultos}</b><span>bultos · {cargados.length} paquete{cargados.length === 1 ? "" : "s"}</span></>
+            : <span className="db-esc-tit">Apuntá al QR de la etiqueta</span>}
         </div>
-        <button className="db-btn" style={{ background: "rgba(0,0,0,.55)" }} onClick={() => onCerrar(cargados.length)}>Terminar</button>
+        <button className="db-esc-term" onClick={() => onCerrar(cargados.length)}>Terminar</button>
       </div>
 
       {flash && !card && <div className={"db-esc-flash" + (flash.tipo === "ok" ? "" : " aviso")}>{flash.txt}</div>}
       {error && !card && !flash && <div className="db-esc-flash aviso">{error}</div>}
 
-      <div className="db-esc-abajo">
+      <div className={"db-esc-abajo" + (card ? " hoja" : "")}>
         {card ? (
-          <div className="db-esc-card">
-            <div className="db-esc-cli">{card.cargando ? "Buscando…" : card.cliente || "Cliente: se completa al cruzar con LightData"}</div>
-            <div className="db-esc-det">
-              Envío {card.l.codigo}
-              {card.env && card.env.localidad ? ` · ${card.env.localidad}` : !card.cargando && !card.env ? " · todavía no está en LightData" : ""}
+          <>
+            <div className="db-esc-cab">
+              <div style={{ minWidth: 0 }}>
+                <div className="db-esc-cli">{card.cargando ? "Buscando…" : card.cliente || "Cliente: se completa solo"}</div>
+                <div className="db-esc-det">
+                  {card.l.codigo}
+                  {card.env && card.env.localidad ? ` · ${card.env.localidad}` : !card.cargando && !card.env ? " · todavía no está en LightData" : ""}
+                </div>
+              </div>
+              <button className="db-esc-desc" onClick={soltar}>Descartar</button>
             </div>
-            {card.ex && !card.cargando && <div className="db-esc-ya">Ya estaba cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos} bultos. Si cambiás la cantidad se actualiza; no se duplica.</div>}
+            {card.ex && !card.cargando && <div className="db-esc-ya">Ya estaba cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos} bultos. Tocá otro número para corregirlo; no se duplica.</div>}
             {card.error && <div className="db-esc-err">{card.error}</div>}
-            <div className="db-esc-bultos">
-              <button className="db-paso" onClick={() => setBultos(card.bultos - 1)} disabled={card.bultos <= 2} aria-label="Menos">−</button>
-              <div className="db-esc-n"><b>{card.bultos}</b><small>bultos</small></div>
-              <button className="db-paso" onClick={() => setBultos(card.bultos + 1)} aria-label="Más">+</button>
-            </div>
-            <div className="db-chips">
-              {[2, 3, 4, 5, 6].map((n) => <button key={n} className={"db-chip" + (card.bultos === n ? " on" : "")} onClick={() => setBultos(n)}>{n}</button>)}
-            </div>
-            <div className="db-esc-acc">
-              <button className="db-btn db-esc-desc" onClick={soltar}>Descartar</button>
-              <button className="db-btn db-pri db-esc-conf" disabled={card.cargando || card.guardando || !!card.error} onClick={confirmar}>
-                {card.guardando ? "Guardando…" : card.ex && card.ex.bultos === card.bultos ? "Listo, seguir" : `Confirmar · ${card.bultos} bultos`}
-              </button>
-            </div>
-          </div>
+            {card.errGuardar && <div className="db-esc-err">{card.errGuardar}</div>}
+            {card.mas ? (
+              <>
+                <div className="db-esc-bultos">
+                  <button className="db-paso" onClick={() => setMas(card.mas - 1)} disabled={card.mas <= 2} aria-label="Menos">−</button>
+                  <div className="db-esc-n"><b>{card.mas}</b><small>bultos</small></div>
+                  <button className="db-paso" onClick={() => setMas(card.mas + 1)} disabled={card.mas >= 50} aria-label="Más">+</button>
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="db-num chico" onClick={() => setMas(0)}>Volver</button>
+                  <button className="db-num on" style={{ flex: 1 }} disabled={bloqueado} onClick={() => guardar(card.mas)}>{card.guardando ? "Guardando…" : `Guardar · ${card.mas} bultos`}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="db-esc-preg">{card.guardando ? "Guardando…" : "¿Cuántos bultos? Tocá el número y se guarda."}</div>
+                <div className="db-nums">
+                  {[2, 3, 4, 5, 6].map((n) => (
+                    <button key={n} className={"db-num" + ((actual ? actual === n : n === 2) ? " on" : "")} disabled={bloqueado} onClick={() => guardar(n)}>{n}</button>
+                  ))}
+                  <button className="db-num chico" disabled={bloqueado} onClick={() => setMas(Math.max(7, actual || 7))}>Más…</button>
+                </div>
+              </>
+            )}
+          </>
         ) : (
           <>
             <form onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { procesar(manual.trim(), true); setManual(""); } }} style={{ display: "flex", gap: 8 }}>
               <input className="db-input" inputMode="text" placeholder="Etiqueta rota: tipeá el número de envío" value={manual} onChange={(e) => setManual(e.target.value)} />
-              <button className="db-btn" type="submit">Buscar</button>
+              <button className="db-esc-term" type="submit">Buscar</button>
             </form>
             {cargados.length > 0 && (
               <div className="db-esc-lista">
-                {cargados.slice(0, 6).map((x) => (
+                {cargados.slice(0, 5).map((x) => (
                   <div key={x.codigo} className="db-esc-fila"><span className="db-esc-ico">✓</span><span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.cliente || `Envío ${x.codigo}`}</span><b>{x.bultos}</b></div>
                 ))}
               </div>
@@ -451,31 +470,44 @@ i.db-amb{font-style:normal}
 }
 .db-esc{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
 .db-esc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.db-esc-marco{position:absolute;inset:max(90px,12%) 9% max(300px,40%);border:3px solid rgba(255,255,255,.55);border-radius:18px;transition:border-color .15s;pointer-events:none}
-.db-esc-marco.ok{border-color:#2ee6b6}
-.db-esc-arriba{position:absolute;top:0;left:0;right:0;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;background:linear-gradient(rgba(0,0,0,.75),rgba(0,0,0,0))}
-.db-esc-flash{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 78px);transform:translateX(-50%);background:rgba(10,12,24,.9);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:12px;padding:11px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
+.db-esc-marco{position:absolute;left:14%;right:14%;top:max(120px,16%);height:min(64vw,300px);pointer-events:none}
+.db-esc-marco i{position:absolute;width:38px;height:38px;border:0 solid rgba(255,255,255,.75);transition:border-color .15s}
+.db-esc-marco i:nth-child(1){left:0;top:0;border-left-width:4px;border-top-width:4px;border-top-left-radius:16px}
+.db-esc-marco i:nth-child(2){right:0;top:0;border-right-width:4px;border-top-width:4px;border-top-right-radius:16px}
+.db-esc-marco i:nth-child(3){left:0;bottom:0;border-left-width:4px;border-bottom-width:4px;border-bottom-left-radius:16px}
+.db-esc-marco i:nth-child(4){right:0;bottom:0;border-right-width:4px;border-bottom-width:4px;border-bottom-right-radius:16px}
+.db-esc-marco.ok i{border-color:#2ee6b6}
+.db-esc-arriba{position:absolute;top:0;left:0;right:0;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 12px) 18px 14px;background:rgba(8,8,15,.72)}
+.db-esc-total{display:flex;align-items:baseline;gap:10px;min-width:0}
+.db-esc-total b{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;line-height:1}
+.db-esc-total span{font-size:13px;color:#b9bdd0}
+.db-esc-total .db-esc-tit{font-size:15px;color:#f4f5fa;font-weight:600}
+.db-esc-term{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.db-esc-flash{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 84px);transform:translateX(-50%);background:rgba(10,12,24,.92);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:14px;padding:11px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
 .db-esc-flash.aviso{border-color:rgba(245,192,68,.6);font-weight:500}
-.db-esc-abajo{position:absolute;left:0;right:0;bottom:0;padding:14px 14px calc(env(safe-area-inset-bottom) + 14px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.85) 25%);display:flex;flex-direction:column;gap:10px}
-.db-esc-card{background:rgba(20,21,36,.96);border:1px solid rgba(46,230,182,.35);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px;max-width:520px;width:100%;margin:0 auto;box-sizing:border-box}
-.db-esc-cli{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;line-height:1.25}
-.db-esc-det{font-size:13px;color:#a7adc2;margin-top:-6px}
+.db-esc-abajo{position:absolute;left:0;right:0;bottom:0;padding:14px 16px calc(env(safe-area-inset-bottom) + 16px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.85) 25%);display:flex;flex-direction:column;gap:12px}
+.db-esc-abajo.hoja{background:#151626;border-top-left-radius:28px;border-top-right-radius:28px;padding-top:20px;gap:14px}
+.db-esc-abajo>*{width:100%;max-width:520px;margin:0 auto;box-sizing:border-box}
+.db-esc-cab{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.db-esc-cli{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;line-height:1.25}
+.db-esc-det{font-size:13px;color:#b9bdd0;margin-top:3px;overflow-wrap:anywhere}
+.db-esc-desc{min-height:44px;padding:0 12px;border:0;border-radius:12px;background:transparent;color:#b9bdd0;font:inherit;font-size:14px;font-weight:500;cursor:pointer;flex-shrink:0}
 .db-esc-ya{font-size:12.5px;color:#F5C044;line-height:1.4}
 .db-esc-err{font-size:13px;color:#F5C044}
-.db-esc-bultos{display:flex;align-items:center;justify-content:center;gap:22px}
-.db-paso{width:58px;height:58px;border-radius:50%;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#fff;font-size:28px;line-height:1;cursor:pointer}
+.db-esc-preg{font-size:14px;color:#b9bdd0}
+.db-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.db-num{min-height:72px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f4f5fa;font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.db-num.on{background:#2ee6b6;border-color:#2ee6b6;color:#062a20}
+.db-num.chico{font-family:inherit;font-size:17px;font-weight:600;padding:0 18px}
+.db-num.on.chico,.db-esc-bultos+div .db-num.on{font-family:inherit;font-size:17px}
+.db-num:active:not(:disabled){transform:scale(.96)}
+.db-num:disabled{opacity:.45;cursor:default}
+.db-esc-bultos{display:flex;align-items:center;justify-content:center;gap:24px}
+.db-paso{width:60px;height:60px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font-size:28px;line-height:1;cursor:pointer}
 .db-paso:disabled{opacity:.3}
-.db-paso:active{transform:scale(.94)}
-.db-esc-n{display:flex;flex-direction:column;align-items:center;min-width:70px}
-.db-esc-n b{font-family:'Space Grotesk',sans-serif;font-size:44px;line-height:1}
-.db-esc-n small{font-size:12px;color:#a7adc2}
-.db-chips{display:flex;gap:8px;justify-content:center}
-.db-chip{flex:1;max-width:64px;min-height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#f4f5fa;font:inherit;font-size:16px;font-weight:600;cursor:pointer}
-.db-chip.on{border-color:rgba(46,230,182,.6);background:rgba(46,230,182,.14);color:#2ee6b6}
-.db-esc-acc{display:flex;gap:10px}
-.db-esc-desc{min-height:54px;padding:0 16px}
-.db-esc-conf{flex:1;min-height:54px;font-size:16px;font-weight:700;background:#2ee6b6;color:#06231b;border-color:#2ee6b6}
-.db-esc-conf:disabled{background:rgba(46,230,182,.25);color:#06231b}
+.db-esc-n{display:flex;flex-direction:column;align-items:center;min-width:80px}
+.db-esc-n b{font-family:'Space Grotesk',sans-serif;font-size:52px;line-height:1}
+.db-esc-n small{font-size:13px;color:#b9bdd0}
 .db-input{flex:1;min-width:0;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);color:#fff;font:inherit;font-size:15px;padding:11px 12px;border-radius:10px}
 .db-esc-lista{display:flex;flex-direction:column;gap:6px;max-height:24vh;overflow:auto}
 .db-esc-fila{display:flex;gap:10px;align-items:center;font-size:14px}
