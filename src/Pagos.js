@@ -2271,12 +2271,15 @@ function PagosInner({ session }) {
                 </div>
               </div>
 
-              {/* Tabla principal */}
+              {/* Tabla principal — la columna Cadete queda fija al deslizar de costado (09/11: en el celu, al
+                  llegar a Estado/Confirmar no se veía de quién era la fila) */}
+              <style>{`.pg-fija{position:sticky;left:0;z-index:2;box-shadow:6px 0 10px -6px rgba(0,0,0,.55)}
+@media (max-width:700px){.pg-fija{max-width:128px;min-width:110px;white-space:normal;overflow-wrap:anywhere;font-size:12.5px}}`}</style>
               <div style={{ ...cardSt, padding: 0, overflow: 'auto', maxHeight: '72vh', marginBottom: 20 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720, fontSize: 13 }}>
                   <thead>
                     <tr style={{ color: BRAND.muted, textAlign: 'left', borderBottom: `1px solid ${BRAND.border}` }}>
-                      <th style={thSt}>Cadete</th>
+                      <th className="pg-fija" style={{ ...thSt, zIndex: 5 }}>Cadete</th>
                       <th style={thSt}>Cant.</th>
                       <th style={thNum}>Precio</th>
                       <th style={thNum}>Monto</th>
@@ -2302,13 +2305,14 @@ function PagosInner({ session }) {
                       const autoConf = cierre?.detalle?.auto?.cantidad;
                       const nuevas = (autoConf != null && !f.esFletero) ? (f.cantidadOriginal - autoConf) : 0;
                       const desvio = trabada && nuevas > 0;
+                      const rowTint = open ? 'rgba(46,207,170,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : (i % 2 ? 'rgba(255,255,255,0.022)' : 'transparent');
                       return (
                         <React.Fragment key={f.key}>
                           <tr
                             onMouseEnter={() => setHoverKey(f.key)}
                             onMouseLeave={() => setHoverKey(h => (h === f.key ? null : h))}
-                            style={{ borderTop: `1px solid ${BRAND.border}`, background: open ? 'rgba(46,207,170,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : (i % 2 ? 'rgba(255,255,255,0.022)' : 'transparent') }}>
-                            <td onClick={() => setExpandido(open ? null : f.key)} title="ver / ocultar detalle" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}` }}>
+                            style={{ borderTop: `1px solid ${BRAND.border}`, background: rowTint }}>
+                            <td className="pg-fija" onClick={() => setExpandido(open ? null : f.key)} title="ver / ocultar detalle" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}`, background: `linear-gradient(${rowTint}, ${rowTint}), ${BRAND.navyCard}` }}>
                               <span style={{ borderBottom: `1px dotted ${BRAND.muted}` }}>{f.nombre}</span>
                               {f.esFletero && <span title="fletero: solo colectas" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, color: BRAND.muted, border: `1px solid ${BRAND.border}` }}>fletero</span>}
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
@@ -2630,7 +2634,7 @@ function PagosInner({ session }) {
                   {filasVisibles.length > 0 && (
                     <tfoot>
                       <tr style={{ borderTop: `2px solid ${BRAND.border}`, fontWeight: 700, background: BRAND.navyCard, position: 'sticky', bottom: 0 }}>
-                        <td style={{ padding: '10px 12px', borderLeft: '3px solid transparent' }}>Totales ({filasVisibles.length})</td>
+                        <td className="pg-fija" style={{ padding: '10px 12px', borderLeft: '3px solid transparent', background: BRAND.navyCard, zIndex: 4 }}>Totales ({filasVisibles.length})</td>
                         <td></td>
                         <td></td>
                         <td style={{ padding: '10px 12px', textAlign: 'right' }}>{money(totalesVisibles.monto)}</td>
