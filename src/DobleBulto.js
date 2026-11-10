@@ -240,29 +240,37 @@ function Escaner({ onCerrar }) {
   const [flash, setFlash] = useState(null);
   const cardRef = useRef(null); cardRef.current = card;
 
-  const procesar = useCallback(async (texto, aMano = false) => {
+  // 09/11: todo lo lento pasa por detrás. Al escanear, la hoja aparece al instante con los números
+  // habilitados; la búsqueda del cliente/dirección y el guardado corren en segundo plano, con reintentos.
+  const vendCache = useRef(new Map()); // sender_id → cliente, para mostrarlo al toque en esta tanda
+  const pendientes = useRef(new Set());
+  const [cerrando, setCerrando] = useState(false);
+
+  const procesar = useCallback((texto) => {
     if (pausa.current) return;
     const l = leerEtiqueta(texto);
     const ahora = Date.now();
-    if (!l) { if (aMano) setFlash({ tipo: "aviso", txt: "Eso no parece un número de envío" }); return; }
-    if (!aMano && l.codigo === ultimo.current.c && ahora - ultimo.current.at < 5000) return; // la misma etiqueta sigue en cuadro
+    if (!l) return;
+    if (l.codigo === ultimo.current.c && ahora - ultimo.current.at < 5000) return; // la misma etiqueta sigue en cuadro
     ultimo.current = { c: l.codigo, at: ahora };
     pausa.current = true;
     beep(true);
     setFlash(null);
-    setCard({ l, cargando: true, bultos: 2 });
-    try {
-      const [ex, env, vend] = await Promise.all([
-        buscarExistente(l.codigo),
-        buscarEnvio(l.codigo).catch(() => null),
-        l.sender_id ? clienteDeVendedor(l.sender_id).catch(() => null) : null,
-      ]);
-      setCard((c) => (c && c.l.codigo === l.codigo
-        ? { ...c, cargando: false, ex, env, cliente: (env && env.razon_social) || (ex && ex.cliente) || vend || null, bultos: ex ? ex.bultos : 2 }
-        : c));
-    } catch (e) {
-      setCard((c) => (c && c.l.codigo === l.codigo ? { ...c, cargando: false, error: sinTabla(e) ? "Falta crear la tabla en Supabase: todavía no se puede guardar." : "Sin conexión con la base. Probá de nuevo." } : c));
-    }
+    const conocido = l.sender_id ? vendCache.current.get(l.sender_id) : null;
+    const info = Promise.all([
+      buscarExistente(l.codigo).catch(() => null),
+      buscarEnvio(l.codigo).catch(() => null),
+      l.sender_id && !conocido ? clienteDeVendedor(l.sender_id).catch(() => null) : conocido,
+    ]).then(([ex, env, vend]) => {
+      const cliente = (env && env.razon_social) || (ex && ex.cliente) || vend || null;
+      if (cliente && l.sender_id) vendCache.current.set(l.sender_id, cliente);
+      return { ex, env, vend, cliente };
+    });
+    setCard({ l, info, buscando: true, cliente: conocido || null });
+    info.then((r) => {
+      setCard((c) => (c && c.l.codigo === l.codigo ? { ...c, buscando: false, ex: r.ex, env: r.env, cliente: r.cliente || c.cliente } : c));
+      setCargados((xs) => xs.map((x) => (x.codigo === l.codigo && !x.cliente && r.cliente ? { ...x, cliente: r.cliente } : x)));
+    });
   }, []);
 
   function soltar() {
@@ -271,33 +279,55 @@ function Escaner({ onCerrar }) {
     pausa.current = false;
   }
 
-  // Opción C (09/11): tocar el número guarda directo y la cámara sigue con el próximo paquete
-  async function guardar(n) {
-    const c = cardRef.current;
-    if (!c || c.cargando || c.guardando || c.error) return;
-    if (c.ex && c.ex.bultos === n) { soltar(); setFlash({ tipo: "ok", txt: `Sin cambios · ${n} bultos` }); return; }
-    setCard({ ...c, bultos: n, guardando: true, errGuardar: null });
-    try {
-      if (c.ex) await actualizarFila(c.ex.id, { bultos: n });
-      else {
-        const fila = {
-          codigo: c.l.codigo, qr: c.l.qr.slice(0, 500), sender_id: c.l.sender_id, bultos: n, escaneado_por: yo(),
-          ...(c.env ? { ...datosDeEnvio(c.env), cruzado_at: new Date().toISOString() } : { cliente: c.cliente || null }),
-        };
-        try { await sbFetch("doble_bultos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(fila) }); }
-        catch (e) {
-          if (!/duplicate|23505|409/i.test(String(e.message))) throw e;
-          const ya = await buscarExistente(c.l.codigo); // lo cargó otro recién: solo se actualizan los bultos
-          if (ya) await actualizarFila(ya.id, { bultos: n });
+  const marcar = (codigo, patch) => setCargados((xs) => xs.map((x) => (x.codigo === codigo ? { ...x, ...patch } : x)));
+
+  // Guarda en segundo plano: upsert por código (re-escanear actualiza los bultos, nunca duplica),
+  // y cuando llega la búsqueda completa cliente/dirección. Hasta 3 reintentos; si no, queda ⚠ para tocar.
+  function guardarFondo(l, info, n, intento = 0) {
+    const p = (async () => {
+      marcar(l.codigo, { estado: "guardando" });
+      try {
+        await sbFetch("doble_bultos?on_conflict=codigo", {
+          method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify([{ codigo: l.codigo, qr: l.qr.slice(0, 500), sender_id: l.sender_id, bultos: n, escaneado_por: yo() }]),
+        });
+        marcar(l.codigo, { estado: "ok" });
+        const r = await info;
+        const cod = encodeURIComponent(l.codigo);
+        if (r.env) {
+          await sbFetch(`doble_bultos?codigo=eq.${cod}`, { method: "PATCH", body: JSON.stringify({ ...datosDeEnvio(r.env), cruzado_at: new Date().toISOString() }) }).catch(() => {});
+          aprenderVendedor(l.sender_id, r.env.razon_social);
+        } else if (r.cliente) {
+          await sbFetch(`doble_bultos?codigo=eq.${cod}&cliente=is.null`, { method: "PATCH", body: JSON.stringify({ cliente: r.cliente }) }).catch(() => {});
         }
-        if (c.env) aprenderVendedor(c.l.sender_id, c.env.razon_social);
+      } catch (e) {
+        if (sinTabla(e)) { marcar(l.codigo, { estado: "error" }); setError("Falta crear la tabla en Supabase: todavía no se guarda nada."); return; }
+        if (intento < 3) { await new Promise((ok) => setTimeout(ok, 1500 * (intento + 1))); return guardarFondo(l, info, n, intento + 1); }
+        marcar(l.codigo, { estado: "error" });
       }
-      setCargados((xs) => [{ codigo: c.l.codigo, cliente: c.cliente, bultos: n, cambio: !!c.ex, at: Date.now() }, ...xs.filter((x) => x.codigo !== c.l.codigo)]);
-      setFlash({ tipo: "ok", txt: `✓ ${c.ex ? "Actualizado" : "Guardado"} · ${n} bultos` });
-      soltar();
-    } catch {
-      setCard({ ...c, guardando: false, errGuardar: "No se pudo guardar. Tocá el número de nuevo." });
+    })();
+    pendientes.current.add(p);
+    p.finally(() => pendientes.current.delete(p));
+    return p;
+  }
+
+  // Opción C: tocar el número guarda y la cámara sigue con el próximo paquete — sin esperar a la red
+  function guardar(n) {
+    const c = cardRef.current;
+    if (!c) return;
+    if (c.ex && c.ex.bultos === n) { soltar(); setFlash({ tipo: "ok", txt: `Sin cambios · ${n} bultos` }); return; }
+    setCargados((xs) => [{ codigo: c.l.codigo, l: c.l, info: c.info, cliente: c.cliente, bultos: n, estado: "guardando" }, ...xs.filter((x) => x.codigo !== c.l.codigo)]);
+    guardarFondo(c.l, c.info, n);
+    setFlash({ tipo: "ok", txt: `✓ ${n} bultos` });
+    soltar();
+  }
+
+  async function terminar() {
+    if (pendientes.current.size) {
+      setCerrando(true);
+      await Promise.race([Promise.allSettled([...pendientes.current]), new Promise((ok) => setTimeout(ok, 8000))]);
     }
+    onCerrar(cargados.length);
   }
 
   // Cámara + lectura cada ~250 ms (BarcodeDetector si existe; si no, jsQR — iPhone)
@@ -310,7 +340,7 @@ function Escaner({ onCerrar }) {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
         if (!vivo) { stream.getTracks().forEach((t) => t.stop()); return; }
         video.current.srcObject = stream; await video.current.play();
-      } catch { setError("No se pudo abrir la cámara. Podés tipear el número de envío abajo."); return; }
+      } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
       timer = setInterval(async () => {
         const v = video.current;
@@ -325,7 +355,7 @@ function Escaner({ onCerrar }) {
             const r = jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, { inversionAttempts: "dontInvert" });
             if (r) texto = r.data;
           }
-          if (texto) await procesar(texto);
+          if (texto) procesar(texto);
         } finally { ocupado = false; }
       }, 250);
     })();
@@ -362,7 +392,8 @@ function Escaner({ onCerrar }) {
 
   const setMas = (n) => setCard((c) => (c ? { ...c, mas: n ? Math.max(2, Math.min(50, n)) : 0 } : c));
   const totalBultos = cargados.reduce((s, x) => s + x.bultos, 0);
-  const bloqueado = !card || card.cargando || card.guardando || !!card.error;
+  const bloqueado = !card || cerrando;
+  const conError = cargados.filter((x) => x.estado === "error");
   const actual = card && card.ex ? card.ex.bultos : null;
 
   return createPortal(
@@ -376,7 +407,7 @@ function Escaner({ onCerrar }) {
             ? <><b>{totalBultos}</b><span>bultos · {cargados.length} paquete{cargados.length === 1 ? "" : "s"}</span></>
             : <span className="db-esc-tit">Apuntá al QR de la etiqueta</span>}
         </div>
-        <button className="db-esc-term" onClick={() => onCerrar(cargados.length)}>Terminar</button>
+        <button className="db-esc-term" disabled={cerrando} onClick={terminar}>{cerrando ? "Guardando…" : "Terminar"}</button>
       </div>
 
       {flash && !card && <div className={"db-esc-flash" + (flash.tipo === "ok" ? "" : " aviso")}>{flash.txt}</div>}
@@ -387,17 +418,15 @@ function Escaner({ onCerrar }) {
           <>
             <div className="db-esc-cab">
               <div style={{ minWidth: 0 }}>
-                <div className="db-esc-cli">{card.cargando ? "Buscando…" : card.cliente || "Cliente: se completa solo"}</div>
+                <div className="db-esc-cli">{card.cliente || (card.buscando ? <span className="db-esc-busc">Buscando cliente…</span> : "Cliente: se completa solo")}</div>
                 <div className="db-esc-det">
                   {card.l.codigo}
-                  {card.env && card.env.localidad ? ` · ${card.env.localidad}` : !card.cargando && !card.env ? " · todavía no está en LightData" : ""}
+                  {card.env && card.env.localidad ? ` · ${card.env.localidad}` : !card.buscando && !card.env ? " · todavía no está en LightData" : ""}
                 </div>
               </div>
               <button className="db-esc-desc" onClick={soltar}>Descartar</button>
             </div>
-            {card.ex && !card.cargando && <div className="db-esc-ya">Ya estaba cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos} bultos. Tocá otro número para corregirlo; no se duplica.</div>}
-            {card.error && <div className="db-esc-err">{card.error}</div>}
-            {card.errGuardar && <div className="db-esc-err">{card.errGuardar}</div>}
+            {card.ex && <div className="db-esc-ya">Ya estaba cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos} bultos. Tocá otro número para corregirlo; no se duplica.</div>}
             {card.mas ? (
               <>
                 <div className="db-esc-bultos">
@@ -407,12 +436,12 @@ function Escaner({ onCerrar }) {
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button className="db-num chico" onClick={() => setMas(0)}>Volver</button>
-                  <button className="db-num on" style={{ flex: 1 }} disabled={bloqueado} onClick={() => guardar(card.mas)}>{card.guardando ? "Guardando…" : `Guardar · ${card.mas} bultos`}</button>
+                  <button className="db-num on" style={{ flex: 1 }} disabled={bloqueado} onClick={() => guardar(card.mas)}>{`Guardar · ${card.mas} bultos`}</button>
                 </div>
               </>
             ) : (
               <>
-                <div className="db-esc-preg">{card.guardando ? "Guardando…" : "¿Cuántos bultos? Tocá el número y se guarda."}</div>
+                <div className="db-esc-preg">¿Cuántos bultos? Tocá el número y se guarda.</div>
                 <div className="db-nums">
                   {[2, 3, 4, 5, 6].map((n) => (
                     <button key={n} className={"db-num" + ((actual ? actual === n : n === 2) ? " on" : "")} disabled={bloqueado} onClick={() => guardar(n)}>{n}</button>
@@ -425,10 +454,18 @@ function Escaner({ onCerrar }) {
         ) : (
           <>
             {/* 09/11: sacamos el "tipeá el número" — Alejo prefiere la foto de siempre para etiquetas rotas */}
+            {conError.length > 0 && (
+              <button className="db-esc-reint" onClick={() => conError.forEach((x) => guardarFondo(x.l, x.info, x.bultos))}>
+                ⚠ {conError.length} sin guardar (sin señal). Tocá para reintentar
+              </button>
+            )}
             {cargados.length > 0 && (
               <div className="db-esc-lista">
                 {cargados.slice(0, 5).map((x) => (
-                  <div key={x.codigo} className="db-esc-fila"><span className="db-esc-ico">✓</span><span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.cliente || `Envío ${x.codigo}`}</span><b>{x.bultos}</b></div>
+                  <div key={x.codigo} className="db-esc-fila">
+                    <span className={"db-esc-ico" + (x.estado === "error" ? " err" : x.estado === "guardando" ? " pend" : "")}>{x.estado === "error" ? "!" : "✓"}</span>
+                    <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.cliente || `Envío ${x.codigo}`}</span><b>{x.bultos}</b>
+                  </div>
                 ))}
               </div>
             )}
@@ -526,5 +563,9 @@ i.db-amb{font-style:normal}
 .db-esc-n small{font-size:13px;color:#b9bdd0}
 .db-esc-lista{display:flex;flex-direction:column;gap:6px;max-height:24vh;overflow:auto}
 .db-esc-fila{display:flex;gap:10px;align-items:center;font-size:14px}
+.db-esc-ico.pend{background:rgba(255,255,255,.1);color:#b9bdd0}
+.db-esc-ico.err{background:rgba(245,192,68,.2);color:#F5C044}
+.db-esc-busc{color:#b9bdd0;font-weight:500;font-size:17px}
+.db-esc-reint{min-height:44px;border-radius:12px;border:1px solid rgba(245,192,68,.5);background:rgba(245,192,68,.12);color:#F5C044;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .db-esc-ico{width:22px;height:22px;border-radius:50%;background:rgba(46,230,182,.18);color:#2ee6b6;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
 `;
