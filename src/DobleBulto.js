@@ -102,12 +102,17 @@ export default function DobleBulto() {
   const [aviso, setAviso] = useState(null);
   const [armado, setArmado] = useState(null); // id de la fila con "¿Borrar?" armado
 
+  // Primero muestra la tabla y después, en segundo plano, completa direcciones que falten (09/11: antes
+  // esperaba el cruce con LightData antes de mostrar nada).
   const cargar = useCallback(async (cruzar = true) => {
-    try {
-      if (cruzar) await cruzarPendientes();
+    const traer = async () => {
       const hasta = hastaRango(rango);
       const rows = await sbFetch(`doble_bultos?escaneado_at=gte.${desdeRango(rango)}${hasta ? `&escaneado_at=lt.${hasta}` : ""}&order=escaneado_at.desc&limit=3000`);
       setFilas(rows || []); setError(null);
+    };
+    try {
+      await traer();
+      if (cruzar) cruzarPendientes().then((n) => (n ? traer() : null)).catch(() => {});
     } catch (e) {
       setError(sinTabla(e) ? "tabla" : getSession() ? "red" : "sesion");
       setFilas((f) => f || []);

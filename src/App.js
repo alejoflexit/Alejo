@@ -7,7 +7,11 @@ import { slaMeli } from "./slaShared";
 import { esDemoradoFlexit } from "./demoraTotalShared";
 import DemoraTotalCell from "./DemoraTotalCell";
 import HistorialLoader from "./HistorialLoader";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+// recharts (~700KB con sus dependencias) va en un chunk aparte: antes viajaba en el bundle principal y
+// demoraba la carga de TODAS las pantallas, aunque solo estos 3 gráficos de Métricas lo usan (09/11).
+const GraficoTendencia = lazy(() => import("./GraficosMetricas").then((m) => ({ default: m.GraficoTendencia })));
+const GraficoComparativa = lazy(() => import("./GraficosMetricas").then((m) => ({ default: m.GraficoComparativa })));
+const GraficoSlaDia = lazy(() => import("./GraficosMetricas").then((m) => ({ default: m.GraficoSlaDia })));
 
 // Code splitting: cada vista pesada se baja recién cuando se entra (mejora la carga inicial)
 const Colectas = lazy(() => import("./Colectas"));
@@ -23,6 +27,8 @@ const AlertasReparto = lazy(() => import("./AlertasReparto"));
 const Pizarra = lazy(() => import("./Pizarra"));
 const Devoluciones = lazy(() => import("./Devoluciones"));
 const DobleBulto = lazy(() => import("./DobleBulto"));
+// Acceso directo del celu (#doblebulto): pedir la pantalla ya, en paralelo con el arranque de la app
+if (typeof window !== "undefined" && window.location.hash === "#doblebulto") import("./DobleBulto");
 const Usuarios = lazy(() => import("./Usuarios"));
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -1512,32 +1518,14 @@ export default function App() {
                         </button>
                       </div>
                       <div style={{ height:220 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={tendencia} margin={{ left:0, right:20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
-                            <XAxis dataKey="fecha" tick={{ fontSize:11, fill:BRAND.muted }} tickFormatter={v=>{ const p=v.split("-"); return `${p[2]}/${p[1]}`; }} />
-                            <YAxis domain={[0,100]} tickFormatter={v=>v+"%"} tick={{ fontSize:11, fill:BRAND.muted }} />
-                            <Tooltip contentStyle={ttStyle} formatter={v=>[v!==null?v.toFixed(1)+"%":"—","SLA Meli"]} labelFormatter={v=>{ const p=v.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; }} />
-                            <Line type="monotone" dataKey="sla" stroke="#2ECFAA" strokeWidth={2.5} dot={{ fill:"#2ECFAA", r:5 }} activeDot={{ r:7 }} connectNulls />
-                          </LineChart>
-                        </ResponsiveContainer>
+                        <Suspense fallback={null}><GraficoTendencia data={tendencia} ttStyle={ttStyle} /></Suspense>
                       </div>
                     </div>
                   )}
                   <div style={card}>
                     <div style={{ fontSize:11, fontWeight:600, color:BRAND.muted, marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"0.06em" }}>Peores cadetes — SLA Meli</div>
                     <div style={{ height:Math.max(260, comparativa.length*30) }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={comparativa} layout="vertical" margin={{ left:10, right:60 }}>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={BRAND.border} />
-                          <XAxis type="number" domain={[0,100]} tickFormatter={v=>v+"%"} tick={{ fontSize:11, fill:BRAND.muted }} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="name" tick={{ fontSize:10, fill:BRAND.muted }} width={120} axisLine={false} tickLine={false} />
-                          <Tooltip contentStyle={ttStyle} formatter={v=>[v.toFixed(1)+"%","SLA Meli"]} />
-                          <Bar dataKey="sla" radius={[0,4,4,0]} label={{ position:"right", formatter:v=>v.toFixed(0)+"%", fontSize:11, fill:BRAND.muted }}>
-                            {comparativa.map((e,i)=><Cell key={i} fill={e.color} />)}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <Suspense fallback={null}><GraficoComparativa data={comparativa} ttStyle={ttStyle} /></Suspense>
                     </div>
                     <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginTop:12 }}>
                       {[["#2ECFAA","OK (≥98%)"],["#EF9F27","En riesgo (95–98%)"],["#E24B4A","Crítico (<95%)"]].map(([c,l])=>(
@@ -1609,15 +1597,7 @@ export default function App() {
                     <div style={card}>
                       <div style={{ fontSize:11, fontWeight:600, color:BRAND.muted, marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"0.06em" }}>Evolución SLA diario del mes</div>
                       <div style={{ height:180 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={slaPorDia} margin={{ left:0, right:20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
-                            <XAxis dataKey="fecha" tick={{ fontSize:11, fill:BRAND.muted }} />
-                            <YAxis domain={[85,100]} tickFormatter={v=>v+"%"} tick={{ fontSize:11, fill:BRAND.muted }} />
-                            <Tooltip contentStyle={{ background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, fontSize:12, color:"#fff" }} formatter={v=>[v+"%","SLA"]} />
-                            <Line type="monotone" dataKey="sla" stroke="#2ECFAA" strokeWidth={2.5} dot={{ fill:"#2ECFAA", r:4 }} connectNulls />
-                          </LineChart>
-                        </ResponsiveContainer>
+                        <Suspense fallback={null}><GraficoSlaDia data={slaPorDia} /></Suspense>
                       </div>
                     </div>
                   )}
