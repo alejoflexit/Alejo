@@ -345,7 +345,10 @@ function Escaner({ onCerrar }) {
         const remedir = () => { v.style.width = "99.9%"; requestAnimationFrame(() => { v.style.width = "100%"; }); };
         ["loadedmetadata", "playing", "resize"].forEach((ev) => v.addEventListener(ev, remedir));
         v.srcObject = stream; await v.play();
-        setTimeout(remedir, 300); setTimeout(remedir, 1000);
+        // Queda invisible (negro) mientras el iPhone se acomoda y recién ahí aparece, ya a pantalla completa
+        remedir();
+        setTimeout(() => { remedir(); requestAnimationFrame(() => requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; })); }, 350);
+        setTimeout(remedir, 1000);
       } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
       timer = setInterval(async () => {
@@ -406,7 +409,7 @@ function Escaner({ onCerrar }) {
     <div className="db-esc" onPointerDown={prepararAudio}>
       <style>{CSS}</style>
       <video ref={video} playsInline muted autoPlay disablePictureInPicture className="db-esc-video"
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000" }} />
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", opacity: 0, transition: "opacity .18s" }} />
       <div className={"db-esc-marco" + (card ? " ok" : "")}><i /><i /><i /><i /></div>
       <div className="db-esc-arriba">
         <div className="db-esc-total">
