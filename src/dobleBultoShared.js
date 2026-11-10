@@ -103,3 +103,23 @@ export function resumen(filas, ahora = Date.now()) {
   for (const f of filas) { bultos += Number(f.bultos) || 0; if (estadoFila(f, ahora) !== "ok") sinDatos++; }
   return { paquetes: filas.length, bultos, sinDatos };
 }
+
+// Día (reloj AR) de una fila, como "2026-11-10" — para el filtro por día dentro de la semana
+export function diaAR(iso) {
+  const d = enAR(iso);
+  return d ? d.toISOString().slice(0, 10) : "";
+}
+const DIAS_SEM = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+// Días del rango semanal para los chips: "semana" = lunes → hoy; "pasada" = lunes → domingo
+export function diasDelRango(rango, ahora = Date.now()) {
+  if (rango !== "semana" && rango !== "pasada") return [];
+  const ini = new Date(new Date(desdeRango(rango, ahora)).getTime() - 3 * 3600e3);
+  const hoy = new Date(ahora - 3 * 3600e3); hoy.setUTCHours(0, 0, 0, 0);
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(ini.getTime() + i * 864e5);
+    if (d > hoy) break;
+    out.push({ dia: d.toISOString().slice(0, 10), label: `${DIAS_SEM[d.getUTCDay()]} ${d.getUTCDate()}` });
+  }
+  return out;
+}

@@ -1,4 +1,4 @@
-import { leerEtiqueta, envioCoincide, filtroEnvios, textoParaExcel, desdeRango, hastaRango, estadoFila, fechaCorta, resumen } from "./dobleBultoShared";
+import { leerEtiqueta, envioCoincide, filtroEnvios, textoParaExcel, desdeRango, hastaRango, estadoFila, fechaCorta, resumen, diasDelRango, diaAR } from "./dobleBultoShared";
 
 test("lee el QR de Mercado Libre", () => {
   const r = leerEtiqueta('{"id":"45123456789","t":"lm","sender_id":123456789,"hash_code":"abc","security_digit":"0"}');
@@ -60,4 +60,12 @@ test("estado y resumen", () => {
   expect(estadoFila(pend, ahora)).toBe("pendiente");
   expect(estadoFila(viejo, ahora)).toBe("no_aparece");
   expect(resumen([ok, pend, viejo], ahora)).toEqual({ paquetes: 3, bultos: 7, sinDatos: 2 });
+});
+
+test("días del rango semanal para los chips (reloj AR)", () => {
+  const martes = Date.parse("2026-11-10T22:00:00Z"); // martes 10/11 19:00 AR
+  expect(diasDelRango("semana", martes).map((d) => d.label)).toEqual(["Lun 9", "Mar 10"]);
+  expect(diasDelRango("pasada", martes).map((d) => d.dia)).toEqual(["2026-11-02","2026-11-03","2026-11-04","2026-11-05","2026-11-06","2026-11-07","2026-11-08"]);
+  expect(diasDelRango("hoy", martes)).toEqual([]);
+  expect(diaAR("2026-11-10T02:30:00Z")).toBe("2026-11-09"); // 23:30 del lunes en AR
 });

@@ -5,7 +5,7 @@ import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import {
   leerEtiqueta, envioCoincide, filtroEnvios, datosDeEnvio, fechaCorta, horaCorta,
-  desdeRango, hastaRango, estadoFila, textoParaExcel, resumen,
+  desdeRango, hastaRango, diaAR, diasDelRango, estadoFila, textoParaExcel, resumen,
 } from "./dobleBultoShared";
 
 // Doble bulto — paquetes de más de un bulto que se le cobran al cliente (pedido de Alejo 08/11/2026).
@@ -97,6 +97,7 @@ export default function DobleBulto() {
   const [error, setError] = useState(null);
   const [rango, setRango] = useState("semana");
   const [cliente, setCliente] = useState("");
+  const [dia, setDia] = useState(""); // "" = todos los días del rango
   // Desde el ícono del celu (?escanear=1) la cámara se abre en el primer cuadro, sin mostrar antes la tabla
   const [escaner, setEscaner] = useState(() => /[?&]escanear=1/.test(window.location.search));
   const [copiado, setCopiado] = useState(false);
@@ -130,7 +131,14 @@ export default function DobleBulto() {
   useEffect(() => { if (armado == null) return; const t = setTimeout(() => setArmado(null), 3000); return () => clearTimeout(t); }, [armado]);
 
   const clientes = useMemo(() => [...new Set((filas || []).map((f) => f.cliente).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [filas]);
-  const visibles = useMemo(() => (filas || []).filter((f) => !cliente || (cliente === "__sin" ? !f.cliente : f.cliente === cliente)), [filas, cliente]);
+  const dias = useMemo(() => {
+    const cuenta = {};
+    for (const f of filas || []) { const k = diaAR(f.escaneado_at); cuenta[k] = (cuenta[k] || 0) + 1; }
+    return diasDelRango(rango).map((d) => ({ ...d, n: cuenta[d.dia] || 0 }));
+  }, [filas, rango]);
+  const visibles = useMemo(() => (filas || []).filter((f) =>
+    (!dia || diaAR(f.escaneado_at) === dia) &&
+    (!cliente || (cliente === "__sin" ? !f.cliente : f.cliente === cliente))), [filas, cliente, dia]);
   const res = resumen(visibles);
 
   async function copiarTabla() {
@@ -172,7 +180,7 @@ export default function DobleBulto() {
       <div className="db-card">
         <div className="db-barra">
           <div className="db-seg">
-            {RANGOS.map(([k, l]) => <button key={k} className={rango === k ? "on" : ""} onClick={() => { setRango(k); setCliente(""); }}>{l}</button>)}
+            {RANGOS.map(([k, l]) => <button key={k} className={rango === k ? "on" : ""} onClick={() => { setRango(k); setCliente(""); setDia(""); }}>{l}</button>)}
           </div>
           {clientes.length > 0 && (
             <select className="db-select" value={cliente} onChange={(e) => setCliente(e.target.value)} aria-label="Cliente">
@@ -187,6 +195,17 @@ export default function DobleBulto() {
           </button>
         </div>
 
+        {dias.length > 1 && (
+          <div className="db-dias">
+            <button className={!dia ? "on" : ""} onClick={() => setDia("")}>Todos</button>
+            {dias.map((d) => (
+              <button key={d.dia} className={(dia === d.dia ? "on" : "") + (d.n ? "" : " vacio")} onClick={() => setDia(dia === d.dia ? "" : d.dia)}>
+                {d.label}{d.n ? <small>{d.n}</small> : null}
+              </button>
+            ))}
+          </div>
+        )}
+
         {filas && (
           <div className="db-res">
             <span><b>{res.paquetes}</b> paquete{res.paquetes === 1 ? "" : "s"}</span>
@@ -196,7 +215,7 @@ export default function DobleBulto() {
         )}
 
         {filas === null ? <div className="db-vacio">Cargando…</div>
-          : !visibles.length ? <div className="db-vacio">{error ? "" : "Nada escaneado en este período."}</div>
+          : !visibles.length ? <div className="db-vacio">{error ? "" : (dia ? "Nada escaneado ese día." : "Nada escaneado en este período.")}</div>
           : (
             <div className="db-tabla">
               <div className="db-f db-th"><span>Fecha</span><span>Cliente</span><span>Nro de envío</span><span>Dirección</span><span>Bultos</span><span>Zona</span><span /></div>
@@ -223,14 +242,14 @@ export default function DobleBulto() {
       </div>
 
       {aviso && <div className="db-toast">{aviso}</div>}
-      {escaner && <Escaner onCerrar={(n) => { setEscaner(false); if (n) setAviso(`${n} paquete${n === 1 ? "" : "s"} cargado${n === 1 ? "" : "s"}`); cargar(); }} />}
+      {escaner && <Escaner onGuardado={() => cargar(false)} onCerrar={(n) => { setEscaner(false); if (n) setAviso(`${n} paquete${n === 1 ? "" : "s"} cargado${n === 1 ? "" : "s"}`); cargar(); }} />}
     </div>
   );
 }
 
 // =====================================================================================
 // Escáner continuo: lee → muestra cliente y bultos → Confirmar → sigue con el próximo.
-function Escaner({ onCerrar }) {
+function Escaner({ onCerrar, onGuardado }) {
   const video = useRef();
   const pausa = useRef(false);
   const ultimo = useRef({ c: "", at: 0 });
@@ -292,6 +311,7 @@ function Escaner({ onCerrar }) {
           body: JSON.stringify([{ codigo: l.codigo, qr: l.qr.slice(0, 500), sender_id: l.sender_id, bultos: n, escaneado_por: yo() }]),
         });
         marcar(l.codigo, { estado: "ok" });
+        onGuardado && onGuardado(); // la tabla de atrás ya lo muestra: no hace falta cerrar la cámara
         const r = await info;
         const cod = encodeURIComponent(l.codigo);
         if (r.env) {
@@ -318,7 +338,7 @@ function Escaner({ onCerrar }) {
     if (c.ex && c.ex.bultos === n) { soltar(); setFlash({ tipo: "ok", txt: `Sin cambios · ${n} bultos` }); return; }
     setCargados((xs) => [{ codigo: c.l.codigo, l: c.l, info: c.info, cliente: c.cliente, bultos: n, estado: "guardando" }, ...xs.filter((x) => x.codigo !== c.l.codigo)]);
     guardarFondo(c.l, c.info, n);
-    setFlash({ tipo: "ok", txt: `✓ ${n} bultos` });
+    setFlash({ tipo: "ok", txt: `✓ Guardado · ${n} bultos` });
     soltar();
   }
 
@@ -417,7 +437,7 @@ function Escaner({ onCerrar }) {
             ? <><b>{totalBultos}</b><span>bultos · {cargados.length} paquete{cargados.length === 1 ? "" : "s"}</span></>
             : <span className="db-esc-tit">Apuntá al QR de la etiqueta</span>}
         </div>
-        <button className="db-esc-term" disabled={cerrando} onClick={terminar}>{cerrando ? "Guardando…" : "Terminar"}</button>
+        <button className="db-esc-term" disabled={cerrando} onClick={terminar}>{cerrando ? "Guardando…" : "Cerrar"}</button>
       </div>
 
       {flash && !card && <div className={"db-esc-flash" + (flash.tipo === "ok" ? "" : " aviso")}>{flash.txt}</div>}
@@ -505,6 +525,11 @@ const CSS = `
 .db-seg button.on{background:rgba(255,255,255,.08);color:#f4f5fa}
 .db-select{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 10px;border-radius:9px;max-width:220px}
 .db-select option{background:#1b1c2e}
+.db-dias{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.db-dias button{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);color:#a7adc2;font:inherit;font-size:13px;padding:6px 11px;border-radius:999px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.db-dias button small{font-size:11px;color:#f4f5fa;background:rgba(255,255,255,.08);border-radius:999px;padding:1px 6px}
+.db-dias button.on{background:rgba(255,255,255,.1);color:#f4f5fa;border-color:rgba(255,255,255,.14)}
+.db-dias button.vacio{opacity:.45}
 .db-res{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#a7adc2;margin:14px 0 10px}
 .db-res b{font-family:'Space Grotesk',sans-serif;font-size:17px;color:#f4f5fa;margin-right:4px}
 .db-amb{color:#F5C044}.db-res .db-amb b{color:#F5C044}
