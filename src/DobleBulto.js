@@ -490,7 +490,7 @@ i.db-amb{font-style:normal}
 .db-esc{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif;touch-action:manipulation;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
 .db-esc-video{touch-action:none}
 .db-esc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.db-esc-marco{position:absolute;left:14%;right:14%;top:max(120px,16%);height:min(64vw,300px);pointer-events:none}
+.db-esc-marco{position:absolute;left:50%;top:41%;width:min(70vw,290px);aspect-ratio:1/1;transform:translate(-50%,-50%);pointer-events:none}
 .db-esc-marco i{position:absolute;width:38px;height:38px;border:0 solid rgba(255,255,255,.75);transition:border-color .15s}
 .db-esc-marco i:nth-child(1){left:0;top:0;border-left-width:4px;border-top-width:4px;border-top-left-radius:16px}
 .db-esc-marco i:nth-child(2){right:0;top:0;border-right-width:4px;border-top-width:4px;border-top-right-radius:16px}
