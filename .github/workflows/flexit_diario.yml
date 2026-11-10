@@ -51,6 +51,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
+          LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
           BACKFILL_DESDE: ${{ inputs.backfill_desde }}
           BACKFILL_HASTA: ${{ inputs.backfill_hasta }}
           RUN_SOURCE: ${{ github.event_name }}

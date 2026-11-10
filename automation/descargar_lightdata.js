@@ -10,8 +10,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const TOKEN_EMPRESA = "ldae_125_6e2c8f1d4a9b3d7c5f0a2e8b1c4d7a96";
 const ID_EMPRESA = "125";
-const LD_USER = "beto";
-const LD_PASS = "123456";
+const LD_USER = process.env.LIGHTDATA_USER;
+const LD_PASS = process.env.LIGHTDATA_PASSWORD;
+if (!LD_USER || !LD_PASS) throw new Error("Faltan LIGHTDATA_USER / LIGHTDATA_PASSWORD (secrets de GitHub)");
 
 // Supabase via fetch directo (sin WebSocket)
 async function supabaseGet(table, params = "") {

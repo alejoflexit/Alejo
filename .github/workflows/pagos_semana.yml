@@ -43,6 +43,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
+          LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
           FECHA_DESDE: ${{ github.event.inputs.fecha_desde }}
           FECHA_HASTA: ${{ github.event.inputs.fecha_hasta }}
           DIAS_BUFFER: ${{ github.event.inputs.dias_buffer }}

@@ -39,8 +39,9 @@ const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const LD_USER = "beto";
-const LD_PASS = "123456";
+const LD_USER = process.env.LIGHTDATA_USER;
+const LD_PASS = process.env.LIGHTDATA_PASSWORD;
+if (!LD_USER || !LD_PASS) throw new Error("Faltan LIGHTDATA_USER / LIGHTDATA_PASSWORD (secrets de GitHub)");
 const DIAS_BUFFER = parseInt(process.env.DIAS_BUFFER || "0", 10);
 const TIPO_FECHA  = process.env.TIPO_FECHA || "2"; // 2 = "Fecha Entregado" en LightData
 

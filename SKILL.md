@@ -50,7 +50,7 @@ description: >
 
 ### LightData Sistema
 - URL: https://flexit.lightdata.app
-- Usuario: beto / Password: 123456
+- Credenciales: secrets `LIGHTDATA_USER` / `LIGHTDATA_PASSWORD` en GitHub; en el VPS, `/root/flexit/ld.creds`. Nunca en el código.
 
 ## Tablas Supabase
 
