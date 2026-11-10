@@ -97,7 +97,8 @@ export default function DobleBulto() {
   const [error, setError] = useState(null);
   const [rango, setRango] = useState("semana");
   const [cliente, setCliente] = useState("");
-  const [escaner, setEscaner] = useState(false);
+  // Desde el ícono del celu (?escanear=1) la cámara se abre en el primer cuadro, sin mostrar antes la tabla
+  const [escaner, setEscaner] = useState(() => /[?&]escanear=1/.test(window.location.search));
   const [copiado, setCopiado] = useState(false);
   const [aviso, setAviso] = useState(null);
   const [armado, setArmado] = useState(null); // id de la fila con "¿Borrar?" armado
@@ -123,7 +124,6 @@ export default function DobleBulto() {
   useEffect(() => {
     if (!/[?&]escanear=1/.test(window.location.search)) return;
     window.history.replaceState(null, "", window.location.pathname + window.location.hash);
-    setEscaner(true);
   }, []);
   useEffect(() => { setFilas(null); cargar(); const t = setInterval(() => cargar(), REFRESH_MS); return () => clearInterval(t); }, [cargar]);
   useEffect(() => { if (!aviso) return; const t = setTimeout(() => setAviso(null), 2600); return () => clearTimeout(t); }, [aviso]);

@@ -27,6 +27,9 @@ const AlertasReparto = lazy(() => import("./AlertasReparto"));
 const Pizarra = lazy(() => import("./Pizarra"));
 const Devoluciones = lazy(() => import("./Devoluciones"));
 const DobleBulto = lazy(() => import("./DobleBulto"));
+const SECCIONES_SIN_HISTORIAL = new Set(["colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "devoluciones", "doblebulto", "pagos", "usuarios"]);
+// Abierto desde el ícono del celu: mientras baja la pantalla se ve negro (como la cámara), no la app
+const ABRE_ESCANER = typeof window !== "undefined" && /[?&]escanear=1/.test(window.location.search);
 // Acceso directo del celu (#doblebulto): pedir la pantalla ya, en paralelo con el arranque de la app
 if (typeof window !== "undefined" && window.location.hash === "#doblebulto") import("./DobleBulto");
 const Usuarios = lazy(() => import("./Usuarios"));
@@ -1104,7 +1107,9 @@ export default function App() {
     </div>
   );
 
-  if (loadingDB && seccion !== "home") return (
+  // El "Cargando historial" (métricas de cadetes) solo frena las pantallas que usan esos datos. Las
+  // secciones que traen lo suyo arrancan de una (09/11: Doble bulto esperaba ~4 s por nada).
+  if (loadingDB && seccion !== "home" && !SECCIONES_SIN_HISTORIAL.has(seccion)) return (
     <div style={{ ...APP_BACKGROUND, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
       <HistorialLoader />
     </div>
@@ -1218,7 +1223,7 @@ export default function App() {
       {vista === "pendientes" && <Suspense fallback={<VistaSkeleton />}><PendientesHistoricos /></Suspense>}
       {!enDividida && vista === "devoluciones" && <Suspense fallback={<VistaSkeleton />}><Devoluciones abrirEnvio={puedeVer("envio") ? abrirEnvio : null} /></Suspense>}
 
-      {vista === "doblebulto" && <Suspense fallback={<VistaSkeleton />}><DobleBulto /></Suspense>}
+      {vista === "doblebulto" && <Suspense fallback={ABRE_ESCANER ? <div style={{ position:"fixed", inset:0, zIndex:90, background:"#000" }} /> : <VistaSkeleton />}><DobleBulto /></Suspense>}
 
       {vista === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}
 
