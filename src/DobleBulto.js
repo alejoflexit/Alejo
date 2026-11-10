@@ -237,7 +237,6 @@ function Escaner({ onCerrar }) {
   const [card, setCard] = useState(null);
   const [cargados, setCargados] = useState([]);
   const [error, setError] = useState(null);
-  const [manual, setManual] = useState("");
   const [flash, setFlash] = useState(null);
   const cardRef = useRef(null); cardRef.current = card;
 
@@ -333,6 +332,24 @@ function Escaner({ onCerrar }) {
     return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
   }, [procesar]);
 
+  // Pantalla fija mientras se escanea: sin pellizcar para hacer zoom (iOS ignora user-scalable=no)
+  useEffect(() => {
+    const no = (e) => e.preventDefault();
+    const pinch = (e) => { if (e.touches && e.touches.length > 1) e.preventDefault(); };
+    document.addEventListener("gesturestart", no);
+    document.addEventListener("gesturechange", no);
+    document.addEventListener("touchmove", pinch, { passive: false });
+    const vp = document.querySelector('meta[name="viewport"]');
+    const antes = vp && vp.getAttribute("content");
+    if (vp) vp.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
+    return () => {
+      document.removeEventListener("gesturestart", no);
+      document.removeEventListener("gesturechange", no);
+      document.removeEventListener("touchmove", pinch);
+      if (vp && antes) vp.setAttribute("content", antes);
+    };
+  }, []);
+
   // Desktop: tocar 2–6 guarda, Escape descarta
   useEffect(() => {
     const k = (e) => {
@@ -410,10 +427,7 @@ function Escaner({ onCerrar }) {
           </>
         ) : (
           <>
-            <form onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { procesar(manual.trim(), true); setManual(""); } }} style={{ display: "flex", gap: 8 }}>
-              <input className="db-input" inputMode="text" placeholder="Etiqueta rota: tipeá el número de envío" value={manual} onChange={(e) => setManual(e.target.value)} />
-              <button className="db-esc-term" type="submit">Buscar</button>
-            </form>
+            {/* 09/11: sacamos el "tipeá el número" — Alejo prefiere la foto de siempre para etiquetas rotas */}
             {cargados.length > 0 && (
               <div className="db-esc-lista">
                 {cargados.slice(0, 5).map((x) => (
@@ -473,7 +487,8 @@ i.db-amb{font-style:normal}
   .db-f>span:nth-child(7){grid-area:x;justify-self:end}
   .db-fecha small{display:inline;margin-left:6px}
 }
-.db-esc{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
+.db-esc{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif;touch-action:manipulation;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+.db-esc-video{touch-action:none}
 .db-esc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .db-esc-marco{position:absolute;left:14%;right:14%;top:max(120px,16%);height:min(64vw,300px);pointer-events:none}
 .db-esc-marco i{position:absolute;width:38px;height:38px;border:0 solid rgba(255,255,255,.75);transition:border-color .15s}
@@ -513,7 +528,6 @@ i.db-amb{font-style:normal}
 .db-esc-n{display:flex;flex-direction:column;align-items:center;min-width:80px}
 .db-esc-n b{font-family:'Space Grotesk',sans-serif;font-size:52px;line-height:1}
 .db-esc-n small{font-size:13px;color:#b9bdd0}
-.db-input{flex:1;min-width:0;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);color:#fff;font:inherit;font-size:15px;padding:11px 12px;border-radius:10px}
 .db-esc-lista{display:flex;flex-direction:column;gap:6px;max-height:24vh;overflow:auto}
 .db-esc-fila{display:flex;gap:10px;align-items:center;font-size:14px}
 .db-esc-ico{width:22px;height:22px;border-radius:50%;background:rgba(46,230,182,.18);color:#2ee6b6;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
