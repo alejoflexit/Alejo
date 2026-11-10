@@ -337,9 +337,15 @@ function Escaner({ onCerrar }) {
     const det = "BarcodeDetector" in window ? new window.BarcodeDetector({ formats: ["qr_code"] }) : null;
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
         if (!vivo) { stream.getTracks().forEach((t) => t.stop()); return; }
-        video.current.srcObject = stream; await video.current.play();
+        // iPhone a veces dibuja el video chico (con bordes negros) hasta que algo lo obliga a re-medirse:
+        // cuando llega la imagen o cambia su tamaño, se fuerza un re-dibujo a pantalla completa (09/11)
+        const v = video.current;
+        const remedir = () => { v.style.width = "99.9%"; requestAnimationFrame(() => { v.style.width = "100%"; }); };
+        ["loadedmetadata", "playing", "resize"].forEach((ev) => v.addEventListener(ev, remedir));
+        v.srcObject = stream; await v.play();
+        setTimeout(remedir, 300); setTimeout(remedir, 1000);
       } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
       timer = setInterval(async () => {
@@ -399,7 +405,8 @@ function Escaner({ onCerrar }) {
   return createPortal(
     <div className="db-esc" onPointerDown={prepararAudio}>
       <style>{CSS}</style>
-      <video ref={video} playsInline muted className="db-esc-video" />
+      <video ref={video} playsInline muted autoPlay disablePictureInPicture className="db-esc-video"
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000" }} />
       <div className={"db-esc-marco" + (card ? " ok" : "")}><i /><i /><i /><i /></div>
       <div className="db-esc-arriba">
         <div className="db-esc-total">
@@ -521,7 +528,7 @@ i.db-amb{font-style:normal}
   .db-f>span:nth-child(7){grid-area:x;justify-self:end}
   .db-fecha small{display:inline;margin-left:6px}
 }
-.db-esc{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
+.db-esc{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:90;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
 .db-esc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .db-esc-marco{position:absolute;left:50%;top:41%;width:min(70vw,290px);aspect-ratio:1/1;transform:translate(-50%,-50%);pointer-events:none}
 .db-esc-marco i{position:absolute;width:38px;height:38px;border:0 solid rgba(255,255,255,.75);transition:border-color .15s}
