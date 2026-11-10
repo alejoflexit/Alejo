@@ -339,14 +339,11 @@ function Escaner({ onCerrar }) {
     document.addEventListener("gesturestart", no);
     document.addEventListener("gesturechange", no);
     document.addEventListener("touchmove", pinch, { passive: false });
-    const vp = document.querySelector('meta[name="viewport"]');
-    const antes = vp && vp.getAttribute("content");
-    if (vp) vp.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
+    // OJO: no cambiar el <meta viewport> en vivo — en iPhone deja los toques corridos y achica el video (09/11)
     return () => {
       document.removeEventListener("gesturestart", no);
       document.removeEventListener("gesturechange", no);
       document.removeEventListener("touchmove", pinch);
-      if (vp && antes) vp.setAttribute("content", antes);
     };
   }, []);
 
@@ -501,7 +498,7 @@ i.db-amb{font-style:normal}
 .db-esc-total b{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;line-height:1}
 .db-esc-total span{font-size:13px;color:#b9bdd0}
 .db-esc-total .db-esc-tit{font-size:15px;color:#f4f5fa;font-weight:600}
-.db-esc-term{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.db-esc-term{touch-action:manipulation;min-height:44px;padding:0 16px;border-radius:22px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
 .db-esc-flash{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 84px);transform:translateX(-50%);background:rgba(10,12,24,.92);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:14px;padding:11px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
 .db-esc-flash.aviso{border-color:rgba(245,192,68,.6);font-weight:500}
 .db-esc-abajo{position:absolute;left:0;right:0;bottom:0;padding:14px 16px calc(env(safe-area-inset-bottom) + 16px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.85) 25%);display:flex;flex-direction:column;gap:12px}
@@ -510,12 +507,12 @@ i.db-amb{font-style:normal}
 .db-esc-cab{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .db-esc-cli{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;line-height:1.25}
 .db-esc-det{font-size:13px;color:#b9bdd0;margin-top:3px;overflow-wrap:anywhere}
-.db-esc-desc{min-height:44px;padding:0 12px;border:0;border-radius:12px;background:transparent;color:#b9bdd0;font:inherit;font-size:14px;font-weight:500;cursor:pointer;flex-shrink:0}
+.db-esc-desc{touch-action:manipulation;min-height:44px;padding:0 12px;border:0;border-radius:12px;background:transparent;color:#b9bdd0;font:inherit;font-size:14px;font-weight:500;cursor:pointer;flex-shrink:0}
 .db-esc-ya{font-size:12.5px;color:#F5C044;line-height:1.4}
 .db-esc-err{font-size:13px;color:#F5C044}
 .db-esc-preg{font-size:14px;color:#b9bdd0}
 .db-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.db-num{min-height:72px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f4f5fa;font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.db-num{touch-action:manipulation;min-height:72px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f4f5fa;font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .db-num.on{background:#2ee6b6;border-color:#2ee6b6;color:#062a20}
 .db-num.chico{font-family:inherit;font-size:17px;font-weight:600;padding:0 18px}
 .db-num.on.chico,.db-esc-bultos+div .db-num.on{font-family:inherit;font-size:17px}
