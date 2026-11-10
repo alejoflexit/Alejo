@@ -5,7 +5,7 @@ import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import {
   leerEtiqueta, envioCoincide, filtroEnvios, datosDeEnvio, fechaCorta, horaCorta,
-  desdeRango, hastaRango, diaAR, diasDelRango, estadoFila, textoParaExcel, resumen,
+  desdeRango, hastaRango, diaAR, diasDelRango, etiquetaDia, estadoFila, textoParaExcel, resumen,
 } from "./dobleBultoShared";
 
 // Doble bulto — paquetes de más de un bulto que se le cobran al cliente (pedido de Alejo 08/11/2026).
@@ -19,7 +19,7 @@ const COLS_ENVIO = "id_interno,tracking,id_venta_ml,razon_social,direccion,local
 const REFRESH_MS = 3 * 60 * 1000;
 const yo = () => { const s = getSession(); return (s && (s.nombre || s.email)) || "equipo"; };
 const sinTabla = (e) => /doble_bultos|ml_vendedores|relation|schema cache|PGRST205|42P01/i.test(String(e && e.message));
-const RANGOS = [["hoy", "Hoy"], ["semana", "Esta semana"], ["pasada", "Semana pasada"], ["30", "30 días"]];
+const RANGOS = [["hoy", "Hoy", "Hoy"], ["semana", "Esta semana", "Semana"], ["pasada", "Semana pasada", "Pasada"], ["30", "30 días", "30 días"]];
 
 // ---------- datos ----------
 async function buscarEnvio(codigo) {
@@ -140,6 +140,11 @@ export default function DobleBulto() {
     (!dia || diaAR(f.escaneado_at) === dia) &&
     (!cliente || (cliente === "__sin" ? !f.cliente : f.cliente === cliente))), [filas, cliente, dia]);
   const res = resumen(visibles);
+  const porDia = useMemo(() => {
+    const m = {};
+    for (const f of visibles) { const k = diaAR(f.escaneado_at); m[k] = m[k] || { paquetes: 0, bultos: 0 }; m[k].paquetes++; m[k].bultos += Number(f.bultos) || 0; }
+    return m;
+  }, [visibles]);
 
   async function copiarTabla() {
     if (!visibles.length) return;
@@ -165,9 +170,9 @@ export default function DobleBulto() {
       <div className="db-card db-top">
         <div style={{ minWidth: 0 }}>
           <div className="db-tit">Doble bulto</div>
-          <div className="db-sub">Escaneá el QR de cada paquete con más de un bulto al ingresar. La dirección y la zona se completan solas cuando el envío entra a LightData.</div>
+          <div className="db-sub db-solo-pc">Escaneá el QR de cada paquete con más de un bulto al ingresar. La dirección y la zona se completan solas cuando el envío entra a LightData.</div>
         </div>
-        <button className="db-btn db-pri db-grande" onClick={() => { prepararAudio(); setEscaner(true); }}>
+        <button className="db-btn db-pri db-grande db-solo-pc" onClick={() => { prepararAudio(); setEscaner(true); }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 12h10" /></svg>
           Escanear paquetes
         </button>
@@ -180,7 +185,7 @@ export default function DobleBulto() {
       <div className="db-card">
         <div className="db-barra">
           <div className="db-seg">
-            {RANGOS.map(([k, l]) => <button key={k} className={rango === k ? "on" : ""} onClick={() => { setRango(k); setCliente(""); setDia(""); }}>{l}</button>)}
+            {RANGOS.map(([k, l, c]) => <button key={k} className={rango === k ? "on" : ""} onClick={() => { setRango(k); setCliente(""); setDia(""); }}><span className="db-l">{l}</span><span className="db-c">{c}</span></button>)}
           </div>
           {clientes.length > 0 && (
             <select className="db-select" value={cliente} onChange={(e) => setCliente(e.target.value)} aria-label="Cliente">
@@ -190,7 +195,7 @@ export default function DobleBulto() {
             </select>
           )}
           <div className="db-esp" />
-          <button className={"db-btn" + (copiado ? " db-ok" : "")} disabled={!visibles.length} onClick={copiarTabla} title="Copia las filas en el orden del Excel: Fecha · Cliente · Nro de venta · Dirección · Bultos · Zona">
+          <button className={"db-btn db-solo-pc" + (copiado ? " db-ok" : "")} disabled={!visibles.length} onClick={copiarTabla} title="Copia las filas en el orden del Excel: Fecha · Cliente · Nro de venta · Dirección · Bultos · Zona">
             {copiado ? `Copiado ✓ ${visibles.length} fila${visibles.length === 1 ? "" : "s"}` : "Copiar para Excel"}
           </button>
         </div>
@@ -219,11 +224,20 @@ export default function DobleBulto() {
           : (
             <div className="db-tabla">
               <div className="db-f db-th"><span>Fecha</span><span>Cliente</span><span>Nro de envío</span><span>Dirección</span><span>Bultos</span><span>Zona</span><span /></div>
-              {visibles.map((f) => {
+              {visibles.map((f, i) => {
                 const est = estadoFila(f);
+                const d = diaAR(f.escaneado_at);
+                const nuevoDia = i === 0 || diaAR(visibles[i - 1].escaneado_at) !== d;
                 return (
-                  <div key={f.id} className="db-f">
-                    <span className="db-fecha">{fechaCorta(f.escaneado_at)}<small>{horaCorta(f.escaneado_at)}</small></span>
+                  <React.Fragment key={f.id}>
+                  {nuevoDia && (
+                    <div className="db-sep">
+                      <b>{etiquetaDia(f.escaneado_at)}</b>
+                      <span>{porDia[d].paquetes} paq · {porDia[d].bultos} bultos</span>
+                    </div>
+                  )}
+                  <div className="db-f">
+                    <span className="db-fecha"><span className="db-dd">{fechaCorta(f.escaneado_at)}</span><small>{horaCorta(f.escaneado_at)}</small></span>
                     <span className="db-cli">{f.cliente || <i className="db-gris">Se completa solo</i>}</span>
                     <span className="db-cod">{f.codigo}</span>
                     <span className="db-dir">{f.direccion || <i className={est === "no_aparece" ? "db-amb" : "db-gris"}>{est === "no_aparece" ? "No apareció en LightData" : "Sin datos todavía"}</i>}</span>
@@ -235,10 +249,18 @@ export default function DobleBulto() {
                     <span className="db-zona">{f.localidad || "—"}</span>
                     <span><button className={"db-x" + (armado === f.id ? " on" : "")} onClick={() => borrar(f)} title="Borrar (tocá dos veces)">{armado === f.id ? "¿Borrar?" : "×"}</button></span>
                   </div>
+                  </React.Fragment>
                 );
               })}
             </div>
           )}
+      </div>
+
+      <div className="db-fab">
+        <button className="db-btn db-pri db-grande" onClick={() => { prepararAudio(); setEscaner(true); }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 12h10" /></svg>
+          Escanear paquetes
+        </button>
       </div>
 
       {aviso && <div className="db-toast">{aviso}</div>}
@@ -546,43 +568,44 @@ i.db-amb{font-style:normal}
 .db-x{background:none;border:1px solid transparent;color:#71768e;font:inherit;font-size:15px;padding:4px 8px;border-radius:8px;cursor:pointer}
 .db-x.on{border-color:rgba(245,192,68,.4);color:#F5C044;font-size:12px}
 .db-toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);background:rgba(10,12,24,.92);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:11px 16px;font-size:14px;z-index:80}
+.db-c,.db-sep,.db-fab{display:none}
 @media (max-width:700px){
-  .db-top{flex-direction:column;align-items:stretch}
-  .db-grande{width:100%}
+  .db{gap:10px}
+  .db-solo-pc{display:none!important}
+  .db-top{background:none;border:0;-webkit-backdrop-filter:none;backdrop-filter:none;padding:2px 4px 0}
+  .db-top .db-tit{font-size:22px}
+  .db-card{padding:12px}
+  .db-barra{gap:8px}
+  .db-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%}
+  .db-seg button{padding:9px 4px;font-size:13.5px;white-space:nowrap}
+  .db-l{display:none}.db-c{display:inline}
+  .db-esp{display:none}
+  .db-select{max-width:none;width:100%;padding:10px 12px;font-size:15px;border-radius:11px}
+  .db-dias{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:10px -12px 0;padding:0 12px}
+  .db-dias::-webkit-scrollbar{display:none}
+  .db-dias button{flex:none;padding:8px 13px;font-size:14px}
+  .db-res{margin:12px 2px 8px;gap:14px}
+  .db-tabla{border:0;border-radius:0;overflow:visible}
   .db-th{display:none}
-  .db-f{grid-template-columns:minmax(0,1fr) 72px;grid-template-areas:"cli bul" "dir dir" "zona zona" "fecha x";gap:4px 10px;padding:12px}
-  .db-f>span:nth-child(1){grid-area:fecha}.db-cli{grid-area:cli;font-weight:600;font-size:14px}.db-f>span:nth-child(3){display:none}
-  .db-dir{grid-area:dir;color:#a7adc2}.db-f>span:nth-child(5){grid-area:bul;justify-self:end}.db-zona{grid-area:zona;color:#a7adc2;font-size:12.5px}
+  .db-sep{display:flex;justify-content:space-between;align-items:baseline;padding:14px 4px 6px;font-size:12px;color:#8a8ca6;text-transform:uppercase;letter-spacing:.05em}
+  .db-sep b{color:#f4f5fa;font-weight:600}
+  .db-f{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"cli cli bul" "dir dir bul" "fecha zona x";gap:2px 10px;padding:10px 12px 8px;margin-bottom:6px;border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(255,255,255,.025)}
+  .db-f>span:nth-child(1){grid-area:fecha}
+  .db-cli{grid-area:cli;font-weight:600;font-size:15px}
+  .db-f>span:nth-child(3){display:none}
+  .db-dir{grid-area:dir;color:#c9cbe0;font-size:13.5px}
+  .db-f>span:nth-child(5){grid-area:bul;justify-self:end;align-self:center}
+  .db-zona{grid-area:zona;color:#8a8ca6;font-size:12.5px;align-self:center}
   .db-f>span:nth-child(7){grid-area:x;justify-self:end}
-  .db-fecha small{display:inline;margin-left:6px}
+  .db-dd{display:none}
+  .db-fecha{align-self:center}
+  .db-fecha small{display:inline;margin:0;font-size:12.5px;color:#8a8ca6}
+  .db-bul{width:58px;padding:8px 6px;font-size:16px;font-weight:600;text-align:center;border-radius:11px}
+  .db-x{min-width:36px;min-height:28px;padding:0 8px}
+  .db-fab{display:block;position:sticky;bottom:calc(env(safe-area-inset-bottom) + 10px);z-index:20;padding-top:4px}
+  .db-fab .db-grande{width:100%;min-height:54px;font-size:16px;border-radius:14px;background:#2ee6b6;border-color:#2ee6b6;color:#062a20;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .db-toast{bottom:calc(env(safe-area-inset-bottom) + 84px)}
 }
-.db-esc{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:90;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
-.db-esc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.db-esc-marco{position:absolute;left:50%;top:41%;width:min(70vw,290px);aspect-ratio:1/1;transform:translate(-50%,-50%);pointer-events:none}
-.db-esc-marco i{position:absolute;width:38px;height:38px;border:0 solid rgba(255,255,255,.75);transition:border-color .15s}
-.db-esc-marco i:nth-child(1){left:0;top:0;border-left-width:4px;border-top-width:4px;border-top-left-radius:16px}
-.db-esc-marco i:nth-child(2){right:0;top:0;border-right-width:4px;border-top-width:4px;border-top-right-radius:16px}
-.db-esc-marco i:nth-child(3){left:0;bottom:0;border-left-width:4px;border-bottom-width:4px;border-bottom-left-radius:16px}
-.db-esc-marco i:nth-child(4){right:0;bottom:0;border-right-width:4px;border-bottom-width:4px;border-bottom-right-radius:16px}
-.db-esc-marco.ok i{border-color:#2ee6b6}
-.db-esc-arriba{position:absolute;top:0;left:0;right:0;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 12px) 18px 14px;background:rgba(8,8,15,.72)}
-.db-esc-total{display:flex;align-items:baseline;gap:10px;min-width:0}
-.db-esc-total b{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;line-height:1}
-.db-esc-total span{font-size:13px;color:#b9bdd0}
-.db-esc-total .db-esc-tit{font-size:15px;color:#f4f5fa;font-weight:600}
-.db-esc-term{touch-action:manipulation;min-height:44px;padding:0 16px;border-radius:22px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
-.db-esc-flash{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 84px);transform:translateX(-50%);background:rgba(10,12,24,.92);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:14px;padding:11px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
-.db-esc-flash.aviso{border-color:rgba(245,192,68,.6);font-weight:500}
-.db-esc-abajo{position:absolute;left:0;right:0;bottom:0;padding:14px 16px calc(env(safe-area-inset-bottom) + 16px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.85) 25%);display:flex;flex-direction:column;gap:12px}
-.db-esc-abajo.hoja{background:#151626;border-top-left-radius:28px;border-top-right-radius:28px;padding-top:20px;gap:14px}
-.db-esc-abajo>*{width:100%;max-width:520px;margin:0 auto;box-sizing:border-box}
-.db-esc-cab{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.db-esc-cli{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;line-height:1.25}
-.db-esc-det{font-size:13px;color:#b9bdd0;margin-top:3px;overflow-wrap:anywhere}
-.db-esc-desc{touch-action:manipulation;min-height:44px;padding:0 12px;border:0;border-radius:12px;background:transparent;color:#b9bdd0;font:inherit;font-size:14px;font-weight:500;cursor:pointer;flex-shrink:0}
-.db-esc-ya{font-size:12.5px;color:#F5C044;line-height:1.4}
-.db-esc-err{font-size:13px;color:#F5C044}
-.db-esc-preg{font-size:14px;color:#b9bdd0}
 .db-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .db-num{touch-action:manipulation;min-height:72px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f4f5fa;font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .db-num.on{background:#2ee6b6;border-color:#2ee6b6;color:#062a20}

@@ -123,3 +123,14 @@ export function diasDelRango(rango, ahora = Date.now()) {
   }
   return out;
 }
+
+// Encabezado de cada día en la lista del celu: "Hoy · mar 10/11", "Ayer · lun 9/11", "vie 6/11"
+export function etiquetaDia(iso, ahora = Date.now()) {
+  const d = enAR(iso);
+  if (!d) return "";
+  const base = `${DIAS_SEM[d.getUTCDay()]} ${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+  const k = d.toISOString().slice(0, 10);
+  const hoy = new Date(ahora - 3 * 3600e3).toISOString().slice(0, 10);
+  const ayer = new Date(ahora - 3 * 3600e3 - 864e5).toISOString().slice(0, 10);
+  return k === hoy ? `Hoy · ${base}` : k === ayer ? `Ayer · ${base}` : base;
+}
