@@ -4,7 +4,8 @@
  * Corre todos los días a las 17 hs con la cuenta de Alejo (Google Apps Script, script.google.com).
  * Trae de Supabase los doble bultos escaneados en la app y los agrega al final de la solapa
  * DOBLE BULTOS del archivo del mes en que se escanearon. Columnas: FECHA · Cliente · Nro de venta ·
- * Dirección · Num bultos · Zona (la G "Dato extra" no se toca).
+ * Dirección · Num bultos · Zona (la G "Dato extra" no se toca). En la H ("Cargado por") deja
+ * "Bot · dd/MM HH:mm" para distinguir cada tanda de lo que se cargó a mano.
  *
  * Reglas:
  *  - Nunca duplica: antes de escribir lee la columna C (Nro de venta) y saltea lo que ya está,
@@ -87,9 +88,13 @@ function correr_(soloPrueba) {
     // El Nro de venta como texto: los códigos largos (16 dígitos) se rompen si Sheets los toma como número
     sh.getRange(desde, 3, valores.length, 1).setNumberFormat('@');
     sh.getRange(desde, 1, valores.length, 6).setValues(valores);
+    // Columna H: marca de la tanda (lo cargado a mano queda con la H vacía)
+    if (!String(sh.getRange(1, 8).getValue()).trim()) sh.getRange(1, 8).setValue('Cargado por');
+    const marca = 'Bot · ' + Utilities.formatDate(ahora, TZ, 'dd/MM HH:mm');
+    sh.getRange(desde, 8, valores.length, 1).setValues(valores.map(() => [marca]));
   });
 
-  Logger.log(hechos.length ? `Agregado → ${hechos.join(' | ')}` : 'Nada nuevo para agregar.');
+  Logger.log(hechos.length ? `${soloPrueba ? 'Prueba (no escribió nada) — agregaría' : 'Agregado'} → ${hechos.join(' | ')}` : 'Nada nuevo para agregar.');
   if (problemas.length) {
     Logger.log('Problemas: ' + problemas.join(' / '));
     if (!soloPrueba) {
