@@ -26,3 +26,10 @@
 - Confirmar con una etiqueta real que el envío de ML cruza por `tracking` en `envios_busqueda`.
 - Clientes no-ML (ej. Unistore): ver qué trae su QR y si cruza.
 - Si un envío nunca aparece en LightData, queda marcado "No apareció en LightData" a los 3 días.
+
+## Pegado automático en la planilla (10/11/2026)
+- Alejo pidió que no haga falta copiar/pegar: todos los días a las **17 hs** las filas se agregan solas a la solapa **DOBLE BULTOS** del archivo **"FUERA <MES> <AA>"** (Google Sheets; cada mes se crea copiando el anterior).
+- Código: `automation/apps-script/doble_bultos_a_planilla.gs` — Google Apps Script con la cuenta de Alejo (ve todos los "FUERA …", aunque los haya creado otro). No es un GitHub Action a propósito: así no hace falta cuenta de servicio ni compartir carpetas.
+- No duplica (lee la columna C antes de escribir, incluso lo pegado a mano). Solo manda filas con dirección o con 3+ días sin aparecer en LightData. Va al archivo del mes en que se escaneó. Si falta el archivo o la solapa, manda mail y no escribe.
+- Instalación: script.google.com → Nuevo proyecto → pegar el .gs → Configuración del proyecto: zona horaria Buenos Aires + propiedades `SUPABASE_URL` y `SUPABASE_KEY` (service_role) → ejecutar `instalar` (pide permisos una vez y deja el disparo de las 17 hs; corre una prueba sin escribir y la deja en el registro).
+- Desde que está activo, nadie pega a mano en esa solapa (el script igual saltearía duplicados).
