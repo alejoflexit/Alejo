@@ -403,6 +403,8 @@ async function reasignarDeposito(page) {
     console.log(`::notice title=Ya en devuelto deposito::${yaEstan.length} marcados como reasignados`);
   }
   const dids = pend.map((p) => Number(p.did)).filter((d) => { const x = devs.get(d); return x && !x.en_deposito_ld && Number(x.estado_ld) !== ESTADO.DEVUELTO_CLIENTE; });
+  const fuera = pend.map((p) => Number(p.did)).filter((d) => !dids.includes(d) && !yaEstan.includes(d));
+  if (fuera.length) console.log(`Pendientes que no se reasignan: ${fuera.slice(0, 20).map((d) => { const x = devs.get(d); return x ? `${d} est=${x.estado_ld} dep=${x.en_deposito_ld}` : `${d} sin fila en devoluciones`; }).join(' | ')}`);
   if (!dids.length) return 0;
   const chofer = Number(await choferDeposito(page));
   const empresa = await empresaLD(page);
