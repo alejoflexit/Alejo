@@ -313,6 +313,29 @@ async function usuarioLD(page) {
     return out;
   });
   const c = info.claves;
+  // LightData expone el nombre (window.usuario, ej. "fmonsegur") pero no el id: se busca ese nombre en las
+  // listas globales que trae la página (g_data_*) y se toma el id del objeto que lo tiene.
+  if (c.usuario && !/^\d+$/.test(String(c.usuario))) {
+    const enc = await page.evaluate((nombre) => {
+      const hits = [];
+      const n = String(nombre).toLowerCase();
+      for (const k of Object.getOwnPropertyNames(window)) {
+        let v; try { v = window[k]; } catch { continue; }
+        const arr = Array.isArray(v) ? v : v && typeof v === 'object' && !v.document ? Object.values(v) : null;
+        if (!arr || arr.length > 5000) continue;
+        for (const o of arr) {
+          if (!o || typeof o !== 'object' || Array.isArray(o)) continue;
+          let match = false;
+          for (const [kk, vv] of Object.entries(o)) if (typeof vv === 'string' && vv.toLowerCase() === n && /usu|user|login|nick/i.test(kk)) match = true;
+          if (match) { const plano = {}; for (const [kk, vv] of Object.entries(o)) if (['string', 'number'].includes(typeof vv)) plano[kk] = String(vv).slice(0, 40); hits.push({ en: k, obj: plano }); }
+        }
+        if (hits.length > 5) break;
+      }
+      return hits;
+    }, c.usuario);
+    info.encontrado = enc;
+    for (const h of enc) { const o = h.obj; const id = o.did || o.didusuario || o.idusuario || o.id; if (id && /^\d+$/.test(id)) { c.idusuario = id; break; } }
+  }
   let u = c.idusuario || c.idUsuario || c.id_usuario || c.userId || c.userid || c.iduser || c.idUser || c.g_idusuario;
   if (!u) { const m = info.html.join('\n').match(/(?:idusuario|id_usuario|userid|user_id|iduser)\s*[=:]\s*["']?(\d+)/i); if (m) u = m[1]; }
   if (!u || !/^\d+$/.test(String(u))) {
