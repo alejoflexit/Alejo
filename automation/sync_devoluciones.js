@@ -300,6 +300,29 @@ async function importarSanti() {
 const REASIGNAR_DESDE = process.env.REASIGNAR_DESDE || '2026-10-24T00:00:00-03:00';
 // id de empresa de la sesión de LightData (lo pide setOperadorExcel). Está en una variable global del index
 // o escrito en el HTML; se busca en los dos lados y queda registrado si no aparece.
+// Id del usuario logueado en LightData (10/11/2026: antes iba fijo userId=5 = beto; con Alejozubi LightData
+// contestaba "Sesión inválida" y no reasignaba nada). Se lee de la página igual que la empresa; LIGHTDATA_USER_ID lo pisa.
+async function usuarioLD(page) {
+  if (process.env.LIGHTDATA_USER_ID) return process.env.LIGHTDATA_USER_ID;
+  const info = await page.evaluate(() => {
+    const out = { claves: {}, html: [] };
+    for (const k of Object.getOwnPropertyNames(window)) if (/usu|user/i.test(k)) { try { const v = window[k]; if (['string', 'number'].includes(typeof v)) out.claves[k] = v; } catch { /* */ } }
+    const h = document.documentElement.innerHTML;
+    out.html = (h.match(/.{0,60}(idusu|id_usu|userid|user_id|iduser).{0,60}/gi) || []).slice(0, 40);
+    for (const st of [localStorage, sessionStorage]) for (let i = 0; i < st.length; i++) { const k = st.key(i); if (/usu|user/i.test(k)) out.claves['storage:' + k] = String(st.getItem(k)).slice(0, 80); }
+    return out;
+  });
+  const c = info.claves;
+  let u = c.idusuario || c.idUsuario || c.id_usuario || c.userId || c.userid || c.iduser || c.idUser || c.g_idusuario;
+  if (!u) { const m = info.html.join('\n').match(/(?:idusuario|id_usuario|userid|user_id|iduser)\s*[=:]\s*["']?(\d+)/i); if (m) u = m[1]; }
+  if (!u || !/^\d+$/.test(String(u))) {
+    await sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave: 'usuario', contenido: JSON.stringify(info).slice(0, 20000) }) }).catch(() => {});
+    console.log(`::warning title=Usuario LightData::no encontré el id; pistas: ${JSON.stringify(info).slice(0, 900)}`);
+    throw new Error('No encontré el id de usuario de LightData (cargá LIGHTDATA_USER_ID)');
+  }
+  return Number(u);
+}
+
 async function empresaLD(page) {
   const info = await page.evaluate(() => {
     const out = { global: null, claves: {}, html: [] };
@@ -360,7 +383,8 @@ async function reasignarDeposito(page) {
   // Reintenta los que fallaron (LightData a veces corta con "Asignacion interrumpida"): hasta 4 intentos en total.
   const intentos = (e) => { const m = /^\[(\d+)\]/.exec(String(e || '')); return e ? (m ? Number(m[1]) : 1) : 0; };
   const sinReasig = await sbTodo(`devoluciones_gestion?select=did,ingreso_deposito_at,ld_reasignado_error&ingreso_deposito_at=gte.${encodeURIComponent(REASIGNAR_DESDE)}&ld_reasignado_at=is.null&order=ingreso_deposito_at`);
-  const pend = sinReasig.filter((p) => intentos(p.ld_reasignado_error) < 6);
+  // Los que fallaron por "Sesión inválida" (usuario equivocado, no culpa del envío) se reintentan siempre
+  const pend = sinReasig.filter((p) => intentos(p.ld_reasignado_error) < 6 || /sesi.{1,4}n inv/i.test(String(p.ld_reasignado_error || '')));
   const errPrev = new Map(pend.map((p) => [Number(p.did), p.ld_reasignado_error]));
   { // diagnóstico: qué pasó con los ingresos de los últimos 7 días
     const hace7 = new Date(Date.now() - 7 * 864e5).toISOString();
@@ -386,10 +410,12 @@ async function reasignarDeposito(page) {
   if (!dids.length) return 0;
   const chofer = Number(await choferDeposito(page));
   const empresa = await empresaLD(page);
+  const usuario = await usuarioLD(page);
+  console.log(`::notice title=Usuario LightData::reasigna con userId ${usuario}`);
   const ahora = new Date().toISOString();
   for (let i = 0; i < dids.length; i += 20) {
     const parte = dids.slice(i, i + 20);
-    const r = await postLD(page, 'modules/envios/alta/controlador.php', [['operador', 'setOperadorExcel'], ['empresaID', empresa], ['userId', 5], ['perfil', 1], ['data', JSON.stringify([{ chofer, idpaquetes: parte.join(',') }])]]);
+    const r = await postLD(page, 'modules/envios/alta/controlador.php', [['operador', 'setOperadorExcel'], ['empresaID', empresa], ['userId', usuario], ['perfil', 1], ['data', JSON.stringify([{ chofer, idpaquetes: parte.join(',') }])]]);
     let j = null; try { j = JSON.parse(r.texto); } catch { /* */ }
     const fallidos = new Set([...(j && j.enviosNoAsignados) || [], ...(j && j.enviosNoProcesados) || []].map((x) => Number(typeof x === 'object' ? (x.idPaquete || x.did || x.id) : x)));
     console.log(`Reasignar ${parte.length} a devuelto deposito → HTTP ${r.status} ${String(r.texto).slice(0, 200)}`);
