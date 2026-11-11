@@ -334,9 +334,10 @@ async function usuarioLD(page) {
       return hits;
     }, c.usuario);
     info.encontrado = enc;
+    console.log(`::notice title=Usuario LightData encontrado::${JSON.stringify({ usuario: c.usuario, enc }).slice(0, 3000)}`);
     for (const h of enc) { const o = h.obj; const id = o.did || o.didusuario || o.idusuario || o.id; if (id && /^\d+$/.test(id)) { c.idusuario = id; break; } }
   }
-  if (!c.idusuario) { // diagnóstico: de dónde saca LightData el userId en su propia pantalla de asignaciones
+  if (process.env.DIAG_USUARIO !== '0') { // diagnóstico: de dónde saca LightData el userId en su propia pantalla de asignaciones
     info.modulos = await page.evaluate(async () => {
       const out = { cookies: document.cookie.replace(/=[^;]{6,}/g, '=…'), scripts: [], paginas: {} };
       const urls = [...document.querySelectorAll('script[src]')].map((x) => x.src).filter((u) => u.includes(location.host));
