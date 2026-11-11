@@ -303,64 +303,20 @@ const REASIGNAR_DESDE = process.env.REASIGNAR_DESDE || '2026-10-24T00:00:00-03:0
 // Id del usuario logueado en LightData (10/11/2026: antes iba fijo userId=5 = beto; con Alejozubi LightData
 // contestaba "Sesión inválida" y no reasignaba nada). Se lee de la página igual que la empresa; LIGHTDATA_USER_ID lo pisa.
 async function usuarioLD(page) {
-  if (process.env.LIGHTDATA_USER_ID) return process.env.LIGHTDATA_USER_ID;
-  const info = await page.evaluate(() => {
-    const out = { claves: {}, html: [] };
-    for (const k of Object.getOwnPropertyNames(window)) if (/usu|user/i.test(k)) { try { const v = window[k]; if (['string', 'number'].includes(typeof v)) out.claves[k] = v; } catch { /* */ } }
-    const h = document.documentElement.innerHTML;
-    out.html = (h.match(/.{0,60}(idusu|id_usu|userid|user_id|iduser).{0,60}/gi) || []).slice(0, 40);
-    for (const st of [localStorage, sessionStorage]) for (let i = 0; i < st.length; i++) { const k = st.key(i); if (/usu|user/i.test(k)) out.claves['storage:' + k] = String(st.getItem(k)).slice(0, 80); }
-    return out;
+  if (process.env.LIGHTDATA_USER_ID) return Number(process.env.LIGHTDATA_USER_ID);
+  // LightData guarda el id del usuario logueado en la global $quien (11/11/2026: es 1085 con Alejozubi).
+  // window.usuario NO sirve: queda pisada por el último usuario que recorrió algún listado.
+  const r = await page.evaluate(() => {
+    let q = null;
+    try { /* eslint-disable-next-line no-undef */ q = typeof $quien !== 'undefined' ? $quien : null; } catch { /* */ }
+    if (q == null) for (const k of Object.getOwnPropertyNames(window)) { try { const v = window[k]; if (v && typeof v === 'object' && '$quien' in v) { q = v.$quien; break; } } catch { /* */ } }
+    let op = null;
+    try { /* eslint-disable-next-line no-undef */ const ops = typeof g_operadores !== 'undefined' ? g_operadores : []; const o = (ops || []).find((x) => x && String(x.did || x.id) === String(q)); if (o) { op = {}; for (const [k, v] of Object.entries(o)) if (['string', 'number'].includes(typeof v)) op[k] = String(v).slice(0, 40); } } catch { /* */ }
+    return { quien: q, operador: op };
   });
-  const c = info.claves;
-  // LightData expone el nombre (window.usuario, ej. "fmonsegur") pero no el id: se busca ese nombre en las
-  // listas globales que trae la página (g_data_*) y se toma el id del objeto que lo tiene.
-  if (c.usuario && !/^\d+$/.test(String(c.usuario))) {
-    const enc = await page.evaluate((nombre) => {
-      const hits = [];
-      const n = String(nombre).toLowerCase();
-      for (const k of Object.getOwnPropertyNames(window)) {
-        let v; try { v = window[k]; } catch { continue; }
-        const arr = Array.isArray(v) ? v : v && typeof v === 'object' && !v.document ? Object.values(v) : null;
-        if (!arr || arr.length > 5000) continue;
-        for (const o of arr) {
-          if (!o || typeof o !== 'object' || Array.isArray(o)) continue;
-          let match = false;
-          for (const [kk, vv] of Object.entries(o)) if (typeof vv === 'string' && vv.toLowerCase() === n && /usu|user|login|nick/i.test(kk)) match = true;
-          if (match) { const plano = {}; for (const [kk, vv] of Object.entries(o)) if (['string', 'number'].includes(typeof vv)) plano[kk] = String(vv).slice(0, 40); hits.push({ en: k, obj: plano }); }
-        }
-        if (hits.length > 5) break;
-      }
-      return hits;
-    }, c.usuario);
-    info.encontrado = enc;
-    console.log(`::notice title=Usuario LightData encontrado::${JSON.stringify({ usuario: c.usuario, enc }).slice(0, 3000)}`);
-    for (const h of enc) { const o = h.obj; const id = o.did || o.didusuario || o.idusuario || o.id; if (id && /^\d+$/.test(id)) { c.idusuario = id; break; } }
-  }
-  if (process.env.DIAG_USUARIO !== '0') { // diagnóstico: de dónde saca LightData el userId en su propia pantalla de asignaciones
-    info.modulos = await page.evaluate(async () => {
-      const out = { cookies: document.cookie.replace(/=[^;]{6,}/g, '=…'), scripts: [], paginas: {} };
-      const urls = [...document.querySelectorAll('script[src]')].map((x) => x.src).filter((u) => u.includes(location.host));
-      for (const u of ['/modules/envios/alta/', '/modules/envios/alta/index.php', '/modules/asignaciones/', '/modules/envios/asignaciones/', ...urls].slice(0, 25)) {
-        try {
-          const t = await (await fetch(u, { credentials: 'include' })).text();
-          const m = t.match(/.{0,120}(setOperadorExcel|userId|idusuario|didusuario|g_id\w*).{0,120}/gi) || [];
-          if (m.length) out.paginas[u] = m.slice(0, 8).map((x) => x.replace(/\s+/g, ' '));
-        } catch (e) { out.paginas[u] = 'err ' + e.message; }
-      }
-      for (const k of Object.getOwnPropertyNames(window)) if (/^g_/.test(k)) { try { const v = window[k]; out.scripts.push(k + ':' + (Array.isArray(v) ? 'arr' + v.length : typeof v === 'object' && v ? 'obj' : String(v).slice(0, 20))); } catch { /* */ } }
-      return out;
-    });
-    console.log(`::warning title=Diag usuario::${JSON.stringify(info.modulos).slice(0, 3500)}`);
-  }
-  let u = c.idusuario || c.idUsuario || c.id_usuario || c.userId || c.userid || c.iduser || c.idUser || c.g_idusuario;
-  if (!u) { const m = info.html.join('\n').match(/(?:idusuario|id_usuario|userid|user_id|iduser)\s*[=:]\s*["']?(\d+)/i); if (m) u = m[1]; }
-  if (!u || !/^\d+$/.test(String(u))) {
-    await sb('ld_exploracion', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ clave: 'usuario', contenido: JSON.stringify(info).slice(0, 20000) }) }).catch(() => {});
-    console.log(`::warning title=Usuario LightData::no encontré el id; pistas: ${JSON.stringify(info).slice(0, 900)}`);
-    throw new Error('No encontré el id de usuario de LightData (cargá LIGHTDATA_USER_ID)');
-  }
-  return Number(u);
+  console.log(`::notice title=Usuario LightData::${JSON.stringify(r).slice(0, 800)}`);
+  if (!r.quien || !/^\d+$/.test(String(r.quien))) throw new Error('No encontré el id de usuario de LightData ($quien); cargá LIGHTDATA_USER_ID');
+  return Number(r.quien);
 }
 
 async function empresaLD(page) {
