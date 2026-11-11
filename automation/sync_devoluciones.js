@@ -336,6 +336,22 @@ async function usuarioLD(page) {
     info.encontrado = enc;
     for (const h of enc) { const o = h.obj; const id = o.did || o.didusuario || o.idusuario || o.id; if (id && /^\d+$/.test(id)) { c.idusuario = id; break; } }
   }
+  if (!c.idusuario) { // diagnóstico: de dónde saca LightData el userId en su propia pantalla de asignaciones
+    info.modulos = await page.evaluate(async () => {
+      const out = { cookies: document.cookie.replace(/=[^;]{6,}/g, '=…'), scripts: [], paginas: {} };
+      const urls = [...document.querySelectorAll('script[src]')].map((x) => x.src).filter((u) => u.includes(location.host));
+      for (const u of ['/modules/envios/alta/', '/modules/envios/alta/index.php', '/modules/asignaciones/', '/modules/envios/asignaciones/', ...urls].slice(0, 25)) {
+        try {
+          const t = await (await fetch(u, { credentials: 'include' })).text();
+          const m = t.match(/.{0,120}(setOperadorExcel|userId|idusuario|didusuario|g_id\w*).{0,120}/gi) || [];
+          if (m.length) out.paginas[u] = m.slice(0, 8).map((x) => x.replace(/\s+/g, ' '));
+        } catch (e) { out.paginas[u] = 'err ' + e.message; }
+      }
+      for (const k of Object.getOwnPropertyNames(window)) if (/^g_/.test(k)) { try { const v = window[k]; out.scripts.push(k + ':' + (Array.isArray(v) ? 'arr' + v.length : typeof v === 'object' && v ? 'obj' : String(v).slice(0, 20))); } catch { /* */ } }
+      return out;
+    });
+    console.log(`::warning title=Diag usuario::${JSON.stringify(info.modulos).slice(0, 3500)}`);
+  }
   let u = c.idusuario || c.idUsuario || c.id_usuario || c.userId || c.userid || c.iduser || c.idUser || c.g_idusuario;
   if (!u) { const m = info.html.join('\n').match(/(?:idusuario|id_usuario|userid|user_id|iduser)\s*[=:]\s*["']?(\d+)/i); if (m) u = m[1]; }
   if (!u || !/^\d+$/.test(String(u))) {
