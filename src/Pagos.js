@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { login, logout, getSession, authedFetch } from './auth';
 import PagosPagador from './PagosPagador';
 import LiqWhatsapp from './LiqWhatsapp';
+import { montoColecta, cargarPreciosChofer } from './colectasShared';
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -303,7 +304,6 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
   const colectaItems = new Map(); // key -> [{fecha, cliente, monto, con}] colectas que se le pagan, para copiar el detalle
   colectas.forEach(c => {
     if (c.estado === 'rojo') return; // cancelada: aunque haya quedado confirmado_por de antes, no se paga
-    const monto = Number(c.monto ?? c.colectas_clientes?.monto ?? 0) || 0; // fallback al precio del cliente (el monto por colecta casi nunca se guarda)
     const chsCol = [...new Set(c.choferes || [])]; // sin duplicados: un chofer repetido no cobra doble
     const dividida = chsCol.filter(x => x && norm(String(x).trim()) !== 'a coordinar').length > 1;
     chsCol.forEach(ch => {
@@ -316,6 +316,8 @@ function calcularPagos({ entregados, tarifas, alias, cpOverrides, cpTarifas, zon
       // resolver alias también en colectas (ej. "Yeni" -> "Yeni Sambrano")
       const alC = aliasByLD.get(norm(raw));
       if (alC && alC.regla === 'merge' && alC.paga_como) raw = alC.paga_como;
+      // precio del día > precio de este chofer para el cliente > precio del cliente (colectasShared.montoColecta)
+      const monto = montoColecta(c, c._precios, ch, raw);
       const key = norm(raw);
       const tC = tarifaByLD.get(key);
       if (tC) {
@@ -1482,13 +1484,14 @@ function PagosInner({ session }) {
       const sabado = addDays(lunes, 5);
       const [ent, col, aj, ci, remoteOv, av] = await Promise.all([
         sbAll(`pagos_entregados?select=cadete,localidad,cp,fecha_estado&semana_lunes=eq.${lunes}`),
-        sbAll(`colectas_registros?select=fecha,choferes,monto,estado,confirmado_por,colectas_clientes(nombre,monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
+        sbAll(`colectas_registros?select=fecha,cliente_id,choferes,monto,estado,confirmado_por,colectas_clientes(nombre,monto)&fecha=gte.${lunes}&fecha=lte.${sabado}`),
         sbAll(`pagos_ajustes?select=*&semana_label=eq.${lunes}`),
         sbAll(`pagos_cierres?select=*&semana_label=eq.${lunes}`),
         loadOverridesRemote(lunes),
         sbAll(`pagos_avisos?select=cadete&semana_label=eq.${lunes}`),
       ]);
-      setEntregados(ent || []); setColectas(col || []); setAjustes(aj || []);
+      const precios = await cargarPreciosChofer(sbAll);
+      setEntregados(ent || []); setColectas((col || []).map(c => ({ ...c, _precios: precios }))); setAjustes(aj || []);
       setCierres(ci || []);
       setAvisados(new Set((av || []).map(r => norm(r.cadete))));
       // Overrides: si el remoto (Supabase) está disponible es la fuente de verdad y se espeja al navegador;

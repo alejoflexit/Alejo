@@ -634,3 +634,39 @@ export function NotasHoy({ fecha, soloAusencias = false, irAPizarra }) {
     </div>
   );
 }
+
+// ── Precio de colecta por chofer (11/11/2026) ─────────────────────────────────────────────────
+// Tabla colectas_precio_chofer (cliente_id, chofer, monto). Prioridad del precio que cobra cada chofer:
+//   1. precio del día (colectas_registros.monto, el que se edita a mano en la tabla — pisa todo)
+//   2. precio del chofer para ese cliente (ej. Celulares: Juan/Sprinter $45.000)
+//   3. precio general del cliente (colectas_clientes.monto)
+// Todo lo que calcule plata de colectas (Colectas › Pagos, Liquidaciones) usa ESTA función.
+export function indexPreciosChofer(rows) {
+  const m = new Map();
+  for (const r of rows || []) {
+    if (!r || r.monto == null) continue;
+    const k = String(r.cliente_id);
+    if (!m.has(k)) m.set(k, new Map());
+    m.get(k).set(normNombre(r.chofer), Number(r.monto) || 0);
+  }
+  return m;
+}
+export function precioChofer(precios, clienteId, ...nombres) {
+  const pc = precios && precios.get(String(clienteId));
+  if (!pc) return null;
+  for (const n of nombres) { const v = pc.get(normNombre(n)); if (v != null) return v; }
+  return null;
+}
+// reg: fila de colectas_registros con cliente_id y colectas_clientes(monto). nombres: el chofer tal
+// como figura en la colecta y, si hay, su nombre canónico (alias de Liquidaciones).
+export function montoColecta(reg, precios, ...nombres) {
+  if (reg && reg.monto != null) return Number(reg.monto) || 0;
+  const p = precioChofer(precios, reg && reg.cliente_id, ...nombres);
+  if (p != null) return p;
+  return Number(reg && reg.colectas_clientes && reg.colectas_clientes.monto) || 0;
+}
+// Carga la tabla; si todavía no existe (migración sin correr) devuelve vacío y todo sigue como antes.
+export async function cargarPreciosChofer(fetcher) {
+  try { return indexPreciosChofer(await fetcher('colectas_precio_chofer?select=cliente_id,chofer,monto')); }
+  catch { return new Map(); }
+}

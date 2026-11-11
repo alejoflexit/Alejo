@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import { getSession, getToken } from './auth';
 import {
-  BRAND, VEHICULOS, normNombre, estadoEfectivo, ChoferPicker,
+  BRAND, VEHICULOS, normNombre, estadoEfectivo, ChoferPicker, montoColecta, cargarPreciosChofer, precioChofer,
   SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, minutosAR, mergeChoferes, LoginFlexit, NotasHoy,
 } from './colectasShared';
 import ColectasBot from './ColectasBot';
@@ -304,6 +304,13 @@ function ColectasInner({ soloArribos = false, irA }) {
   // Choferes agregados a mano: viven en Supabase (colectas_choferes_manuales) — el sync de LightData NO los pisa.
   const [choferesManuales, setChoferesManuales] = useState([]);
   const [choferAviso, setChoferAviso] = useState(''); // aviso al intentar agregar un duplicado
+  // Precio de colecta por chofer dentro de cada cliente (tabla colectas_precio_chofer, 11/11/2026)
+  const [preciosRows, setPreciosRows] = useState([]);
+  const [preciosForm, setPreciosForm] = useState([]); // [{ chofer, monto }] en la ficha que se edita
+  const [preciosError, setPreciosError] = useState('');
+  const preciosChofer = useMemo(() => { const m = new Map(); for (const r of preciosRows) { const k = String(r.cliente_id); if (!m.has(k)) m.set(k, new Map()); m.get(k).set(normNombre(r.chofer), Number(r.monto) || 0); } return m; }, [preciosRows]);
+  const cargarPrecios = useCallback(() => sbFetch('colectas_precio_chofer?select=cliente_id,chofer,monto&order=chofer.asc').then(r => setPreciosRows(Array.isArray(r) ? r : [])).catch(() => setPreciosRows([])), []);
+  useEffect(() => { cargarPrecios(); }, [cargarPrecios]);
 
   const syncChoferes = useCallback(async () => {
     setSyncingChoferes(true);
@@ -551,11 +558,10 @@ function ColectasInner({ soloArribos = false, irA }) {
     if (navView !== 'pagos') return;
     setLoadingPagos(true);
     const { start, end } = getWeekRange(semanaFecha);
-    sbFetch(`colectas_registros?select=*,colectas_clientes(nombre,monto)&fecha=gte.${start}&fecha=lte.${end}`)
-      .then(regs => {
+    Promise.all([sbFetch(`colectas_registros?select=*,colectas_clientes(nombre,monto)&fecha=gte.${start}&fecha=lte.${end}`), cargarPreciosChofer(sbFetch)])
+      .then(([regs, precios]) => {
         const map = {};
         regs.forEach(r => {
-          const monto = Number(r.monto ?? r.colectas_clientes?.monto ?? 0);
           const chsPago = [...new Set(r.choferes || [])]; // sin duplicados: un chofer repetido no cobra doble
           const dividida = chsPago.filter(x => x && x !== 'A coordinar').length > 1;
           chsPago.forEach(ch => {
@@ -567,7 +573,7 @@ function ColectasInner({ soloArribos = false, irA }) {
             // Una colecta cancelada (rojo) nunca se paga, aunque haya quedado confirmado_por viejo.
             if (r.estado === 'rojo') return;
             const confirmoEste = dividida ? (r.confirmado_por || []).includes(ch) : r.estado === 'verde';
-            if (confirmoEste) { map[ch].confirmadas++; map[ch].monto += monto; }
+            if (confirmoEste) { map[ch].confirmadas++; map[ch].monto += montoColecta(r, precios, ch); }
           });
         });
         setPagosData(Object.values(map).sort((a, b) => b.monto - a.monto));
@@ -722,12 +728,34 @@ function ColectasInner({ soloArribos = false, irA }) {
       zona_sabado: clienteForm.seccion === 'SABADOS' ? (clienteForm.zona_sabado || null) : null,
     };
     try {
+      let clienteId = editId;
       if (editId) {
         await sbFetch(`colectas_clientes?id=eq.${editId}`, {
           method: 'PATCH', headers: { 'Prefer':'return=minimal' }, body: JSON.stringify(payload),
         });
       } else {
-        await sbFetch('colectas_clientes', { method: 'POST', body: JSON.stringify(payload) });
+        const nuevo = await sbFetch('colectas_clientes', { method: 'POST', headers: { 'Prefer':'return=representation' }, body: JSON.stringify(payload) });
+        clienteId = Array.isArray(nuevo) && nuevo[0] ? nuevo[0].id : null;
+      }
+      // Precios por chofer: se reemplaza la lista completa del cliente (vacía = todos cobran el precio general)
+      if (clienteId) {
+        const filas = []; const vistos = new Set();
+        for (const p of preciosForm) {
+          const ch = String(p.chofer || '').trim(); const m = p.monto === '' || p.monto == null ? null : Number(p.monto);
+          if (!ch || m == null || !Number.isFinite(m) || vistos.has(normNombre(ch))) continue;
+          vistos.add(normNombre(ch)); filas.push({ cliente_id: clienteId, chofer: ch, monto: m });
+        }
+        const teniaAntes = preciosRows.some(r => String(r.cliente_id) === String(clienteId));
+        if (filas.length || teniaAntes) {
+          try {
+            await sbFetch(`colectas_precio_chofer?cliente_id=eq.${clienteId}`, { method: 'DELETE', headers: { 'Prefer':'return=minimal' } });
+            if (filas.length) await sbFetch('colectas_precio_chofer', { method: 'POST', headers: { 'Prefer':'return=minimal' }, body: JSON.stringify(filas) });
+            await cargarPrecios();
+          } catch (e) {
+            setPreciosError('El cliente se guardó, pero los precios por chofer no: ' + e.message);
+            return;
+          }
+        }
       }
       const updated = await sbFetch('colectas_clientes?select=*&bot_prueba=not.is.true&order=seccion.asc,nombre.asc');
       setClientes(updated);
@@ -767,6 +795,8 @@ function ColectasInner({ soloArribos = false, irA }) {
     setEditId(c.id);
     setConfirmarSoloSab(false);
     setClienteForm({ nombre:c.nombre, direccion:c.direccion, zona_barrio:c.zona_barrio||'', seccion:c.seccion, horario:c.horario??'', monto:c.monto??'', activo:c.activo, chat_id:c.chat_id||'', opera_sabados:!!c.opera_sabados, vehiculo:c.vehiculo||'', zona_sabado:c.zona_sabado||'', lat:c.lat??null, lng:c.lng??null, geo_fuente:c.geo_fuente??null, geo_direccion:c.geo_direccion??null });
+    setPreciosForm(preciosRows.filter(r => String(r.cliente_id) === String(c.id)).map(r => ({ chofer: r.chofer, monto: String(r.monto) })));
+    setPreciosError('');
     setShowForm(true); setMapaForm(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1237,7 +1267,13 @@ function ColectasInner({ soloArribos = false, irA }) {
                               <span onClick={() => setMontoEdit({ id:c.id, valor: (reg.monto ?? c.monto) ?? '' })}
                                 title="Click para cambiar el precio de hoy (el predeterminado no se toca)"
                                 style={{ cursor:'pointer', color: reg.monto!=null ? '#FBBF24' : undefined, display:'inline-flex', alignItems:'center', gap:5 }}>
-                                {fmtMonto(reg.monto ?? c.monto)}
+                                {(() => {
+                                  if (reg.monto != null) return fmtMonto(reg.monto);
+                                  const chs = [...new Set((reg.choferes || []).filter(x => x && x !== 'A coordinar'))];
+                                  const vals = chs.map(ch => precioChofer(preciosChofer, c.id, ch) ?? c.monto);
+                                  if (!vals.length || vals.every(v => v === vals[0])) return fmtMonto(vals.length ? vals[0] : c.monto);
+                                  return vals.map(v => fmtMonto(v)).join(' / ');
+                                })()}
                                 <i className="ti ti-pencil" style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }} />
                               </span>
                             )}
@@ -1573,7 +1609,7 @@ function ColectasInner({ soloArribos = false, irA }) {
               </button>
             ))}
           </div>
-          <button onClick={() => { setShowForm(true); setEditId(null); setClienteForm(emptyForm); setConfirmarSoloSab(false); setMapaForm(false); }}
+          <button onClick={() => { setShowForm(true); setEditId(null); setClienteForm(emptyForm); setPreciosForm([]); setPreciosError(''); setConfirmarSoloSab(false); setMapaForm(false); }}
             style={{ marginLeft:'auto', padding:'6px 14px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'rgba(46,207,170,0.1)', color:BRAND.teal, fontSize:13, fontWeight:600, cursor:'pointer' }}>
             + Agregar cliente
           </button>
@@ -1644,6 +1680,36 @@ function ColectasInner({ soloArribos = false, irA }) {
                   </span>
                 </div>
               )}
+            </div>
+
+            {/* Precio por chofer (11/11/2026): un chofer puede cobrar distinto en este cliente (ej. Sprinter vs Kangoo) */}
+            <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${BRAND.border}` }}>
+              <div style={{ display:'flex', alignItems:'baseline', gap:10, flexWrap:'wrap', marginBottom:8 }}>
+                <div style={{ ...lblSt, marginBottom:0 }}>Precio por chofer</div>
+                <span style={{ fontSize:12, color:BRAND.muted }}>
+                  Si un chofer cobra distinto en este cliente. El resto cobra el monto general{clienteForm.monto !== '' && clienteForm.monto != null ? ` (${fmtMonto(Number(clienteForm.monto))})` : ''}.
+                </span>
+              </div>
+              <datalist id="colectas-choferes-precio">
+                {[...new Set([...(choferesList || []), ...(choferesManuales || []).map(x => (typeof x === 'string' ? x : x && x.nombre))].filter(Boolean))].map(n => <option key={n} value={n} />)}
+              </datalist>
+              {preciosForm.map((p, i) => (
+                <div key={i} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6, maxWidth:520 }}>
+                  <input list="colectas-choferes-precio" value={p.chofer} placeholder="Chofer"
+                    onChange={e => setPreciosForm(arr => arr.map((x, j) => j === i ? { ...x, chofer: e.target.value } : x))}
+                    style={{ ...ctlSt, flex:2 }} />
+                  <input type="number" value={p.monto} placeholder="$"
+                    onChange={e => setPreciosForm(arr => arr.map((x, j) => j === i ? { ...x, monto: e.target.value } : x))}
+                    style={{ ...ctlSt, flex:1 }} />
+                  <button type="button" title="Quitar" onClick={() => setPreciosForm(arr => arr.filter((_, j) => j !== i))}
+                    style={{ height:36, minWidth:36, borderRadius:8, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, cursor:'pointer', fontSize:15 }}>×</button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setPreciosForm(arr => [...arr, { chofer:'', monto:'' }])}
+                style={{ padding:'5px 12px', borderRadius:8, border:`1px dashed ${BRAND.border}`, background:'none', color:BRAND.white, fontSize:12, cursor:'pointer' }}>
+                + Agregar precio de un chofer
+              </button>
+              {preciosError && <div style={{ fontSize:12, color:'#F87171', marginTop:8 }}>{preciosError}</div>}
             </div>
 
             {/* Ubicación en el mapa */}
