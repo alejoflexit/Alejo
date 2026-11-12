@@ -615,6 +615,7 @@ function Fila({ c, remito, ubicacion, codigosLugar = [], onLugar, lugarSeller, a
             {c.marca && <span className="dv-tag mk">{MARCAS[c.marca]}</span>}
             {remito && <span className="dv-tag">{remito.codigo}</span>}
             {ubicacion && c.etapa === "deposito" && <span className="dv-tag ub" title="Dónde está guardado en el cuartito">📍 {ubicacion}</span>}
+            {c.volvio_a_salir && <span className="dv-tag" title={c.vencido ? "Ya había vuelto a depósito, salió de nuevo y lleva más días de los normales: se reclama" : "Ya había vuelto a depósito y salió de nuevo con un cadete: no se reclama salvo que pase el límite de días"}>↩ Volvió a salir{c.vencido ? " · se reclama" : ""}</span>}
           </div>
           <div style={{ fontSize: 13, color: C.ink2, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {c.direccion ? <>{c.direccion}{c.localidad ? <span style={{ color: C.ink3 }}>, {c.localidad}</span> : null}</> : <span style={{ color: C.ink3 }}>Sin dirección</span>}
@@ -668,7 +669,7 @@ function Fila({ c, remito, ubicacion, codigosLugar = [], onLugar, lugarSeller, a
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, alignItems: "center" }}>
             {onVerEnvio && <button className="dv-btn" onClick={onVerEnvio}>Ver envío e historial</button>}
-            {c.etapa === "calle" && c.cadete && !CHOFER_FICTICIO.test(c.cadete) && <button className="dv-btn" disabled={ocupado} onClick={onReclamar}>Copiar reclamo</button>}
+            {c.etapa === "calle" && !(c.volvio_a_salir && !c.vencido) && c.cadete && !CHOFER_FICTICIO.test(c.cadete) && <button className="dv-btn" disabled={ocupado} onClick={onReclamar}>Copiar reclamo</button>}
             {c.etapa === "deposito" && c.ingreso_deposito_at && !c.en_deposito_ld && <button className="dv-btn" disabled={ocupado} onClick={() => onIngreso(true)}>Volver a “en la calle”</button>}
             {(c.etapa === "calle" || c.etapa === "retiro") && <button className="dv-btn pri" disabled={ocupado} onClick={() => onIngreso(false)}>Pasar a depósito</button>}
             <input className="dv-input" style={{ flex: "1 1 180px" }} placeholder="Motivo de la etiqueta (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} />

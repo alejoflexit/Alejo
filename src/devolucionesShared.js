@@ -47,6 +47,16 @@ export function armarCaso(d, g = {}, ahora = Date.now()) {
   } else {
     etapa = "retiro"; desde = d.fecha_alta;
   }
+  // Volvió a salir (12/11/2026): ya estuvo en depósito y DESPUÉS se le asignó a un cadete (reintento de
+  // entrega o devolución al seller). LightData le saca "devuelto deposito", pero no hay que reclamárselo
+  // como si nunca hubiera vuelto. Los días cuentan desde la nueva asignación: si pasa LIMITE_CALLE sin
+  // resolverse (ni entregado ni de vuelta en depósito), ahí sí se reclama.
+  let volvioASalir = false;
+  if (etapa === "calle") {
+    const dep = Math.max(Date.parse(d.fecha_deposito || "") || 0, Date.parse(g.ingreso_deposito_at || "") || 0);
+    const asig = Date.parse(d.cadete_asignado_at || "") || 0;
+    if (dep && asig > dep && d.cadete && !CHOFER_FICTICIO.test(d.cadete)) { volvioASalir = true; desde = d.cadete_asignado_at; }
+  }
   const dias = diasDesde(desde, ahora);
   const limite = etapa === "calle" ? LIMITE_CALLE : etapa === "deposito" ? LIMITE_DEPOSITO : null;
   const marca = g.marca || null;
@@ -55,6 +65,7 @@ export function armarCaso(d, g = {}, ahora = Date.now()) {
     reclamo_at: g.reclamo_at || null, notas: Array.isArray(g.notas) ? g.notas : [], ubicacion_manual: g.ubicacion || null,
     ingreso_deposito_at: g.ingreso_deposito_at || null, ingreso_por: g.ingreso_por || "",
     vencido: limite !== null && dias !== null && dias > limite,
+    volvio_a_salir: volvioASalir,
     cerrado: MARCAS_CIERRAN.includes(marca),
   };
 }
@@ -97,6 +108,7 @@ export function reclamosPorCadete(casos) {
   const m = new Map();
   for (const c of casos) {
     if (c.etapa !== "calle" || c.cerrado) continue;
+    if (c.volvio_a_salir && !c.vencido) continue; // ya estuvo en depósito y salió de nuevo: no se reclama (todavía)
     const k = CHOFER_FICTICIO.test(c.cadete || "") ? "" : c.cadete;
     if (!m.has(k)) m.set(k, []);
     m.get(k).push(c);

@@ -166,3 +166,20 @@ test("etiqueta del envío original entregado → encuentra el cambio abierto (ve
   expect(cambiosDeEnvio(casos, { id_interno: 10, razon_social: "Nitid", direccion: "Pedro Goyena 1104" })).toEqual([]);
   expect(etiquetaLegible('{"local":1,"did":"1065719","cliente":3}')).toBe("envío #1065719");
 });
+
+test("volvió a salir: estuvo en depósito y después se asignó a un cadete → no se reclama hasta pasar el límite", () => {
+  const d = { ...base, tipo: "NO_ENTREGADO", estado_ld: 3, en_deposito_ld: false, cadete: "Micaela Lopez",
+    fecha_deposito: "2026-10-17T10:00:00-03:00", cadete_asignado_at: "2026-10-19T09:00:00-03:00" };
+  const c = armarCaso(d, {}, AHORA);
+  expect(c.etapa).toBe("calle");
+  expect(c.volvio_a_salir).toBe(true);
+  expect(c.dias).toBe(1);
+  expect(reclamosPorCadete([c]).length).toBe(0);
+  const viejo = armarCaso({ ...d, cadete_asignado_at: "2026-10-10T09:00:00-03:00", fecha_deposito: "2026-10-08T10:00:00-03:00" }, {}, AHORA);
+  expect(viejo.vencido).toBe(true);
+  expect(reclamosPorCadete([viejo])[0].casos.length).toBe(1);
+  // asignado ANTES de pasar por depósito: sigue siendo un reclamo normal
+  const normal = armarCaso({ ...d, fecha_deposito: null, cadete_asignado_at: "2026-10-19T09:00:00-03:00" }, {}, AHORA);
+  expect(normal.volvio_a_salir).toBe(false);
+  expect(reclamosPorCadete([normal])[0].casos.length).toBe(1);
+});
