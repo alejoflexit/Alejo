@@ -5,7 +5,7 @@
 **Implementó:** Claude · **Revisa:** pendiente (Alejo / ChatGPT).
 
 ## Decisiones
-- Vive en **Liquidaciones › 📦 Extraviados** (solo admin: es plata, igual que el resto de Liquidaciones).
+- Sección propia **Extraviados** en el menú; la ve quien tenga Devoluciones (mismo equipo de depósito) y el admin. Todo lo que toca pagos va por RPC security definer (pagos_* y cadetes_tarifas siguen solo admin).
 - El descuento al transportista = filas de `pagos_ajustes` con `extraviado_id` + `cuota`, una por semana consecutiva desde la semana elegida. Liquidaciones no tiene lógica nueva: las muestra como cualquier descuento y el cierre las congela.
 - Cuotas enteras; la última absorbe el redondeo (suman exacto). 1 a 12 cuotas.
 - No se crea ni se borra una cuota de una semana ya **pagada**. Si el chofer está confirmado (no pagado), se ajusta el total congelado del cierre igual que el descuento manual (y avisa si ya tenía factura marcada).
@@ -20,7 +20,7 @@
 
 ## Estado
 - Tests de la lógica OK, `npm run build` OK.
-- **Migración: falta correrla** (Supabase › SQL Editor). Sin ella la pestaña avisa y no guarda; el resto de Liquidaciones no se toca.
+- **Migraciones: faltan correr, en orden** 20261113150000_extraviados.sql y 20261113170000_extraviados_equipo.sql (Supabase › SQL Editor). Sin ella la pestaña avisa y no guarda; el resto de Liquidaciones no se toca.
 - No probado en producción con datos reales.
 
 ## Pendientes / a validar

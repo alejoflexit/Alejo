@@ -43,9 +43,8 @@ test('cadeteDePago resuelve alias y tarifas', () => {
 });
 
 test('estadoCuotas cuenta lo ya pagado', () => {
-  const aj = [{ semana_label: '2026-11-16', cadete: 'Ana', monto: 500 }, { semana_label: '2026-11-09', cadete: 'Ana', monto: 500 }];
-  const ci = [{ semana_label: '2026-11-09', cadete: 'ana', pagado: true }];
-  expect(estadoCuotas(aj, ci)).toMatchObject({ n: 2, pagadas: 1, descontado: 500, resta: 500, proxima: '2026-11-16' });
+  const aj = [{ semana_label: '2026-11-16', monto: 500, pagado: false }, { semana_label: '2026-11-09', monto: 500, pagado: true }];
+  expect(estadoCuotas(aj)).toMatchObject({ n: 2, pagadas: 1, descontado: 500, resta: 500, proxima: '2026-11-16' });
 });
 
 test('mondayOf y filtroEnvio', () => {

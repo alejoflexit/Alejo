@@ -1,13 +1,15 @@
-// src/Extraviados.js — Liquidaciones › Extraviados (pedido de Alejo 13/11/2026).
+// src/Extraviados.js — sección Extraviados (pedido de Alejo 13/11/2026; la usa todo el equipo).
 // Reemplaza el Excel "Paquetes extraviados que debemos descontar de la factura del cliente".
 // Se carga el IDML → cruza con envios_busqueda (cliente, transportista) → el valor declarado lo trae
 // el workflow extraviados.yml desde la ficha de LightData. Tildar "Descontar" crea una fila de
 // pagos_ajustes por cuota (semanas consecutivas) y aparece sola en la Semana de Liquidaciones.
-// Datos: extraviados + pagos_ajustes.extraviado_id (migración 20261113150000_extraviados.sql).
+// Datos: extraviados (RLS: equipo logueado). Lo que toca pagos va por RPC security definer
+// (extraviado_descontar / extraviado_quitar / extraviados_cuotas / extraviados_cadetes) porque
+// pagos_ajustes, pagos_cierres y cadetes_tarifas son solo admin. Migraciones 20261113150000 y 20261113170000.
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authedFetch, getSession } from './auth';
 import {
-  norm, montoDe, cuotasDe, planDescuento, cadeteDePago, cierreDe, estadoCuotas,
+  norm, montoDe, cuotasDe, planDescuento, cadeteDePago, estadoCuotas,
   addDays, mondayOf, hoyAR, ddmm, semanaTxt, filtroEnvio, codigoLimpio, parseValor,
 } from './extraviadosShared';
 
@@ -18,7 +20,10 @@ const C = {
 };
 const money = (n) => (n == null || Number.isNaN(n) ? '—' : '$' + Math.round(n).toLocaleString('es-AR'));
 const yo = () => { const s = getSession(); return (s && (s.nombre || s.email)) || 'admin'; };
-const sinTabla = (e) => /extraviados|extraviado_id|relation|schema cache|PGRST20|42P01|42703/i.test(String(e && e.message));
+const sinTabla = (e) => /42P01|42883|PGRST202|PGRST205|schema cache|does not exist/i.test(String(e && e.message));
+// Mensaje legible de un raise exception de Postgres
+const msgDe = (e) => { const t = String(e && e.message); const m = /"message"\s*:\s*"([^"]+)"/.exec(t); return m ? m[1] : t; };
+const rpc = (fn, args = {}) => sb(`rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
 
 async function sb(path, options = {}) {
   const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -29,28 +34,15 @@ async function sb(path, options = {}) {
   return txt ? JSON.parse(txt) : null;
 }
 
-// Mismo criterio que Liquidaciones (syncCierrePorDescuento): si el chofer ya está confirmado y no
-// pagado, el total del cierre está congelado → se ajusta por el delta del descuento.
-async function syncCierre(cierre, delta) {
-  if (!cierre || !cierre.id || cierre.estado !== 'confirmado' || cierre.pagado) return;
-  const total = (Number(cierre.total) || 0) + delta;
-  const ajuste = (Number(cierre.detalle?.ajuste) || 0) - delta;
-  await sb(`pagos_cierres?id=eq.${cierre.id}`, { method: 'PATCH', body: JSON.stringify({ total, detalle: { ...(cierre.detalle || {}), ajuste } }) });
-  cierre.total = total; cierre.detalle = { ...(cierre.detalle || {}), ajuste };
-}
-const cierresDe = async (semanas) => {
-  const lista = [...new Set(semanas)].filter(Boolean);
-  if (!lista.length) return [];
-  return (await sb(`pagos_cierres?select=id,semana_label,cadete,estado,pagado,total,detalle,factura_ok&semana_label=in.(${lista.join(',')})`)) || [];
-};
-
 const FORM0 = (semana) => ({ tipo: 'extraviado', codigo: '', fecha: hoyAR(), cliente: '', cadete: '', cadete_ld: '', info: '', valor_manual: '', semana_inicio: semana, cuotas: 1, envio: null, buscando: false });
 
-export default function Extraviados({ tarifas = [], alias = [], semanaLunes, onCambio }) {
-  const semanaBase = semanaLunes || mondayOf(hoyAR());
+export default function Extraviados() {
+  // primera cuota por defecto: la semana en curso (se liquida y paga el lunes que viene)
+  const semanaBase = mondayOf(hoyAR());
   const [rows, setRows] = useState([]);
   const [ajustes, setAjustes] = useState([]);
-  const [cierres, setCierres] = useState([]);
+  const [tarifas, setTarifas] = useState([]);
+  const [alias, setAlias] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [faltaMigracion, setFaltaMigracion] = useState(false);
   const [error, setError] = useState('');
@@ -66,21 +58,21 @@ export default function Extraviados({ tarifas = [], alias = [], semanaLunes, onC
   const semanasOpts = useMemo(() => {
     const out = []; const base = mondayOf(hoyAR());
     for (let i = -6; i <= 12; i++) out.push(addDays(base, 7 * i));
-    if (semanaLunes && !out.includes(semanaLunes)) out.push(semanaLunes);
-    return out.sort();
-  }, [semanaLunes]);
+    return out;
+  }, []);
 
   const cargar = useCallback(async () => {
     setError('');
     try {
-      const [r, aj] = await Promise.all([
+      const [r, aj, cad] = await Promise.all([
         sb('extraviados?select=*&order=fecha.desc,id.desc&limit=2000'),
-        sb('pagos_ajustes?extraviado_id=not.is.null&select=id,semana_label,cadete,monto,cuota,extraviado_id&limit=5000'),
+        rpc('extraviados_cuotas'),
+        rpc('extraviados_cadetes'),
       ]);
-      const ci = await cierresDe((aj || []).map((a) => a.semana_label));
-      setRows(r || []); setAjustes(aj || []); setCierres(ci); setFaltaMigracion(false);
+      setRows(r || []); setAjustes(aj || []); setTarifas((cad && cad.tarifas) || []); setAlias((cad && cad.alias) || []); setFaltaMigracion(false);
     } catch (e) {
-      if (sinTabla(e)) setFaltaMigracion(true); else setError(e.message);
+      if (!getSession()) setError('Iniciá sesión desde Inicio para ver y cargar los extraviados.');
+      else if (sinTabla(e)) setFaltaMigracion(true); else setError(msgDe(e));
     } finally { setCargando(false); }
   }, []);
   useEffect(() => { cargar(); }, [cargar]);
@@ -139,7 +131,7 @@ export default function Extraviados({ tarifas = [], alias = [], semanaLunes, onC
       }]) });
       setForm(FORM0(form.semana_inicio || semanaBase));
       await cargar();
-    } catch (e) { setError(sinTabla(e) ? 'Falta correr la migración de Extraviados en Supabase.' : e.message); }
+    } catch (e) { setError(sinTabla(e) ? 'Falta correr las migraciones de Extraviados en Supabase.' : msgDe(e)); }
     finally { setBusy(null); }
   }
 
@@ -155,47 +147,34 @@ export default function Extraviados({ tarifas = [], alias = [], semanaLunes, onC
       setError(!r.cadete ? 'Elegí el transportista antes de tildar Descontar.' : !montoDe(r) ? 'Todavía no hay valor: esperá el de LightData o cargalo a mano.' : 'Elegí la semana de la primera cuota.');
       return;
     }
+    const n = plan.length;
+    const txt = `Descontar ${money(montoDe(r))} a ${r.cadete}` +
+      (n > 1 ? ` en ${n} cuotas (${plan.map((p) => money(p.monto)).join(' + ')}), semanas del ${ddmm(plan[0].semana_label)} al ${ddmm(plan[n - 1].semana_label)}.` : ` en la semana ${semanaTxt(plan[0].semana_label)}.`) +
+      '\n\nVa a aparecer como descuento en Liquidaciones.';
+    if (!window.confirm(txt)) return;
     setBusy(r.id); setError(''); setAviso('');
     try {
-      const ci = await cierresDe(plan.map((p) => p.semana_label));
-      const pagada = plan.find((p) => { const c = cierreDe(ci, p.semana_label, p.cadete); return c && c.pagado; });
-      if (pagada) { setError(`La semana ${semanaTxt(pagada.semana_label)} ya se le pagó a ${r.cadete}. Elegí una semana posterior para la primera cuota.`); return; }
-      const conFactura = plan.filter((p) => { const c = cierreDe(ci, p.semana_label, p.cadete); return c && c.estado === 'confirmado' && c.factura_ok; });
-      const n = plan.length;
-      const txt = `Descontar ${money(montoDe(r))} a ${r.cadete}` +
-        (n > 1 ? ` en ${n} cuotas (${plan.map((p) => money(p.monto)).join(' + ')}), semanas del ${ddmm(plan[0].semana_label)} al ${ddmm(plan[n - 1].semana_label)}.` : ` en la semana ${semanaTxt(plan[0].semana_label)}.`) +
-        (conFactura.length ? `\n\nOjo: ya tiene la factura marcada en ${conFactura.map((p) => semanaTxt(p.semana_label)).join(', ')}; el total va a cambiar y la factura no va a coincidir.` : '');
-      if (!window.confirm(txt)) return;
-      const creadas = await sb('pagos_ajustes', { method: 'POST', body: JSON.stringify(plan) });
-      try {
-        await sb(`extraviados?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ descontar: true, actualizado_at: new Date().toISOString() }) });
-      } catch (e) {
-        // sin la marca no se ve que hay cuotas: se deshace para no dejar descuentos huérfanos
-        await sb(`pagos_ajustes?id=in.(${(creadas || []).map((a) => a.id).join(',')})`, { method: 'DELETE' }).catch(() => {});
-        throw e;
-      }
-      for (const p of plan) await syncCierre(cierreDe(ci, p.semana_label, p.cadete), -p.monto);
-      await cargar(); onCambio && onCambio();
-    } catch (e) { setError(sinTabla(e) ? 'Falta correr la migración de Extraviados en Supabase.' : e.message); }
+      const res = await rpc('extraviado_descontar', { p_id: r.id });
+      const fm = (res && res.factura_marcada) || [];
+      if (fm.length) setAviso(`Ojo: ${r.cadete} ya tenía la factura marcada en la semana del ${fm.join(', ')}. El total cambió y la factura no va a coincidir.`);
+      await cargar();
+    } catch (e) { setError(sinTabla(e) ? 'Falta correr las migraciones de Extraviados en Supabase.' : msgDe(e)); }
     finally { setBusy(null); }
   }
 
   async function quitarDescuento(r) {
     const mias = ajPorId.get(r.id) || [];
+    const pagadas = mias.filter((a) => a.pagado);
+    const borrables = mias.filter((a) => !a.pagado);
+    if (mias.length && !borrables.length) { setError('Todas las cuotas ya se pagaron: no hay nada para sacar.'); return; }
+    if (!window.confirm(`Sacar ${borrables.length} cuota${borrables.length === 1 ? '' : 's'} (${money(borrables.reduce((s, a) => s + Number(a.monto || 0), 0))}) de Liquidaciones?` +
+      (pagadas.length ? `\n${pagadas.length} ya pagada${pagadas.length === 1 ? '' : 's'} quedan como están.` : ''))) return;
     setBusy(r.id); setError(''); setAviso('');
     try {
-      const ci = await cierresDe(mias.map((a) => a.semana_label));
-      const pagadas = mias.filter((a) => { const c = cierreDe(ci, a.semana_label, a.cadete); return c && c.pagado; });
-      const borrables = mias.filter((a) => !pagadas.includes(a));
-      if (!borrables.length && mias.length) { setError('Todas las cuotas ya se pagaron: no hay nada para sacar.'); return; }
-      if (!window.confirm(`Sacar ${borrables.length} cuota${borrables.length === 1 ? '' : 's'} (${money(borrables.reduce((s, a) => s + Number(a.monto || 0), 0))}) de Liquidaciones?` +
-        (pagadas.length ? `\n${pagadas.length} ya pagada${pagadas.length === 1 ? '' : 's'} quedan como están.` : ''))) return;
-      if (borrables.length) await sb(`pagos_ajustes?id=in.(${borrables.map((a) => a.id).join(',')})`, { method: 'DELETE' });
-      for (const a of borrables) await syncCierre(cierreDe(ci, a.semana_label, a.cadete), Number(a.monto) || 0);
-      if (!pagadas.length) await sb(`extraviados?id=eq.${r.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ descontar: false, actualizado_at: new Date().toISOString() }) });
-      else setAviso(`Quedaron ${pagadas.length} cuota${pagadas.length === 1 ? '' : 's'} ya pagada${pagadas.length === 1 ? '' : 's'}; se sacaron las demás.`);
-      await cargar(); onCambio && onCambio();
-    } catch (e) { setError(e.message); }
+      const res = await rpc('extraviado_quitar', { p_id: r.id });
+      if (res && res.pagadas) setAviso(`Quedaron ${res.pagadas} cuota${res.pagadas === 1 ? '' : 's'} ya pagada${res.pagadas === 1 ? '' : 's'}; se sacaron las demás.`);
+      await cargar();
+    } catch (e) { setError(msgDe(e)); }
     finally { setBusy(null); }
   }
 
@@ -209,7 +188,7 @@ export default function Extraviados({ tarifas = [], alias = [], semanaLunes, onC
   }
 
   // ── vista ──
-  const filas = useMemo(() => rows.map((r) => ({ ...r, monto: montoDe(r), est: estadoCuotas(ajPorId.get(r.id), cierres) })), [rows, ajPorId, cierres]);
+  const filas = useMemo(() => rows.map((r) => ({ ...r, monto: montoDe(r), est: estadoCuotas(ajPorId.get(r.id)) })), [rows, ajPorId]);
   const visibles = useMemo(() => {
     const k = norm(q);
     return filas.filter((r) => {
@@ -242,7 +221,7 @@ export default function Extraviados({ tarifas = [], alias = [], semanaLunes, onC
   if (cargando) return <div style={{ color: C.muted, padding: '2rem', textAlign: 'center' }}>Cargando extraviados…</div>;
   if (faltaMigracion) return (
     <div style={{ background: 'rgba(255,176,32,0.1)', border: `1px solid ${C.amber}`, color: C.amber, padding: 16, borderRadius: 12, fontSize: 13.5, lineHeight: 1.5 }}>
-      Falta crear la tabla. En Supabase › SQL Editor corré <b>supabase/migrations/20261113150000_extraviados.sql</b> y volvé a entrar.
+      Falta crear la tabla. En Supabase › SQL Editor corré <b>supabase/migrations/20261113150000_extraviados.sql</b> y después <b>20261113170000_extraviados_equipo.sql</b>, y volvé a entrar.
     </div>
   );
 

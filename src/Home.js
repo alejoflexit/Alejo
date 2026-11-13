@@ -471,7 +471,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   const modulos = [
     { id: "metricas", label: "Métricas" }, { id: "colectas", label: "Colectas" }, { id: "arribos", label: "Arribos" }, { id: "monitoreo", label: "Monitoreo" },
     { id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }, { id: "pagos", label: "Pagos" }, { id: "pendientes", label: "Históricos" },
-    { id: "devoluciones", label: "Devoluciones" }, { id: "doblebulto", label: "Doble bulto" },
+    { id: "devoluciones", label: "Devoluciones" }, { id: "doblebulto", label: "Doble bulto" }, { id: "extraviados", label: "Extraviados" },
   ].filter((d) => puedeVer(d.id))
     .concat(session && esAdmin() ? [{ id: "usuarios", label: "Usuarios" }] : []); // solo el admin
 

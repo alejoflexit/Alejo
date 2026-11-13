@@ -53,6 +53,7 @@ export function puedeVer(id) {
   if (id === "home") return true;
   if (id === "envio") return puedeVer("tiquetera");
   if (id === "doblebulto") return puedeVer("devoluciones"); // mismo equipo de depósito (sin tocar la edge function admin-usuarios) // Buscar envío usa los mismos datos que la Tiquetera
+  if (id === "extraviados") return puedeVer("devoluciones"); // mismo equipo de depósito (no requiere tocar la edge function)
   if (id === "usuarios") return esAdmin();
   const p = permisosActuales();
   if (!p) return true; // sin sesión: igual que antes (cada sección pide su propio login; Pagos el del admin)

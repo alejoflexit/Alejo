@@ -88,17 +88,13 @@ export function cadeteDePago(cadeteLD, tarifas = [], alias = []) {
   return t ? t.nombre_lightdata : '';
 }
 
-// Cuál cierre corresponde a una cuota (mismo criterio que Liquidaciones: nombre normalizado)
-export const cierreDe = (cierres, semana, cadete) =>
-  (cierres || []).find((c) => c.semana_label === semana && norm(c.cadete) === norm(cadete)) || null;
-
-// Estado de las cuotas cargadas de un extraviado
-export function estadoCuotas(ajustes, cierres) {
-  const filas = [...(ajustes || [])].sort((a, b) => (a.semana_label < b.semana_label ? -1 : 1));
-  const pagadas = filas.filter((a) => { const c = cierreDe(cierres, a.semana_label, a.cadete); return c && c.pagado; });
+// Estado de las cuotas de un extraviado (filas de la RPC extraviados_cuotas: semana_label, monto, cuota, pagado)
+export function estadoCuotas(cuotas) {
+  const filas = [...(cuotas || [])].sort((a, b) => (a.semana_label < b.semana_label ? -1 : 1));
+  const pagadas = filas.filter((a) => a.pagado);
   const descontado = pagadas.reduce((s, a) => s + (Number(a.monto) || 0), 0);
   const total = filas.reduce((s, a) => s + (Number(a.monto) || 0), 0);
-  const proxima = filas.find((a) => !pagadas.includes(a));
+  const proxima = filas.find((a) => !a.pagado);
   return { filas, n: filas.length, pagadas: pagadas.length, descontado, total, resta: total - descontado, proxima: proxima ? proxima.semana_label : null };
 }
 
