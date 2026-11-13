@@ -1,0 +1,33 @@
+name: Extraviados (valor declarado de LightData)
+
+# Completa el valor declarado de los extraviados/rotos cargados en Liquidaciones › Extraviados.
+# Si no hay filas pendientes, termina en segundos sin abrir LightData.
+
+on:
+  schedule:
+    - cron: '10,40 11-23 * * *'   # 08:10 a 20:40 ART, cada media hora
+  workflow_dispatch:
+
+concurrency:
+  group: extraviados
+  cancel-in-progress: false
+
+jobs:
+  valor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias
+        run: cd automation && npm install
+      - name: Valor declarado
+        env:
+          TZ: America/Argentina/Buenos_Aires
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LIGHTDATA_USER: ${{ secrets.LIGHTDATA_USER }}
+          LIGHTDATA_PASSWORD: ${{ secrets.LIGHTDATA_PASSWORD }}
+        run: cd automation && node sync_extraviados.js
+        timeout-minutes: 10

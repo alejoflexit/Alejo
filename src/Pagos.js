@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { login, logout, getSession, authedFetch } from './auth';
 import PagosPagador from './PagosPagador';
 import LiqWhatsapp from './LiqWhatsapp';
+import Extraviados from './Extraviados';
 import { montoColecta, cargarPreciosChofer } from './colectasShared';
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -1365,7 +1366,7 @@ function PagosInner({ session }) {
   const [exportando, setExportando] = useState(false); // el botón siempre existe; ExcelJS baja al tocarlo
   const isAdmin = session && session.email === ADMIN_EMAIL;
 
-  const [vista, setVista] = useState('tabla'); // 'tabla' | 'config' | 'pagador'
+  const [vista, setVista] = useState('tabla'); // 'tabla' | 'config' | 'pagador' | 'colectas' | 'extraviados'
   const [semanaLunes, setSemanaLunes] = useState(null); // se resuelve al cargar
   const [colExp, setColExp] = useState(() => new Set()); // choferes con el desglose por cliente abierto (vista Colectas)
 
@@ -1941,6 +1942,7 @@ function PagosInner({ session }) {
   }
 
   async function borrarAjuste(a, cierre) {
+    if (a.extraviado_id && !window.confirm('Este descuento es una cuota de un extraviado/roto. Si lo borrás acá, en la pestaña Extraviados va a figurar como faltante. ¿Borrar igual?')) return;
     setBusyAccion(true); setError('');
     try {
       await sb(`pagos_ajustes?id=eq.${a.id}`, { method: 'DELETE' });
@@ -1966,6 +1968,7 @@ function PagosInner({ session }) {
           </div>
           {/* Secundarios: Colectas (referencia) y Config (engranaje) */}
           <button onClick={() => setVista('colectas')} title="Resumen de lo que se paga por colectas (la gestión del día está en la sección Colectas del menú)" style={{ background: 'none', border: 'none', color: vista === 'colectas' ? BRAND.blue : BRAND.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 8px', borderRadius: 8 }}>📋 Colectas</button>
+          {isAdmin && <button onClick={() => setVista('extraviados')} title="Paquetes extraviados y rotos: valor de LightData y descuento al transportista en cuotas" style={{ background: 'none', border: 'none', color: vista === 'extraviados' ? BRAND.blue : BRAND.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 8px', borderRadius: 8 }}>📦 Extraviados</button>}
           {isAdmin && <button onClick={() => setVista('config')} title="Config de cadetes" style={{ width: 34, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: `1px solid ${vista === 'config' ? BRAND.blue : BRAND.border}`, background: vista === 'config' ? 'rgba(76,141,255,0.12)' : BRAND.faint, color: vista === 'config' ? BRAND.blue : BRAND.muted, cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>⚙</button>}
         </div>
         <div style={{ fontSize: 12, color: BRAND.muted }}>
@@ -1981,6 +1984,10 @@ function PagosInner({ session }) {
 
       {vista === 'pagador' && isAdmin && (
         <PagosPagador tarifas={tarifas} />
+      )}
+
+      {vista === 'extraviados' && isAdmin && (
+        <Extraviados tarifas={tarifas} alias={alias} semanaLunes={semanaLunes} onCambio={() => refreshDescuentos(semanaLunes)} />
       )}
 
       {vista === 'colectas' && (
