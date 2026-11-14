@@ -256,7 +256,7 @@ export default function Extraviados() {
             <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted }}>IDML / tracking / ID LightData
               <input autoFocus value={form.codigo} onChange={(e) => setForm((s) => ({ ...s, codigo: e.target.value, envio: null }))} placeholder="2000019384679834" style={{ ...inp, fontFamily: 'monospace' }} />
               <span style={{ fontSize: 11, minHeight: 14, color: form.envio ? C.teal : form.envio === false ? C.amber : C.muted }}>
-                {form.buscando ? 'Buscando en LightData…' : form.envio ? `✓ Encontrado · ID ${form.envio.id_interno}${form.cadete_ld ? ` · ${form.cadete_ld}` : ''}` : form.envio === false ? 'No está en los últimos días de LightData: completá a mano' : ''}
+                {form.buscando ? 'Buscando en LightData…' : form.envio ? `✓ Encontrado · ID ${form.envio.id_interno}${form.cadete_ld ? ` · ${form.cadete_ld}` : ''}` : form.envio === false ? 'No está en la app todavía: guardalo y lo busco en LightData en la próxima pasada (cliente, transportista y valor)' : ''}
               </span>
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Fecha
