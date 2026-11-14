@@ -141,7 +141,7 @@ function VistaSkeleton() {
 
 // Ítems de la sidebar: filas planas; en hover solo cambian fondo y colores (sin reflujo)
 const NAV_CSS = `
-.fx-nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.72);font-size:14px;font-weight:500;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit;transition:background-color .1s,color .1s,border-color .1s}
+.fx-nav{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.72);font-size:14px;font-weight:500;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit;transition:background-color .1s,color .1s,border-color .1s}
 .fx-nav i{font-size:18px;color:rgba(255,255,255,0.5);transition:color .1s}
 @media (hover:hover){.fx-nav:hover{background:rgba(255,255,255,0.05);color:#fff}.fx-nav:hover i{color:#2ECFAA}}
 .fx-nav:focus-visible{outline:none;border-color:rgba(46,207,170,0.45)}
@@ -149,55 +149,77 @@ const NAV_CSS = `
 .fx-nav.on i{color:#2ECFAA}
 `;
 
-// Panel de navegación (compartido entre la sidebar fija de desktop y el overlay de mobile)
-function NavPanel({ seccion, go, onClose, logo, comBadge = 0 }) {
-  const items = [
+// Panel de navegación (compartido entre la sidebar fija de desktop y el overlay de mobile).
+// Menú agrupado por tema (13/11/2026, opción A de Alejo). "Buscar envío" es la barra de arriba:
+// Enter busca directo; vacía, abre la sección.
+const NAV_GRUPOS = [
+  { titulo: "En vivo", items: [
     { id: "metricas", icon: "ti ti-chart-bar", label: "Métricas" },
-    { id: "colectas", icon: "ti ti-package", label: "Colectas" },
-    { id: "arribos", icon: "ti ti-truck-delivery", label: "Arribos" },
-    { id: "zonas", icon: "ti ti-alarm", label: "Zonas" },
     { id: "monitoreo", icon: "ti ti-activity-heartbeat", label: "Monitoreo" },
-    { id: "pizarra", icon: "ti ti-notes", label: "Pizarra" },
-    { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
-    { id: "envio", icon: "ti ti-search", label: "Buscar envío" },
-    { id: "pendientes", icon: "ti ti-history", label: "Pendientes históricos" },
+    { id: "zonas", icon: "ti ti-alarm", label: "Zonas" },
+    { id: "arribos", icon: "ti ti-truck-delivery", label: "Arribos" },
+    { id: "colectas", icon: "ti ti-package", label: "Colectas" },
+  ] },
+  { titulo: "Depósito", items: [
     { id: "devoluciones", icon: "ti ti-arrow-back-up", label: "Devoluciones" },
     { id: "doblebulto", icon: "ti ti-packages", label: "Doble bulto" },
     { id: "extraviados", icon: "ti ti-package-off", label: "Extraviados" },
-    ...(getSession() && esAdmin() ? [{ id: "pagos", icon: "ti ti-cash", label: "Liquidaciones" }] : []),
-  ].filter(it => puedeVer(it.id));
+    { id: "pendientes", icon: "ti ti-history", label: "Pendientes históricos" },
+  ] },
+  { titulo: "Atención", items: [
+    { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
+    { id: "pizarra", icon: "ti ti-notes", label: "Pizarra" },
+  ] },
+  { titulo: "Administración", items: [
+    { id: "pagos", icon: "ti ti-cash", label: "Liquidaciones", soloAdmin: true },
+    { id: "choferes", icon: "ti ti-user-plus", label: "Alta de choferes", href: "/choferes.html" },
+    { id: "usuarios", icon: "ti ti-shield-lock", label: "Usuarios y permisos", soloAdmin: true },
+  ] },
+];
+const NAV_TITULO = { fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "16px 0 4px", paddingLeft: 10 };
+
+function NavPanel({ seccion, go, onBuscar, onClose, logo, comBadge = 0 }) {
+  const [q, setQ] = useState("");
+  const admin = !!(getSession() && esAdmin());
+  const grupos = NAV_GRUPOS
+    .map(g => ({ ...g, items: g.items.filter(it => (it.soloAdmin ? admin : true) && puedeVer(it.id)) }))
+    .filter(g => g.items.length);
+  const buscar = (e) => {
+    e.preventDefault();
+    const t = q.trim();
+    if (t && onBuscar) { onBuscar(t); setQ(""); } else go("envio");
+  };
   return (
     <>
       <style>{NAV_CSS}</style>
-      <div onClick={() => go("home")} title="Ir al inicio" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "2rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(255,255,255,0.08)", cursor: "pointer" }}>
+      <div onClick={() => go("home")} title="Ir al inicio" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1.25rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(255,255,255,0.08)", cursor: "pointer" }}>
         <img src={logo} alt="Flexit" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 8 }} />
         <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Flexit</span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6, paddingLeft: 10 }}>Navegación</div>
-        {items.map(it => {
-          const active = seccion === it.id;
-          return (
-            <button key={it.id} onClick={() => go(it.id)} className={"fx-nav" + (active ? " on" : "")}>
-              <i className={it.icon} />
-              {it.label}
-              {it.id === "pizarra" && comBadge > 0 && (
-                <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: "#E24B4A", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{comBadge}</span>
-              )}
-            </button>
-          );
-        })}
-        {puedeVer("choferes") && <a href="/choferes.html" className="fx-nav">
-          <i className="ti ti-user-plus" />
-          Alta de Choferes
-        </a>}
-        {getSession() && esAdmin() && (<>
-          <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "18px 0 6px", paddingLeft: 10 }}>Administración</div>
-          <button onClick={() => go("usuarios")} className={"fx-nav" + (seccion === "usuarios" ? " on" : "")}>
-            <i className="ti ti-shield-lock" />
-            Usuarios y permisos
-          </button>
-        </>)}
+      {puedeVer("envio") && (
+        <form onSubmit={buscar} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, border: `1px solid ${seccion === "envio" ? "rgba(46,207,170,0.45)" : "rgba(255,255,255,0.1)"}`, background: "rgba(0,0,0,0.2)", marginBottom: 4 }}>
+          <i className="ti ti-search" style={{ fontSize: 16, color: "rgba(255,255,255,0.5)" }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar envío…" aria-label="Buscar envío por tracking, ID o venta"
+            style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", color: "#fff", fontSize: 13.5, fontFamily: "inherit" }} />
+        </form>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {grupos.map(g => (
+          <React.Fragment key={g.titulo}>
+            <div style={NAV_TITULO}>{g.titulo}</div>
+            {g.items.map(it => it.href ? (
+              <a key={it.id} href={it.href} className="fx-nav"><i className={it.icon} />{it.label}</a>
+            ) : (
+              <button key={it.id} onClick={() => go(it.id)} className={"fx-nav" + (seccion === it.id ? " on" : "")}>
+                <i className={it.icon} />
+                {it.label}
+                {it.id === "pizarra" && comBadge > 0 && (
+                  <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: "#E24B4A", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{comBadge}</span>
+                )}
+              </button>
+            ))}
+          </React.Fragment>
+        ))}
       </div>
       {onClose && (
         <button onClick={onClose}
@@ -1148,8 +1170,8 @@ export default function App() {
         <div onClick={() => setSidebarOpen(false)}
           style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.68)", zIndex:1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, backgroundColor:BRAND.navy, backgroundImage:"radial-gradient(circle at 0% 0%, rgba(46,207,170,0.10), transparent 45%), radial-gradient(circle at 100% 85%, rgba(20,125,170,0.16), transparent 50%), linear-gradient(180deg, #08182D 0%, #050E1D 100%)", borderRight:`1px solid ${BRAND.border}`, boxShadow:"12px 0 40px rgba(0,0,0,0.35)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", transform:"translateZ(0)", contain:"layout paint" }}>
-            <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} comBadge={comNuevos} />
+            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, backgroundColor:BRAND.navy, backgroundImage:"radial-gradient(circle at 0% 0%, rgba(46,207,170,0.10), transparent 45%), radial-gradient(circle at 100% 85%, rgba(20,125,170,0.16), transparent 50%), linear-gradient(180deg, #08182D 0%, #050E1D 100%)", borderRight:`1px solid ${BRAND.border}`, boxShadow:"12px 0 40px rgba(0,0,0,0.35)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", overflowY:"auto", transform:"translateZ(0)", contain:"layout paint" }}>
+            <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onBuscar={(t) => { abrirEnvio(t); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} comBadge={comNuevos} />
           </div>
         </div>
       )}
