@@ -26,13 +26,16 @@ Esta entrega cubre solo las mejoras 1 (tokens) y 2 (tipografía), aprobadas por 
 - La escala de tamaños bajó de 31 a 25 valores, no a 6: colapsarla del todo mueve layouts y va con el rediseño de cada pantalla.
 
 ## Commit / push / deploy
-- Ver el pase de la sesión (se completa al publicar).
+- Commit 2da3b81 en `main` — push hecho el 13/11/2026.
+- Deploy de Vercel verificado en producción por Claude (bundle nuevo servido).
 
 ## Pruebas
 - `npm run build` compila. Tests: 9 suites, 69 pasan.
+- En producción (ancho 733 px): Métricas, Liquidaciones y Colectas revisadas con captura; sin Arial en pantalla, sin teal viejo, layout sin cambios.
+- Falta: revisar a ancho completo de escritorio, en iPhone real, y modales / Análisis / mapa de Colectas.
 
 ## Pendientes
-- Mejora 3 (armazón de navegación único): maqueta presentada, espera aprobación.
+- Mejora 3 (armazón de navegación único): maqueta presentada (https://claude.ai/artifact/MDpeUF1uKkKaPFCEaeYiTc), espera aprobación.
 - Mejoras 4 a 10 de la auditoría.
 
 ## Próxima acción
