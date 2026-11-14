@@ -35,7 +35,7 @@ async function sb(path, options = {}) {
   return txt ? JSON.parse(txt) : null;
 }
 
-const FORM0 = (semana) => ({ tipo: 'extraviado', codigo: '', fecha: hoyAR(), cliente: '', cadete: '', cadete_ld: '', info: '', valor_manual: '', semana_inicio: semana, cuotas: 1, envio: null, buscando: false });
+const FORM0 = (semana) => ({ tipo: 'extraviado', codigo: '', fecha: hoyAR(), cliente: '', cadete: '', cadete_ld: '', info: '', valor_manual: '', semana_inicio: semana, cuotas: 1, envio: null, buscando: false, clienteManual: false, cadeteManual: false });
 
 export default function Extraviados() {
   // primera cuota por defecto: la semana en curso (se liquida y paga el lunes que viene)
@@ -101,9 +101,10 @@ export default function Extraviados() {
         if (n !== busq.current) return;
         setForm((s) => ({
           ...s, buscando: false, envio: e || false,
-          cliente: s.cliente || (e && e.razon_social) || '',
+          // lo que vino de LightData se reemplaza al cambiar de envío; lo que se tocó a mano, no
+          cliente: s.clienteManual ? s.cliente : ((e && e.razon_social) || ''),
           cadete_ld: (e && e.cadete) || '',
-          cadete: s.cadete || (e ? cadeteDePago(e.cadete, tarifas, alias) : ''),
+          cadete: s.cadeteManual ? s.cadete : (e ? cadeteDePago(e.cadete, tarifas, alias) : ''),
         }));
       } catch { if (n === busq.current) setForm((s) => ({ ...s, buscando: false, envio: false })); }
     }, 450);
@@ -262,13 +263,16 @@ export default function Extraviados() {
               <input type="date" value={form.fecha} onChange={(e) => setForm((s) => ({ ...s, fecha: e.target.value }))} style={inp} />
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Cliente
-              <input value={form.cliente} onChange={(e) => setForm((s) => ({ ...s, cliente: e.target.value }))} style={inp} />
+              <input value={form.cliente} onChange={(e) => setForm((s) => ({ ...s, cliente: e.target.value, clienteManual: true }))} style={inp} />
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Transportista
-              <select value={form.cadete} onChange={(e) => setForm((s) => ({ ...s, cadete: e.target.value }))} style={sel}>
+              <select value={form.cadete} onChange={(e) => setForm((s) => ({ ...s, cadete: e.target.value, cadeteManual: true }))} style={sel}>
                 <option value="" style={opt}>— sin transportista —</option>
                 {cadetesOpts.map((n) => <option key={n} value={n} style={opt}>{n}</option>)}
               </select>
+              {form.cadete_ld && !form.cadeteManual && !form.cadete && (
+                <span style={{ fontSize: 11, color: C.amber }}>"{form.cadete_ld}" no figura en Liquidaciones: elegilo a mano</span>
+              )}
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Info
               <input value={form.info} onChange={(e) => setForm((s) => ({ ...s, info: e.target.value }))} placeholder="qué pasó" style={inp} />

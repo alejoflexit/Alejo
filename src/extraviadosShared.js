@@ -85,7 +85,13 @@ export function cadeteDePago(cadeteLD, tarifas = [], alias = []) {
   const al = alias.find((a) => norm(a.nombre_lightdata) === k);
   const canon = al && al.regla === 'merge' && al.paga_como ? al.paga_como : cadeteLD;
   const t = tarifas.find((x) => norm(x.nombre_lightdata) === norm(canon));
-  return t ? t.nombre_lightdata : '';
+  if (t) return t.nombre_lightdata;
+  // En envios_busqueda el chofer viene sin la zona: "Joel Ariza" vs "JOEL ARIZA (MORENO)".
+  // Se compara sin el paréntesis y solo se acepta si hay UNA coincidencia.
+  const base = (n) => norm(String(n || '').replace(/\([^)]*\)/g, ''));
+  const kb = base(canon);
+  const cands = tarifas.filter((x) => base(x.nombre_lightdata) === kb);
+  return cands.length === 1 ? cands[0].nombre_lightdata : '';
 }
 
 // Estado de las cuotas de un extraviado (filas de la RPC extraviados_cuotas: semana_label, monto, cuota, pagado)

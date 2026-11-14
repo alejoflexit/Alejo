@@ -40,6 +40,9 @@ test('cadeteDePago resuelve alias y tarifas', () => {
   expect(cadeteDePago('Yamila G', tarifas, alias)).toBe('Yamila Gomez');
   expect(cadeteDePago('nahuel  saez', tarifas, alias)).toBe('Nahuel Saez');
   expect(cadeteDePago('Desconocido', tarifas, alias)).toBe('');
+  const t2 = [{ nombre_lightdata: 'JOEL ARIZA (MORENO)' }, { nombre_lightdata: 'ANA PEREZ (SUR)' }, { nombre_lightdata: 'ANA PEREZ (NORTE)' }];
+  expect(cadeteDePago('Joel Ariza', t2, [])).toBe('JOEL ARIZA (MORENO)');
+  expect(cadeteDePago('Ana Perez', t2, [])).toBe(''); // dos posibles: que lo elija a mano
 });
 
 test('estadoCuotas cuenta lo ya pagado', () => {
