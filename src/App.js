@@ -7,6 +7,7 @@ import { slaMeli } from "./slaShared";
 import { esDemoradoFlexit } from "./demoraTotalShared";
 import DemoraTotalCell from "./DemoraTotalCell";
 import HistorialLoader from "./HistorialLoader";
+import { FX_FONT } from "./theme";
 // recharts (~700KB con sus dependencias) va en un chunk aparte: antes viajaba en el bundle principal y
 // demoraba la carga de TODAS las pantallas, aunque solo estos 3 gráficos de Métricas lo usan (09/11).
 const GraficoTendencia = lazy(() => import("./GraficosMetricas").then((m) => ({ default: m.GraficoTendencia })));
@@ -106,7 +107,7 @@ const BRAND = {
   navy:    "#061225",
   navyMid: "rgba(10, 29, 53, 0.92)",
   navyCard:"rgba(13, 31, 55, 0.86)",
-  teal:    "#2ECFAA",
+  teal:    "#2EE6B6",
   blue:    "#3A8FD4",
   white:   "#FFFFFF",
   muted:   "rgba(255,255,255,0.62)", // contraste AA sobre navy (antes 0.5)
@@ -126,7 +127,7 @@ const APP_BACKGROUND = {
 
 // Skeleton de carga: feedback inmediato al cambiar de vista (evita la pantalla congelada)
 function VistaSkeleton() {
-  const bar = (w, h = 16) => ({ width: w, height: h, borderRadius: 8, background: "rgba(255,255,255,0.07)", animation: "flexitPulse 1.2s ease-in-out infinite" });
+  const bar = (w, h = 16) => ({ width: w, height: h, borderRadius: 10, background: "rgba(255,255,255,0.07)", animation: "flexitPulse 1.2s ease-in-out infinite" });
   return (
     <div aria-label="Cargando..." style={{ padding: "0.5rem 0" }}>
       <style>{`@keyframes flexitPulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }`}</style>
@@ -143,10 +144,10 @@ function VistaSkeleton() {
 const NAV_CSS = `
 .fx-nav{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.72);font-size:14px;font-weight:500;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit;transition:background-color .1s,color .1s,border-color .1s}
 .fx-nav i{font-size:18px;color:rgba(255,255,255,0.5);transition:color .1s}
-@media (hover:hover){.fx-nav:hover{background:rgba(255,255,255,0.05);color:#fff}.fx-nav:hover i{color:#2ECFAA}}
-.fx-nav:focus-visible{outline:none;border-color:rgba(46,207,170,0.45)}
-.fx-nav.on{background:rgba(46,207,170,0.1);border-color:rgba(46,207,170,0.25);color:#2ECFAA}
-.fx-nav.on i{color:#2ECFAA}
+@media (hover:hover){.fx-nav:hover{background:rgba(255,255,255,0.05);color:#fff}.fx-nav:hover i{color:#2EE6B6}}
+.fx-nav:focus-visible{outline:none;border-color:rgba(46,230,182,0.45)}
+.fx-nav.on{background:rgba(46,230,182,0.1);border-color:rgba(46,230,182,0.25);color:#2EE6B6}
+.fx-nav.on i{color:#2EE6B6}
 `;
 
 // Panel de navegación (compartido entre la sidebar fija de desktop y el overlay de mobile).
@@ -193,14 +194,14 @@ function NavPanel({ seccion, go, onBuscar, onClose, logo, comBadge = 0 }) {
     <>
       <style>{NAV_CSS}</style>
       <div onClick={() => go("home")} title="Ir al inicio" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1.25rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(255,255,255,0.08)", cursor: "pointer" }}>
-        <img src={logo} alt="Flexit" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 8 }} />
+        <img src={logo} alt="Flexit" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 10 }} />
         <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Flexit</span>
       </div>
       {puedeVer("envio") && (
-        <form onSubmit={buscar} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, border: `1px solid ${seccion === "envio" ? "rgba(46,207,170,0.45)" : "rgba(255,255,255,0.1)"}`, background: "rgba(0,0,0,0.2)", marginBottom: 4 }}>
+        <form onSubmit={buscar} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, border: `1px solid ${seccion === "envio" ? "rgba(46,230,182,0.45)" : "rgba(255,255,255,0.1)"}`, background: "rgba(0,0,0,0.2)", marginBottom: 4 }}>
           <i className="ti ti-search" style={{ fontSize: 16, color: "rgba(255,255,255,0.5)" }} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar envío…" aria-label="Buscar envío por tracking, ID o venta"
-            style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", color: "#fff", fontSize: 13.5, fontFamily: "inherit" }} />
+            style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", color: "#fff", fontSize: 14, fontFamily: "inherit" }} />
         </form>
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -214,7 +215,7 @@ function NavPanel({ seccion, go, onBuscar, onClose, logo, comBadge = 0 }) {
                 <i className={it.icon} />
                 {it.label}
                 {it.id === "pizarra" && comBadge > 0 && (
-                  <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: "#E24B4A", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{comBadge}</span>
+                  <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 10, background: "#E8615F", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{comBadge}</span>
                 )}
               </button>
             ))}
@@ -223,7 +224,7 @@ function NavPanel({ seccion, go, onBuscar, onClose, logo, comBadge = 0 }) {
       </div>
       {onClose && (
         <button onClick={onClose}
-          style={{ marginTop: "auto", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "none", color: "rgba(255,255,255,0.45)", fontSize: 13, cursor: "pointer" }}>
+          style={{ marginTop: "auto", padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "none", color: "rgba(255,255,255,0.45)", fontSize: 13, cursor: "pointer" }}>
           Cerrar ✕
         </button>
       )}
@@ -236,9 +237,9 @@ const SLA_AMARILLO = 95;
 
 function getSemaforo(sla) {
   if (sla === null) return { color: "#555577", bg: "rgba(85,85,119,0.15)", label: "SIN DATOS", emoji: "⚪" };
-  if (sla >= SLA_VERDE)    return { color: "#2ECFAA", bg: "rgba(46,207,170,0.15)", label: "OK",      emoji: "🟢" };
-  if (sla >= SLA_AMARILLO) return { color: "#EF9F27", bg: "rgba(239,159,39,0.15)", label: "RIESGO",  emoji: "🟡" };
-  return                          { color: "#E24B4A", bg: "rgba(226,75,74,0.15)",  label: "CRÍTICO", emoji: "🔴" };
+  if (sla >= SLA_VERDE)    return { color: "#2EE6B6", bg: "rgba(46,230,182,0.15)", label: "OK",      emoji: "🟢" };
+  if (sla >= SLA_AMARILLO) return { color: "#F5C044", bg: "rgba(245,192,68,0.15)", label: "RIESGO",  emoji: "🟡" };
+  return                          { color: "#E8615F", bg: "rgba(232,97,95,0.15)",  label: "CRÍTICO", emoji: "🔴" };
 }
 
 function evaluar(demorados, sla) {
@@ -605,18 +606,18 @@ function SemaforoCard({ m, onClick, selected }) {
       background: selected ? sem.bg : BRAND.navyCard,
       border: `1px solid ${selected ? sem.color : BRAND.border}`,
       borderLeft: `3px solid ${sem.color}`,
-      borderRadius: 12, padding: "1rem", cursor: "pointer", transition: "all 0.15s",
+      borderRadius: 14, padding: "1rem", cursor: "pointer", transition: "all 0.15s",
     }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
         <div style={{ fontSize:13, fontWeight:600, color:BRAND.white, lineHeight:1.3, flex:1, marginRight:8 }}>{m.cadete}</div>
         <div style={{ fontSize:18 }}>{sem.emoji}</div>
       </div>
-      <div style={{ fontSize:26, fontWeight:700, color:sem.color, marginBottom:6 }}>
+      <div style={{ fontFamily:FX_FONT.display, fontSize:26, fontWeight:700, color:sem.color, marginBottom:6 }}>
         {m.slaMeli !== null ? m.slaMeli.toFixed(1)+"%" : "—"}
       </div>
       <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
         <span style={{ fontSize:11, color:BRAND.muted }}>{m.cantidad} envíos</span>
-        {m.demorados > 0 && <span style={{ fontSize:11, color:"#E24B4A", fontWeight:600 }}>{m.demorados} dem.</span>}
+        {m.demorados > 0 && <span style={{ fontSize:11, color:"#E8615F", fontWeight:600 }}>{m.demorados} dem.</span>}
         {m.pendientes > 0 && <span style={{ fontSize:11, color:"#3A8FD4" }}>{m.pendientes} pend.</span>}
       </div>
       <div style={{ height:4, background:BRAND.faint, borderRadius:2, overflow:"hidden" }}>
@@ -626,12 +627,12 @@ function SemaforoCard({ m, onClick, selected }) {
   );
 }
 
-const ttStyle = { background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, fontSize:12, color:"#fff" };
+const ttStyle = { background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, fontSize:12, color:"#fff" };
 
 // Contador clickeable con el detalle de los envíos que lo componen y un botón para copiar las
 // direcciones. Lo usan las columnas "Demorados ML" y "Repro 21hs" — mismo comportamiento, distinto
 // rótulo y color, porque son dos listas que Alejo manda por separado.
-function DemoradosPopover({ detalle, count, cadete, acento = "#E24B4A", icono = "🔴", singular = "demorado", plural = "demorados" }) {
+function DemoradosPopover({ detalle, count, cadete, acento = "#E8615F", icono = "🔴", singular = "demorado", plural = "demorados" }) {
   const [show, setShow] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const ref = React.useRef(null);
@@ -662,7 +663,7 @@ function DemoradosPopover({ detalle, count, cadete, acento = "#E24B4A", icono = 
               <span style={{ color:acento, fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>{icono} {count} {count===1?singular:plural}</span>
               {cadete && <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginTop:4 }}>{cadete}</div>}
             </div>
-            <button onClick={copyAll} title="Copiar todas las direcciones" style={{ background:"none", border:"none", cursor:"pointer", color: copied ? "#2ECFAA" : "rgba(255,255,255,0.4)", fontSize:16, padding:"2px 4px", display:"flex", alignItems:"center" }}>
+            <button onClick={copyAll} title="Copiar todas las direcciones" style={{ background:"none", border:"none", cursor:"pointer", color: copied ? "#2EE6B6" : "rgba(255,255,255,0.4)", fontSize:16, padding:"2px 4px", display:"flex", alignItems:"center" }}>
               {copied ? "✓" : "⎘"}
             </button>
           </div>
@@ -697,25 +698,25 @@ function SinDatosBadge({ items }) {
     // Sin marginBottom: vive dentro de la fila de controles, que es la que separa del contenido.
     <div ref={ref} style={{ position:"relative", display:"inline-block" }}>
       <button onClick={() => setShow(s => !s)} title="Envíos sin dirección (cliente desvinculado) — tocar para ver detalle"
-        style={{ position:"relative", display:"inline-flex", alignItems:"center", justifyContent:"center", background: show ? "rgba(239,159,39,0.22)" : "rgba(239,159,39,0.12)", border:"1px solid rgba(239,159,39,0.5)", borderRadius:9, padding:8, color:"#EF9F27", cursor:"pointer", lineHeight:1 }}>
+        style={{ position:"relative", display:"inline-flex", alignItems:"center", justifyContent:"center", background: show ? "rgba(245,192,68,0.22)" : "rgba(245,192,68,0.12)", border:"1px solid rgba(245,192,68,0.5)", borderRadius:10, padding:8, color:"#F5C044", cursor:"pointer", lineHeight:1 }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block" }}>
           <path d="M12 9v4" />
           <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z" />
           <path d="M12 16h.01" />
         </svg>
-        <span style={{ position:"absolute", top:-7, right:-7, background:"#E24B4A", color:"#fff", fontSize:11, fontWeight:700, minWidth:18, height:18, borderRadius:9, display:"inline-flex", alignItems:"center", justifyContent:"center", padding:"0 4px", border:"2px solid #0D0D2B" }}>{items.length}</span>
+        <span style={{ position:"absolute", top:-7, right:-7, background:"#E8615F", color:"#fff", fontSize:11, fontWeight:700, minWidth:18, height:18, borderRadius:10, display:"inline-flex", alignItems:"center", justifyContent:"center", padding:"0 4px", border:"2px solid #0D0D2B" }}>{items.length}</span>
       </button>
       {show && (
-        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, background:"#0D0D2B", border:"1px solid rgba(239,159,39,0.4)", borderRadius:10, padding:"12px", zIndex:999, minWidth:270, maxWidth:360, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
+        <div style={{ position:"absolute", top:"calc(100% + 6px)", left:0, background:"#0D0D2B", border:"1px solid rgba(245,192,68,0.4)", borderRadius:10, padding:"12px", zIndex:999, minWidth:270, maxWidth:360, boxShadow:"0 8px 32px rgba(0,0,0,0.6)", fontSize:12 }}>
           <div style={{ color:"rgba(255,255,255,0.85)", fontSize:12, lineHeight:"1.45", marginBottom:10 }}>
-            <strong style={{ color:"#EF9F27" }}>{items.length} envío{items.length > 1 ? "s" : ""} sin dirección</strong> — cliente desvinculado de LightData. No cuentan como demora.
+            <strong style={{ color:"#F5C044" }}>{items.length} envío{items.length > 1 ? "s" : ""} sin dirección</strong> — cliente desvinculado de LightData. No cuentan como demora.
           </div>
-          <div style={{ color:"#EF9F27", fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Por cliente</div>
+          <div style={{ color:"#F5C044", fontWeight:700, fontSize:10, textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Por cliente</div>
           <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:240, overflowY:"auto" }}>
             {filas.map(([cliente, n]) => (
               <div key={cliente} style={{ display:"flex", justifyContent:"space-between", gap:10, padding:"6px 8px", borderRadius:6, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.06)" }}>
                 <span style={{ color:"rgba(255,255,255,0.85)", wordBreak:"break-word" }}>{cliente}</span>
-                <span style={{ color:"#EF9F27", fontWeight:700 }}>{n}</span>
+                <span style={{ color:"#F5C044", fontWeight:700 }}>{n}</span>
               </div>
             ))}
           </div>
@@ -734,7 +735,7 @@ function ThHeader({ label, col, tip, sortCol, sortDir, toggleSort }) {
       style={{ padding:"10px 14px", fontSize:11, fontWeight:600, color:sortCol===col?"#fff":"rgba(255,255,255,0.5)", textAlign:col==="cadete"?"left":"right", borderBottom:"1px solid rgba(255,255,255,0.1)", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:"0.05em", cursor:col!=="cadete"?"pointer":"default", userSelect:"none", background:sortCol===col?"rgba(255,255,255,0.08)":"transparent", position:"relative" }}>
       {label}{col!=="cadete" && <span style={{marginLeft:4, opacity:0.6}}>{sortCol===col?(sortDir==="asc"?"↑":"↓"):"↕"}</span>}
       {show && tip && (
-        <div style={{ position:"absolute", top:"calc(100% + 4px)", left:"50%", transform:"translateX(-50%)", background:"#0D0D2B", border:"1px solid rgba(46,207,170,0.4)", borderRadius:8, padding:"6px 10px", zIndex:200, minWidth:180, fontSize:11, color:"rgba(255,255,255,0.8)", fontWeight:400, textTransform:"none", letterSpacing:"normal", whiteSpace:"normal", pointerEvents:"none" }}>
+        <div style={{ position:"absolute", top:"calc(100% + 4px)", left:"50%", transform:"translateX(-50%)", background:"#0D0D2B", border:"1px solid rgba(46,230,182,0.4)", borderRadius:10, padding:"6px 10px", zIndex:200, minWidth:180, fontSize:11, color:"rgba(255,255,255,0.8)", fontWeight:400, textTransform:"none", letterSpacing:"normal", whiteSpace:"normal", pointerEvents:"none" }}>
           {tip}
         </div>
       )}
@@ -767,41 +768,41 @@ function TooltipKpi({ label, val, color, icon, tooltip, tooltipDem, tooltipInfo 
         <div style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}{tooltipInfo && " ⓘ"}</div>
         <i className={`ti ${icon}`} style={{ fontSize:16, color, opacity:0.7 }} />
       </div>
-      <div style={{ fontSize:26, fontWeight:700, color }}>{val}</div>
+      <div style={{ fontFamily:FX_FONT.display, fontSize:26, fontWeight:700, color }}>{val}</div>
       {show && tooltipInfo && <div role="tooltip" style={{ position:"absolute", top:"calc(100% + 8px)", left:0, width:280, maxWidth:"calc(100vw - 56px)", boxSizing:"border-box", background:BRAND.navy, color:BRAND.white, border:`1px solid ${BRAND.border}`, borderRadius:10, padding:14, zIndex:100, boxShadow:"0 8px 24px rgba(0,0,0,0.4)", fontSize:12, lineHeight:1.5 }}>{tooltipInfo}</div>}
       {show && tooltip && (
-        <div style={{ position:"absolute", top:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:BRAND.navy, border:`1px solid rgba(46,207,170,0.4)`, borderRadius:10, padding:"12px", zIndex:100, minWidth:220, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, padding:"8px 10px", background:"rgba(255,230,0,0.08)", border:"1px solid rgba(255,230,0,0.2)", borderRadius:8 }}>
+        <div style={{ position:"absolute", top:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:BRAND.navy, border:`1px solid rgba(46,230,182,0.4)`, borderRadius:10, padding:"12px", zIndex:100, minWidth:220, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, padding:"8px 10px", background:"rgba(255,230,0,0.08)", border:"1px solid rgba(255,230,0,0.2)", borderRadius:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <img src={ML_LOGO} alt="ML" style={{ width:22, height:22, objectFit:"contain", background:"#FFE600", borderRadius:4, padding:1 }} />
+              <img src={ML_LOGO} alt="ML" style={{ width:22, height:22, objectFit:"contain", background:"#FFE600", borderRadius:6, padding:1 }} />
               <span style={{ fontSize:13, fontWeight:500 }}>Mercado Libre</span>
             </div>
             <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:18, fontWeight:600, color:BRAND.white }}>{tooltip.ml.toLocaleString("es-AR")}</div>
+              <div style={{ fontFamily:FX_FONT.display, fontSize:18, fontWeight:600, color:BRAND.white }}>{tooltip.ml.toLocaleString("es-AR")}</div>
               <div style={{ fontSize:10, color:BRAND.muted }}>{tooltip.totalEnvios>0?(tooltip.ml/tooltip.totalEnvios*100).toFixed(1):0}%</div>
             </div>
           </div>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background:BRAND.faint, border:`1px solid ${BRAND.border}`, borderRadius:8 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background:BRAND.faint, border:`1px solid ${BRAND.border}`, borderRadius:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:22, height:22, objectFit:"contain", background:"white", borderRadius:4, padding:1 }} />
+              <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:22, height:22, objectFit:"contain", background:"white", borderRadius:6, padding:1 }} />
               <span style={{ fontSize:13, fontWeight:500 }}>Particulares</span>
             </div>
             <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:18, fontWeight:600, color:BRAND.white }}>{tooltip.particular.toLocaleString("es-AR")}</div>
+              <div style={{ fontFamily:FX_FONT.display, fontSize:18, fontWeight:600, color:BRAND.white }}>{tooltip.particular.toLocaleString("es-AR")}</div>
               <div style={{ fontSize:10, color:BRAND.muted }}>{tooltip.totalEnvios>0?(tooltip.particular/tooltip.totalEnvios*100).toFixed(1):0}%</div>
             </div>
           </div>
         </div>
       )}
       {show && tooltipDem && (
-        <div style={{ position:"absolute", top:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:BRAND.navy, border:`1px solid rgba(226,75,74,0.4)`, borderRadius:10, padding:"12px", zIndex:100, minWidth:200, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, padding:"8px 10px", background:"rgba(226,75,74,0.08)", border:"1px solid rgba(226,75,74,0.2)", borderRadius:8 }}>
+        <div style={{ position:"absolute", top:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:BRAND.navy, border:`1px solid rgba(232,97,95,0.4)`, borderRadius:10, padding:"12px", zIndex:100, minWidth:200, boxShadow:"0 8px 24px rgba(0,0,0,0.4)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, padding:"8px 10px", background:"rgba(232,97,95,0.08)", border:"1px solid rgba(232,97,95,0.2)", borderRadius:10 }}>
             <span style={{ fontSize:12, color:"rgba(255,255,255,0.7)" }}>Demorados ML</span>
-            <span style={{ fontSize:18, fontWeight:700, color:"#E24B4A" }}>{tooltipDem.demML}</span>
+            <span style={{ fontFamily:FX_FONT.display, fontSize:18, fontWeight:700, color:"#E8615F" }}>{tooltipDem.demML}</span>
           </div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:"rgba(226,75,74,0.05)", border:`1px solid rgba(226,75,74,0.15)`, borderRadius:8 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:"rgba(232,97,95,0.05)", border:`1px solid rgba(232,97,95,0.15)`, borderRadius:10 }}>
             <span style={{ fontSize:12, color:"rgba(255,255,255,0.7)" }}>Repro post 21hs</span>
-            <span style={{ fontSize:18, fontWeight:700, color:"#E24B4A" }}>{tooltipDem.dem21}</span>
+            <span style={{ fontFamily:FX_FONT.display, fontSize:18, fontWeight:700, color:"#E8615F" }}>{tooltipDem.dem21}</span>
           </div>
         </div>
       )}
@@ -1119,9 +1120,9 @@ export default function App() {
   const comparativa = rankingData.slice(0,25).map(m => ({ name:m.cadete, sla:m.slaMeli??0, color:getSemaforo(m.slaMeli).color }));
   const mesSlaMap = Object.fromEntries(mesDataActual.filter(m => m.slaMeli !== null).map(m => [m.cadete, m.slaMeli]));
 
-  const inp  = { padding:"7px 12px", fontSize:13, border:`1px solid ${BRAND.border}`, borderRadius:8, background:BRAND.faint, color:BRAND.white, outline:"none" };
-  const card = { background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:"1.25rem" };
-  const btn  = (active) => ({ padding:"5px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${active?"#2ECFAA":BRAND.border}`, background:active?"rgba(46,207,170,0.15)":BRAND.faint, color:active?"#2ECFAA":BRAND.muted });
+  const inp  = { padding:"7px 12px", fontSize:13, border:`1px solid ${BRAND.border}`, borderRadius:10, background:BRAND.faint, color:BRAND.white, outline:"none" };
+  const card = { background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:14, padding:"1.25rem" };
+  const btn  = (active) => ({ padding:"5px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${active?"#2EE6B6":BRAND.border}`, background:active?"rgba(46,230,182,0.15)":BRAND.faint, color:active?"#2EE6B6":BRAND.muted });
 
   // Toda la app pide usuario del equipo (antes, sin sesión se veía todo). Las páginas públicas
   // (colecta.html para clientes, choferes.html) son archivos aparte y no pasan por acá.
@@ -1146,18 +1147,18 @@ export default function App() {
       {showDateModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}
           onClick={()=>setShowDateModal(false)}>
-          <div style={{ background:"#0D0D2B", border:"1px solid rgba(46,207,170,0.4)", borderRadius:14, padding:"1.5rem", minWidth:280, boxShadow:"0 12px 40px rgba(0,0,0,0.7)" }}
+          <div style={{ background:"#0D0D2B", border:"1px solid rgba(46,230,182,0.4)", borderRadius:14, padding:"1.5rem", minWidth:280, boxShadow:"0 12px 40px rgba(0,0,0,0.7)" }}
             onClick={e=>e.stopPropagation()}>
             <div style={{ fontSize:15, fontWeight:700, marginBottom:16 }}>¿De qué fecha es el archivo?</div>
             <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)}
-              style={{ width:"100%", background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.15)", borderRadius:8, padding:"8px 12px", color:BRAND.white, fontSize:14, marginBottom:16, boxSizing:"border-box" }} />
+              style={{ width:"100%", background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.15)", borderRadius:10, padding:"8px 12px", color:BRAND.white, fontSize:14, marginBottom:16, boxSizing:"border-box" }} />
             <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
               <button onClick={()=>setShowDateModal(false)}
-                style={{ padding:"7px 16px", borderRadius:8, border:"1px solid rgba(255,255,255,0.15)", background:"none", color:BRAND.muted, cursor:"pointer", fontSize:13 }}>
+                style={{ padding:"7px 16px", borderRadius:10, border:"1px solid rgba(255,255,255,0.15)", background:"none", color:BRAND.muted, cursor:"pointer", fontSize:13 }}>
                 Cancelar
               </button>
               <button onClick={()=>{setShowDateModal(false);fileRef.current.click();}}
-                style={{ padding:"7px 16px", borderRadius:8, border:"none", background:"#2ECFAA", color:"#0D0D2B", cursor:"pointer", fontSize:13, fontWeight:700 }}>
+                style={{ padding:"7px 16px", borderRadius:10, border:"none", background:"#2EE6B6", color:"#0D0D2B", cursor:"pointer", fontSize:13, fontWeight:700 }}>
                 Elegir archivo
               </button>
             </div>
@@ -1170,7 +1171,7 @@ export default function App() {
         <div onClick={() => setSidebarOpen(false)}
           style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.68)", zIndex:1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, backgroundColor:BRAND.navy, backgroundImage:"radial-gradient(circle at 0% 0%, rgba(46,207,170,0.10), transparent 45%), radial-gradient(circle at 100% 85%, rgba(20,125,170,0.16), transparent 50%), linear-gradient(180deg, #08182D 0%, #050E1D 100%)", borderRight:`1px solid ${BRAND.border}`, boxShadow:"12px 0 40px rgba(0,0,0,0.35)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", overflowY:"auto", transform:"translateZ(0)", contain:"layout paint" }}>
+            style={{ position:"absolute", top:0, left:0, bottom:0, width:240, backgroundColor:BRAND.navy, backgroundImage:"radial-gradient(circle at 0% 0%, rgba(46,230,182,0.10), transparent 45%), radial-gradient(circle at 100% 85%, rgba(20,125,170,0.16), transparent 50%), linear-gradient(180deg, #08182D 0%, #050E1D 100%)", borderRight:`1px solid ${BRAND.border}`, boxShadow:"12px 0 40px rgba(0,0,0,0.35)", display:"flex", flexDirection:"column", padding:"1.5rem 1rem", overflowY:"auto", transform:"translateZ(0)", contain:"layout paint" }}>
             <NavPanel seccion={seccion} go={(s) => { setSeccion(s); setSidebarOpen(false); }} onBuscar={(t) => { abrirEnvio(t); setSidebarOpen(false); }} onClose={() => setSidebarOpen(false)} logo={FLEXIT_LOGO} comBadge={comNuevos} />
           </div>
         </div>
@@ -1180,14 +1181,14 @@ export default function App() {
       {seccion !== "home" && (<div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.5rem", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
         <button onClick={() => setSidebarOpen(true)} aria-label="Abrir menú"
-          style={{ width:40, height:40, borderRadius:9, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+          style={{ width:40, height:40, borderRadius:10, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.06)", color:"#fff", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           ☰
         </button>
-        <div style={{ width:44, height:44, borderRadius:12, flexShrink:0, overflow:"hidden" }}>
+        <div style={{ width:44, height:44, borderRadius:14, flexShrink:0, overflow:"hidden" }}>
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{enDividida ? "Devoluciones · Arribos" : seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "doblebulto" ? "Doble bulto" : seccion === "extraviados" ? "Extraviados y rotos" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
+          <div style={{ fontFamily:FX_FONT.display, fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{enDividida ? "Devoluciones · Arribos" : seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "doblebulto" ? "Doble bulto" : seccion === "extraviados" ? "Extraviados y rotos" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
           <div style={{ fontSize:13, color:BRAND.muted }}>{enDividida ? "Las dos pantallas a la vez · cada lado se mueve por separado" : seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "devoluciones" ? "Cancelados y cambios · calle, depósito y cliente" : seccion === "doblebulto" ? "Paquetes de más de un bulto para cobrar al cliente" : seccion === "extraviados" ? "Se descuentan al cliente y, si corresponde, al transportista" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
@@ -1195,14 +1196,14 @@ export default function App() {
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
           {puedeDividir && (
             <button onClick={() => cambiarDividida(!dividida)} title={dividida ? "Volver a una sola pantalla" : "Ver Devoluciones y Arribos lado a lado"}
-              style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 14px", borderRadius:10, border:`1px solid ${dividida ? "rgba(46,207,170,0.35)" : "rgba(255,255,255,0.12)"}`, background: dividida ? "rgba(46,207,170,0.1)" : "rgba(255,255,255,0.05)", color: dividida ? "#2ECFAA" : "#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 14px", borderRadius:10, border:`1px solid ${dividida ? "rgba(46,230,182,0.35)" : "rgba(255,255,255,0.12)"}`, background: dividida ? "rgba(46,230,182,0.1)" : "rgba(255,255,255,0.05)", color: dividida ? "#2EE6B6" : "#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
               <i className={dividida ? "ti ti-square" : "ti ti-layout-columns"} style={{ fontSize:16 }} />
               {dividida ? "Una sola pantalla" : vista === "devoluciones" ? "Dividir con Arribos" : "Dividir con Devoluciones"}
             </button>
           )}
           {!isMobile && vista === "metricas" && (<>
           <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){setPendingFile(f);setShowDateModal(true);}}} onDragOver={e=>e.preventDefault()} onClick={()=>xlsxReady&&!loading&&setShowDateModal(true)}
-            style={{ border:"1px solid #2ECFAA", borderRadius:8, padding:"6px 16px", cursor:xlsxReady&&!loading?"pointer":"wait", fontSize:12, color:"#2ECFAA", background:"rgba(46,207,170,0.08)", whiteSpace:"nowrap" }}>
+            style={{ border:"1px solid #2EE6B6", borderRadius:10, padding:"6px 16px", cursor:xlsxReady&&!loading?"pointer":"wait", fontSize:12, color:"#2EE6B6", background:"rgba(46,230,182,0.08)", whiteSpace:"nowrap" }}>
             <i className="ti ti-upload" style={{ fontSize:14, marginRight:6 }} />
             {!xlsxReady?"Cargando...":loading?(loadingMsg||"Procesando..."):"Subir Excel"}
             <input ref={fileRef} type="file" accept=".xls,.xlsx" style={{ display:"none" }} onChange={e=>{const f=e.target.files[0];if(f)onFile(f);e.target.value="";}} />
@@ -1255,16 +1256,16 @@ export default function App() {
       {vista === "usuarios" && <Suspense fallback={<VistaSkeleton />}><Usuarios /></Suspense>}
 
       {vista === "sin-acceso" && (
-        <div style={{ maxWidth: 440, margin: "3rem auto", textAlign: "center", padding: "2rem 1.5rem", borderRadius: 16, background: "rgba(27,28,46,0.72)", border: "1px solid rgba(255,255,255,0.07)" }}>
+        <div style={{ maxWidth: 440, margin: "3rem auto", textAlign: "center", padding: "2rem 1.5rem", borderRadius: 14, background: "rgba(27,28,46,0.72)", border: "1px solid rgba(255,255,255,0.07)" }}>
           <i className="ti ti-lock" style={{ fontSize: 30, color: "rgba(255,255,255,0.45)" }} />
           <div style={{ fontSize: 17, fontWeight: 600, margin: "10px 0 6px" }}>No tenés acceso a esta sección</div>
           <div style={{ fontSize: 13, color: BRAND.muted, marginBottom: 18 }}>Si la necesitás, pedile al administrador que te la habilite.</div>
-          <button onClick={() => setSeccion("home")} style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#2ECFAA", color: "#04150f", fontWeight: 700, cursor: "pointer" }}>Volver al inicio</button>
+          <button onClick={() => setSeccion("home")} style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#2EE6B6", color: "#04150f", fontWeight: 700, cursor: "pointer" }}>Volver al inicio</button>
         </div>
       )}
 
       {vista === "metricas" && (<>
-      {error && <div style={{ background:"rgba(226,75,74,0.15)", color:"#E24B4A", border:"1px solid rgba(226,75,74,0.3)", padding:"10px 14px", borderRadius:8, fontSize:13, marginBottom:"1rem" }}>{error}</div>}
+      {error && <div style={{ background:"rgba(232,97,95,0.15)", color:"#E8615F", border:"1px solid rgba(232,97,95,0.3)", padding:"10px 14px", borderRadius:10, fontSize:13, marginBottom:"1rem" }}>{error}</div>}
 
 
 
@@ -1276,7 +1277,7 @@ export default function App() {
             <div style={{ position:"relative" }} ref={historialRef}>
               <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                 <span style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.06em" }}>Semana:</span>
-                <button onClick={()=>setShowHistorial(h=>!h)} style={{ padding:"3px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${showHistorial?"rgba(46,207,170,0.8)":"#2ECFAA"}`, background:"rgba(46,207,170,0.15)", color:"#2ECFAA", display:"flex", alignItems:"center", gap:6 }}>
+                <button onClick={()=>setShowHistorial(h=>!h)} style={{ padding:"3px 14px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:`1px solid ${showHistorial?"rgba(46,230,182,0.8)":"#2EE6B6"}`, background:"rgba(46,230,182,0.15)", color:"#2EE6B6", display:"flex", alignItems:"center", gap:6 }}>
                   {semanaActiva || "—"}
                   <span style={{ fontSize:10, opacity:0.7 }}>{showHistorial ? "▲" : "▼"}</span>
                 </button>
@@ -1290,7 +1291,7 @@ export default function App() {
                 });
                 const anios = [...new Set(Object.keys(mesesConDatos).map(k=>k.slice(0,4)))].sort();
                 return (
-                  <div style={{position:"absolute",top:"calc(100% + 8px)",left:0,background:"#1A1A4A",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,zIndex:300,padding:12,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:240}}>
+                  <div style={{position:"absolute",top:"calc(100% + 8px)",left:0,background:"#1A1A4A",border:"1px solid rgba(255,255,255,0.15)",borderRadius:14,zIndex:300,padding:12,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:240}}>
                     {anios.map(anio=>(
                       <div key={anio}>
                         <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.08em"}}>{anio}</div>
@@ -1299,14 +1300,14 @@ export default function App() {
                             const k=`${anio}-${String(i+1).padStart(2,"0")}`;
                             const tiene=!!mesesConDatos[k];
                             const activo=mesActivo===k;
-                            return <button key={k} onClick={()=>tiene&&setMesActivo(activo?null:k)} style={{padding:"7px 2px",fontSize:12,fontWeight:600,borderRadius:8,cursor:tiene?"pointer":"default",border:`1px solid ${activo?"#2ECFAA":tiene?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.04)"}`,background:activo?"rgba(46,207,170,0.18)":"transparent",color:activo?"#2ECFAA":tiene?"#fff":"rgba(255,255,255,0.18)"}}>{m.toLowerCase()}.</button>;
+                            return <button key={k} onClick={()=>tiene&&setMesActivo(activo?null:k)} style={{padding:"7px 2px",fontSize:12,fontWeight:600,borderRadius:10,cursor:tiene?"pointer":"default",border:`1px solid ${activo?"#2EE6B6":tiene?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.04)"}`,background:activo?"rgba(46,230,182,0.18)":"transparent",color:activo?"#2EE6B6":tiene?"#fff":"rgba(255,255,255,0.18)"}}>{m.toLowerCase()}.</button>;
                           })}
                         </div>
                         {mesActivo&&mesActivo.startsWith(anio)&&mesesConDatos[mesActivo]&&(
                           <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:8,marginBottom:4}}>
                             {mesesConDatos[mesActivo].map(s=>(
                               <div key={s.label} onClick={()=>{setSemanaActiva(s.label);setCadeteSeleccionado(null);setDiaActivo(null);setShowHistorial(false);setMesActivo(null);}}
-                                style={{padding:"7px 10px",fontSize:13,cursor:"pointer",borderRadius:8,color:semanaActiva===s.label?"#2ECFAA":"#fff",background:semanaActiva===s.label?"rgba(46,207,170,0.1)":"transparent",fontWeight:semanaActiva===s.label?600:400}}>
+                                style={{padding:"7px 10px",fontSize:13,cursor:"pointer",borderRadius:10,color:semanaActiva===s.label?"#2EE6B6":"#fff",background:semanaActiva===s.label?"rgba(46,230,182,0.1)":"transparent",fontWeight:semanaActiva===s.label?600:400}}>
                                 {s.label}{semanaActiva===s.label&&" ✓"}
                               </div>
                             ))}
@@ -1323,7 +1324,7 @@ export default function App() {
                 <span style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.06em" }}>Día:</span>
                 <span style={{ position:"relative", display:"inline-flex", alignItems:"center", flexShrink:0 }}>
                 <select value={diaActivo || ""} onChange={e=>setDiaActivo(e.target.value || null)}
-                  style={{ appearance:"none", WebkitAppearance:"none", MozAppearance:"none", padding:"4px 24px 4px 10px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:"1px solid #2ECFAA", background:"rgba(46,207,170,0.15)", color:"#2ECFAA", outline:"none" }}>
+                  style={{ appearance:"none", WebkitAppearance:"none", MozAppearance:"none", padding:"4px 24px 4px 10px", fontSize:12, fontWeight:600, borderRadius:20, cursor:"pointer", border:"1px solid #2EE6B6", background:"rgba(46,230,182,0.15)", color:"#2EE6B6", outline:"none" }}>
                   <option value="" style={{background:"#141a2e",color:"#fff"}}>Todos los días</option>
                   {semana.dias.map(d => {
                     const p = d.fecha.split("-");
@@ -1332,7 +1333,7 @@ export default function App() {
                     return <option key={d.fecha} value={d.fecha} style={{background:"#141a2e",color:"#fff"}}>{dia} {p[2]}/{p[1]}</option>;
                   })}
                 </select>
-                <span style={{ position:"absolute", right:11, pointerEvents:"none", color:"#2ECFAA", fontSize:9 }}>▼</span>
+                <span style={{ position:"absolute", right:11, pointerEvents:"none", color:"#2EE6B6", fontSize:9 }}>▼</span>
                 </span>
               </div>
             )}
@@ -1342,8 +1343,8 @@ export default function App() {
 
       {acumulado.length === 0 ? (
         <div style={{ textAlign:"center", padding:"5rem 2rem", color:BRAND.muted }}>
-          <i className="ti ti-truck-delivery" style={{ fontSize:56, display:"block", marginBottom:16, color:"#2ECFAA", opacity:0.3 }} />
-          <div style={{ fontSize:18, fontWeight:600, color:BRAND.white, marginBottom:8 }}>Sin datos todavía</div>
+          <i className="ti ti-truck-delivery" style={{ fontSize:56, display:"block", marginBottom:16, color:"#2EE6B6", opacity:0.3 }} />
+          <div style={{ fontFamily:FX_FONT.display, fontSize:18, fontWeight:600, color:BRAND.white, marginBottom:8 }}>Sin datos todavía</div>
           <div style={{ fontSize:14 }}>Subí el Excel de LightData para comenzar</div>
         </div>
       ) : (
@@ -1354,7 +1355,7 @@ export default function App() {
             <>
               {/* SLA Meli — card grande featured en mobile */}
               {(() => {
-                const slaColor = slaPromedio !== null && slaPromedio >= 98 ? "#2ECFAA" : slaPromedio !== null && slaPromedio >= 95 ? "#EF9F27" : "#E24B4A";
+                const slaColor = slaPromedio !== null && slaPromedio >= 98 ? "#2EE6B6" : slaPromedio !== null && slaPromedio >= 95 ? "#F5C044" : "#E8615F";
                 const circ = 2 * Math.PI * 30;
                 const offset = slaPromedio !== null ? circ - (slaPromedio / 100) * circ : circ;
                 const sem = getSemaforo(slaPromedio);
@@ -1384,10 +1385,10 @@ export default function App() {
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:"1.5rem" }}>
                 <TooltipKpi label="Total envíos" val={totalEnvios} color={BRAND.white} icon="ti-package"
                   tooltip={{ml:totalML, particular:totalParticular, totalEnvios}} />
-                <TooltipKpi label="Entregados" val={totalEntregados} color="#2ECFAA" icon="ti-circle-check" />
+                <TooltipKpi label="Entregados" val={totalEntregados} color="#2EE6B6" icon="ti-circle-check" />
                 <TooltipKpi label="Pendientes" val={totalPendientes} color="#3A8FD4" icon="ti-clock" />
-                <TooltipKpi label="Demorados" val={totalDemorados} color="#E24B4A" icon="ti-alert-circle" tooltipDem={{demML: totalDemDia, dem21: totalDem21}} />
-                <TooltipKpi label="SLA Flexit" tooltipInfo="Porcentaje de envíos resueltos sobre el total de Mercado Libre y particulares. Fórmula: (total − pendientes) ÷ total × 100. Entregados y cancelados cuentan como resueltos. No mide entregas a horario. Cuanto más alto, mejor." val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
+                <TooltipKpi label="Demorados" val={totalDemorados} color="#E8615F" icon="ti-alert-circle" tooltipDem={{demML: totalDemDia, dem21: totalDem21}} />
+                <TooltipKpi label="SLA Flexit" tooltipInfo="Porcentaje de envíos resueltos sobre el total de Mercado Libre y particulares. Fórmula: (total − pendientes) ÷ total × 100. Entregados y cancelados cuentan como resueltos. No mide entregas a horario. Cuanto más alto, mejor." val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2EE6B6" : slaFlexit !== null && slaFlexit >= 90 ? "#F5C044" : "#E8615F"} icon="ti-chart-dots" />
                 <TooltipKpi label="Cadetes" val={acumulado.length} color={BRAND.muted} icon="ti-users" />
               </div>
             </>
@@ -1395,9 +1396,9 @@ export default function App() {
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:"1.5rem" }}>
               <TooltipKpi label="Total envíos" val={totalEnvios} color={BRAND.white} icon="ti-package"
                 tooltip={{ml:totalML, particular:totalParticular, totalEnvios}} />
-              <TooltipKpi label="Entregados" val={totalEntregados} color="#2ECFAA" icon="ti-circle-check" />
+              <TooltipKpi label="Entregados" val={totalEntregados} color="#2EE6B6" icon="ti-circle-check" />
               {(() => {
-                const slaColor = slaPromedio !== null && slaPromedio >= 98 ? "#2ECFAA" : slaPromedio !== null && slaPromedio >= 95 ? "#EF9F27" : "#E24B4A";
+                const slaColor = slaPromedio !== null && slaPromedio >= 98 ? "#2EE6B6" : slaPromedio !== null && slaPromedio >= 95 ? "#F5C044" : "#E8615F";
                 const circ = 2 * Math.PI * 28;
                 const offset = slaPromedio !== null ? circ - (slaPromedio / 100) * circ : circ;
                 return (
@@ -1418,14 +1419,14 @@ export default function App() {
                 );
               })()}
               <TooltipKpi label="Pendientes" val={totalPendientes} color="#3A8FD4" icon="ti-clock" />
-              <TooltipKpi label="Demorados" val={totalDemorados} color="#E24B4A" icon="ti-alert-circle" tooltipDem={{demML: totalDemDia, dem21: totalDem21}} />
-              <TooltipKpi label="SLA Flexit" tooltipInfo="Porcentaje de envíos resueltos sobre el total de Mercado Libre y particulares. Fórmula: (total − pendientes) ÷ total × 100. Entregados y cancelados cuentan como resueltos. No mide entregas a horario. Cuanto más alto, mejor." val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2ECFAA" : slaFlexit !== null && slaFlexit >= 90 ? "#EF9F27" : "#E24B4A"} icon="ti-chart-dots" />
+              <TooltipKpi label="Demorados" val={totalDemorados} color="#E8615F" icon="ti-alert-circle" tooltipDem={{demML: totalDemDia, dem21: totalDem21}} />
+              <TooltipKpi label="SLA Flexit" tooltipInfo="Porcentaje de envíos resueltos sobre el total de Mercado Libre y particulares. Fórmula: (total − pendientes) ÷ total × 100. Entregados y cancelados cuentan como resueltos. No mide entregas a horario. Cuanto más alto, mejor." val={slaFlexit !== null ? slaFlexit+"%" : "—"} color={slaFlexit !== null && slaFlexit >= 95 ? "#2EE6B6" : slaFlexit !== null && slaFlexit >= 90 ? "#F5C044" : "#E8615F"} icon="ti-chart-dots" />
               <TooltipKpi label="Cadetes" val={acumulado.length} color={BRAND.muted} icon="ti-users" />
             </div>
           ))}
 
           {tab !== "analisis" && criticos > 0 && (
-            <div style={{ background:"rgba(226,75,74,0.1)", border:"1px solid rgba(226,75,74,0.3)", borderRadius:10, padding:"10px 16px", marginBottom:"1rem", fontSize:13, color:"#E24B4A" }}>
+            <div style={{ background:"rgba(232,97,95,0.1)", border:"1px solid rgba(232,97,95,0.3)", borderRadius:10, padding:"10px 16px", marginBottom:"1rem", fontSize:13, color:"#E8615F" }}>
               <i className="ti ti-alert-circle" style={{ marginRight:8 }} />
               <strong>{criticos} cadete{criticos>1?"s":""} con SLA crítico</strong> — por debajo del 95%. Requieren atención inmediata.
             </div>
@@ -1438,7 +1439,7 @@ export default function App() {
               de los KPIs y los filtros — Alejo lo probó pegado al título y prefirió este lugar. */}
           <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:"1.25rem" }}>
             {!isMobile && (
-            <div style={{ display:"inline-flex", gap:4, padding:4, borderRadius:12, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
+            <div style={{ display:"inline-flex", gap:4, padding:4, borderRadius:14, background:"rgba(0,0,0,0.3)", border:`1px solid ${BRAND.border}` }}>
               {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"],["seguimiento","ti-message-check","Seguimiento"]].map(([key,icon,label]) => {
                 const on = tab === key;
                 return (
@@ -1447,11 +1448,11 @@ export default function App() {
                     // tenue, igual que "Todos" y los botones de rango. El borde se declara SIEMPRE
                     // (transparente cuando no está activo) para que la píldora no cambie de tamaño al
                     // cambiar de pestaña.
-                    style={{ display:"inline-flex", alignItems:"center", gap:7, height:38, padding:"0 20px", borderRadius:9,
+                    style={{ display:"inline-flex", alignItems:"center", gap:7, height:38, padding:"0 20px", borderRadius:10,
                       fontSize:14, fontWeight:700, cursor:"pointer",
-                      border:`1px solid ${on ? "rgba(46,207,170,0.45)" : "transparent"}`,
-                      background: on ? "rgba(46,207,170,0.16)" : "transparent",
-                      color: on ? "#2ECFAA" : BRAND.muted,
+                      border:`1px solid ${on ? "rgba(46,230,182,0.45)" : "transparent"}`,
+                      background: on ? "rgba(46,230,182,0.16)" : "transparent",
+                      color: on ? "#2EE6B6" : BRAND.muted,
                       transition:"background .15s ease, color .15s ease, border-color .15s ease" }}>
                     <i className={`ti ${icon}`} style={{ fontSize:15 }} />{label}
                   </button>
@@ -1466,7 +1467,7 @@ export default function App() {
           {isMobile && (
             <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#0D0D2B", borderTop:`1px solid ${BRAND.border}`, display:"flex", alignItems:"stretch", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
               {[["tabla","ti-table","Tabla"],["analisis","ti-chart-histogram","Análisis"],["seguimiento","ti-message-check","Seguimiento"]].map(([key,icon,label]) => (
-                <button key={key} onClick={()=>setTab(key)} style={{ flex:1, padding:"10px 4px 8px", fontSize:10, fontWeight:600, cursor:"pointer", border:"none", background:"none", color:tab===key?"#2ECFAA":BRAND.muted, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderTop:`2px solid ${tab===key?"#2ECFAA":"transparent"}` }}>
+                <button key={key} onClick={()=>setTab(key)} style={{ flex:1, padding:"10px 4px 8px", fontSize:10, fontWeight:600, cursor:"pointer", border:"none", background:"none", color:tab===key?"#2EE6B6":BRAND.muted, display:"flex", flexDirection:"column", alignItems:"center", gap:3, borderTop:`2px solid ${tab===key?"#2EE6B6":"transparent"}` }}>
                   <i className={`ti ${icon}`} style={{ fontSize:20 }} />
                   {label}
                 </button>
@@ -1478,7 +1479,7 @@ export default function App() {
           {tab==="ranking" && (
             <div style={{ display:"flex", flexDirection:"column", gap:"1.5rem" }}>
               <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
-                <div style={{ fontSize:18, fontWeight:700, color:BRAND.white }}>⚠️ Semáforo de Cadetes</div>
+                <div style={{ fontFamily:FX_FONT.display, fontSize:18, fontWeight:700, color:BRAND.white }}>⚠️ Semáforo de Cadetes</div>
                 <div style={{ display:"flex", gap:6 }}>
                   {[["semana","Esta semana"],["mes","Mes completo"]].map(([v,l])=>(
                     <button key={v} onClick={()=>setRankingVista(v)} style={btn(rankingVista===v)}>{l}</button>
@@ -1501,11 +1502,11 @@ export default function App() {
                         const mesSla = mesSlaMap[m.cadete];
                         const delta = (rankingVista === "semana" && mesSla !== undefined && m.slaMeli !== null) ? +(m.slaMeli - mesSla).toFixed(1) : null;
                         const trend = delta === null ? null : delta > 1 ? "↑" : delta < -1 ? "↓" : "→";
-                        const trendColor = trend === "↑" ? "#2ECFAA" : trend === "↓" ? "#E24B4A" : BRAND.muted;
+                        const trendColor = trend === "↑" ? "#2EE6B6" : trend === "↓" ? "#E8615F" : BRAND.muted;
                         return (
                           <div key={m.cadete} onClick={()=>setCadeteSeleccionado(isSelected?null:m.cadete)}
                             style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 12px", borderRadius:10, cursor:"pointer",
-                              background:isSelected?"rgba(46,207,170,0.1)":i%2===0?"rgba(255,255,255,0.02)":"transparent",
+                              background:isSelected?"rgba(46,230,182,0.1)":i%2===0?"rgba(255,255,255,0.02)":"transparent",
                               border:`1px solid ${isSelected?BRAND.teal:"transparent"}`,
                             }}
                           >
@@ -1515,19 +1516,19 @@ export default function App() {
                               <div style={{ fontSize:11, color:BRAND.muted, marginTop:3, display:"flex", gap:10, flexWrap:"wrap" }}>
                                 <span>📦 {m.cantidad} envíos</span>
                                 <span>✅ {m.cantidad - m.pendientes} entregados</span>
-                                <span style={{ color: m.demorados + (m.dem21||0) > 0 ? "#E24B4A" : BRAND.muted }}>🔴 {m.demorados + (m.dem21||0)} dem.</span>
+                                <span style={{ color: m.demorados + (m.dem21||0) > 0 ? "#E8615F" : BRAND.muted }}>🔴 {m.demorados + (m.dem21||0)} dem.</span>
                                 {(m.post21||0) > 0 && <span>🌙 {m.post21} post-21hs</span>}
                                 <span>🚚 {m.envios_ml} ML</span>
                               </div>
                             </div>
                             {trend && (
                               <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0, width:48, marginRight:4 }}>
-                                <div style={{ fontSize:20, color:trendColor, fontWeight:700, lineHeight:1 }}>{trend}</div>
+                                <div style={{ fontFamily:FX_FONT.display, fontSize:20, color:trendColor, fontWeight:700, lineHeight:1 }}>{trend}</div>
                                 <div style={{ fontSize:10, color:trendColor, fontWeight:600 }}>{delta > 0 ? "+" : ""}{delta}%</div>
                                 <div style={{ fontSize:9, color:BRAND.muted, opacity:0.7 }}>vs mes</div>
                               </div>
                             )}
-                            <div style={{ background:sem.bg, color:sem.color, borderRadius:8, padding:"5px 14px", fontSize:14, fontWeight:700, flexShrink:0, textAlign:"center", minWidth:72 }}>
+                            <div style={{ background:sem.bg, color:sem.color, borderRadius:10, padding:"5px 14px", fontSize:14, fontWeight:700, flexShrink:0, textAlign:"center", minWidth:72 }}>
                               {m.slaMeli !== null ? m.slaMeli.toFixed(1)+"%" : "—"}
                               <div style={{ fontSize:9, fontWeight:500, marginTop:1, opacity:0.8 }}>{sem.label}</div>
                             </div>
@@ -1543,7 +1544,7 @@ export default function App() {
                           <div style={{ fontSize:11, fontWeight:600, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.06em" }}>Evolución SLA Meli</div>
                           <div style={{ fontSize:16, fontWeight:700, color:BRAND.white, marginTop:2 }}>{cadeteSeleccionado}</div>
                         </div>
-                        <button onClick={()=>setCadeteSeleccionado(null)} style={{ background:BRAND.faint, border:`1px solid ${BRAND.border}`, borderRadius:8, padding:"4px 12px", fontSize:12, color:BRAND.muted, cursor:"pointer" }}>
+                        <button onClick={()=>setCadeteSeleccionado(null)} style={{ background:BRAND.faint, border:`1px solid ${BRAND.border}`, borderRadius:10, padding:"4px 12px", fontSize:12, color:BRAND.muted, cursor:"pointer" }}>
                           Cerrar
                         </button>
                       </div>
@@ -1558,7 +1559,7 @@ export default function App() {
                       <Suspense fallback={null}><GraficoComparativa data={comparativa} ttStyle={ttStyle} /></Suspense>
                     </div>
                     <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginTop:12 }}>
-                      {[["#2ECFAA","OK (≥98%)"],["#EF9F27","En riesgo (95–98%)"],["#E24B4A","Crítico (<95%)"]].map(([c,l])=>(
+                      {[["#2EE6B6","OK (≥98%)"],["#F5C044","En riesgo (95–98%)"],["#E8615F","Crítico (<95%)"]].map(([c,l])=>(
                         <span key={l} style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:BRAND.muted }}>
                           <span style={{ width:10, height:10, borderRadius:2, background:c, display:"inline-block" }} />{l}
                         </span>
@@ -1606,18 +1607,18 @@ export default function App() {
                     <TooltipKpi label="Total envíos" val={totalEnviosMes.toLocaleString("es-AR")} color={BRAND.white} icon="ti-package"
                       tooltip={{ ml: totalMLMes, particular: totalParticularMes, totalEnvios: totalEnviosMes }} />
                     {[
-                      ["Demorados", totalDemoradosMes, "#E24B4A", "ti-alert-circle"],
-                      ["SLA Meli", slaPromedioMes !== null ? slaPromedioMes.toFixed(1)+"%" : "—", slaPromedioMes !== null && slaPromedioMes >= 98 ? "#2ECFAA" : slaPromedioMes !== null && slaPromedioMes >= 95 ? "#EF9F27" : "#E24B4A", "ti-chart-bar"],
-                      ["Críticos", criticosMes.length, "#E24B4A", "ti-users"],
-                      ["OK ≥98%", okMes.length, "#2ECFAA", "ti-circle-check"],
-                      ["Reincidentes", reincidentes.length, "#EF9F27", "ti-repeat"],
+                      ["Demorados", totalDemoradosMes, "#E8615F", "ti-alert-circle"],
+                      ["SLA Meli", slaPromedioMes !== null ? slaPromedioMes.toFixed(1)+"%" : "—", slaPromedioMes !== null && slaPromedioMes >= 98 ? "#2EE6B6" : slaPromedioMes !== null && slaPromedioMes >= 95 ? "#F5C044" : "#E8615F", "ti-chart-bar"],
+                      ["Críticos", criticosMes.length, "#E8615F", "ti-users"],
+                      ["OK ≥98%", okMes.length, "#2EE6B6", "ti-circle-check"],
+                      ["Reincidentes", reincidentes.length, "#F5C044", "ti-repeat"],
                     ].map(([label,val,color,icon]) => (
                       <div key={label} className="fx-glass" style={{ ...card, padding:"1rem" }}>
                         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                           <div style={{ fontSize:11, color:BRAND.muted, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</div>
                           <i className={`ti ${icon}`} style={{ fontSize:16, color, opacity:0.7 }} />
                         </div>
-                        <div style={{ fontSize:26, fontWeight:500, color }}>{val}</div>
+                        <div style={{ fontFamily:FX_FONT.display, fontSize:26, fontWeight:500, color }}>{val}</div>
                       </div>
                     ))}
                   </div>
@@ -1636,13 +1637,13 @@ export default function App() {
                   {/* Reincidentes */}
                   {reincidentes.length > 0 && (
                     <div style={card}>
-                      <div style={{ fontSize:11, fontWeight:600, color:BRAND.muted, marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"0.06em" }}>Reincidentes — demoras 3+ días <i className="ti ti-repeat" style={{ fontSize:13, color:"#EF9F27" }} /></div>
+                      <div style={{ fontSize:11, fontWeight:600, color:BRAND.muted, marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"0.06em" }}>Reincidentes — demoras 3+ días <i className="ti ti-repeat" style={{ fontSize:13, color:"#F5C044" }} /></div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:10 }}>
                         {reincidentes.map(m => (
-                          <div key={m.cadete} style={{ background:"rgba(226,75,74,0.08)", border:"1px solid rgba(226,75,74,0.2)", borderRadius:8, padding:"10px 14px" }}>
+                          <div key={m.cadete} style={{ background:"rgba(232,97,95,0.08)", border:"1px solid rgba(232,97,95,0.2)", borderRadius:10, padding:"10px 14px" }}>
                             <div style={{ fontSize:13, fontWeight:500, color:BRAND.white }}>{m.cadete}</div>
                             <div style={{ fontSize:11, color:BRAND.muted, marginTop:2 }}>{m.dias_con_demora} días con demoras</div>
-                            <div style={{ fontSize:20, fontWeight:500, color:"#E24B4A", marginTop:4 }}>{m.demorados} dem.</div>
+                            <div style={{ fontFamily:FX_FONT.display, fontSize:20, fontWeight:500, color:"#E8615F", marginTop:4 }}>{m.demorados} dem.</div>
                           </div>
                         ))}
                       </div>
@@ -1651,7 +1652,7 @@ export default function App() {
 
                   {/* Sin asignar del mes */}
                   {mesData.find(m => m.cadete.includes("Sin asignar")) && (
-                    <div style={{ background:"rgba(226,75,74,0.1)", border:"1px solid rgba(226,75,74,0.3)", borderRadius:10, padding:"10px 16px", fontSize:13, color:"#E24B4A" }}>
+                    <div style={{ background:"rgba(232,97,95,0.1)", border:"1px solid rgba(232,97,95,0.3)", borderRadius:10, padding:"10px 16px", fontSize:13, color:"#E8615F" }}>
                       <i className="ti ti-alert-circle" style={{ marginRight:8 }} />
                       <strong>{mesData.find(m=>m.cadete.includes("Sin asignar"))?.cantidad} envíos sin cadete asignado</strong> en el mes — revisar asignación
                     </div>
@@ -1683,15 +1684,15 @@ export default function App() {
               <div style={{ display:"flex", gap:12, marginBottom:"0.85rem", flexWrap:"wrap", alignItems:"center" }}>
                 <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
                   {[["todos","Todos",null,acumulado.length,"Ver todos los cadetes"],
-                    ["critico","críticos","#E24B4A",criticos,"SLA Meli por debajo del 95%"],
-                    ["riesgo","en riesgo","#EF9F27",enRiesgo,"SLA Meli entre 95% y 98%"],
-                    ["ok","OK","#2ECFAA",enOk,"SLA Meli 98% o más"]].map(([key,label,color,n,tip]) => {
+                    ["critico","críticos","#E8615F",criticos,"SLA Meli por debajo del 95%"],
+                    ["riesgo","en riesgo","#F5C044",enRiesgo,"SLA Meli entre 95% y 98%"],
+                    ["ok","OK","#2EE6B6",enOk,"SLA Meli 98% o más"]].map(([key,label,color,n,tip]) => {
                     const on = filtro===key;
                     return (
                       <button key={key} type="button" title={tip}
                         onClick={()=>setFiltro(on && key!=="todos" ? "todos" : key)}
                         style={{ display:"inline-flex", alignItems:"center", gap:6, padding:0, border:"none",
-                          background:"none", cursor:"pointer", fontSize:11.5, whiteSpace:"nowrap",
+                          background:"none", cursor:"pointer", fontSize:12, whiteSpace:"nowrap",
                           color: on ? (color || "#fff") : "rgba(255,255,255,0.38)",
                           transition:"color .15s ease" }}>
                         {color && <span style={{ width:7, height:7, borderRadius:"50%", background:color, display:"block",
@@ -1706,18 +1707,18 @@ export default function App() {
 
                 <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>
                 {diaActivo && (
-                  <button onClick={()=>setShowRuteo(r=>!r)} style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showRuteo?"#2ECFAA":BRAND.border}`, background:showRuteo?"rgba(46,207,170,0.15)":BRAND.faint, color:showRuteo?"#2ECFAA":BRAND.muted, flexShrink:0 }}>
+                  <button onClick={()=>setShowRuteo(r=>!r)} style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showRuteo?"#2EE6B6":BRAND.border}`, background:showRuteo?"rgba(46,230,182,0.15)":BRAND.faint, color:showRuteo?"#2EE6B6":BRAND.muted, flexShrink:0 }}>
                     🗺️ {showRuteo ? "Ocultar ruteo" : "Ver ruteo"}
                   </button>
                 )}
-                <button type="button" aria-expanded={showExtras} onClick={()=>setShowExtras(v=>!v)} style={{ padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showExtras ? "#2ECFAA" : BRAND.border}`, background:showExtras ? "rgba(46,207,170,0.15)" : BRAND.faint, color:showExtras ? "#2ECFAA" : BRAND.muted }}>
+                <button type="button" aria-expanded={showExtras} onClick={()=>setShowExtras(v=>!v)} style={{ padding:"8px 20px", fontSize:14, fontWeight:600, borderRadius:20, cursor:"pointer", border:`2px solid ${showExtras ? "#2EE6B6" : BRAND.border}`, background:showExtras ? "rgba(46,230,182,0.15)" : BRAND.faint, color:showExtras ? "#2EE6B6" : BRAND.muted }}>
                   Extras {showExtras ? "▴" : "▾"}
                 </button>
                 </div>
               </div>
 
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
-                <div style={{ flex:1, overflowX:"auto", borderRadius:12, border:`1px solid ${BRAND.border}` }}>
+                <div style={{ flex:1, overflowX:"auto", borderRadius:14, border:`1px solid ${BRAND.border}` }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", minWidth:620 }}>
                   <thead>
                     <tr style={{ background:BRAND.navyMid }}>
@@ -1733,19 +1734,19 @@ export default function App() {
                     {filtrados.map((m,i)=>{
                       const sem = getSemaforo(m.slaMeli);
                       return (
-                        <tr key={m.cadete} onMouseEnter={()=>setHoveredRow(i)} onMouseLeave={()=>setHoveredRow(null)} style={{ background:hoveredRow===i?"rgba(46,207,170,0.12)":i%2===0?BRAND.navyCard:BRAND.navy, borderLeft:`3px solid ${sem.color}`, height:44, transition:"background 0.1s" }}>
+                        <tr key={m.cadete} onMouseEnter={()=>setHoveredRow(i)} onMouseLeave={()=>setHoveredRow(null)} style={{ background:hoveredRow===i?"rgba(46,230,182,0.12)":i%2===0?BRAND.navyCard:BRAND.navy, borderLeft:`3px solid ${sem.color}`, height:44, transition:"background 0.1s" }}>
                           <td style={{ padding:"10px 14px", width:30, borderBottom:`1px solid ${BRAND.border}` }}>
                             <span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:sem.color }} />
                           </td>
                           <td style={{ padding:"10px 14px", fontSize:13, fontWeight:500, color:BRAND.white, borderBottom:`1px solid ${BRAND.border}` }}>{m.cadete}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:BRAND.white, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.cantidad}</td>
-                          <td style={{ padding:"10px 14px", fontSize:13, color:"#2ECFAA", borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.cantidad-m.pendientes}</td>
+                          <td style={{ padding:"10px 14px", fontSize:13, color:"#2EE6B6", borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.cantidad-m.pendientes}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, color:m.pendientes>0?"#3A8FD4":BRAND.muted, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.pendientes}</td>
                           <td style={{ padding:"10px 14px", fontSize:13, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}><DemoradosPopover count={m.demorados} detalle={m.demoradosDetalle} cadete={m.cadete} /></td>
                           <td style={{ padding:"10px 14px", fontSize:13, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>
-                            <DemoradosPopover count={m.dem21||0} detalle={m.dem21Detalle} cadete={m.cadete} acento="#EF9F27" icono="🟠" singular="repro 21hs" plural="repro 21hs" />
+                            <DemoradosPopover count={m.dem21||0} detalle={m.dem21Detalle} cadete={m.cadete} acento="#F5C044" icono="🟠" singular="repro 21hs" plural="repro 21hs" />
                           </td>
-                          <td style={{ padding:"10px 14px", fontSize:13, color:(m.post21||0)>0?"#EF9F27":BRAND.muted, fontWeight:(m.post21||0)>0?600:400, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.post21||0}</td>
+                          <td style={{ padding:"10px 14px", fontSize:13, color:(m.post21||0)>0?"#F5C044":BRAND.muted, fontWeight:(m.post21||0)>0?600:400, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.post21||0}</td>
 
                           <td style={{ padding:"10px 14px", fontSize:13, color:BRAND.muted, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.pctEntrega.toFixed(1)}%</td>
                           <td style={{ padding:"10px 14px", fontSize:13, fontWeight:700, color:sem.color, borderBottom:`1px solid ${BRAND.border}`, textAlign:"right" }}>{m.slaMeli!==null?m.slaMeli.toFixed(1)+"%":"—"}</td>
@@ -1760,12 +1761,12 @@ export default function App() {
 
               {/* Tabla Ruteo al lado */}
               {showRuteo && diaActivo && (
-                <div style={{ borderRadius:12, border:`1px solid rgba(46,207,170,0.3)`, background:"rgba(46,207,170,0.03)", flexShrink:0 }}>
+                <div style={{ borderRadius:14, border:`1px solid rgba(46,230,182,0.3)`, background:"rgba(46,230,182,0.03)", flexShrink:0 }}>
                   <table style={{ borderCollapse:"collapse" }}>
                     <thead>
-                      <tr style={{ background:"rgba(46,207,170,0.08)" }}>
+                      <tr style={{ background:"rgba(46,230,182,0.08)" }}>
                         {["Inicio","Fin","Dur."].map(h=>(
-                          <th key={h} style={{ padding:"10px 12px", fontSize:11, fontWeight:600, color:"#2ECFAA", textAlign:"right", borderBottom:`1px solid rgba(46,207,170,0.2)`, textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>{h}</th>
+                          <th key={h} style={{ padding:"10px 12px", fontSize:11, fontWeight:600, color:"#2EE6B6", textAlign:"right", borderBottom:`1px solid rgba(46,230,182,0.2)`, textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1773,14 +1774,14 @@ export default function App() {
                       {filtrados.map((m,i)=>{
                         const toMin = t => { const [h,min] = t.split(':').map(Number); return h*60+min; };
                         const diff = m.inicio_ruta && m.fin_ruta ? toMin(m.fin_ruta) - toMin(m.inicio_ruta) : 0;
-                        const durColor = m.fin_ruta>="21:00"?"#E24B4A":m.fin_ruta>="20:00"?"#EF9F27":"#2ECFAA";
-                        const durBg = m.fin_ruta>="21:00"?"rgba(226,75,74,0.15)":m.fin_ruta>="20:00"?"rgba(239,159,39,0.15)":"rgba(46,207,170,0.15)";
+                        const durColor = m.fin_ruta>="21:00"?"#E8615F":m.fin_ruta>="20:00"?"#F5C044":"#2EE6B6";
+                        const durBg = m.fin_ruta>="21:00"?"rgba(232,97,95,0.15)":m.fin_ruta>="20:00"?"rgba(245,192,68,0.15)":"rgba(46,230,182,0.15)";
                         return (
-                          <tr key={m.cadete} onMouseEnter={()=>setHoveredRow(i)} onMouseLeave={()=>setHoveredRow(null)} style={{ borderBottom:`1px solid rgba(46,207,170,0.1)`, height:44, background:hoveredRow===i?"rgba(46,207,170,0.15)":"transparent", transition:"background 0.1s" }}>
+                          <tr key={m.cadete} onMouseEnter={()=>setHoveredRow(i)} onMouseLeave={()=>setHoveredRow(null)} style={{ borderBottom:`1px solid rgba(46,230,182,0.1)`, height:44, background:hoveredRow===i?"rgba(46,230,182,0.15)":"transparent", transition:"background 0.1s" }}>
                             <td style={{ padding:"10px 12px", fontSize:13, color:BRAND.muted, textAlign:"right" }}>{m.inicio_ruta?m.inicio_ruta.slice(0,5):"—"}</td>
-                            <td style={{ padding:"10px 12px", fontSize:13, color:m.fin_ruta&&m.fin_ruta>="21:00"?"#E24B4A":BRAND.muted, fontWeight:m.fin_ruta&&m.fin_ruta>="21:00"?600:400, textAlign:"right" }}>{m.fin_ruta?m.fin_ruta.slice(0,5):"—"}</td>
+                            <td style={{ padding:"10px 12px", fontSize:13, color:m.fin_ruta&&m.fin_ruta>="21:00"?"#E8615F":BRAND.muted, fontWeight:m.fin_ruta&&m.fin_ruta>="21:00"?600:400, textAlign:"right" }}>{m.fin_ruta?m.fin_ruta.slice(0,5):"—"}</td>
                             <td style={{ padding:"10px 12px", textAlign:"right" }}>
-                              {diff>0?<span style={{ display:"inline-block", padding:"2px 8px", borderRadius:12, fontSize:12, fontWeight:600, color:durColor, background:durBg }}>{Math.floor(diff/60)}h {diff%60}m</span>:<span style={{color:BRAND.muted}}>—</span>}
+                              {diff>0?<span style={{ display:"inline-block", padding:"2px 8px", borderRadius:14, fontSize:12, fontWeight:600, color:durColor, background:durBg }}>{Math.floor(diff/60)}h {diff%60}m</span>:<span style={{color:BRAND.muted}}>—</span>}
                             </td>
                           </tr>
                         );

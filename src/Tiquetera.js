@@ -1,6 +1,7 @@
 // build: tiquetera 11 — login con Supabase Auth (email+contraseña por persona)
 import { useState, useEffect, useCallback, useRef } from "react";
 import { login, logout, getSession, authedFetch, getToken } from "./auth";
+import { FX_FONT } from "./theme";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -72,17 +73,17 @@ function comoEncontro(caso, envio) {
 
 function colorEstado(e) {
   const s = String(e || "");
-  if (/entregado/i.test(s) && !/no entregado/i.test(s)) return "#2ECFAA";
-  if (/(no entregado|cancelado|devuelto|nadie)/i.test(s)) return "#E24B4A";
-  return "#FFB020";
+  if (/entregado/i.test(s) && !/no entregado/i.test(s)) return "#2EE6B6";
+  if (/(no entregado|cancelado|devuelto|nadie)/i.test(s)) return "#E8615F";
+  return "#F5C044";
 }
 
 const S_SEC = { fontSize: 10, letterSpacing: ".11em", textTransform: "uppercase", color: "rgba(255,255,255,0.34)", fontWeight: 800, marginBottom: 8 };
 const S_CHIP = { display: "flex", alignItems: "flex-start", gap: 9, borderRadius: 10, padding: "10px 12px", marginBottom: 14 };
 const CHIP_COLOR = {
-  ok:    { bg: "rgba(46,207,170,0.10)",  bd: "rgba(46,207,170,0.30)",  c: "#2ECFAA", ic: "🟢" },
-  medio: { bg: "rgba(255,176,32,0.09)",  bd: "rgba(255,176,32,0.30)",  c: "#FFB020", ic: "🟡" },
-  no:    { bg: "rgba(226,75,74,0.09)",   bd: "rgba(226,75,74,0.28)",   c: "#ff8b8a", ic: "🔴" },
+  ok:    { bg: "rgba(46,230,182,0.10)",  bd: "rgba(46,230,182,0.30)",  c: "#2EE6B6", ic: "🟢" },
+  medio: { bg: "rgba(245,192,68,0.09)",  bd: "rgba(245,192,68,0.30)",  c: "#F5C044", ic: "🟡" },
+  no:    { bg: "rgba(232,97,95,0.09)",   bd: "rgba(232,97,95,0.28)",   c: "#ff8b8a", ic: "🔴" },
 };
 function ChipMatch({ nivel, txt, det }) {
   const k = CHIP_COLOR[nivel] || CHIP_COLOR.medio;
@@ -91,7 +92,7 @@ function ChipMatch({ nivel, txt, det }) {
       <span style={{ fontSize: 15, lineHeight: 1.2 }}>{k.ic}</span>
       <div>
         <div style={{ fontSize: 13, fontWeight: 700, color: k.c }}>{txt}</div>
-        {det && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", marginTop: 2, lineHeight: 1.5 }}>{det}</div>}
+        {det && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 2, lineHeight: 1.5 }}>{det}</div>}
       </div>
     </div>
   );
@@ -99,7 +100,7 @@ function ChipMatch({ nivel, txt, det }) {
 function Fila({ k, v, mono }) {
   if (!v) return null;
   return (<>
-    <dt style={{ color: "rgba(255,255,255,0.34)", fontSize: 11.5 }}>{k}</dt>
+    <dt style={{ color: "rgba(255,255,255,0.34)", fontSize: 12 }}>{k}</dt>
     <dd style={{ margin: 0, color: "#e8ecf7", wordBreak: "break-word", ...(mono ? { fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12 } : {}) }}>{v}</dd>
   </>);
 }
@@ -197,12 +198,12 @@ function PanelEnvio({ caso }) {
       {match && <ChipMatch nivel={match.nivel} txt={match.txt} det={match.det} />}
       {!match && data && <ChipMatch nivel="medio" txt="Envío guardado en el caso" det="Ya no está en la caché: se muestra lo que quedó registrado." />}
 
-      <div style={S_SEC}>Envío {envioId}{e && e.origen ? <span style={{ marginLeft: 8, padding: "1px 7px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.6)", textTransform: "none", letterSpacing: 0 }}>{e.origen}</span> : null}</div>
+      <div style={S_SEC}>Envío {envioId}{e && e.origen ? <span style={{ marginLeft: 8, padding: "1px 7px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.6)", textTransform: "none", letterSpacing: 0 }}>{e.origen}</span> : null}</div>
       {e ? (<>
         <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.3px", color: colorEstado(e.estado) }}>{e.estado || "Sin estado"}</div>
-        {e.fecha_estado && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.34)", marginBottom: 13 }}>{e.fecha_estado}</div>}
-        <dl style={{ display: "grid", gridTemplateColumns: "88px 1fr", gap: "6px 10px", fontSize: 12.5, alignItems: "baseline", margin: 0 }}>
-          <Fila k="Cadete" v={e.cadete ? <b style={{ color: "#fff" }}>🛵 {e.cadete}</b> : <span style={{ color: "#FFB020" }}>sin asignar</span>} />
+        {e.fecha_estado && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.34)", marginBottom: 13 }}>{e.fecha_estado}</div>}
+        <dl style={{ display: "grid", gridTemplateColumns: "88px 1fr", gap: "6px 10px", fontSize: 13, alignItems: "baseline", margin: 0 }}>
+          <Fila k="Cadete" v={e.cadete ? <b style={{ color: "#fff" }}>🛵 {e.cadete}</b> : <span style={{ color: "#F5C044" }}>sin asignar</span>} />
           <Fila k="Vendedor" v={[e.razon_social, e.cod_cliente].filter(Boolean).join(" · ")} />
           <Fila k="Destinatario" v={e.nombre} />
           <Fila k="Dirección" v={[e.direccion, e.localidad, e.cp ? `CP ${e.cp}` : ""].filter(Boolean).join(", ")} />
@@ -214,7 +215,7 @@ function PanelEnvio({ caso }) {
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <a href={`tel:${String(e.telefono).replace(/[^\d+]/g, "")}`} style={{ color: "#fff", fontWeight: 600, textDecoration: "none" }}>{e.telefono}</a>
               <button onClick={() => { try { navigator.clipboard.writeText(String(e.telefono)); } catch (err) { /* sin portapapeles */ } }}
-                style={{ background: "none", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)", borderRadius: 7, fontSize: 11, padding: "2px 8px", cursor: "pointer" }}>Copiar</button>
+                style={{ background: "none", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.7)", borderRadius: 6, fontSize: 11, padding: "2px 8px", cursor: "pointer" }}>Copiar</button>
             </span>) : <span style={{ color: "rgba(255,255,255,0.34)" }}>No informado</span>} />
           {(() => {
             // "Juan Pérez DNI: 30123456" → quién recibió y DNI por separado (mismo criterio que la extensión).
@@ -229,7 +230,7 @@ function PanelEnvio({ caso }) {
           })()}
         </dl>
       </>) : (
-        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
           {caso.cadete ? <>Cadete registrado en el caso: <b style={{ color: "#fff" }}>{caso.cadete}</b><br /></> : null}
           {data && data.error ? data.error : "Sin datos del envío."}
         </div>
@@ -241,27 +242,27 @@ function PanelEnvio({ caso }) {
           {data.historial.map((h, i) => {
             const ult = i === data.historial.length - 1;
             return (
-              <div key={i} style={{ display: "flex", gap: 9, alignItems: "baseline", padding: "5px 0", fontSize: 12.5 }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", flex: "0 0 auto", position: "relative", top: -2, background: ult ? "#2ECFAA" : "rgba(255,255,255,0.22)", boxShadow: ult ? "0 0 0 3px rgba(46,207,170,0.18)" : "none" }} />
+              <div key={i} style={{ display: "flex", gap: 9, alignItems: "baseline", padding: "5px 0", fontSize: 13 }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", flex: "0 0 auto", position: "relative", top: -2, background: ult ? "#2EE6B6" : "rgba(255,255,255,0.22)", boxShadow: ult ? "0 0 0 3px rgba(46,230,182,0.18)" : "none" }} />
                 <span style={{ flex: 1, color: ult ? "#fff" : "rgba(255,255,255,0.8)", fontWeight: ult ? 700 : 400 }}>{h.estado}</span>
-                <span style={{ color: "rgba(255,255,255,0.34)", fontSize: 11.5, whiteSpace: "nowrap" }}>{fmtFecha(h.fecha)}</span>
+                <span style={{ color: "rgba(255,255,255,0.34)", fontSize: 12, whiteSpace: "nowrap" }}>{fmtFecha(h.fecha)}</span>
               </div>
             );
           })}
         </div>
       )}
 
-      {data && data.error && e && <div style={{ color: "#FFB020", fontSize: 12, marginTop: 10 }}>⚠ {data.error}</div>}
+      {data && data.error && e && <div style={{ color: "#F5C044", fontSize: 12, marginTop: 10 }}>⚠ {data.error}</div>}
 
       {qrAbierto && qrImg && (
         <div onClick={() => setQrAbierto(false)} role="dialog" aria-label="QR de la etiqueta"
           style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(6,8,20,0.78)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, cursor: "pointer" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-            <div style={{ background: "#fff", borderRadius: 16, padding: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+            <div style={{ background: "#fff", borderRadius: 14, padding: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
               <img src={qrImg} alt={`QR de la etiqueta del envío ${envioId}`} style={{ width: "min(78vw, 320px)", height: "auto", display: "block" }} />
             </div>
             <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>Envío {envioId}</div>
-            <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12.5 }}>QR de la etiqueta{qrTipo ? ` (${qrTipo})` : ""} · tocá en cualquier lado para cerrar</div>
+            <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13 }}>QR de la etiqueta{qrTipo ? ` (${qrTipo})` : ""} · tocá en cualquier lado para cerrar</div>
           </div>
         </div>
       )}
@@ -269,19 +270,19 @@ function PanelEnvio({ caso }) {
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         {qrImg && (
           <button onClick={() => setQrAbierto(true)} title="Mostrar el QR de la etiqueta" aria-label="Mostrar el QR de la etiqueta"
-            style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 10px 4px 4px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.8)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-            <img src={qrImg} alt="" style={{ width: 28, height: 28, borderRadius: 4, background: "#fff", display: "block" }} />
+            style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 10px 4px 4px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            <img src={qrImg} alt="" style={{ width: 28, height: 28, borderRadius: 6, background: "#fff", display: "block" }} />
             QR
           </button>
         )}
         {e && e.url_tracking && (
           <a href={e.url_tracking} target="_blank" rel="noreferrer"
-            style={{ flex: 1, textAlign: "center", padding: 8, borderRadius: 8, border: "1px solid rgba(74,158,255,0.3)", background: "rgba(74,158,255,0.07)", color: "#4A9EFF", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>
+            style={{ flex: 1, textAlign: "center", padding: 8, borderRadius: 10, border: "1px solid rgba(74,158,255,0.3)", background: "rgba(74,158,255,0.07)", color: "#4A9EFF", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
             Ver en LightData ↗
           </a>
         )}
         <button onClick={() => setData(null)} title="Volver a consultar"
-          style={{ padding: "8px 11px", borderRadius: 8, fontSize: 12, cursor: "pointer", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.6)" }}>↻</button>
+          style={{ padding: "8px 11px", borderRadius: 10, fontSize: 12, cursor: "pointer", border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.6)" }}>↻</button>
       </div>
     </div>
   );
@@ -317,9 +318,9 @@ function PanelSinEnvio({ caso }) {
         det="Uno de los números del mensaje sí está en la base. El caso quedó sin envío igual." />
       <div style={S_SEC}>Envío {envio.id_interno}</div>
       <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.3px", color: colorEstado(envio.estado) }}>{envio.estado || "Sin estado"}</div>
-      {envio.fecha_estado && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.34)", marginBottom: 13 }}>{envio.fecha_estado}</div>}
-      <dl style={{ display: "grid", gridTemplateColumns: "88px 1fr", gap: "6px 10px", fontSize: 12.5, alignItems: "baseline", margin: 0 }}>
-        <Fila k="Cadete" v={envio.cadete ? <b style={{ color: "#fff" }}>🛵 {envio.cadete}</b> : <span style={{ color: "#FFB020" }}>sin asignar</span>} />
+      {envio.fecha_estado && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.34)", marginBottom: 13 }}>{envio.fecha_estado}</div>}
+      <dl style={{ display: "grid", gridTemplateColumns: "88px 1fr", gap: "6px 10px", fontSize: 13, alignItems: "baseline", margin: 0 }}>
+        <Fila k="Cadete" v={envio.cadete ? <b style={{ color: "#fff" }}>🛵 {envio.cadete}</b> : <span style={{ color: "#F5C044" }}>sin asignar</span>} />
         <Fila k="Destinatario" v={envio.nombre} />
         <Fila k="Dirección" v={[envio.direccion, envio.localidad].filter(Boolean).join(", ")} />
       </dl>
@@ -332,17 +333,17 @@ function PanelSinEnvio({ caso }) {
         det="El bot no pudo vincular este caso a ningún envío." />
       <div style={S_SEC}>Qué se buscó</div>
       {nums.length === 0 && (
-        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
           El mensaje no trae ningún número de venta, orden ni tracking. Solo se pudo buscar por dirección y nombre.
         </div>
       )}
       {nums.map(n => (
-        <div key={n} style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 9, padding: "9px 11px", marginBottom: 7, background: "rgba(255,255,255,0.025)" }}>
-          <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, color: "#fff", fontWeight: 600 }}>{n}</div>
-          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", marginTop: 3, lineHeight: 1.5 }}>{diagnosticoNumero(n)}</div>
+        <div key={n} style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 10, padding: "9px 11px", marginBottom: 7, background: "rgba(255,255,255,0.025)" }}>
+          <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 13, color: "#fff", fontWeight: 600 }}>{n}</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 3, lineHeight: 1.5 }}>{diagnosticoNumero(n)}</div>
         </div>
       ))}
-      <div style={{ marginTop: 11, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.10)", fontSize: 11.5, color: "rgba(255,255,255,0.34)", lineHeight: 1.7 }}>
+      <div style={{ marginTop: 11, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.10)", fontSize: 12, color: "rgba(255,255,255,0.34)", lineHeight: 1.7 }}>
         <b style={{ color: "rgba(255,255,255,0.55)" }}>Qué probar:</b><br />
         · Pedirle el número que empieza con <b style={{ color: "#fff" }}>2000017</b><br />
         · Buscar por el nombre del comprador en LightData<br />
@@ -357,19 +358,19 @@ const CONFIG_DEFAULT = { pin: "2121", operadores: ["Santi", "Paco", "Tiago", "Em
 
 const TIPO_COLORES = {
   "estado de envío": { bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
-  "demorado":        { bg: "rgba(255,176,32,0.15)", color: "#FFB020" },
+  "demorado":        { bg: "rgba(245,192,68,0.15)", color: "#F5C044" },
   "devolución":      { bg: "rgba(167,139,250,0.15)", color: "#A78BFA" },
-  "reclamo":         { bg: "rgba(255,92,92,0.15)", color: "#FF9D9D" },
-  "colecta":         { bg: "rgba(46,207,170,0.15)", color: "#2ECFAA" },
+  "reclamo":         { bg: "rgba(232,97,95,0.15)", color: "#FF9D9D" },
+  "colecta":         { bg: "rgba(46,230,182,0.15)", color: "#2EE6B6" },
   "otro":            { bg: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)" },
 };
 
 const ESTADO_BADGES = {
-  abierto:            { txt: "● Nuevo",          bg: "rgba(255,92,92,0.15)", color: "#FF5C5C" },
+  abierto:            { txt: "● Nuevo",          bg: "rgba(232,97,95,0.15)", color: "#E8615F" },
   enviando:           { txt: "📤 Enviando…",     bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
-  esperando_cadete:   { txt: "⏳ Esp. cadete",   bg: "rgba(255,176,32,0.15)", color: "#FFB020" },
+  esperando_cadete:   { txt: "⏳ Esp. cadete",   bg: "rgba(245,192,68,0.15)", color: "#F5C044" },
   esperando_deposito: { txt: "📦 Esp. depósito", bg: "rgba(74,158,255,0.15)", color: "#4A9EFF" },
-  esperando_cliente:  { txt: "✓ Contestado",  bg: "rgba(46,207,170,0.15)", color: "#2ECFAA" },
+  esperando_cliente:  { txt: "✓ Contestado",  bg: "rgba(46,230,182,0.15)", color: "#2EE6B6" },
   resuelto:           { txt: "✓ Resuelto",       bg: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.45)" },
 };
 
@@ -402,11 +403,11 @@ function edadTxt(caso) {
 }
 function edadColor(caso) {
   if (caso.estado === "resuelto") return "rgba(255,255,255,0.25)";
-  if (caso.estado === "esperando_cliente") return "#2ECFAA"; // contestado: la presión bajó
+  if (caso.estado === "esperando_cliente") return "#2EE6B6"; // contestado: la presión bajó
   const m = edadMin(caso);
   if (m < 30) return "#4A9EFF";   // nuevo (azul — verde confunde con "resuelto")
-  if (m < 120) return "#FFB020";  // esperando hace 30min-2hs
-  return "#FF5C5C";               // +2hs sin resolver
+  if (m < 120) return "#F5C044";  // esperando hace 30min-2hs
+  return "#E8615F";               // +2hs sin resolver
 }
 function dormido(c)   { return c.snooze_hasta && new Date(c.snooze_hasta) > new Date(); }
 function desperto(c)  { return c.snooze_hasta && new Date(c.snooze_hasta) <= new Date() && c.estado !== "resuelto"; }
@@ -640,12 +641,12 @@ export default function Tiquetera() {
 
   const chipStyle = (activo) => ({
     padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", border: "1px solid",
-    borderColor: activo ? "#2ECFAA" : "rgba(255,255,255,0.12)",
-    background: activo ? "rgba(46,207,170,0.15)" : "rgba(255,255,255,0.04)",
-    color: activo ? "#2ECFAA" : "rgba(255,255,255,0.6)", fontWeight: activo ? 700 : 500,
+    borderColor: activo ? "#2EE6B6" : "rgba(255,255,255,0.12)",
+    background: activo ? "rgba(46,230,182,0.15)" : "rgba(255,255,255,0.04)",
+    color: activo ? "#2EE6B6" : "rgba(255,255,255,0.6)", fontWeight: activo ? 700 : 500,
   });
   const btn = (primario) => ({
-    flex: primario ? 1 : "0 0 auto", padding: "9px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer",
+    flex: primario ? 1 : "0 0 auto", padding: "9px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer",
     border: primario ? "none" : "1px solid rgba(255,255,255,0.15)",
     background: primario ? "#1A9E7C" : "rgba(255,255,255,0.05)",
     color: primario ? "#fff" : "rgba(255,255,255,0.7)",
@@ -655,9 +656,9 @@ export default function Tiquetera() {
 
   if (!operador) return (
     <div style={{ minHeight: "62vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 430, maxWidth: "94vw", padding: "38px 34px", borderRadius: 22, border: "1px solid rgba(46,207,170,0.22)", background: "linear-gradient(165deg, rgba(46,207,170,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))", boxShadow: "0 20px 60px rgba(0,0,0,0.45)", textAlign: "center" }}>
-        <div style={{ width: 66, height: 66, margin: "0 auto 16px", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", boxShadow: "0 6px 20px rgba(46,207,170,0.15)" }}>🎟️</div>
-        <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: "-0.02em" }}>Tiquetera Flexit</div>
+      <div style={{ width: 430, maxWidth: "94vw", padding: "38px 34px", borderRadius: 20, border: "1px solid rgba(46,230,182,0.22)", background: "linear-gradient(165deg, rgba(46,230,182,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))", boxShadow: "0 20px 60px rgba(0,0,0,0.45)", textAlign: "center" }}>
+        <div style={{ width: 66, height: 66, margin: "0 auto 16px", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.35)", boxShadow: "0 6px 20px rgba(46,230,182,0.15)" }}>🎟️</div>
+        <div style={{ fontFamily:FX_FONT.display, fontSize: 21, fontWeight: 800, letterSpacing: "-0.02em" }}>Tiquetera Flexit</div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginTop: 4, marginBottom: 24 }}>Consultas de WhatsApp · Agente</div>
         <form onSubmit={async e => {
           e.preventDefault();
@@ -673,12 +674,12 @@ export default function Tiquetera() {
           finally { setLoginBusy(false); }
         }}>
           <input type="email" autoFocus autoComplete="username" value={loginEmail} onChange={e => { setLoginEmail(e.target.value); setLoginErr(""); }} placeholder="Email"
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${loginErr ? "#FF5C5C" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 15, boxSizing: "border-box", outline: "none", marginBottom: 10 }} />
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 14, border: `1px solid ${loginErr ? "#E8615F" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 15, boxSizing: "border-box", outline: "none", marginBottom: 10 }} />
           <input type="password" autoComplete="current-password" value={loginPass} onChange={e => { setLoginPass(e.target.value); setLoginErr(""); }} placeholder="Contraseña"
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1px solid ${loginErr ? "#FF5C5C" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 15, boxSizing: "border-box", outline: "none" }} />
-          {loginErr && <div style={{ color: "#FF5C5C", fontSize: 12.5, marginTop: 8 }}>{loginErr}</div>}
+            style={{ width: "100%", padding: "12px 14px", borderRadius: 14, border: `1px solid ${loginErr ? "#E8615F" : "rgba(255,255,255,0.18)"}`, background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 15, boxSizing: "border-box", outline: "none" }} />
+          {loginErr && <div style={{ color: "#E8615F", fontSize: 13, marginTop: 8 }}>{loginErr}</div>}
           <button type="submit" disabled={loginBusy}
-            style={{ width: "100%", marginTop: 16, padding: "13px 10px", borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(46,207,170,0.35)", background: loginBusy ? "rgba(46,207,170,0.04)" : "rgba(46,207,170,0.12)", color: "#2ECFAA" }}>
+            style={{ width: "100%", marginTop: 16, padding: "13px 10px", borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: "pointer", border: "1px solid rgba(46,230,182,0.35)", background: loginBusy ? "rgba(46,230,182,0.04)" : "rgba(46,230,182,0.12)", color: "#2EE6B6" }}>
             {loginBusy ? "Entrando…" : "Entrar"}</button>
         </form>
       </div>
@@ -695,7 +696,7 @@ export default function Tiquetera() {
           .tk-col-der{border-left:none;border-top:1px solid rgba(255,255,255,0.10)}
         }`}</style>
 
-      {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: "1rem" }}>{error}</div>}
+      {error && <div style={{ background: "rgba(232,97,95,0.15)", color: "#E8615F", border: "1px solid rgba(232,97,95,0.3)", padding: "10px 14px", borderRadius: 10, fontSize: 13, marginBottom: "1rem" }}>{error}</div>}
 
       {abiertosViejos > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 10, border: "1px solid rgba(74,158,255,0.4)", background: "rgba(74,158,255,0.08)", fontSize: 14, marginBottom: "1rem" }}>
@@ -708,20 +709,20 @@ export default function Tiquetera() {
         <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 420 }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.35)", fontSize: 14 }}>🔍</span>
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar cliente, grupo, envío, dirección…"
-            style={{ width: "100%", padding: "9px 12px 9px 34px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "#fff", fontSize: 14, boxSizing: "border-box" }} />
+            style={{ width: "100%", padding: "9px 12px 9px 34px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", color: "#fff", fontSize: 14, boxSizing: "border-box" }} />
         </div>
         <div onClick={() => setChip("abiertos")} style={chipStyle(chip === "abiertos")}>Abiertos <b>{counts.abiertos}</b></div>
-        <div onClick={() => setChip("sin_contestar")} style={{ ...chipStyle(chip === "sin_contestar"), borderColor: chip === "sin_contestar" ? "#FF5C5C" : "rgba(255,92,92,0.35)", color: chip === "sin_contestar" ? "#FF5C5C" : "rgba(255,140,140,0.8)", background: chip === "sin_contestar" ? "rgba(255,92,92,0.12)" : "rgba(255,92,92,0.04)" }}>Sin contestar <b>{counts.sinContestar}</b></div>
+        <div onClick={() => setChip("sin_contestar")} style={{ ...chipStyle(chip === "sin_contestar"), borderColor: chip === "sin_contestar" ? "#E8615F" : "rgba(232,97,95,0.35)", color: chip === "sin_contestar" ? "#E8615F" : "rgba(255,140,140,0.8)", background: chip === "sin_contestar" ? "rgba(232,97,95,0.12)" : "rgba(232,97,95,0.04)" }}>Sin contestar <b>{counts.sinContestar}</b></div>
         <div onClick={() => setChip("cadete")} style={chipStyle(chip === "cadete")}>Esp. cadete <b>{counts.cadete}</b></div>
         <div onClick={() => setChip("deposito")} style={chipStyle(chip === "deposito")}>Esp. depósito <b>{counts.deposito}</b></div>
         <div onClick={() => setChip("resueltos")} style={chipStyle(chip === "resueltos")}>Resueltos hoy <b>{counts.resueltos}</b></div>
         {miDupla && <div onClick={() => setChip("mios")} style={chipStyle(chip === "mios")}>Mis casos <b>{counts.mios}</b></div>}
         <select value={orden} onChange={e => setOrden(e.target.value)} title="Orden de la lista"
-          style={{ padding: "6px 10px", borderRadius: 20, fontSize: 12.5, cursor: "pointer", border: "1px solid rgba(255,255,255,0.12)", background: "#12123A", color: "rgba(255,255,255,0.6)" }}>
+          style={{ padding: "6px 10px", borderRadius: 20, fontSize: 13, cursor: "pointer", border: "1px solid rgba(255,255,255,0.12)", background: "#12123A", color: "rgba(255,255,255,0.6)" }}>
           <option value="antiguos">⇅ Antiguos primero</option>
           <option value="nuevos">⇅ Nuevos primero</option>
         </select>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "rgba(255,255,255,0.55)" }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.55)" }}>
           👤 <b style={{ color: "#fff" }}>{operador}</b>
           <span onClick={() => { logout(); setOperador(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>salir</span>
           {operador === "Admin" && <span title="Configuración de la tiquetera (pide PIN de admin)" onClick={() => {
@@ -749,39 +750,39 @@ export default function Tiquetera() {
       </div>
 
       {adminOpen && (
-        <div style={{ border: "1px solid rgba(74,158,255,0.35)", borderRadius: 12, padding: "14px 16px", marginBottom: "1rem", background: "rgba(74,158,255,0.06)", maxWidth: 680 }}>
+        <div style={{ border: "1px solid rgba(74,158,255,0.35)", borderRadius: 14, padding: "14px 16px", marginBottom: "1rem", background: "rgba(74,158,255,0.06)", maxWidth: 680 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>⚙️ Configuración de la tiquetera</div>
           <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>PIN del equipo
-              <input value={admPin} onChange={e => setAdmPin(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
+            <label style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>PIN del equipo
+              <input value={admPin} onChange={e => setAdmPin(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
             </label>
-            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Operadores (separados por coma)
-              <input value={admOps} onChange={e => setAdmOps(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
+            <label style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>Operadores (separados por coma)
+              <input value={admOps} onChange={e => setAdmOps(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
             </label>
-            <label style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>Duplas para el reparto automático (separadas por coma)
-              <input value={admDuplas} onChange={e => setAdmDuplas(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
+            <label style={{ fontSize: 13, color: "rgba(255,255,255,0.6)" }}>Duplas para el reparto automático (separadas por coma)
+              <input value={admDuplas} onChange={e => setAdmDuplas(e.target.value)} style={{ width: "100%", marginTop: 3, padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(0,0,0,0.25)", color: "#fff", fontSize: 13, boxSizing: "border-box" }} />
             </label>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button style={btn(true)} onClick={guardarAdmin}>Guardar</button>
             <button style={btn(false)} onClick={() => setAdminOpen(false)}>Cancelar</button>
           </div>
-          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.4)", marginTop: 8 }}>Los cambios aplican para los casos e ingresos nuevos; los casos ya asignados no se tocan.</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 8 }}>Los cambios aplican para los casos e ingresos nuevos; los casos ya asignados no se tocan.</div>
         </div>
       )}
 
       {gruposOpen && (
-        <div style={{ border: "1px solid rgba(74,158,255,0.35)", borderRadius: 12, padding: "14px 16px", marginBottom: "1rem", background: "rgba(74,158,255,0.06)", maxWidth: 720 }}>
+        <div style={{ border: "1px solid rgba(74,158,255,0.35)", borderRadius: 14, padding: "14px 16px", marginBottom: "1rem", background: "rgba(74,158,255,0.06)", maxWidth: 720 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>📱 Grupos de WhatsApp del agente</div>
-          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>
             <b>Pendiente</b> = grupo nuevo detectado, el bot está mudo ahí. <b>Activá</b> para que empiece a crear casos (sigue sin enviar hasta que prendas “Envío”). <b>Envío</b> = el bot puede mandar respuestas aprobadas al cliente.
           </div>
-          {grupos.length === 0 && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.4)" }}>No hay grupos cargados todavía.</div>}
+          {grupos.length === 0 && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>No hay grupos cargados todavía.</div>}
           <div style={{ display: "grid", gap: 8 }}>
             {grupos.map(g => {
               const col = g.estado === "activo" ? "#39d98a" : g.estado === "pendiente" ? "#f5a623" : "rgba(255,255,255,0.4)";
               return (
-                <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 10px", borderRadius: 8, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(255,255,255,0.08)" }}>
                   <div style={{ flex: "1 1 220px", minWidth: 0 }}>
                     <div style={{ fontSize: 13, color: "#fff", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.nombre_grupo || g.chat_id}</div>
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{g.cliente || "cliente sin identificar"}{g.cod_cliente ? ` · cód ${g.cod_cliente}` : ""}</div>
@@ -811,13 +812,13 @@ export default function Tiquetera() {
       )}
 
       {bugsOpen && (
-        <div style={{ border: "1px solid rgba(229,115,115,0.35)", borderRadius: 12, padding: "14px 16px", marginBottom: "1rem", background: "rgba(229,115,115,0.06)", maxWidth: 720 }}>
+        <div style={{ border: "1px solid rgba(229,115,115,0.35)", borderRadius: 14, padding: "14px 16px", marginBottom: "1rem", background: "rgba(229,115,115,0.06)", maxWidth: 720 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🐛 Reportes de bugs del equipo</div>
-          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>Lo que el equipo marcó como raro desde cada caso. Revisalo y marcá cuando lo hayas visto.</div>
-          {reportes.length === 0 && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.4)" }}>No hay reportes todavía.</div>}
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginBottom: 12 }}>Lo que el equipo marcó como raro desde cada caso. Revisalo y marcá cuando lo hayas visto.</div>
+          {reportes.length === 0 && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>No hay reportes todavía.</div>}
           <div style={{ display: "grid", gap: 8 }}>
             {reportes.map(r => (
-              <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap", padding: "8px 10px", borderRadius: 8, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(255,255,255,0.08)", opacity: r.estado === "revisado" ? 0.55 : 1 }}>
+              <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(255,255,255,0.08)", opacity: r.estado === "revisado" ? 0.55 : 1 }}>
                 <div style={{ flex: "1 1 260px", minWidth: 0 }}>
                   <div style={{ fontSize: 13, color: "#fff" }}>{r.texto}</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{r.caso_id ? `caso #${r.caso_id}` : "general"} · {r.reporta || "\u2014"} · {fmtFecha(r.created_at)}</div>
@@ -850,32 +851,32 @@ export default function Tiquetera() {
           return (
             <div key={c.id} style={{
               borderRadius: 10, overflow: "hidden", opacity: dorm || c.estado === "resuelto" ? 0.55 : 1,
-              border: `1px solid ${desp ? "#FFB020" : c.fijado ? "#2ECFAA" : "rgba(255,255,255,0.1)"}`,
+              border: `1px solid ${desp ? "#F5C044" : c.fijado ? "#2EE6B6" : "rgba(255,255,255,0.1)"}`,
               borderLeft: `3px solid ${edadColor(c)}`,
               background: i % 2 ? "rgba(255,255,255,0.055)" : "rgba(255,255,255,0.02)",
-              boxShadow: desp ? "0 0 12px rgba(255,176,32,0.35)" : "none",
+              boxShadow: desp ? "0 0 12px rgba(245,192,68,0.35)" : "none",
               animation: desp ? "temblarTk 1.6s ease-in-out infinite" : "none",
             }}>
               <div onClick={() => setAbierto(c.id)}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", cursor: "pointer", flexWrap: "wrap" }}>
                 <span title={c.estado === "abierto" && !dorm ? "Caso nuevo, sin contestar" : undefined} style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
                   {c.estado === "abierto" && !dorm && (<>
-                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
-                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#F5C044", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#F5C044" }} />
                   </>)}
                 </span>
                 <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.32)" }}>#{c.id}</span>
                 <span style={{ fontWeight: 600, fontSize: 14, minWidth: 120, display: "flex", alignItems: "center" }}>
                   {nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "—"}
                 </span>
-                <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
+                <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
                 <span style={{ flex: 1, color: "rgba(255,255,255,0.5)", fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 120 }}>{resolverMenciones(c.mensaje, mapaLids)}</span>
-                {c.fijado && c.estado !== "resuelto" && <span style={{ fontSize: 11.5, color: "#2ECFAA", background: "rgba(46,207,170,0.12)", border: "1px solid rgba(46,207,170,0.35)", padding: "2px 8px", borderRadius: 6 }}>📌 Fijado</span>}
-                {dorm && <span style={{ fontSize: 11.5, color: "#FFB020", background: "rgba(255,176,32,0.12)", padding: "2px 8px", borderRadius: 6 }}>⏰ hasta {new Date(c.snooze_hasta).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
-                {desp && <span style={{ fontSize: 11.5, color: "#FFB020", background: "rgba(255,176,32,0.2)", fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>⏰ ¡Despertó!</span>}
+                {c.fijado && c.estado !== "resuelto" && <span style={{ fontSize: 12, color: "#2EE6B6", background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.35)", padding: "2px 8px", borderRadius: 6 }}>📌 Fijado</span>}
+                {dorm && <span style={{ fontSize: 12, color: "#F5C044", background: "rgba(245,192,68,0.12)", padding: "2px 8px", borderRadius: 6 }}>⏰ hasta {new Date(c.snooze_hasta).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>}
+                {desp && <span style={{ fontSize: 12, color: "#F5C044", background: "rgba(245,192,68,0.2)", fontWeight: 700, padding: "2px 8px", borderRadius: 6 }}>⏰ ¡Despertó!</span>}
                 {(viendo[c.id] || []).length > 0 && (
-                  <span title={"Cuidado: tambien lo esta viendo " + viendo[c.id].join(" y ")} style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: "rgba(255,176,32,0.15)", color: "#FFB020", whiteSpace: "nowrap" }}>👀 {viendo[c.id].join(", ")}</span>
+                  <span title={"Cuidado: tambien lo esta viendo " + viendo[c.id].join(" y ")} style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: "rgba(245,192,68,0.15)", color: "#F5C044", whiteSpace: "nowrap" }}>👀 {viendo[c.id].join(", ")}</span>
                 )}
                 {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color, whiteSpace: "nowrap" }}>{eb.txt}</span>}
                 <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>
@@ -900,38 +901,38 @@ export default function Tiquetera() {
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "sticky", top: 0, background: "#0f1626", borderRadius: "14px 14px 0 0" }}>
                 {c.estado === "abierto" && !dorm && (
                   <span title="Sin contestar" style={{ width: 10, height: 10, flexShrink: 0, position: "relative", display: "inline-block" }}>
-                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
-                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#FBBF24" }} />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#F5C044", animation: "pingTk 1.6s cubic-bezier(0,0,0.2,1) infinite" }} />
+                    <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#F5C044" }} />
                   </span>
                 )}
-                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 12.5, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 13, fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6 }}>#{c.id}</span>
                 <span style={{ fontWeight: 700, fontSize: 15, color: "#fff" }}>{nombreCliente(mapaGrupos[c.chat_id] || c.grupo) || c.chat_id || "\u2014"}</span>
-                <span style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
+                <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 500, background: tc.bg, color: tc.color }}>{c.tipo || "otro"}</span>
                 {c.asignado && <span style={{ fontSize: 11, color: "#4A9EFF", background: "rgba(74,158,255,0.1)", padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>👥 {c.asignado}</span>}
                 {c.estado !== "abierto" && <span style={{ fontSize: 12, padding: "3px 9px", borderRadius: 6, background: eb.bg, color: eb.color }}>{eb.txt}</span>}
-                <span style={{ marginLeft: "auto", fontSize: 12.5, color: "rgba(255,255,255,0.34)", whiteSpace: "nowrap" }}>{edadTxt(c)}</span>
+                <span style={{ marginLeft: "auto", fontSize: 13, color: "rgba(255,255,255,0.34)", whiteSpace: "nowrap" }}>{edadTxt(c)}</span>
                 <button onClick={() => { setError(""); setAbierto(null); }} title="Cerrar" style={{ marginLeft: 6, background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
               </div>
               <div className="tk-cols">
               <div style={{ padding: "16px 18px", minWidth: 0 }}>
-                {error && <div style={{ background: "rgba(226,75,74,0.15)", color: "#E24B4A", border: "1px solid rgba(226,75,74,0.3)", padding: "10px 14px", borderRadius: 8, fontSize: 13, marginBottom: 10 }}>{error}</div>}
+                {error && <div style={{ background: "rgba(232,97,95,0.15)", color: "#E8615F", border: "1px solid rgba(232,97,95,0.3)", padding: "10px 14px", borderRadius: 10, fontSize: 13, marginBottom: 10 }}>{error}</div>}
                   {c.cita && (
-                    <div style={{ borderLeft: "3px solid rgba(46,207,170,0.55)", background: "rgba(255,255,255,0.04)", borderRadius: "0 8px 8px 0", padding: "6px 10px", marginBottom: 6 }}>
-                      <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 2, textTransform: "uppercase", letterSpacing: ".04em" }}>↩ En respuesta a</div>
-                      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.35 }}>{resolverMenciones(c.cita, mapaLids)}</div>
+                    <div style={{ borderLeft: "3px solid rgba(46,230,182,0.55)", background: "rgba(255,255,255,0.04)", borderRadius: "0 8px 8px 0", padding: "6px 10px", marginBottom: 6 }}>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 2, textTransform: "uppercase", letterSpacing: ".04em" }}>↩ En respuesta a</div>
+                      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.35 }}>{resolverMenciones(c.cita, mapaLids)}</div>
                     </div>
                   )}
                   <div style={{ background: "rgba(74,158,255,0.08)", borderRadius: "0 10px 10px 10px", padding: "10px 12px", fontSize: 14, lineHeight: 1.45, marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, color: "#2ECFAA", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
+                    <div style={{ fontSize: 12, color: "#2EE6B6", fontWeight: 600, marginBottom: 3 }}>{nombreCliente(c.autor) || "Cliente"}</div>
                     {resolverMenciones(c.mensaje, mapaLids)}
                   </div>
                   {mediaCaso && (
-                    <img onClick={() => setLightbox(`data:${mediaCaso.mime};base64,${mediaCaso.b64}`)} src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" title="Tocar para ver en grande" style={{ width: 104, height: 104, objectFit: "cover", borderRadius: 9, border: "1px solid rgba(255,255,255,0.14)", display: "block", cursor: "zoom-in", marginBottom: 10 }} />
+                    <img onClick={() => setLightbox(`data:${mediaCaso.mime};base64,${mediaCaso.b64}`)} src={`data:${mediaCaso.mime};base64,${mediaCaso.b64}`} alt="Imagen adjunta" title="Tocar para ver en grande" style={{ width: 104, height: 104, objectFit: "cover", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", display: "block", cursor: "zoom-in", marginBottom: 10 }} />
                   )}
                   {(c.turno || c.resuelto_por) && (
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
                       {c.turno && <span>Turno: {c.turno}</span>}
-                      {c.resuelto_por && <span style={{ color: "#2ECFAA" }}>✓ Resuelto por {c.resuelto_por}</span>}
+                      {c.resuelto_por && <span style={{ color: "#2EE6B6" }}>✓ Resuelto por {c.resuelto_por}</span>}
                     </div>
                   )}
 
@@ -944,7 +945,7 @@ export default function Tiquetera() {
                     return (
                       <div style={{ marginBottom: 10 }}>
                         <button onClick={() => setHilos(h => ({ ...h, [c.id]: !h[c.id] }))}
-                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#cfe3ff", borderRadius: 9, padding: "9px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#cfe3ff", borderRadius: 10, padding: "9px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                           <span>💬 Conversación ({hilo.length} mensaje{hilo.length > 1 ? "s" : ""})</span>
                           <span style={{ opacity: 0.7 }}>{ab ? "▴" : "▾"}</span>
                         </button>
@@ -958,10 +959,10 @@ export default function Tiquetera() {
                                   <div>
                                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>{it.at ? new Date(it.at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
                                     <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: 6 }}>{nombreCliente(it.quien) || ""}</span>
-                                    {it.esConsulta && <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.15)", borderRadius: 4, padding: "1px 6px", marginLeft: 8 }}>consulta</span>}
+                                    {it.esConsulta && <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, color: "#4A9EFF", background: "rgba(74,158,255,0.15)", borderRadius: 6, padding: "1px 6px", marginLeft: 8 }}>consulta</span>}
                                   </div>
                                   <div style={it.esConsulta
-                                    ? { fontSize: 13, lineHeight: 1.38, marginTop: 3, color: "#fff", background: "rgba(74,158,255,0.10)", border: "1px solid rgba(74,158,255,0.4)", borderRadius: 8, padding: "7px 10px" }
+                                    ? { fontSize: 13, lineHeight: 1.38, marginTop: 3, color: "#fff", background: "rgba(74,158,255,0.10)", border: "1px solid rgba(74,158,255,0.4)", borderRadius: 10, padding: "7px 10px" }
                                     : { fontSize: 13, lineHeight: 1.38, marginTop: 2, color: "rgba(255,255,255,0.9)" }}>
                                     {resolverMenciones(it.texto, mapaLids)}
                                   </div>
@@ -975,16 +976,16 @@ export default function Tiquetera() {
                   })()}
 
                   {c.respuesta_enviada && (
-                    <div style={{ background: "rgba(46,207,170,0.07)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, marginBottom: 4 }}>
+                    <div style={{ background: "rgba(46,230,182,0.07)", border: "1px solid rgba(46,230,182,0.35)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2EE6B6", fontWeight: 700, marginBottom: 4 }}>
                         {c.estado === "enviando" ? "📤 En cola — sale en menos de 1 minuto" : ("✓✓ Enviado al cliente" + (c.enviado_at ? " · " + new Date(c.enviado_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""))}
                       </div>
-                      <div style={{ fontSize: 13.5, color: "rgba(255,255,255,0.85)", lineHeight: 1.45 }}>{c.respuesta_enviada}</div>
+                      <div style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", lineHeight: 1.45 }}>{c.respuesta_enviada}</div>
                     </div>
                   )}
 
                   {(() => { const dups = posiblesDuplicados(c, casos); return dups.length > 0 && (
-                    <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(255,176,32,0.4)", background: "rgba(255,176,32,0.07)", fontSize: 12.5, color: "#FFB020" }}>
+                    <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(245,192,68,0.4)", background: "rgba(245,192,68,0.07)", fontSize: 13, color: "#F5C044" }}>
                       ⚠ Posible duplicado (mismo envío o número):{dups.map(d => (
                         <span key={d.id} onClick={() => setAbierto(d.id)} title={d.mensaje} style={{ cursor: "pointer", textDecoration: "underline", marginLeft: 6 }}>
                           #{d.id}{d.estado === "resuelto" ? " (resuelto)" : d.respuesta_enviada ? " (contestado)" : ""}
@@ -993,9 +994,9 @@ export default function Tiquetera() {
                     </div>
                   ); })()}
                   {c.estado !== "resuelto" && (<>
-                    <div style={{ border: "1px dashed rgba(46,207,170,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,207,170,0.04)", marginBottom: 10 }}>
+                    <div style={{ border: "1px dashed rgba(46,230,182,0.5)", borderRadius: 10, padding: "10px 12px", background: "rgba(46,230,182,0.04)", marginBottom: 10 }}>
                       <div onClick={c.respuesta_enviada ? undefined : () => setRespAbierta(v => !v)} title={c.respuesta_enviada ? undefined : (respAbierta ? "Ocultar" : "Mostrar")}
-                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: c.respuesta_enviada ? "default" : "pointer", fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2ECFAA", fontWeight: 700, userSelect: "none" }}>
+                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: c.respuesta_enviada ? "default" : "pointer", fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#2EE6B6", fontWeight: 700, userSelect: "none" }}>
                         {!c.respuesta_enviada && <span style={{ display: "inline-block", transition: "transform .15s", transform: respAbierta ? "rotate(90deg)" : "none", fontSize: 10 }}>▸</span>}
                         <span>🤖 {c.respuesta_enviada ? "Enviar otro mensaje (opcional)" : "Respuesta del bot — editá antes de enviar"}</span>
                       </div>
@@ -1004,16 +1005,16 @@ export default function Tiquetera() {
                           onChange={e => setTextos({ ...textos, [c.id]: e.target.value })}
                           ref={el => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
                           placeholder="Escribí la respuesta…"
-                          style={{ width: "100%", background: "transparent", border: "none", color: "#fff", fontSize: 13.5, fontFamily: "inherit", resize: "none", overflow: "hidden", outline: "none", boxSizing: "border-box", marginTop: 8, minHeight: 40, display: "block" }} />
+                          style={{ width: "100%", background: "transparent", border: "none", color: "#fff", fontSize: 14, fontFamily: "inherit", resize: "none", overflow: "hidden", outline: "none", boxSizing: "border-box", marginTop: 8, minHeight: 40, display: "block" }} />
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                       <input value={notaTxt} onChange={e => setNotaTxt(e.target.value)} placeholder="Nota interna para el equipo (no la ve el cliente)…"
-                        style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 13 }} />
+                        style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.03)", color: "#fff", fontSize: 13 }} />
                       <button style={btn(false)} onClick={() => { if (!notaTxt.trim()) return; patch(c.id, { notas: [...(c.notas || []), { quien: operador, texto: notaTxt.trim(), at: new Date().toISOString() }] }); setNotaTxt(""); }}>+ Nota</button>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-<button style={{ ...btn(false), padding: "8px 14px", fontWeight: 700, background: "#2ECFAA", borderColor: "transparent", color: "#07281f" }} title="Enviar mensaje de bot" onClick={() => {
+<button style={{ ...btn(false), padding: "8px 14px", fontWeight: 700, background: "#2EE6B6", borderColor: "transparent", color: "#07281f" }} title="Enviar mensaje de bot" onClick={() => {
                         const txt = (textos[c.id] !== undefined ? textos[c.id] : (c.respuesta_sugerida || "")).trim();
                         if (!txt) { setError("Escribí la respuesta antes de enviar."); return; }
                         if (!window.confirm("Se va a ENVIAR este mensaje al cliente por WhatsApp:\n\n" + txt + "\n\n¿Confirmás?")) return; patch(c.id, { respuesta_enviada: txt, estado: "enviando", enviado_por: operador });
@@ -1023,7 +1024,7 @@ export default function Tiquetera() {
                         patch(c.id, { respuesta_enviada: txt || c.respuesta_sugerida || "(respondido por fuera de la tiquetera)", estado: "esperando_cliente", enviado_at: new Date().toISOString(), enviado_via: "manual", enviado_por: operador });
                       }}>✓✓ Contestado</button>
                       
-<button style={{ ...btn(false), borderColor: "rgba(46,207,170,0.45)", background: "rgba(46,207,170,0.07)", color: "#2ECFAA" }}
+<button style={{ ...btn(false), borderColor: "rgba(46,230,182,0.45)", background: "rgba(46,230,182,0.07)", color: "#2EE6B6" }}
                         onClick={() => setConfirmarResolver(c.id)}>
                         Resolver
                       </button>
@@ -1057,7 +1058,7 @@ export default function Tiquetera() {
                         <option value="manana">Mañana 9hs</option>
                       </select>
                       
-{c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(255,176,32,0.5)", color: "#FFB020" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
+{c.snooze_hasta && <button style={{ ...btn(false), borderColor: "rgba(245,192,68,0.5)", color: "#F5C044" }} title="Cancela la alarma: deja de sonar/temblar y el caso vuelve a la lista normal" onClick={() => patch(c.id, { snooze_hasta: null })}>🔕 Apagar alarma</button>}
                       
 <button style={btn(false)} title="Fijar arriba" onClick={() => patch(c.id, { fijado: !c.fijado })}>📌</button>
                       
@@ -1065,7 +1066,7 @@ export default function Tiquetera() {
                         onClick={() => { setBugPara(bugPara === c.id ? null : c.id); setBugTxt(""); }}>🐛</button>
                     </div>
                     {confirmarResolver === c.id && (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "9px 12px", borderRadius: 8, border: "1px solid rgba(46,207,170,0.45)", background: "rgba(46,207,170,0.07)" }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "9px 12px", borderRadius: 10, border: "1px solid rgba(46,230,182,0.45)", background: "rgba(46,230,182,0.07)" }}>
                         <span style={{ fontSize: 13, color: "#fff" }}>¿Marcar este caso como resuelto?</span>
                         <button style={{ ...btn(true), marginLeft: "auto" }} onClick={async () => {
                           const idx = visibles.findIndex(x => x.id === c.id);
@@ -1083,11 +1084,11 @@ export default function Tiquetera() {
                       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                         <input value={bugTxt} onChange={e => setBugTxt(e.target.value)} autoFocus placeholder="¿Qué viste raro en este caso?"
                           onKeyDown={e => { if (e.key === "Enter") reportarBug(c); }}
-                          style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(229,115,115,0.45)", background: "rgba(229,115,115,0.06)", color: "#fff", fontSize: 13 }} />
+                          style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(229,115,115,0.45)", background: "rgba(229,115,115,0.06)", color: "#fff", fontSize: 13 }} />
                         <button style={btn(true)} onClick={() => reportarBug(c)}>Guardar reporte</button>
                       </div>
                     )}
-                    {bugMsg === c.id && <div style={{ marginTop: 8, fontSize: 12.5, color: "#39d98a" }}>✓ ¡Gracias! Reporte guardado para revisar.</div>}
+                    {bugMsg === c.id && <div style={{ marginTop: 8, fontSize: 13, color: "#39d98a" }}>✓ ¡Gracias! Reporte guardado para revisar.</div>}
                   </>)}
               </div>
               <div className="tk-col-der" style={{ padding: "16px 18px", minWidth: 0 }}>
@@ -1100,8 +1101,8 @@ export default function Tiquetera() {
       })()}
       {lightbox && (
         <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(4,6,12,0.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, cursor: "zoom-out" }}>
-          <img src={lightbox} alt="Imagen" style={{ maxWidth: "96%", maxHeight: "94%", borderRadius: 8, boxShadow: "0 20px 80px rgba(0,0,0,0.7)" }} />
-          <button onClick={() => setLightbox(null)} title="Cerrar" style={{ position: "absolute", top: 16, right: 20, background: "rgba(255,255,255,0.14)", border: "none", color: "#fff", fontSize: 24, lineHeight: 1, borderRadius: 8, width: 40, height: 40, cursor: "pointer" }}>×</button>
+          <img src={lightbox} alt="Imagen" style={{ maxWidth: "96%", maxHeight: "94%", borderRadius: 10, boxShadow: "0 20px 80px rgba(0,0,0,0.7)" }} />
+          <button onClick={() => setLightbox(null)} title="Cerrar" style={{ position: "absolute", top: 16, right: 20, background: "rgba(255,255,255,0.14)", border: "none", color: "#fff", fontSize: 24, lineHeight: 1, borderRadius: 10, width: 40, height: 40, cursor: "pointer" }}>×</button>
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@
 // pagos_ajustes, pagos_cierres y cadetes_tarifas son solo admin. Migraciones 20261113150000 y 20261113170000.
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authedFetch, getSession } from './auth';
+import { FX_FONT } from "./theme";
 import {
   norm, montoDe, cuotasDe, planDescuento, cadeteDePago, estadoCuotas,
   addDays, mondayOf, hoyAR, ddmm, semanaTxt, filtroEnvio, codigoLimpio, parseValor,
@@ -15,7 +16,7 @@ import {
 
 const SUPABASE_URL = 'https://svlagoosmxxcsbevkrhy.supabase.co';
 const C = {
-  navy: '#0d1b2a', card: '#162d42', teal: '#2ECFAA', red: '#E24B4A', amber: '#FFB020', blue: '#4C8DFF',
+  navy: '#0d1b2a', card: '#162d42', teal: '#2EE6B6', red: '#E8615F', amber: '#F5C044', blue: '#4C8DFF',
   white: '#FFFFFF', muted: 'rgba(255,255,255,0.62)', faint: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.09)',
 };
 const money = (n) => (n == null || Number.isNaN(n) ? '—' : '$' + Math.round(n).toLocaleString('es-AR'));
@@ -211,7 +212,7 @@ export default function Extraviados() {
     navigator.clipboard.writeText(txt).then(() => { setCopiado(true); setTimeout(() => setCopiado(false), 1800); }).catch(() => setError('No se pudo copiar.'));
   }
 
-  const inp = { padding: '9px 11px', borderRadius: 9, border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.22)', color: C.white, fontSize: 13, outline: 'none', minWidth: 0 };
+  const inp = { padding: '9px 11px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.22)', color: C.white, fontSize: 13, outline: 'none', minWidth: 0 };
   const sel = { ...inp, cursor: 'pointer' };
   const chip = (on, color = C.blue) => ({ padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? color : C.border}`, background: on ? `${color}22` : C.faint, color: on ? color : C.muted });
   const th = { position: 'sticky', top: 0, zIndex: 2, background: C.card, boxShadow: `0 1px 0 ${C.border}`, padding: '10px 10px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'left', whiteSpace: 'nowrap' };
@@ -220,7 +221,7 @@ export default function Extraviados() {
 
   if (cargando) return <div style={{ color: C.muted, padding: '2rem', textAlign: 'center' }}>Cargando extraviados…</div>;
   if (faltaMigracion) return (
-    <div style={{ background: 'rgba(255,176,32,0.1)', border: `1px solid ${C.amber}`, color: C.amber, padding: 16, borderRadius: 12, fontSize: 13.5, lineHeight: 1.5 }}>
+    <div style={{ background: 'rgba(245,192,68,0.1)', border: `1px solid ${C.amber}`, color: C.amber, padding: 16, borderRadius: 14, fontSize: 14, lineHeight: 1.5 }}>
       Falta crear la tabla. En Supabase › SQL Editor corré <b>supabase/migrations/20261113150000_extraviados.sql</b> y después <b>20261113170000_extraviados_equipo.sql</b>, y volvé a entrar.
     </div>
   );
@@ -230,9 +231,9 @@ export default function Extraviados() {
       {/* Resumen + acciones */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
         {[['Valor de lo listado', money(tot.valor), C.white], ['A descontar a transportistas', money(tot.aDescontar), C.amber], ['Falta descontar', money(tot.resta), tot.resta ? C.red : C.teal]].map(([k, v, col]) => (
-          <div key={k} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '10px 14px', minWidth: 150 }}>
+          <div key={k} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '10px 14px', minWidth: 150 }}>
             <div style={{ fontSize: 11, color: C.muted }}>{k}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: col }}>{v}</div>
+            <div style={{ fontFamily:FX_FONT.display, fontSize: 18, fontWeight: 700, color: col }}>{v}</div>
           </div>
         ))}
         <div style={{ flex: 1 }} />
@@ -240,8 +241,8 @@ export default function Extraviados() {
         <button onClick={() => setAbierto((v) => !v)} style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: C.blue, color: C.navy, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{abierto ? 'Cerrar' : '+ Cargar extraviado / roto'}</button>
       </div>
 
-      {error && <div style={{ background: 'rgba(226,75,74,0.15)', color: C.red, border: `1px solid ${C.red}`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 12, display: 'flex', justifyContent: 'space-between', gap: 10 }}><span>{error}</span><button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer' }}>✕</button></div>}
-      {aviso && <div style={{ background: 'rgba(255,176,32,0.12)', color: C.amber, border: `1px solid ${C.amber}`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{aviso}</div>}
+      {error && <div style={{ background: 'rgba(232,97,95,0.15)', color: C.red, border: `1px solid ${C.red}`, padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 12, display: 'flex', justifyContent: 'space-between', gap: 10 }}><span>{error}</span><button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer' }}>✕</button></div>}
+      {aviso && <div style={{ background: 'rgba(245,192,68,0.12)', color: C.amber, border: `1px solid ${C.amber}`, padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 12 }}>{aviso}</div>}
 
       {/* Alta */}
       {abierto && (
@@ -251,32 +252,32 @@ export default function Extraviados() {
             <button onClick={() => setForm((s) => ({ ...s, tipo: 'roto' }))} style={chip(form.tipo === 'roto', C.red)}>Roto</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
-            <label style={{ display: 'grid', gap: 4, fontSize: 11.5, color: C.muted }}>IDML / tracking / ID LightData
+            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted }}>IDML / tracking / ID LightData
               <input autoFocus value={form.codigo} onChange={(e) => setForm((s) => ({ ...s, codigo: e.target.value, envio: null }))} placeholder="2000019384679834" style={{ ...inp, fontFamily: 'monospace' }} />
               <span style={{ fontSize: 11, minHeight: 14, color: form.envio ? C.teal : form.envio === false ? C.amber : C.muted }}>
                 {form.buscando ? 'Buscando en LightData…' : form.envio ? `✓ Encontrado · ID ${form.envio.id_interno}${form.cadete_ld ? ` · ${form.cadete_ld}` : ''}` : form.envio === false ? 'No está en los últimos días de LightData: completá a mano' : ''}
               </span>
             </label>
-            <label style={{ display: 'grid', gap: 4, fontSize: 11.5, color: C.muted, alignContent: 'start' }}>Fecha
+            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Fecha
               <input type="date" value={form.fecha} onChange={(e) => setForm((s) => ({ ...s, fecha: e.target.value }))} style={inp} />
             </label>
-            <label style={{ display: 'grid', gap: 4, fontSize: 11.5, color: C.muted, alignContent: 'start' }}>Cliente
+            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Cliente
               <input value={form.cliente} onChange={(e) => setForm((s) => ({ ...s, cliente: e.target.value }))} style={inp} />
             </label>
-            <label style={{ display: 'grid', gap: 4, fontSize: 11.5, color: C.muted, alignContent: 'start' }}>Transportista
+            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Transportista
               <select value={form.cadete} onChange={(e) => setForm((s) => ({ ...s, cadete: e.target.value }))} style={sel}>
                 <option value="" style={opt}>— sin transportista —</option>
                 {cadetesOpts.map((n) => <option key={n} value={n} style={opt}>{n}</option>)}
               </select>
             </label>
-            <label style={{ display: 'grid', gap: 4, fontSize: 11.5, color: C.muted, alignContent: 'start' }}>Info
+            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Info
               <input value={form.info} onChange={(e) => setForm((s) => ({ ...s, info: e.target.value }))} placeholder="qué pasó" style={inp} />
             </label>
-            <label style={{ display: 'grid', gap: 4, fontSize: 11.5, color: C.muted, alignContent: 'start' }}>Valor a mano (opcional)
+            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: C.muted, alignContent: 'start' }}>Valor a mano (opcional)
               <input className="no-spin" type="number" value={form.valor_manual} onChange={(e) => setForm((s) => ({ ...s, valor_manual: e.target.value }))} placeholder="si no, el declarado de LightData" style={inp} />
             </label>
           </div>
-          {duplicado && <div style={{ marginTop: 10, fontSize: 12.5, color: C.amber }}>Ya está cargado: {ddmm(duplicado.fecha)} · {duplicado.cliente || ''} · {duplicado.cadete || ''}</div>}
+          {duplicado && <div style={{ marginTop: 10, fontSize: 13, color: C.amber }}>Ya está cargado: {ddmm(duplicado.fecha)} · {duplicado.cliente || ''} · {duplicado.cadete || ''}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
             <button onClick={agregar} disabled={busy === 'alta'} style={{ padding: '10px 18px', borderRadius: 10, border: 'none', background: C.teal, color: C.navy, fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: busy === 'alta' ? 0.6 : 1 }}>{busy === 'alta' ? 'Guardando…' : 'Guardar'}</button>
           </div>
@@ -306,7 +307,7 @@ export default function Extraviados() {
                 <tr key={r.id}>
                   <td style={{ ...td, whiteSpace: 'nowrap' }}>
                     <div>{ddmm(r.fecha)}</div>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: r.tipo === 'roto' ? C.red : C.amber }}>{r.tipo === 'roto' ? 'ROTO' : 'EXTRAVIADO'}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: r.tipo === 'roto' ? C.red : C.amber }}>{r.tipo === 'roto' ? 'ROTO' : 'EXTRAVIADO'}</span>
                   </td>
                   <td style={td}>{r.cliente || <span style={{ color: C.muted }}>—</span>}</td>
                   <td style={td}>
@@ -373,7 +374,7 @@ export default function Extraviados() {
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: 10, lineHeight: 1.5 }}>
         El valor declarado se trae de LightData cada 30 min. Al tildar <b>Descontar</b>, cada cuota aparece como descuento del transportista en la Semana correspondiente de Liquidaciones.
       </div>
     </div>

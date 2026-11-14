@@ -10,7 +10,7 @@ import { BuscadorDireccion } from './ColectasMapa';
 
 const CENTRO_CABA = [-34.6083, -58.3712];
 const PIN = L.divIcon({
-  html: '<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2ECFAA;border:2px solid #0d1b2a;box-shadow:0 2px 6px rgba(0,0,0,.5)"></div>',
+  html: '<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2EE6B6;border:2px solid #0d1b2a;box-shadow:0 2px 6px rgba(0,0,0,.5)"></div>',
   className: 'flexit-pin-form', iconSize: [22, 22], iconAnchor: [11, 22],
 });
 

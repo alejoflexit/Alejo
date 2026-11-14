@@ -14,7 +14,7 @@ export function GraficoTendencia({ data, ttStyle }) {
         <XAxis dataKey="fecha" tick={{ fontSize:11, fill:BRAND.muted }} tickFormatter={v=>{ const p=v.split("-"); return `${p[2]}/${p[1]}`; }} />
         <YAxis domain={[0,100]} tickFormatter={v=>v+"%"} tick={{ fontSize:11, fill:BRAND.muted }} />
         <Tooltip contentStyle={ttStyle} formatter={v=>[v!==null?v.toFixed(1)+"%":"—","SLA Meli"]} labelFormatter={v=>{ const p=v.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; }} />
-        <Line type="monotone" dataKey="sla" stroke="#2ECFAA" strokeWidth={2.5} dot={{ fill:"#2ECFAA", r:5 }} activeDot={{ r:7 }} connectNulls />
+        <Line type="monotone" dataKey="sla" stroke="#2EE6B6" strokeWidth={2.5} dot={{ fill:"#2EE6B6", r:5 }} activeDot={{ r:7 }} connectNulls />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -43,8 +43,8 @@ export function GraficoSlaDia({ data }) {
         <CartesianGrid strokeDasharray="3 3" stroke={BRAND.border} />
         <XAxis dataKey="fecha" tick={{ fontSize:11, fill:BRAND.muted }} />
         <YAxis domain={[85,100]} tickFormatter={v=>v+"%"} tick={{ fontSize:11, fill:BRAND.muted }} />
-        <Tooltip contentStyle={{ background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, fontSize:12, color:"#fff" }} formatter={v=>[v+"%","SLA"]} />
-        <Line type="monotone" dataKey="sla" stroke="#2ECFAA" strokeWidth={2.5} dot={{ fill:"#2ECFAA", r:4 }} connectNulls />
+        <Tooltip contentStyle={{ background:"#1A1A4A", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, fontSize:12, color:"#fff" }} formatter={v=>[v+"%","SLA"]} />
+        <Line type="monotone" dataKey="sla" stroke="#2EE6B6" strokeWidth={2.5} dot={{ fill:"#2EE6B6", r:4 }} connectNulls />
       </LineChart>
     </ResponsiveContainer>
   );

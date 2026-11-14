@@ -19,12 +19,12 @@ import {
 // constante: si difieren, los títulos no arrancan a la misma altura y la fila queda coja.
 const PANEL_HEAD_H = 40;
 
-const ROJO = '#E24B4A';
-const AMBAR = '#FBBF24';
+const ROJO = '#E8615F';
+const AMBAR = '#F5C044';
 const LILA = '#818CF8';
 
 const inpSt = {
-  padding: '8px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`,
+  padding: '8px 10px', borderRadius: 10, border: `1px solid ${BRAND.border}`,
   background: 'rgba(0,0,0,0.28)', color: BRAND.white, fontSize: 13, outline: 'none',
   boxSizing: 'border-box', fontFamily: 'inherit',
 };
@@ -36,7 +36,7 @@ function Accion({ onClick, children, color, titulo }) {
     <button type="button" onClick={onClick} title={titulo}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 26, padding: '0 8px',
-        borderRadius: 7, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, touchAction: 'manipulation',
+        borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, touchAction: 'manipulation',
         border: '1px solid transparent', background: 'rgba(255,255,255,0.05)', color: c, whiteSpace: 'nowrap',
       }}>
       {children}
@@ -119,7 +119,7 @@ function BloqueObjetivos({ usuario, esMovil }) {
             background: hecho ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>
           {hecho ? '✓' : ''}
         </button>
-        <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: hecho ? BRAND.muted : BRAND.white }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 14, color: hecho ? BRAND.muted : BRAND.white }}>
           {/* el tachado va SOLO en el texto: si se pone en el contenedor, la línea también
               atraviesa el "✓ quién · cuándo" de abajo (text-decoration no se puede quitar desde el hijo) */}
           <span style={{ textDecoration: hecho ? 'line-through' : 'none' }}>{o.texto}</span>
@@ -135,22 +135,22 @@ function BloqueObjetivos({ usuario, esMovil }) {
             <input autoFocus value={notaDraft} onChange={e => setNotaDraft(e.target.value)}
               placeholder="quién lo cubre…" maxLength={60}
               onKeyDown={e => { if (e.key === 'Enter') guardarNota(o); if (e.key === 'Escape') cerrarNota(); }}
-              style={{ width: esMovil ? 108 : 150, fontSize: 12, padding: '5px 8px', borderRadius: 8, border: `1px solid ${BRAND.teal}55`, background: BRAND.navyCard, color: BRAND.white, outline: 'none' }} />
+              style={{ width: esMovil ? 108 : 150, fontSize: 12, padding: '5px 8px', borderRadius: 10, border: `1px solid ${BRAND.teal}55`, background: BRAND.navyCard, color: BRAND.white, outline: 'none' }} />
             <button type="button" onClick={() => guardarNota(o)} title="Guardar"
-              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 800, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✓</button>
+              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 800, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✓</button>
             <button type="button" onClick={cerrarNota} title="Cancelar"
-              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✕</button>
+              style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>✕</button>
           </div>
         ) : o.nota ? (
           <button type="button" onClick={() => abrirNota(o)} title="Editar comentario"
             style={{ flexShrink: 0, maxWidth: esMovil ? 120 : 200, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-              border: `1px solid ${BRAND.teal}44`, background: 'rgba(46,207,170,0.10)', color: BRAND.teal, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', touchAction: 'manipulation' }}>
+              border: `1px solid ${BRAND.teal}44`, background: 'rgba(46,230,182,0.10)', color: BRAND.teal, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', touchAction: 'manipulation' }}>
             💬 {o.nota}
           </button>
         ) : (
           <button type="button" onClick={() => abrirNota(o)} title="Agregar comentario (ej. quién lo cubre)"
             style={{ flexShrink: 0, padding: '4px 9px', borderRadius: 999, cursor: 'pointer',
-              border: '1px dashed rgba(255,255,255,0.20)', background: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', touchAction: 'manipulation' }}>
+              border: '1px dashed rgba(255,255,255,0.20)', background: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', touchAction: 'manipulation' }}>
             + nota
           </button>
         )}
@@ -161,7 +161,7 @@ function BloqueObjetivos({ usuario, esMovil }) {
   };
 
   return (
-    <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
+    <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 14, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
       {/* Encabezado calcado del de Backups: alto fijo de 40, caret · título · contador. Antes crecía
           por la píldora "+ Objetivo" adentro y los dos paneles no arrancaban a la misma altura.
           El alta ahora es la fila "＋ nuevo objetivo…" del pie de la lista, igual que en Backups. */}
@@ -174,7 +174,7 @@ function BloqueObjetivos({ usuario, esMovil }) {
         <span>🎯 Objetivos del equipo</span>
         {total > 0 && (
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 500, color: BRAND.muted }}>{hechos.length} de {total}</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: BRAND.muted }}>{hechos.length} de {total}</span>
             <span style={{ display: 'block', width: esMovil ? 48 : 64, height: 4, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
               <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: BRAND.teal, transition: 'width .25s' }} />
             </span>
@@ -196,9 +196,9 @@ function BloqueObjetivos({ usuario, esMovil }) {
             }}
             style={{ ...inpSt, flex: 1 }} />
           <button type="button" onClick={agregar}
-            style={{ minHeight: 34, padding: '0 14px', borderRadius: 8, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Agregar</button>
+            style={{ minHeight: 34, padding: '0 14px', borderRadius: 10, border: 'none', background: BRAND.teal, color: '#0d1b2a', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Agregar</button>
           <button type="button" onClick={() => { setTexto(''); setCreando(false); }}
-            style={{ minHeight: 34, padding: '0 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 12.5, cursor: 'pointer' }}>✕</button>
+            style={{ minHeight: 34, padding: '0 10px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, fontSize: 13, cursor: 'pointer' }}>✕</button>
         </div>
       )}
 
@@ -235,7 +235,7 @@ function BloqueObjetivos({ usuario, esMovil }) {
 // deduce buscando barrios/partidos de la tabla zonas_regiones (la del SLA jerárquico: Norte y
 // Oeste = Noroeste) + los barrios porteños que no están ahí. Si no se reconoce nada, va a
 // "Sin zona" y se elige a mano (se guarda en backups_equipo.region, que manda sobre lo deducido).
-const BK_REGIONES = [['NOROESTE', 'Noroeste', '#bd8ed8'], ['CABA', 'CABA', '#5BA8E8'], ['SUR', 'Sur', '#2ECFAA']]; // de norte a sur, como Colectas
+const BK_REGIONES = [['NOROESTE', 'Noroeste', '#bd8ed8'], ['CABA', 'CABA', '#5BA8E8'], ['SUR', 'Sur', '#2EE6B6']]; // de norte a sur, como Colectas
 const BK_EXTRA = {
   CABA: ['caba', 'capital', 'balvanera', 'monserrat', 'montserrat', 'san cristobal', 'san nicolas', 'once', 'abasto', 'nueva pompeya', 'congreso', 'parque centenario', 'villa riachuelo', 'centro'],
   NOROESTE: ['san fer', 'ituzaingo', 'matanza norte', 'pacheco', 'jose c paz'],
@@ -354,7 +354,7 @@ function BloqueBackups({ usuario, esMovil }) {
       <div key={b.id} className="fx-bkrow" style={{ display: 'flex', borderTop: bLine }}>
         <div style={{ flex: '1 1 56%', minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRight: bLine }}>
           <button type="button" onClick={() => alternarEstado(b)} title={ok ? 'Marcar pendiente' : 'Confirmar'}
-            style={{ width: 18, height: 18, flexShrink: 0, borderRadius: 5, cursor: 'pointer', touchAction: 'manipulation', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, border: `2px solid ${ok ? BRAND.teal : 'rgba(255,255,255,0.28)'}`, background: ok ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>{ok ? '✓' : ''}</button>
+            style={{ width: 18, height: 18, flexShrink: 0, borderRadius: 6, cursor: 'pointer', touchAction: 'manipulation', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, border: `2px solid ${ok ? BRAND.teal : 'rgba(255,255,255,0.28)'}`, background: ok ? BRAND.teal : 'transparent', color: '#0d1b2a' }}>{ok ? '✓' : ''}</button>
           {editZona === b.id ? (
             <input autoFocus value={zonaDraft} onChange={e => setZonaDraft(e.target.value)} maxLength={60}
               onKeyDown={e => { if (e.key === 'Enter') guardarZona(b); if (e.key === 'Escape') setEditZona(null); }} onBlur={() => guardarZona(b)}
@@ -367,7 +367,7 @@ function BloqueBackups({ usuario, esMovil }) {
               {BK_REGIONES.map(([r, lbl, color]) => (
                 <button key={r} type="button" title={`Pasar a ${lbl}`}
                   onMouseDown={e => e.preventDefault()} onClick={() => elegirRegion(b, r)}
-                  style={{ fontSize: 10.5, padding: '2px 7px', borderRadius: 10, cursor: 'pointer', touchAction: 'manipulation',
+                  style={{ fontSize: 11, padding: '2px 7px', borderRadius: 10, cursor: 'pointer', touchAction: 'manipulation',
                     border: `1px solid ${b.region === r ? color : 'rgba(255,255,255,0.2)'}`, background: b.region === r ? `${color}22` : 'transparent',
                     color: b.region === r ? color : 'rgba(255,255,255,0.7)' }}>{lbl}</button>
               ))}
@@ -390,7 +390,7 @@ function BloqueBackups({ usuario, esMovil }) {
   };
 
   return (
-    <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
+    <div style={{ flex: esMovil ? '1 1 100%' : '1 1 0', minWidth: 0, borderRadius: 14, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
       <style>{`.fx-bkrow .fx-bkx{opacity:0;transition:opacity .12s}.fx-bkrow:hover .fx-bkx{opacity:1}@media(hover:none){.fx-bkrow .fx-bkx{opacity:.5}}`}</style>
       <button type="button" onClick={() => setAbierto(v => !v)}
         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: PANEL_HEAD_H, padding: '0 14px', cursor: 'pointer', textAlign: 'left', touchAction: 'manipulation',
@@ -398,7 +398,7 @@ function BloqueBackups({ usuario, esMovil }) {
         <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{abierto ? '▾' : '▸'}</span>
         <span>{BACKUP_ICON} Backups</span>
         {total > 0 && (
-          <span style={{ marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: pend > 0 ? AMBAR : BRAND.teal }}>
+          <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: pend > 0 ? AMBAR : BRAND.teal }}>
             {pend > 0 ? `${pend} sin confirmar` : `${total} ✓`}
           </span>
         )}
@@ -408,7 +408,7 @@ function BloqueBackups({ usuario, esMovil }) {
         <div style={{ padding: '10px 14px 12px' }}>
           {error && <div style={{ fontSize: 12, color: ROJO, marginBottom: 6 }}>{error}</div>}
           <div style={{ borderRadius: 10, border: bLine, overflow: 'hidden', background: 'rgba(255,255,255,0.02)' }}>
-            <div style={{ display: 'flex', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.32)' }}>
+            <div style={{ display: 'flex', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.32)' }}>
               <div style={{ flex: '1 1 56%', padding: '6px 10px', borderRight: bLine }}>Necesita backup</div>
               <div style={{ flex: '1 1 44%', padding: '6px 10px' }}>Lo cubre</div>
             </div>
@@ -419,7 +419,7 @@ function BloqueBackups({ usuario, esMovil }) {
               const p = rows.filter(b => b.estado !== 'ok').length;
               return (
                 <React.Fragment key={r}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderTop: bLine, background: 'rgba(255,255,255,0.03)', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', borderTop: bLine, background: 'rgba(255,255,255,0.03)', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
                     {lbl}
                     <span style={{ marginLeft: 'auto', textTransform: 'none', letterSpacing: 0, fontSize: 11, color: p ? AMBAR : 'rgba(255,255,255,0.4)' }}>
@@ -438,7 +438,7 @@ function BloqueBackups({ usuario, esMovil }) {
                   onKeyDown={e => { if (e.key === 'Enter') agregar(); if (e.key === 'Escape') setZona(''); }}
                   style={cellInput} />
               </div>
-              <div style={{ flex: '1 1 44%', padding: '7px 10px', fontSize: 12.5, color: 'rgba(255,255,255,0.22)' }}>—</div>
+              <div style={{ flex: '1 1 44%', padding: '7px 10px', fontSize: 13, color: 'rgba(255,255,255,0.22)' }}>—</div>
             </div>
           </div>
         </div>
@@ -478,7 +478,7 @@ function SelectorHora({ valor, onElegir, onCerrar }) {
   };
 
   return (
-    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, padding: 11, borderRadius: 12, border: `1px solid ${AMBAR}55`, background: BRAND.navyCard, boxShadow: '0 12px 34px rgba(0,0,0,0.6)', width: 208 }}>
+    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, padding: 11, borderRadius: 14, border: `1px solid ${AMBAR}55`, background: BRAND.navyCard, boxShadow: '0 12px 34px rgba(0,0,0,0.6)', width: 208 }}>
       <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 7 }}>Antes de las…</div>
       <input ref={ref} type="text" inputMode="numeric" placeholder="HH:MM" maxLength={5} value={text}
         onChange={e => {
@@ -493,16 +493,16 @@ function SelectorHora({ valor, onElegir, onCerrar }) {
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 9 }}>
         {['12:00', '15:00', '18:00', '21:00'].map(h => (
           <button key={h} type="button" onClick={() => onElegir(h)}
-            style={{ minHeight: 30, padding: '0 9px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600, touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.04)', color: BRAND.muted }}>
+            style={{ minHeight: 30, padding: '0 9px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.04)', color: BRAND.muted }}>
             {h}
           </button>
         ))}
       </div>
       <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
         <button type="button" onClick={() => { if (!commit(text)) onCerrar(); }}
-          style={{ flex: 1, minHeight: 32, borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700, touchAction: 'manipulation', border: `1px solid ${AMBAR}`, background: `${AMBAR}22`, color: AMBAR }}>Listo</button>
+          style={{ flex: 1, minHeight: 32, borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700, touchAction: 'manipulation', border: `1px solid ${AMBAR}`, background: `${AMBAR}22`, color: AMBAR }}>Listo</button>
         <button type="button" onClick={onCerrar}
-          style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
+          style={{ minHeight: 32, padding: '0 11px', borderRadius: 10, cursor: 'pointer', fontSize: 13, touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
       </div>
     </div>
   );
@@ -585,7 +585,7 @@ function CreadorInline({ autor, fechaFija, clientes, onListo, onCancelar }) {
   };
 
   return (
-    <div className="fx-crear" style={{ padding: 10, borderRadius: 10, border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,207,170,0.05)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="fx-crear" style={{ padding: 10, borderRadius: 10, border: `1px solid ${BRAND.teal}55`, background: 'rgba(46,230,182,0.05)', display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* El tipo va primero porque decide qué se carga: una ausencia pide un NOMBRE, el resto un texto. */}
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
         {Object.entries(NOTA_TIPOS).map(([k, t]) => (
@@ -595,11 +595,11 @@ function CreadorInline({ autor, fechaFija, clientes, onListo, onCancelar }) {
 
       {tipo === 'ausencia' && (
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: 14.5, fontWeight: 700, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{AUSENCIA_PREFIJO}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>{AUSENCIA_PREFIJO}</span>
           <input ref={refCad} type="text" list="fx-choferes" value={cadete} onChange={e => setCadete(e.target.value)}
             placeholder="¿quién?"
             onKeyDown={e => { if (e.key === 'Enter' && !falta) { e.preventDefault(); publicar(); } if (e.key === 'Escape') onCancelar(); }}
-            style={{ ...inpSt, fontSize: 14.5, fontWeight: 600, flex: 1, minWidth: 120 }} />
+            style={{ ...inpSt, fontSize: 14, fontWeight: 600, flex: 1, minWidth: 120 }} />
         </div>
       )}
 
@@ -614,7 +614,7 @@ function CreadorInline({ autor, fechaFija, clientes, onListo, onCancelar }) {
       {/* Cuándo: en Hoy/Mañana el día ya está fijo; en Próximos se elige con botones de día. */}
       {!fechaFija && (
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>¿Qué día?</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>¿Qué día?</div>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
             {proximos.map(f => (
               <Chip key={f} activo={fecha === f && !hasta} color={LILA} onClick={() => { setFecha(f); setHasta(''); }}>{chipDia(f)}</Chip>
@@ -642,31 +642,31 @@ function CreadorInline({ autor, fechaFija, clientes, onListo, onCancelar }) {
 
       {tipo === 'ausencia' && (
         <input type="text" list="fx-choferes" value={cubre} onChange={e => setCubre(e.target.value)}
-          placeholder="Lo cubre (opcional)" style={{ ...inpSt, fontSize: 12.5, width: '100%' }} />
+          placeholder="Lo cubre (opcional)" style={{ ...inpSt, fontSize: 13, width: '100%' }} />
       )}
 
       {tipo === 'colecta' && (
-        <select value={clienteId} onChange={e => setClienteId(e.target.value)} style={{ ...inpSt, fontSize: 12.5, maxWidth: '100%' }}>
+        <select value={clienteId} onChange={e => setClienteId(e.target.value)} style={{ ...inpSt, fontSize: 13, maxWidth: '100%' }}>
           <option value="">Sin cliente</option>
           {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </select>
       )}
 
-      {aviso && <div style={{ color: AMBAR, fontSize: 11.5 }}>{aviso}</div>}
+      {aviso && <div style={{ color: AMBAR, fontSize: 12 }}>{aviso}</div>}
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <button type="button" onClick={publicar} disabled={busy}
           style={{
-            minHeight: 32, padding: '0 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, touchAction: 'manipulation',
+            minHeight: 32, padding: '0 14px', borderRadius: 10, fontSize: 13, fontWeight: 700, touchAction: 'manipulation',
             cursor: busy ? 'default' : 'pointer',
             border: `1px solid ${falta ? BRAND.border : BRAND.teal}`,
-            background: falta ? 'rgba(255,255,255,0.04)' : 'rgba(46,207,170,0.14)',
+            background: falta ? 'rgba(255,255,255,0.04)' : 'rgba(46,230,182,0.14)',
             color: falta ? 'rgba(255,255,255,0.45)' : BRAND.teal,
           }}>
           {busy ? 'Publicando…' : 'Publicar'}
         </button>
         <button type="button" onClick={onCancelar}
-          style={{ minHeight: 32, padding: '0 10px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
+          style={{ minHeight: 32, padding: '0 10px', borderRadius: 10, cursor: 'pointer', fontSize: 13, touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
       </div>
     </div>
   );
@@ -731,7 +731,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
       }}
       className="fx-nota"
       style={{
-        padding: '8px 10px', borderRadius: 9,
+        padding: '8px 10px', borderRadius: 10,
         background: hover && !resuelta ? '#1a3550' : BRAND.navyCard,
         border: `1px solid ${hover && !resuelta ? 'rgba(255,255,255,0.16)' : BRAND.border}`,
         boxShadow: hover && !resuelta ? '0 4px 14px rgba(0,0,0,0.35)' : 'none',
@@ -758,7 +758,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
         <div style={{ flex: 1, minWidth: 0 }}>
           {(urgente || conHora) && (
             <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
-              <span style={{ width: 7, height: 7, borderRadius: 4, background: acento, flexShrink: 0 }} />
+              <span style={{ width: 7, height: 7, borderRadius: 6, background: acento, flexShrink: 0 }} />
               {urgente ? 'Ahora' : `Antes de las ${nota.hora_limite}`}
             </div>
           )}
@@ -769,7 +769,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
                 <input type="text" list="fx-choferes" value={cadEdit} onChange={e => setCadEdit(e.target.value)} autoFocus
                   placeholder="¿Quién falta?"
                   onKeyDown={e => { if (e.key === 'Enter') guardarEdit(); if (e.key === 'Escape') setEditando(false); }}
-                  style={{ ...inpSt, fontSize: 14.5, fontWeight: 600, width: '100%' }} />
+                  style={{ ...inpSt, fontSize: 14, fontWeight: 600, width: '100%' }} />
               )}
               <textarea value={txtEdit} onChange={e => setTxtEdit(e.target.value)} rows={2} autoFocus={tipoEdit !== 'ausencia'}
                 placeholder={tipoEdit === 'ausencia' ? 'Motivo o detalle (opcional)' : ''}
@@ -778,16 +778,16 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                 {Object.entries(NOTA_TIPOS).map(([k, v]) => (
                   <button key={k} type="button" onClick={() => setTipoEdit(k)}
-                    style={{ minHeight: 30, padding: '0 9px', borderRadius: 7, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation',
-                      border: `1px solid ${tipoEdit === k ? BRAND.teal : BRAND.border}`, background: tipoEdit === k ? 'rgba(46,207,170,0.14)' : 'transparent', color: tipoEdit === k ? BRAND.teal : BRAND.muted, fontWeight: tipoEdit === k ? 700 : 500 }}>
+                    style={{ minHeight: 30, padding: '0 9px', borderRadius: 6, fontSize: 12, cursor: 'pointer', touchAction: 'manipulation',
+                      border: `1px solid ${tipoEdit === k ? BRAND.teal : BRAND.border}`, background: tipoEdit === k ? 'rgba(46,230,182,0.14)' : 'transparent', color: tipoEdit === k ? BRAND.teal : BRAND.muted, fontWeight: tipoEdit === k ? 700 : 500 }}>
                     {v.emoji} {v.label}
                   </button>
                 ))}
                 <span style={{ marginLeft: 'auto', display: 'flex', gap: 5 }}>
                   <button type="button" onClick={guardarEdit} disabled={!(tipoEdit === 'ausencia' ? cadEdit.trim() : txtEdit.trim())}
-                    style={{ minHeight: 30, padding: '0 12px', borderRadius: 7, fontSize: 12.5, fontWeight: 700, cursor: (tipoEdit === 'ausencia' ? cadEdit.trim() : txtEdit.trim()) ? 'pointer' : 'default', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.14)', color: BRAND.teal }}>Guardar</button>
+                    style={{ minHeight: 30, padding: '0 12px', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: (tipoEdit === 'ausencia' ? cadEdit.trim() : txtEdit.trim()) ? 'pointer' : 'default', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,230,182,0.14)', color: BRAND.teal }}>Guardar</button>
                   <button type="button" onClick={() => { setEditando(false); setTxtEdit(nota.texto); setTipoEdit(nota.tipo); setCadEdit(nota.cadete || ''); }}
-                    style={{ minHeight: 30, padding: '0 10px', borderRadius: 7, fontSize: 12.5, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
+                    style={{ minHeight: 30, padding: '0 10px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: 'transparent', color: BRAND.muted }}>✕</button>
                 </span>
               </div>
             </div>
@@ -795,17 +795,17 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
             /* Ausencia: el tag "🚫 Ausencia" se absorbió en el título. "No viene" va en rojo y el
                nombre en blanco — decir las dos cosas era ruido puro. El motivo, si lo hay, abajo. */
             <div style={{ fontWeight: 600, lineHeight: 1.3, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
-              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14.5, fontWeight: 500 }}>{AUSENCIA_PREFIJO}</span>{' '}
-              <span style={{ color: BRAND.white, fontSize: 14.5 }}>{nota.cadete}</span>
+              <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: 500 }}>{AUSENCIA_PREFIJO}</span>{' '}
+              <span style={{ color: BRAND.white, fontSize: 14 }}>{nota.cadete}</span>
               {nota.texto && (
-                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>{nota.texto}</span>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>{nota.texto}</span>
               )}
             </div>
           ) : (
             /* El tag va AL LADO del título, no en una línea propia debajo: ahorra una línea por tarjeta. */
-            <div style={{ fontSize: 14.5, fontWeight: 500, color: BRAND.white, lineHeight: 1.4, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: BRAND.white, lineHeight: 1.4, textDecoration: resuelta ? 'line-through' : 'none', wordBreak: 'break-word' }}>
               {nota.texto}
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 8, padding: '1px 7px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', fontSize: 10.5, fontWeight: 600, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', verticalAlign: 2, whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 8, padding: '1px 7px', borderRadius: 6, background: 'rgba(255,255,255,0.06)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', verticalAlign: 2, whiteSpace: 'nowrap' }}>
                 {t.emoji} {t.label}{nota.cadete ? ` · ${nota.cadete}` : ''}
               </span>
             </div>
@@ -815,7 +815,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           {(mostrarDia || detalle) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
               {mostrarDia && (
-                <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 5, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)', fontSize: 10.5, fontWeight: 600 }}>
+                <span style={{ display: 'inline-flex', padding: '1px 7px', borderRadius: 6, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600 }}>
                   {labelDia(nota.fecha_objetivo, hoy)}
                 </span>
               )}
@@ -869,13 +869,13 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
               <input type="text" list="fx-choferes" value={cubre} onChange={e => setCubre(e.target.value)}
                 placeholder="Lo cubre (a mano o de la lista)" autoFocus
                 onKeyDown={e => { if (e.key === 'Enter' && cubre.trim()) onCubrir(nota, cubre.trim()); }}
-                style={{ ...inpSt, fontSize: 12.5, flex: 1, minWidth: 130 }} />
+                style={{ ...inpSt, fontSize: 13, flex: 1, minWidth: 130 }} />
               <button type="button" onClick={() => onCubrir(nota, cubre.trim())} disabled={!cubre.trim()}
                 style={{
-                  minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, touchAction: 'manipulation',
+                  minHeight: 32, padding: '0 11px', borderRadius: 10, fontSize: 12, fontWeight: 700, touchAction: 'manipulation',
                   cursor: cubre.trim() ? 'pointer' : 'default',
                   border: `1px solid ${cubre.trim() ? BRAND.teal : BRAND.border}`,
-                  background: cubre.trim() ? 'rgba(46,207,170,0.14)' : 'rgba(255,255,255,0.04)',
+                  background: cubre.trim() ? 'rgba(46,230,182,0.14)' : 'rgba(255,255,255,0.04)',
                   color: cubre.trim() ? BRAND.teal : 'rgba(255,255,255,0.3)',
                 }}>
                 Cubrir ausencia
@@ -886,14 +886,14 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           {/* Comentarios del equipo (cualquiera puede sumar uno) */}
           {comOpen && (
             <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${BRAND.border}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
-              {comentarios.length === 0 && <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.4)' }}>Sin comentarios todavía.</div>}
+              {comentarios.length === 0 && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Sin comentarios todavía.</div>}
               {comentarios.map(c => {
                 const h = c.created_at ? new Date(new Date(c.created_at).getTime() - 3 * 3600 * 1000).toISOString().slice(11, 16) : '';
                 return (
                   <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                    <div style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 700, color: BRAND.teal, background: 'rgba(46,207,170,0.14)' }}>{(c.autor || '?')[0].toUpperCase()}</div>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: BRAND.teal, background: 'rgba(46,230,182,0.14)' }}>{(c.autor || '?')[0].toUpperCase()}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12.5, color: BRAND.white, lineHeight: 1.35, wordBreak: 'break-word' }}>{c.texto}</div>
+                      <div style={{ fontSize: 13, color: BRAND.white, lineHeight: 1.35, wordBreak: 'break-word' }}>{c.texto}</div>
                       <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>{c.autor}{h ? ` · ${h}` : ''}{c.autor === usuario ? <span onClick={() => onBorrarComentario(c.id)} style={{ color: ROJO, cursor: 'pointer', marginLeft: 6 }}>borrar</span> : null}</div>
                     </div>
                   </div>
@@ -902,9 +902,9 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
               <div style={{ display: 'flex', gap: 5 }}>
                 <input type="text" value={comTxt} onChange={e => setComTxt(e.target.value)} placeholder="Escribir un comentario…"
                   onKeyDown={e => { if (e.key === 'Enter' && comTxt.trim()) enviarCom(); }}
-                  style={{ ...inpSt, fontSize: 12.5, flex: 1, minWidth: 120 }} />
+                  style={{ ...inpSt, fontSize: 13, flex: 1, minWidth: 120 }} />
                 <button type="button" onClick={enviarCom} disabled={!comTxt.trim()}
-                  style={{ minHeight: 32, padding: '0 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, touchAction: 'manipulation', cursor: comTxt.trim() ? 'pointer' : 'default', border: `1px solid ${comTxt.trim() ? BRAND.teal : BRAND.border}`, background: comTxt.trim() ? 'rgba(46,207,170,0.14)' : 'rgba(255,255,255,0.04)', color: comTxt.trim() ? BRAND.teal : 'rgba(255,255,255,0.3)' }}>Enviar</button>
+                  style={{ minHeight: 32, padding: '0 12px', borderRadius: 10, fontSize: 13, fontWeight: 700, touchAction: 'manipulation', cursor: comTxt.trim() ? 'pointer' : 'default', border: `1px solid ${comTxt.trim() ? BRAND.teal : BRAND.border}`, background: comTxt.trim() ? 'rgba(46,230,182,0.14)' : 'rgba(255,255,255,0.04)', color: comTxt.trim() ? BRAND.teal : 'rgba(255,255,255,0.3)' }}>Enviar</button>
               </div>
             </div>
           )}
@@ -917,7 +917,7 @@ function Tarjeta({ nota, clientesById, usuario, comentariosByNota = {}, onResolv
           title={menu ? 'Ocultar acciones' : 'Acciones'}
           style={{
             flexShrink: 0, alignSelf: 'flex-start', width: 26, height: 26, marginTop: -2,
-            borderRadius: 7, cursor: 'pointer', touchAction: 'manipulation',
+            borderRadius: 6, cursor: 'pointer', touchAction: 'manipulation',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             border: '1px solid transparent', fontSize: 15, fontWeight: 700, lineHeight: 1,
             background: menu ? 'rgba(255,255,255,0.08)' : 'transparent',
@@ -935,14 +935,14 @@ function BloqueAusencias({ notas, ...rest }) {
   const [abierto, setAbierto] = useState(null);
   const sel = notas.find(n => n.id === abierto);
   return (
-    <div style={{ padding: '8px 10px', borderRadius: 9, background: BRAND.navyCard, border: `1px solid ${BRAND.border}` }}>
+    <div style={{ padding: '8px 10px', borderRadius: 10, background: BRAND.navyCard, border: `1px solid ${BRAND.border}` }}>
       <div style={{ fontSize: 14, lineHeight: 1.7, color: BRAND.white }}>
         <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>{notas.length === 1 ? 'No viene' : 'No vienen'}: </span>
         {notas.map((n, i) => (
           <span key={n.id}>
             <span onClick={() => setAbierto(abierto === n.id ? null : n.id)} role="button" tabIndex={0}
               style={{ fontWeight: 600, cursor: 'pointer', textDecoration: abierto === n.id ? 'underline' : 'none', textUnderlineOffset: 3 }}>{n.cadete}</span>
-            {n.cubre ? <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}> (cubre {n.cubre})</span> : null}
+            {n.cubre ? <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}> (cubre {n.cubre})</span> : null}
             {i < notas.length - 1 ? ', ' : ''}
           </span>
         ))}
@@ -993,9 +993,9 @@ function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, o
           alignSelf: esMovil ? 'auto' : 'stretch', minHeight: esMovil ? 42 : 0,
           display: 'flex', flexDirection: esMovil ? 'row' : 'column', alignItems: 'center',
           gap: esMovil ? 8 : 10, padding: esMovil ? '0 14px' : '10px 0',
-          borderRadius: 12, cursor: 'pointer', touchAction: 'manipulation',
+          borderRadius: 14, cursor: 'pointer', touchAction: 'manipulation',
           border: `1px ${encima ? 'dashed' : 'solid'} ${encima ? BRAND.teal : BRAND.border}`,
-          background: encima ? 'rgba(46,207,170,0.07)' : 'rgba(255,255,255,0.015)',
+          background: encima ? 'rgba(46,230,182,0.07)' : 'rgba(255,255,255,0.015)',
           transition: 'background .15s, border-color .15s',
         }}>
         <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.color, opacity: 0.7, flexShrink: 0 }} />
@@ -1020,9 +1020,9 @@ function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, o
         flex: esMovil ? '1 1 100%' : (col.anchoFijo ? `0 1 ${col.anchoFijo}px` : '1 1 0'),
         minWidth: esMovil ? 0 : (col.anchoFijo ? 250 : 232),
         display: 'flex', flexDirection: 'column', gap: 6,
-        padding: 8, borderRadius: 12,
+        padding: 8, borderRadius: 14,
         // Tinte apenas perceptible del color de la columna: el cerebro ubica Hoy/Mañana/Próximos sin leer.
-        background: encima ? 'rgba(46,207,170,0.07)' : 'rgba(255,255,255,0.02)',
+        background: encima ? 'rgba(46,230,182,0.07)' : 'rgba(255,255,255,0.02)',
         border: `1px dashed ${encima ? BRAND.teal : 'transparent'}`,
         // Hoy es el protagonista; Mañana y Próximos van apenas más apagados.
         opacity: (col.id === 'manana' || col.id === 'proximos') ? 0.72 : 1,
@@ -1050,7 +1050,7 @@ function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, o
 
       {turno.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 6px 8px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: `1px solid ${BRAND.border}` }}>
-          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(255,255,255,0.55)', padding: '0 3px' }}>🌙 Del turno noche · {turno.length}</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.55)', padding: '0 3px' }}>🌙 Del turno noche · {turno.length}</div>
           {turno.map(n => <Tarjeta key={n.id} nota={n} arrastrable={!esMovil} mostrarDia={col.mostrarDia} vencida={col.id === 'vencidas'} {...rest} />)}
         </div>
       )}
@@ -1064,7 +1064,7 @@ function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, o
           <button type="button" onClick={() => setVerArch(v => !v)} title="Vencidas de hace 2 días o más que nadie tocó"
             style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '8px 3px 2px', border: 'none', background: 'transparent', cursor: 'pointer', touchAction: 'manipulation' }}>
             <span style={{ flex: 1, height: 1, background: BRAND.border }} />
-            <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.35)' }}>{verArch ? '▾' : '▸'} Archivadas {archivadas.length}</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{verArch ? '▾' : '▸'} Archivadas {archivadas.length}</span>
             <span style={{ flex: 1, height: 1, background: BRAND.border }} />
           </button>
           {verArch && archivadas.map(n => <Tarjeta key={n.id} nota={n} mostrarDia vencida {...rest} />)}
@@ -1073,7 +1073,7 @@ function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, o
 
       {!notas.length && !hechas.length && !archivadas.length && !creando && (
         <div style={{ padding: '14px 6px 10px', textAlign: 'center' }}>
-          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.3)' }}>{col.vacio}</div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)' }}>{col.vacio}</div>
           {col.creable && (
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>{col.pista}</div>
           )}
@@ -1094,7 +1094,7 @@ function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, o
             style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', padding: '8px 3px 2px',
               border: 'none', background: 'transparent', cursor: 'pointer', touchAction: 'manipulation' }}>
             <span style={{ flex: 1, height: 1, background: BRAND.border }} />
-            <span style={{ fontSize: 10.5, color: verHechas ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.3)' }}>
+            <span style={{ fontSize: 11, color: verHechas ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.3)' }}>
               {verHechas ? '▾' : '▸'} Hechas {hechas.length}
             </span>
             <span style={{ flex: 1, height: 1, background: BRAND.border }} />
@@ -1105,7 +1105,7 @@ function Columna({ col, notas, hechas = [], archivadas = [], esMovil, creando, o
 
       {creando ? children : col.creable && (
         <button type="button" onClick={onCrear}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 38, padding: '0 8px', borderRadius: 9, cursor: 'pointer', fontSize: 13, fontWeight: 600, touchAction: 'manipulation', border: '1px dashed rgba(255,255,255,0.16)', background: 'transparent', color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 38, padding: '0 8px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600, touchAction: 'manipulation', border: '1px dashed rgba(255,255,255,0.16)', background: 'transparent', color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
           + Nueva nota{esMovil ? ` en ${col.titulo}` : ''}
         </button>
       )}
@@ -1303,7 +1303,7 @@ function PizarraInner({ usuario }) {
       </datalist>
 
       {error && (
-        <div style={{ background: 'rgba(226,75,74,0.15)', color: ROJO, border: `1px solid rgba(226,75,74,0.3)`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ background: 'rgba(232,97,95,0.15)', color: ROJO, border: `1px solid rgba(232,97,95,0.3)`, padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {error}
           <button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: ROJO, cursor: 'pointer', fontSize: 16 }}>✕</button>
         </div>
@@ -1338,7 +1338,7 @@ function PizarraInner({ usuario }) {
               Es transitorio y accionable, así que va ancho completo y a la vista — antes estaba
               escondido detrás de un acordeón cerrado y nadie lo veía. */}
                 {sugerencias.length > 0 && (
-                  <div style={{ marginTop: 14, padding: '11px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)' }}>
+                  <div style={{ marginTop: 14, padding: '11px 14px', borderRadius: 14, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.02)' }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>Seguimiento de ausencias</div>
                     {sugerencias.map(a => (
                       <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${BRAND.border}` }}>
@@ -1349,9 +1349,9 @@ function PizarraInner({ usuario }) {
                         </span>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button type="button" onClick={() => ocultarSug(a.id)}
-                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>✓ Volvió</button>
+                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,230,182,0.12)', color: BRAND.teal }}>✓ Volvió</button>
                           <button type="button" onClick={() => seguirFaltando(a)}
-                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.75)' }}>Sigue faltando</button>
+                            style={{ minHeight: 32, padding: '0 11px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', touchAction: 'manipulation', border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.75)' }}>Sigue faltando</button>
                         </div>
                       </div>
                     ))}

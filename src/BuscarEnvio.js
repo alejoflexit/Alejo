@@ -36,7 +36,7 @@ function DevolucionInfo({ did, verDevolucion }) {
     return () => { vivo = false; };
   }, [did]);
   if (!c) return null;
-  const color = c.etapa === 'devuelto' ? '#2ECFAA' : c.vencido ? '#FFB020' : '#9fb0ff';
+  const color = c.etapa === 'devuelto' ? '#2EE6B6' : c.vencido ? '#F5C044' : '#9fb0ff';
   const trajo = quienTrajo(c);
   const filas = [
     ['Tipo', c.tipo === 'CAMBIO' ? `Cambio${c.li_texto ? ` · “${c.li_texto}”` : ''}` : c.tipo === 'NO_ENTREGADO' ? 'No entregado (volvió al depósito)' : 'Cancelado'],
@@ -50,20 +50,20 @@ function DevolucionInfo({ did, verDevolucion }) {
   ].filter(Boolean);
   const limite = c.etapa === 'calle' ? LIMITE_CALLE : c.etapa === 'deposito' ? LIMITE_DEPOSITO : null;
   return (
-    <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: `1px solid ${color}55` }}>
+    <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.03)', border: `1px solid ${color}55` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>Devolución</span>
         <span style={{ fontWeight: 700, color }}>● {ETAPA_TXT[c.etapa]}</span>
-        {c.dias != null && c.etapa !== 'devuelto' && <span style={{ fontSize: 13, color: c.vencido ? '#FFB020' : 'rgba(255,255,255,0.6)' }}>hace {c.dias} día{c.dias !== 1 ? 's' : ''}{c.vencido && limite ? ` (más de ${limite})` : ''}</span>}
+        {c.dias != null && c.etapa !== 'devuelto' && <span style={{ fontSize: 13, color: c.vencido ? '#F5C044' : 'rgba(255,255,255,0.6)' }}>hace {c.dias} día{c.dias !== 1 ? 's' : ''}{c.vencido && limite ? ` (más de ${limite})` : ''}</span>}
         <span style={{ flex: 1 }} />
         {verDevolucion && (c.etapa === 'devuelto' && remito && remito.estado === 'devuelto'
-          ? <button onClick={() => verDevolucion(c.did, remito.codigo)} style={{ background: 'none', border: '1px solid rgba(46,207,170,0.5)', color: '#2ECFAA', borderRadius: 8, fontSize: 12.5, padding: '5px 10px', cursor: 'pointer' }}>Ver remito firmado →</button>
-          : <button onClick={() => verDevolucion(c.did)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', borderRadius: 8, fontSize: 12.5, padding: '5px 10px', cursor: 'pointer' }}>Ver en Devoluciones →</button>)}
+          ? <button onClick={() => verDevolucion(c.did, remito.codigo)} style={{ background: 'none', border: '1px solid rgba(46,230,182,0.5)', color: '#2EE6B6', borderRadius: 10, fontSize: 13, padding: '5px 10px', cursor: 'pointer' }}>Ver remito firmado →</button>
+          : <button onClick={() => verDevolucion(c.did)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', borderRadius: 10, fontSize: 13, padding: '5px 10px', cursor: 'pointer' }}>Ver en Devoluciones →</button>)}
       </div>
       <div style={{ marginTop: 8 }}>
         {filas.map(([k, v]) => (
-          <div key={k} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 13.5 }}>
-            <span style={{ width: 170, flexShrink: 0, color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}>{k}</span>
+          <div key={k} style={{ display: 'flex', gap: 10, padding: '3px 0', fontSize: 14 }}>
+            <span style={{ width: 170, flexShrink: 0, color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>{k}</span>
             <span style={{ flex: 1, color: '#fff', wordBreak: 'break-word' }}>{v}</span>
           </div>
         ))}
@@ -271,7 +271,7 @@ function porDia(rows) {
 
 // ── Caja de búsqueda: misma estética que Home/Devoluciones (vidrio, grises, un solo acento teal) ──
 const CSS_BUSCADOR = `
-.be-caja{background:rgba(27,28,46,0.72);border:1px solid rgba(255,255,255,0.08);border-radius:16px;
+.be-caja{background:rgba(27,28,46,0.72);border:1px solid rgba(255,255,255,0.08);border-radius:14px;
   -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 20px 60px rgba(0,0,0,0.28);
   transition:border-color .2s,box-shadow .2s}
 .be-caja:focus-within{border-color:rgba(46,230,182,0.35)}
@@ -281,7 +281,7 @@ const CSS_BUSCADOR = `
 .be-texto::placeholder{color:#71768e}
 .be-barra{display:flex;gap:8px;align-items:center;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,0.06)}
 .be-sec,.be-pri{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 14px;
-  border-radius:11px;font:600 14px/1 'Space Grotesk',-apple-system,'Segoe UI',sans-serif;letter-spacing:.1px;cursor:pointer;
+  border-radius:10px;font:600 14px/1 'Space Grotesk',-apple-system,'Segoe UI',sans-serif;letter-spacing:.1px;cursor:pointer;
   transition:background .15s,border-color .15s,color .15s;-webkit-tap-highlight-color:transparent;white-space:nowrap}
 .be-sec{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#a7adc2}
 .be-sec:hover{background:rgba(255,255,255,0.09);color:#f4f5fa}
@@ -376,7 +376,7 @@ export default function BuscarEnvio({ inicial = '', verDevolucion = null }) {
           </button>
         </div>
       </div>
-      {err && <div style={{ color: '#FFB020', fontSize: 13, marginTop: 10 }}>{err}</div>}
+      {err && <div style={{ color: '#F5C044', fontSize: 13, marginTop: 10 }}>{err}</div>}
 
       {res !== null && (() => {
         const d = desglosar(texto);
@@ -389,13 +389,13 @@ export default function BuscarEnvio({ inicial = '', verDevolucion = null }) {
           d.cp && ['CP', d.cp],
         ].filter(Boolean);
         return (
-          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 12, background: 'rgba(74,158,255,0.07)', border: '1px solid rgba(74,158,255,0.25)' }}>
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 14, background: 'rgba(74,158,255,0.07)', border: '1px solid rgba(74,158,255,0.25)' }}>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>Lo que entendí del mensaje</div>
             {filas.map(([k, v]) => (
               <div key={k} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '4px 0', fontSize: 14 }}>
-                <span style={{ width: 128, flexShrink: 0, color: 'rgba(255,255,255,0.45)', fontSize: 12.5 }}>{k}</span>
+                <span style={{ width: 128, flexShrink: 0, color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>{k}</span>
                 <span style={{ flex: 1, color: '#fff', wordBreak: 'break-word' }}>{v}</span>
-                {k !== 'Pide' && <button onClick={() => copiar(v)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', borderRadius: 7, fontSize: 11.5, padding: '3px 8px', cursor: 'pointer' }}>Copiar</button>}
+                {k !== 'Pide' && <button onClick={() => copiar(v)} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', borderRadius: 6, fontSize: 12, padding: '3px 8px', cursor: 'pointer' }}>Copiar</button>}
               </div>
             ))}
           </div>
@@ -412,7 +412,7 @@ export default function BuscarEnvio({ inicial = '', verDevolucion = null }) {
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>
             {via && via.via === 'suelto'
-              ? <>No había número de envío. Busqué {via.sueltos.length === 1 ? 'el número suelto' : 'los números sueltos'} <b style={{ color: '#FFB020' }}>{via.sueltos.join(', ')}</b> como pedido: confirmá cuál es (los números de pedido se repiten entre clientes).</>
+              ? <>No había número de envío. Busqué {via.sueltos.length === 1 ? 'el número suelto' : 'los números sueltos'} <b style={{ color: '#F5C044' }}>{via.sueltos.join(', ')}</b> como pedido: confirmá cuál es (los números de pedido se repiten entre clientes).</>
               : res.length === 1 ? 'Encontré 1, pero no estoy seguro. ¿Es este?' : (() => { const ds = new Set(res.map((r) => [r.direccion, r.localidad].filter(Boolean).join(', ').toLowerCase())); return ds.size === 1 ? `Encontré ${res.length} en ${[res[0].direccion, res[0].localidad].filter(Boolean).join(', ')}. ¿Cuál es?` : `Encontré ${res.length}. ¿Cuál es?`; })()}
           </div>
           {(() => {
@@ -428,15 +428,15 @@ export default function BuscarEnvio({ inicial = '', verDevolucion = null }) {
                   <button key={r.id_interno} onClick={() => setElegido(r.id_interno)}
                     style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', marginBottom: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.03)', color: '#fff', cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 14.5, minWidth: 0 }}>{r.razon_social || 'Cliente sin nombre'}</span>
-                      <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: colorEstado(r.estado) }}>● {r.estado || 'sin estado'}</span>
+                      <span style={{ fontWeight: 700, fontSize: 14, minWidth: 0 }}>{r.razon_social || 'Cliente sin nombre'}</span>
+                      <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, color: colorEstado(r.estado) }}>● {r.estado || 'sin estado'}</span>
                     </div>
-                    <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
                       {r.nombre || '—'} <span style={{ color: 'rgba(255,255,255,0.4)' }}>· #{r.id_interno}</span>
                       {!mismaDir && [r.direccion, r.localidad].some(Boolean) ? <> · {[r.direccion, r.localidad].filter(Boolean).join(', ')}</> : null}
                     </div>
                     {devs.get(Number(r.id_interno)) && (() => { const dv = devs.get(Number(r.id_interno)); return (
-                      <div style={{ fontSize: 12, marginTop: 3, color: dv.etapa === 'devuelto' ? '#2ECFAA' : dv.vencido ? '#FFB020' : '#9fb0ff' }}>
+                      <div style={{ fontSize: 12, marginTop: 3, color: dv.etapa === 'devuelto' ? '#2EE6B6' : dv.vencido ? '#F5C044' : '#9fb0ff' }}>
                         ↩ {dv.tipo === 'CAMBIO' ? 'Cambio' : 'Cancelado'} · {ETAPA_TXT[dv.etapa]}{dv.etapa !== 'devuelto' && dv.dias != null ? ` hace ${dv.dias} d` : ''}
                       </div>); })()}
                   </button>

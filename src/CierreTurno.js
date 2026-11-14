@@ -13,7 +13,7 @@ const C = {
   glass: "rgba(27,28,46,0.72)", line: "rgba(255,255,255,0.06)", soft: "rgba(255,255,255,0.05)",
   teal: "#2ee6b6", ambar: "#F5C044",
 };
-const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 16, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" };
+const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 14, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" };
 const INICIO_TURNO = 18 * 60;
 
 // Próximo día con operación: lunes a sábado (el domingo no se trabaja).
@@ -76,14 +76,14 @@ export default function CierreTurno({ cadetes = [], abierto: abiertoCtl, onCerra
   if (controlado && !abierto) return null;
 
   const resueltasAnoche = deAnoche.filter((n) => n.resuelta_at).length;
-  const inp = { background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "9px 12px", fontSize: 13.5, fontFamily: "inherit" };
+  const inp = { background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, padding: "9px 12px", fontSize: 14, fontFamily: "inherit" };
 
   return (
     <div style={{ ...card, padding: "12px 14px", margin: "12px 0" }}>
       <button onClick={() => (controlado ? onCerrar && onCerrar() : setAbierto((v) => !v))} aria-expanded={abierto}
         style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "baseline", gap: 10, width: "100%" }}>
         <span style={{ fontWeight: 600, fontSize: 14, color: C.ink }}>Cierre de turno</span>
-        <span style={{ fontSize: 12.5, color: C.ink2, flex: 1 }}>
+        <span style={{ fontSize: 13, color: C.ink2, flex: 1 }}>
           {deHoy.length ? `${deHoy.length} novedad${deHoy.length > 1 ? "es" : ""} para ${labelDia(destino, hoy)}` : `las novedades pasan a la Pizarra de ${labelDia(destino, hoy)}`}
           {deAnoche.length ? ` · de anoche: ${resueltasAnoche}/${deAnoche.length} resueltas` : ""}
         </span>
@@ -105,11 +105,11 @@ export default function CierreTurno({ cadetes = [], abierto: abiertoCtl, onCerra
                 <input type="checkbox" checked={urgente} onChange={(e) => setUrgente(e.target.checked)} /> Urgente
               </label>
               <button type="submit" disabled={busy || !texto.trim()}
-                style={{ marginLeft: "auto", background: texto.trim() ? "rgba(46,230,182,0.12)" : C.soft, border: `1px solid ${texto.trim() ? "rgba(46,230,182,0.35)" : C.line}`, color: texto.trim() ? C.teal : C.ink3, borderRadius: 10, padding: "9px 16px", fontSize: 13.5, fontWeight: 600, cursor: texto.trim() ? "pointer" : "default" }}>
+                style={{ marginLeft: "auto", background: texto.trim() ? "rgba(46,230,182,0.12)" : C.soft, border: `1px solid ${texto.trim() ? "rgba(46,230,182,0.35)" : C.line}`, color: texto.trim() ? C.teal : C.ink3, borderRadius: 10, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: texto.trim() ? "pointer" : "default" }}>
                 {busy ? "Guardando…" : "Pasar a la Pizarra"}
               </button>
             </div>
-            {err && <div style={{ fontSize: 12.5, color: C.ambar }}>{err}</div>}
+            {err && <div style={{ fontSize: 13, color: C.ambar }}>{err}</div>}
           </form>
 
           {deHoy.length > 0 && (
@@ -140,7 +140,7 @@ export default function CierreTurno({ cadetes = [], abierto: abiertoCtl, onCerra
 function Lista({ titulo, children }) {
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ fontSize: 11.5, color: C.ink3, marginBottom: 4 }}>{titulo}</div>
+      <div style={{ fontSize: 12, color: C.ink3, marginBottom: 4 }}>{titulo}</div>
       {children}
     </div>
   );
@@ -149,7 +149,7 @@ function Lista({ titulo, children }) {
 function Linea({ n, extra }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "6px 0", borderTop: `1px solid ${C.line}` }}>
-      {n.prioridad === "ahora" && <span aria-label="urgente" style={{ width: 7, height: 7, borderRadius: 4, background: C.ambar, flexShrink: 0, alignSelf: "center" }} />}
+      {n.prioridad === "ahora" && <span aria-label="urgente" style={{ width: 7, height: 7, borderRadius: 6, background: C.ambar, flexShrink: 0, alignSelf: "center" }} />}
       <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.ink, lineHeight: 1.45 }}>
         {n.texto}
         <span style={{ color: C.ink3, fontSize: 12 }}>{n.cadete ? ` · ${n.cadete}` : ""}{n.autor ? ` · ${n.autor}` : ""}</span>

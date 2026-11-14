@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { sbFetch, todayStr } from "./colectasShared";
+import { FX_FONT } from "./theme";
 
 // El mapa (Leaflet) se carga recién cuando alguien lo abre, para no engordar el Home.
 const TransitoMapa = React.lazy(() => import("./TransitoMapa"));
@@ -22,7 +23,7 @@ const C = {
   glassSoft: "rgba(27,28,46,0.6)", pop: "rgba(24,25,42,0.96)", line: "rgba(255,255,255,0.06)",
   teal: "#2ee6b6", ambar: "#F5C044", rojo: "#E8615F",
   shadow: "0 20px 60px rgba(0,0,0,0.28)",
-  grotesk: "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+  grotesk: FX_FONT.display,
 };
 
 const TIPOS = {
@@ -100,8 +101,8 @@ function FormCorte({ usuario, onListo, onCancelar }) {
   const [vence, setVence] = useState("2h");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const inp = { width: "100%", boxSizing: "border-box", padding: "9px 11px", borderRadius: 9, border: `1px solid rgba(255,255,255,0.1)`, background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" };
-  const lbl = { fontSize: 11.5, color: C.ink3, fontWeight: 600, marginBottom: 4, display: "block" };
+  const inp = { width: "100%", boxSizing: "border-box", padding: "9px 11px", borderRadius: 10, border: `1px solid rgba(255,255,255,0.1)`, background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, outline: "none", fontFamily: "inherit" };
+  const lbl = { fontSize: 12, color: C.ink3, fontWeight: 600, marginBottom: 4, display: "block" };
   const guardar = async () => {
     if (!donde.trim()) { setErr("Escribí dónde es el corte"); return; }
     setBusy(true); setErr("");
@@ -142,7 +143,7 @@ function FormCorte({ usuario, onListo, onCancelar }) {
         <label style={lbl}>Desvío sugerido (opcional)</label>
         <input value={sug} onChange={(e) => setSug(e.target.value)} placeholder="Salir por Paseo Colón" style={inp} />
       </div>
-      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.ink2, cursor: "pointer" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.ink2, cursor: "pointer" }}>
         <input type="checkbox" checked={base} onChange={(e) => setBase(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.teal }} />
         Afecta la salida de la base
       </label>
@@ -200,7 +201,7 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
         {n > 0 && (
           <span className={baseRoja ? "fx-tr-pulso" : undefined}
             style={isMobile
-              ? { position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 11, background: color, color: hayRoja ? "#fff" : "#1a1406", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", border: "2px solid #0F0F1B", fontFamily: C.grotesk, animation: baseRoja ? "fx-tr-pulso 1.6s ease-in-out infinite" : "none" }
+              ? { position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 10, background: color, color: hayRoja ? "#fff" : "#1a1406", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", border: "2px solid #0F0F1B", fontFamily: C.grotesk, animation: baseRoja ? "fx-tr-pulso 1.6s ease-in-out infinite" : "none" }
               : { width: 8, height: 8, borderRadius: "50%", background: color, animation: baseRoja ? "fx-tr-pulso 1.6s ease-in-out infinite" : "none" }}>
             {isMobile ? n : null}
           </span>
@@ -215,7 +216,7 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
           </div>
 
           {n === 0 && (
-            <div style={{ padding: "4px 16px 14px", fontSize: 12.5, color: C.ink2, lineHeight: 1.5 }}>
+            <div style={{ padding: "4px 16px 14px", fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
               Normal en los {estado.total || ""} corredores y alrededor de la base, comparado con lo habitual para esta hora.
             </div>
           )}
@@ -228,8 +229,8 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.35 }}>
                     {a.titulo}
-                    {esFuturo(a) && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: C.ink2, background: "rgba(255,255,255,0.08)", borderRadius: 5, padding: "1px 6px", verticalAlign: 1 }}>MAÑANA</span>}
-                    {a.radar_base && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: col, background: col + "22", borderRadius: 5, padding: "1px 6px", verticalAlign: 1 }}>BASE</span>}
+                    {esFuturo(a) && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: C.ink2, background: "rgba(255,255,255,0.08)", borderRadius: 6, padding: "1px 6px", verticalAlign: 1 }}>MAÑANA</span>}
+                    {a.radar_base && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", color: col, background: col + "22", borderRadius: 6, padding: "1px 6px", verticalAlign: 1 }}>BASE</span>}
                   </div>
                   {a.hora_evento && <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.45, marginTop: 2 }}>Desde las {a.hora_evento} hs</div>}
                   {a.detalle && <div style={{ fontSize: 12, color: C.ink2, lineHeight: 1.45, marginTop: 2 }}>{a.detalle}</div>}
@@ -246,9 +247,9 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
                   {a.fuente === "tomtom" && <div style={{ fontSize: 11, color: C.ink3, marginTop: 3 }}>TomTom</div>}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-                  {a.cadetes > 0 && <span style={{ fontSize: 11.5, color: C.ink3, whiteSpace: "nowrap" }}>{a.cadetes} cad.</span>}
+                  {a.cadetes > 0 && <span style={{ fontSize: 12, color: C.ink3, whiteSpace: "nowrap" }}>{a.cadetes} cad.</span>}
                   {a.fuente === "manual" && session && (
-                    <button type="button" onClick={() => sacar(a)} style={{ border: `1px solid rgba(255,255,255,0.1)`, background: "transparent", color: C.ink2, borderRadius: 8, padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Sacar</button>
+                    <button type="button" onClick={() => sacar(a)} style={{ border: `1px solid rgba(255,255,255,0.1)`, background: "transparent", color: C.ink2, borderRadius: 10, padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Sacar</button>
                   )}
                 </div>
               </div>
@@ -259,9 +260,9 @@ export function TransitoChip({ transito, session, usuario, isMobile }) {
             <FormCorte usuario={usuario} onCancelar={() => setForm(false)} onListo={() => { setForm(false); recargar(); }} />
           ) : (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 16px", padding: "12px 16px 14px", borderTop: `1px solid ${C.line}` }}>
-              <button type="button" onClick={() => { setOpen(false); setMapa(true); }} style={{ background: "none", border: "none", padding: 0, color: C.teal, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Ver mapa</button>
-              {n > 0 && <button type="button" onClick={copiar} style={{ background: "none", border: "none", padding: 0, color: C.ink2, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{copiado ? "✓ Copiado" : "Copiar aviso para el grupo"}</button>}
-              {session && <button type="button" onClick={() => setForm(true)} style={{ background: "none", border: "none", padding: 0, color: C.ink2, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Cargar corte</button>}
+              <button type="button" onClick={() => { setOpen(false); setMapa(true); }} style={{ background: "none", border: "none", padding: 0, color: C.teal, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Ver mapa</button>
+              {n > 0 && <button type="button" onClick={copiar} style={{ background: "none", border: "none", padding: 0, color: C.ink2, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{copiado ? "✓ Copiado" : "Copiar aviso para el grupo"}</button>}
+              {session && <button type="button" onClick={() => setForm(true)} style={{ background: "none", border: "none", padding: 0, color: C.ink2, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Cargar corte</button>}
             </div>
           )}
         </div>

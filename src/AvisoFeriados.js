@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { todayStr } from "./colectasShared";
+import { FX_FONT } from "./theme";
 
 // Aviso plegable del Home para los feriados de la visita del Papa (9, 10 y 11 de noviembre de 2026).
 // Se muestra solo con sesión (nombra clientes) y deja de aparecer después del jueves 12/11.
@@ -8,7 +9,7 @@ import { todayStr } from "./colectasShared";
 const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
   glass: "rgba(27,28,46,0.72)", line: "rgba(255,255,255,0.06)",
-  azul: "#5BA8E8", grotesk: "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+  azul: "#5BA8E8", grotesk: FX_FONT.display,
 };
 const VENCE = "2026-11-12"; // último día visible
 
@@ -104,9 +105,9 @@ function Bloque({ titulo, children }) {
   );
 }
 
-const lista = { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5, color: C.ink2, fontSize: 13.5, lineHeight: 1.5 };
+const lista = { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5, color: C.ink2, fontSize: 14, lineHeight: 1.5 };
 const chip = (nivel) => ({
-  fontSize: 10.5, fontWeight: 700, letterSpacing: ".6px", textTransform: "uppercase", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap", alignSelf: "flex-start",
+  fontSize: 11, fontWeight: 700, letterSpacing: ".6px", textTransform: "uppercase", padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap", alignSelf: "flex-start",
   color: nivel === "Alto" ? C.ink : nivel === "Medio" ? C.ink2 : C.ink3,
   background: nivel === "Alto" ? "rgba(255,255,255,0.12)" : nivel === "Medio" ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)",
   border: `1px solid ${C.line}`,
@@ -120,19 +121,19 @@ export default function AvisoFeriados({ isMobile, session }) {
   const sep = <div style={{ height: 1, background: C.line }} />;
   return (
     <section aria-label="Aviso feriados 9 al 11 de noviembre" style={{
-      position: "relative", background: C.glass, border: `1px solid rgba(91,168,232,0.28)`, borderRadius: 18,
+      position: "relative", background: C.glass, border: `1px solid rgba(91,168,232,0.28)`, borderRadius: 20,
       boxShadow: "0 20px 60px rgba(0,0,0,0.28)", WebkitBackdropFilter: "blur(18px) saturate(140%)", backdropFilter: "blur(18px) saturate(140%)",
       overflow: "hidden",
     }}>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
         style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: isMobile ? "14px 16px" : "16px 22px", background: "linear-gradient(100deg, rgba(91,168,232,0.10), transparent 60%)", border: "none", color: C.ink, textAlign: "left", cursor: "pointer", minHeight: 44 }}>
-        <span style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 11, background: "rgba(91,168,232,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 10, background: "rgba(91,168,232,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.azul} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "block", fontFamily: C.grotesk, fontSize: 11, fontWeight: 700, letterSpacing: "1.3px", textTransform: "uppercase", color: C.azul }}>Aviso feriados</span>
           <span style={{ display: "block", fontFamily: C.grotesk, fontWeight: 600, fontSize: isMobile ? 15.5 : 17, marginTop: 3, lineHeight: 1.3 }}>9, 10 y 11 de noviembre · Visita del Papa</span>
-          <span style={{ display: "block", fontSize: 12.5, color: C.ink3, marginTop: 2 }}>{open ? "Tocá para cerrar" : "Operamos los 3 días. Tocá para ver cortes, zonas y colectas."}</span>
+          <span style={{ display: "block", fontSize: 13, color: C.ink3, marginTop: 2 }}>{open ? "Tocá para cerrar" : "Operamos los 3 días. Tocá para ver cortes, zonas y colectas."}</span>
         </span>
         <Chevron open={open} />
       </button>
@@ -145,7 +146,7 @@ export default function AvisoFeriados({ isMobile, session }) {
               <li><b style={{ color: C.ink }}>Martes 10:</b> feriado en CABA. Las promesas funcionan normal.</li>
               <li><b style={{ color: C.ink }}>Miércoles 11:</b> feriado en Provincia. Las promesas funcionan normal.</li>
             </ul>
-            <div style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 14, color: C.ink2, lineHeight: 1.5 }}>
               Meli todavía no confirmó qué zonas va a limitar. <b style={{ color: C.ink }}>Por qué trabajar el lunes:</b> el lunes 26/10 hicimos 3.031 envíos y martes y miércoles rondamos los 2.170. Si no repartimos el lunes, el martes podríamos superar los <b style={{ color: C.ink }}>5.000 envíos</b>.
             </div>
           </Bloque>
@@ -154,23 +155,23 @@ export default function AvisoFeriados({ isMobile, session }) {
           <Bloque titulo="2 · Cortes y restricciones">
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 12 }}>
               {DIAS.map((d) => (
-                <div key={d.t} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", background: "rgba(255,255,255,0.025)", minWidth: 0 }}>
+                <div key={d.t} style={{ border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px 14px", background: "rgba(255,255,255,0.025)", minWidth: 0 }}>
                   <div style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: 15 }}>{d.t}</div>
                   <div style={{ fontSize: 12, color: C.ink3, marginBottom: 8 }}>{d.sub}</div>
                   <ul style={{ ...lista, fontSize: 13 }}>{d.items.map((x) => <li key={x}>{x}</li>)}</ul>
                 </div>
               ))}
             </div>
-            <div style={{ fontWeight: 600, fontSize: 13.5, marginTop: 2 }}>Otros cortes importantes</div>
+            <div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>Otros cortes importantes</div>
             <ul style={lista}>{OTROS.map((x) => <li key={x}>{x}</li>)}</ul>
           </Bloque>
           {sep}
 
           <Bloque titulo="3 · Zonas de reparto afectadas">
-            <div style={{ fontSize: 13.5, color: C.ink2 }}>Unos <b style={{ color: C.ink }}>660 envíos por día</b> (~27% del volumen). El resto debería operar normal, sujeto a los cortes definitivos.</div>
+            <div style={{ fontSize: 14, color: C.ink2 }}>Unos <b style={{ color: C.ink }}>660 envíos por día</b> (~27% del volumen). El resto debería operar normal, sujeto a los cortes definitivos.</div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               {ZONAS.map(([z, n, q], i) => (
-                <div key={z} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr auto" : "minmax(0, 1.3fr) 70px minmax(0, 2fr)", columnGap: 12, rowGap: 2, padding: "8px 0", borderTop: i ? `1px solid ${C.line}` : "none", fontSize: 13.5 }}>
+                <div key={z} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr auto" : "minmax(0, 1.3fr) 70px minmax(0, 2fr)", columnGap: 12, rowGap: 2, padding: "8px 0", borderTop: i ? `1px solid ${C.line}` : "none", fontSize: 14 }}>
                   <span style={{ fontWeight: 600 }}>{z}</span>
                   <span style={{ color: C.ink2, fontVariantNumeric: "tabular-nums", textAlign: isMobile ? "right" : "left" }}>{n}/día</span>
                   <span style={{ color: C.ink2, gridColumn: isMobile ? "1 / -1" : "auto" }}>{q}</span>
@@ -185,21 +186,21 @@ export default function AvisoFeriados({ isMobile, session }) {
               {COLECTAS.map(([nivel, zona, clientes, accion], i) => (
                 <div key={zona} style={{ display: "flex", gap: 12, padding: "9px 0", borderTop: i ? `1px solid ${C.line}` : "none" }}>
                   <span style={chip(nivel)}>{nivel}</span>
-                  <div style={{ minWidth: 0, fontSize: 13.5, lineHeight: 1.45 }}>
+                  <div style={{ minWidth: 0, fontSize: 14, lineHeight: 1.45 }}>
                     <div style={{ fontWeight: 600 }}>{zona}</div>
-                    {clientes && <div style={{ color: C.ink3, fontSize: 12.5 }}>{clientes}</div>}
+                    {clientes && <div style={{ color: C.ink3, fontSize: 13 }}>{clientes}</div>}
                     <div style={{ color: C.ink2, marginTop: 2 }}>{accion}</div>
                   </div>
                 </div>
               ))}
             </div>
-            <div style={{ fontSize: 13.5, color: C.ink2 }}><b style={{ color: C.ink }}>Importante:</b> el martes 10 es feriado en CABA y el miércoles 11 en Provincia. Hay que confirmar con cada cliente si despacha esos días.</div>
+            <div style={{ fontSize: 14, color: C.ink2 }}><b style={{ color: C.ink }}>Importante:</b> el martes 10 es feriado en CABA y el miércoles 11 en Provincia. Hay que confirmar con cada cliente si despacha esos días.</div>
           </Bloque>
           {sep}
 
           <Bloque titulo="5 · Clientes grandes: confirmar por escrito">
-            <div style={{ fontSize: 13.5, color: C.ink2 }}>Estos 10 clientes son ~49% del volumen. Hay que saber si despachan cada uno de los tres días.</div>
-            <ol style={{ margin: 0, paddingLeft: 22, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", columnGap: 28, rowGap: 4, fontSize: 13.5, color: C.ink2 }}>
+            <div style={{ fontSize: 14, color: C.ink2 }}>Estos 10 clientes son ~49% del volumen. Hay que saber si despachan cada uno de los tres días.</div>
+            <ol style={{ margin: 0, paddingLeft: 22, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", columnGap: 28, rowGap: 4, fontSize: 14, color: C.ink2 }}>
               {GRANDES.map(([n, v]) => <li key={n}><span style={{ color: C.ink }}>{n}</span> · <span style={{ fontVariantNumeric: "tabular-nums" }}>{v}</span> envíos/día</li>)}
             </ol>
           </Bloque>
@@ -209,7 +210,7 @@ export default function AvisoFeriados({ isMobile, session }) {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 12 }}>
               {PENDIENTES.map(([f, xs]) => (
                 <div key={f} style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 4 }}>{f}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{f}</div>
                   <ul style={lista}>{xs.map((x) => <li key={x}>{x}</li>)}</ul>
                 </div>
               ))}
@@ -219,7 +220,7 @@ export default function AvisoFeriados({ isMobile, session }) {
 
           <Bloque titulo="Las 4 prioridades">
             <ol style={{ ...lista, paddingLeft: 22 }}>{PRIORIDADES.map((x) => <li key={x} style={{ color: C.ink }}>{x}</li>)}</ol>
-            <div style={{ fontSize: 13.5, color: C.ink2 }}>La idea es operar los tres días, evitar que se acumule todo el martes y anticiparnos a los cortes para no perder entregas.</div>
+            <div style={{ fontSize: 14, color: C.ink2 }}>La idea es operar los tres días, evitar que se acumule todo el martes y anticiparnos a los cortes para no perder entregas.</div>
           </Bloque>
         </div>
       )}

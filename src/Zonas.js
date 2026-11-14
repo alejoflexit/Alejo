@@ -24,7 +24,7 @@ const UMBRAL_LIMITE = 0.85;       // ≥85% del tope = "al límite"
 const C = {
   card: "#1A1A4A", cardAlt: "#12123A", border: "rgba(255,255,255,0.08)",
   text: "#fff", muted: "rgba(255,255,255,0.55)", faint: "rgba(255,255,255,0.35)",
-  ok: "#2ECFAA", warn: "#EF9F27", crit: "#E24B4A",
+  ok: "#2EE6B6", warn: "#F5C044", crit: "#E8615F",
 };
 
 const norm = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ");
@@ -622,18 +622,18 @@ export default function Zonas() {
     const abierto = editReco === it.id;
     const sug = (refMapas.current && refMapas.current.sugeridosReco && refMapas.current.sugeridosReco.get(it.id)) || [];
     return (
-      <div key={it.nombre} style={{ background: C.card, border: `1px solid ${rz.nivel === "alto" ? "rgba(226,75,74,0.45)" : C.border}`, borderRadius: 12, padding: "12px 16px" }}>
+      <div key={it.nombre} style={{ background: C.card, border: `1px solid ${rz.nivel === "alto" ? "rgba(232,97,95,0.45)" : C.border}`, borderRadius: 14, padding: "12px 16px" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
           <span style={{ fontSize: 15, fontWeight: 700 }}>{it.nombre}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{badge.t}</span>
-          {it.colecta === false && <span style={{ fontSize: 10.5, color: C.faint, border: `1px solid ${C.border}`, borderRadius: 999, padding: "1px 7px" }}>sin colecta</span>}
+          {it.colecta === false && <span style={{ fontSize: 11, color: C.faint, border: `1px solid ${C.border}`, borderRadius: 999, padding: "1px 7px" }}>sin colecta</span>}
           {/* Historial de quien lo corre: la señal más fuerte según el banco de pruebas. Es contexto,
               no una alarma — por eso va como chip y no cambia el color del recorrido por sí solo. */}
           {rz.banda && (
             <span title={`${rz.banda.cadete}: ${Math.round(rz.banda.tasa * 100)}% de sus últimos ${rz.banda.dias} días terminaron con SLA Meli por debajo de 98`}
-              style={{ fontSize: 10.5, borderRadius: 999, padding: "1px 8px", fontWeight: 600,
-                border: `1px solid ${rz.banda.nivel === "alta" ? "rgba(226,75,74,0.45)" : rz.banda.nivel === "media" ? "rgba(239,159,39,0.40)" : C.border}`,
-                background: rz.banda.nivel === "alta" ? "rgba(226,75,74,0.12)" : rz.banda.nivel === "media" ? "rgba(239,159,39,0.10)" : "transparent",
+              style={{ fontSize: 11, borderRadius: 999, padding: "1px 8px", fontWeight: 600,
+                border: `1px solid ${rz.banda.nivel === "alta" ? "rgba(232,97,95,0.45)" : rz.banda.nivel === "media" ? "rgba(245,192,68,0.40)" : C.border}`,
+                background: rz.banda.nivel === "alta" ? "rgba(232,97,95,0.12)" : rz.banda.nivel === "media" ? "rgba(245,192,68,0.10)" : "transparent",
                 color: rz.banda.nivel === "alta" ? C.crit : rz.banda.nivel === "media" ? C.warn : C.faint }}>
               histórico {Math.round(rz.banda.tasa * 100)}%
             </span>
@@ -644,7 +644,7 @@ export default function Zonas() {
         </div>
         {/* Quién lo corre = de dónde sale la capacidad. Es el dato que faltaba: con una moto
             sumada, el mismo volumen deja de ser "alto". */}
-        <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 5, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 12, color: C.faint, marginBottom: 5, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span>
             {gente.length
               ? <>Lo corren: {gente.map((g) => `${g.cadete}${g.rol === "moto" ? " 🛵" : g.rol === "refuerzo" ? " (refuerzo)" : ""} ${g.tope}`).join(" · ")}</>
@@ -663,21 +663,21 @@ export default function Zonas() {
 
         {abierto && (
           <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: C.cardAlt }}>
-            <div style={{ fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: C.faint, marginBottom: 8 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: C.faint, marginBottom: 8 }}>
               Quién corre este recorrido — la suma de los topes es la capacidad
             </div>
             {gente.map((g) => (
               <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-                <span style={{ flex: 1, minWidth: 130, fontSize: 12.5, fontWeight: 600 }}>{g.cadete}</span>
+                <span style={{ flex: 1, minWidth: 130, fontSize: 13, fontWeight: 600 }}>{g.cadete}</span>
                 {["titular", "refuerzo", "moto"].map((r) => (
                   <button key={r} type="button" disabled={gBusy} onClick={() => gentePatch(g.id, { rol: r })}
-                    style={{ border: `1px solid ${g.rol === r ? C.ok : C.border}`, background: g.rol === r ? "rgba(46,207,170,0.14)" : "transparent", color: g.rol === r ? C.ok : C.faint, borderRadius: 999, padding: "2px 9px", fontSize: 10.5, fontWeight: 600, cursor: "pointer" }}>
+                    style={{ border: `1px solid ${g.rol === r ? C.ok : C.border}`, background: g.rol === r ? "rgba(46,230,182,0.14)" : "transparent", color: g.rol === r ? C.ok : C.faint, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                     {r === "moto" ? "🛵 moto" : r}
                   </button>
                 ))}
                 <input type="number" defaultValue={g.tope} min={0} max={300} disabled={gBusy}
                   onBlur={(e) => { const v = Math.max(0, Math.min(300, +e.target.value || 0)); if (v !== g.tope) gentePatch(g.id, { tope: v }); }}
-                  style={{ width: 58, padding: "3px 6px", borderRadius: 7, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 12, textAlign: "right" }} />
+                  style={{ width: 58, padding: "3px 6px", borderRadius: 6, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 12, textAlign: "right" }} />
                 <button type="button" disabled={gBusy} onClick={() => gentePop(g.id)} title="Sacar del recorrido"
                   style={{ border: "none", background: "none", color: "rgba(255,255,255,0.28)", cursor: "pointer", fontSize: 13 }}>✕</button>
               </div>
@@ -692,7 +692,7 @@ export default function Zonas() {
                   {sug.map((x) => (
                     <button key={x.cadete} type="button" disabled={gBusy}
                       onClick={() => gentePost({ recorrido_id: it.id, cadete: x.cadete, tope: x.tope, rol: "refuerzo" })}
-                      style={{ border: `1px solid ${C.warn}55`, background: "rgba(239,159,39,0.10)", color: C.warn, borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                      style={{ border: `1px solid ${C.warn}55`, background: "rgba(245,192,68,0.10)", color: C.warn, borderRadius: 999, padding: "3px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                       + {x.cadete} · {x.tope}
                     </button>
                   ))}
@@ -702,24 +702,24 @@ export default function Zonas() {
 
             <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
               <input value={nuevoNom} onChange={(e) => setNuevoNom(e.target.value)} placeholder="sumar otra persona o moto…"
-                style={{ flex: 1, minWidth: 150, padding: "5px 9px", borderRadius: 8, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 12.5 }} />
+                style={{ flex: 1, minWidth: 150, padding: "5px 9px", borderRadius: 10, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 13 }} />
               <input type="number" value={nuevoTope} min={0} max={300} onChange={(e) => setNuevoTope(+e.target.value || 0)}
-                style={{ width: 62, padding: "5px 7px", borderRadius: 8, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 12.5, textAlign: "right" }} />
+                style={{ width: 62, padding: "5px 7px", borderRadius: 10, border: `1px solid ${C.border}`, background: "rgba(0,0,0,0.25)", color: C.text, fontSize: 13, textAlign: "right" }} />
               <button type="button" disabled={gBusy || !nuevoNom.trim()}
                 onClick={() => { gentePost({ recorrido_id: it.id, cadete: nuevoNom.trim(), tope: nuevoTope, rol: "moto" }); setNuevoNom(""); }}
-                style={{ border: `1px solid ${C.ok}`, background: "rgba(46,207,170,0.12)", color: C.ok, borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: nuevoNom.trim() ? "pointer" : "default" }}>
+                style={{ border: `1px solid ${C.ok}`, background: "rgba(46,230,182,0.12)", color: C.ok, borderRadius: 10, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: nuevoNom.trim() ? "pointer" : "default" }}>
                 🛵 Sumar
               </button>
             </div>
-            {gErr && <div style={{ color: C.crit, fontSize: 11.5, marginTop: 7 }}>{gErr}</div>}
-            {gente.length === 0 && <div style={{ color: C.warn, fontSize: 11.5, marginTop: 7 }}>Sin gente cargada — se está usando el tope fijo de {num(it.topeFijo || 0)}.</div>}
+            {gErr && <div style={{ color: C.crit, fontSize: 12, marginTop: 7 }}>{gErr}</div>}
+            {gente.length === 0 && <div style={{ color: C.warn, fontSize: 12, marginTop: 7 }}>Sin gente cargada — se está usando el tope fijo de {num(it.topeFijo || 0)}.</div>}
           </div>
         )}
-        {rz.razones.filter(Boolean).length > 0 && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4, lineHeight: 1.5 }}>{rz.razones.filter(Boolean).join(" · ")}</div>}
+        {rz.razones.filter(Boolean).length > 0 && <div style={{ fontSize: 12, color: C.faint, marginBottom: 4, lineHeight: 1.5 }}>{rz.razones.filter(Boolean).join(" · ")}</div>}
         {it.reco && <div style={{ fontSize: 12, color: rz.nivel === "alto" ? "#f1a2a1" : "#f3c886", marginBottom: 6, fontWeight: 600 }}>→ {it.reco}</div>}
         {it.tope ? (
-          <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
-            <div style={{ width: `${(ancho * 100).toFixed(1)}%`, height: "100%", borderRadius: 4, background: col === C.faint ? C.muted : col, transition: "width .5s" }} />
+          <div style={{ height: 8, borderRadius: 6, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
+            <div style={{ width: `${(ancho * 100).toFixed(1)}%`, height: "100%", borderRadius: 6, background: col === C.faint ? C.muted : col, transition: "width .5s" }} />
             <div style={{ position: "absolute", left: `${((1 / 1.2) * 100).toFixed(1)}%`, top: 0, bottom: 0, width: 2, background: "rgba(255,255,255,0.35)" }} />
           </div>
         ) : null}
@@ -729,9 +729,9 @@ export default function Zonas() {
 
   if (sinEndpoint) {
     return (
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28, maxWidth: 620 }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 28, maxWidth: 620 }}>
         <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>El bridge todavía no tiene el endpoint de zonas</div>
-        <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>
           El código ya está en el repo del vault (<code>vps/lightdata-bridge.js</code>) — falta correr el deploy en el VPS.
           Mandale a Hermes el mensaje <b>mensaje-hermes-zonas.md</b> del vault y esta pantalla arranca sola.
         </div>
@@ -753,23 +753,23 @@ export default function Zonas() {
                 <b style={{ color: C.text }}>{num(meta.total)}</b> envíos hoy (todos los estados, Fecha Flexit) · <b style={{ color: C.text }}>{num(meta.asignados)}</b> ubicados en zonas · dato de las <b style={{ color: C.text }}>{horaAR(meta.actualizado)}</b>{escapeVivo ? " · en vivo (una consulta)" : " · refresco 5 min"}
               </span>
             )}
-            <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(226,75,74,0.12)", color: C.crit, fontWeight: 700 }}>🔴 {saturadas} saturados</span>
-            <span style={{ fontSize: 12.5, padding: "3px 10px", borderRadius: 999, background: "rgba(239,159,39,0.12)", color: C.warn, fontWeight: 700 }}>🟠 {alLimite} al límite</span>
+            <span style={{ fontSize: 13, padding: "3px 10px", borderRadius: 999, background: "rgba(232,97,95,0.12)", color: C.crit, fontWeight: 700 }}>🔴 {saturadas} saturados</span>
+            <span style={{ fontSize: 13, padding: "3px 10px", borderRadius: 999, background: "rgba(245,192,68,0.12)", color: C.warn, fontWeight: 700 }}>🟠 {alLimite} al límite</span>
           </>
         )}
         <div style={{ marginLeft: esMapa ? 0 : "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
+          <div style={{ display: "flex", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
             {[["recorrido", "Recorridos"], ["zona", "Por zona"], ["mapa", "Mapa"]].map(([k, lbl]) => (
               <button key={k} onClick={() => setVista(k)}
-                style={{ background: vista === k ? "rgba(46,207,170,0.15)" : "none", border: "none", color: vista === k ? C.ok : C.muted, padding: "7px 12px", fontSize: 13, fontWeight: vista === k ? 700 : 500, cursor: "pointer" }}>
+                style={{ background: vista === k ? "rgba(46,230,182,0.15)" : "none", border: "none", color: vista === k ? C.ok : C.muted, padding: "7px 12px", fontSize: 13, fontWeight: vista === k ? 700 : 500, cursor: "pointer" }}>
                 {lbl}
               </button>
             ))}
           </div>
           <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar zona o cadete…"
-            style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, padding: "7px 12px", fontSize: 13, width: esMapa ? 190 : 160, maxWidth: "48vw" }} />
+            style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, padding: "7px 12px", fontSize: 13, width: esMapa ? 190 : 160, maxWidth: "48vw" }} />
           <button onClick={refrescar} disabled={cargando} title={meta && meta.modo === "foto" && !escapeVivo ? "Volver a leer la foto del corte" : "Actualizar ahora"}
-            style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 9, color: C.muted, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
+            style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, padding: "7px 12px", fontSize: 13, cursor: "pointer" }}>
             {cargando ? "…" : "⟳"}
           </button>
         </div>
@@ -777,32 +777,32 @@ export default function Zonas() {
 
       {/* Modo foto (spec-zonas-foto-1430): banner explicativo + escape a vivo */}
       {!esMapa && meta && meta.modo === "foto" && (
-        <div style={{ background: "rgba(46,207,170,0.10)", border: "1px solid rgba(46,207,170,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#bfeee0", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ background: "rgba(46,230,182,0.10)", border: "1px solid rgba(46,230,182,0.35)", borderRadius: 14, padding: "10px 14px", fontSize: 13, color: "#bfeee0", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ lineHeight: 1.5, flex: 1, minWidth: 220 }}>
             {meta.esDeHoy
               ? <>📸 <b>Foto de las 14:30</b> — con esto salieron los cadetes. Los ingresos de la tarde entran como día siguiente, por eso la pantalla queda congelada en el corte.</>
               : <>📸 Todavía no hay corte de hoy. Te muestro la <b>última foto disponible: {fechaLargaAR(meta.fecha)} 14:30</b>. Los ingresos posteriores son de días siguientes.</>}
           </span>
-          <button onClick={() => setEscapeVivo(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>ver dato en vivo igual</button>
+          <button onClick={() => setEscapeVivo(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>ver dato en vivo igual</button>
         </div>
       )}
       {!esMapa && meta && meta.modo === "vivo" && escapeVivo && (
-        <div style={{ background: "rgba(239,159,39,0.10)", border: "1px solid rgba(239,159,39,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ background: "rgba(245,192,68,0.10)", border: "1px solid rgba(245,192,68,0.35)", borderRadius: 14, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ lineHeight: 1.5, flex: 1, minWidth: 220 }}>⚠️ <b>Dato en vivo después del corte.</b> Desde las 14:30 LightData suma ingresos de ecommerce que son del día siguiente — este número ya no representa lo que salió a reparto. Una sola consulta, sin refresco.</span>
-          <button onClick={() => setEscapeVivo(false)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>volver a la foto</button>
+          <button onClick={() => setEscapeVivo(false)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 12, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>volver a la foto</button>
         </div>
       )}
 
       {/* === Zonas con volumen sin recorrido (spec-zonas-fijas) — el agujero, siempre visible arriba === */}
       {!esMapa && zonasSinReco.length > 0 && (
-        <div style={{ background: "rgba(226,75,74,0.10)", border: "1px solid rgba(226,75,74,0.40)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14, lineHeight: 1.5 }}>
+        <div style={{ background: "rgba(232,97,95,0.10)", border: "1px solid rgba(232,97,95,0.40)", borderRadius: 14, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14, lineHeight: 1.5 }}>
           ⚠️ <b>Volumen sin recorrido asignado</b> ({num(zonasSinReco.reduce((a, z) => a + z.total, 0))} envíos en {zonasSinReco.length} {zonasSinReco.length === 1 ? "zona" : "zonas"}): {zonasSinReco.map((z) => `${z.zona} (${num(z.total)})`).join(" · ")}. No le corresponde a ningún carrito — hay que crear el recorrido o sumarla a uno.
         </div>
       )}
 
       {/* === Centro de decisiones (spec-zonas-copiloto-fase1 / recableado a recorridos) — arriba de todo === */}
       {!esMapa && copiloto && (
-        <div style={{ background: C.card, border: `1px solid ${copiloto.decisiones.length ? "rgba(239,159,39,0.35)" : "rgba(46,207,170,0.30)"}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+        <div style={{ background: C.card, border: `1px solid ${copiloto.decisiones.length ? "rgba(245,192,68,0.35)" : "rgba(46,230,182,0.30)"}`, borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>
               {copiloto.decisiones.length
@@ -810,7 +810,7 @@ export default function Zonas() {
                 : "✅ Sin decisiones pendientes: todos los recorridos en orden"}
             </span>
             {copiloto.capLibre.n > 0 && (
-              <span style={{ marginLeft: "auto", fontSize: 12, color: C.muted, padding: "3px 10px", borderRadius: 999, background: "rgba(46,207,170,0.10)" }}>
+              <span style={{ marginLeft: "auto", fontSize: 12, color: C.muted, padding: "3px 10px", borderRadius: 999, background: "rgba(46,230,182,0.10)" }}>
                 Capacidad libre: ~{num(copiloto.capLibre.envios)} envíos en {copiloto.capLibre.n} recorridos <span style={{ color: C.faint }}>(aprox.)</span>
               </span>
             )}
@@ -824,7 +824,7 @@ export default function Zonas() {
       )}
 
       {/* === Calibrador de topes: propuestas con evidencia (spec-calibrador-topes, C1) === */}
-      {!esMapa && <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 14 }}>
+      {!esMapa && <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, marginBottom: 14 }}>
         <div onClick={() => setVerProp((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", cursor: "pointer" }}>
           <span style={{ color: C.ok, fontSize: 13 }}>{verProp ? "▾" : "▸"}</span>
           <span style={{ fontSize: 14, fontWeight: 700 }}>🎯 Propuestas de tope</span>
@@ -834,50 +834,50 @@ export default function Zonas() {
         {verProp && (
           <div style={{ padding: "0 14px 12px" }}>
             {propuestas == null ? (
-              <div style={{ fontSize: 12.5, color: C.muted }}>Calculando…</div>
+              <div style={{ fontSize: 13, color: C.muted }}>Calculando…</div>
             ) : (propuestas.subir.length + propuestas.lunes.length + propuestas.revisar.length) === 0 ? (
-              <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>Sin propuestas por ahora — los topes están bien calibrados para la carga de las últimas 3 semanas. {propErr ? <span style={{ color: C.crit }}>({propErr})</span> : null}</div>
+              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>Sin propuestas por ahora — los topes están bien calibrados para la carga de las últimas 3 semanas. {propErr ? <span style={{ color: C.crit }}>({propErr})</span> : null}</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {!sesion && <div style={{ fontSize: 11.5, color: "#f3c886" }}>Iniciá sesión (Tiquetera/Colectas) para poder aplicar los cambios.</div>}
-                {propErr && <div style={{ fontSize: 11.5, color: C.crit }}>{propErr}</div>}
+                {!sesion && <div style={{ fontSize: 12, color: "#f3c886" }}>Iniciá sesión (Tiquetera/Colectas) para poder aplicar los cambios.</div>}
+                {propErr && <div style={{ fontSize: 12, color: C.crit }}>{propErr}</div>}
                 {propuestas.subir.map((p) => (
-                  <div key={"s" + p.cadete} style={{ border: "1px solid rgba(46,207,170,0.35)", background: "rgba(46,207,170,0.06)", borderRadius: 10, padding: "10px 12px" }}>
+                  <div key={"s" + p.cadete} style={{ border: "1px solid rgba(46,230,182,0.35)", background: "rgba(46,230,182,0.06)", borderRadius: 10, padding: "10px 12px" }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>⬆️ {p.cadete} — subir tope {p.T} → {p.propuesto}</span>
-                      <span style={{ fontSize: 11.5, color: C.muted }}>· Confianza: {"●".repeat(p.conf.dots)}{"○".repeat(4 - p.conf.dots)} {p.conf.label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700 }}>⬆️ {p.cadete} — subir tope {p.T} → {p.propuesto}</span>
+                      <span style={{ fontSize: 12, color: C.muted }}>· Confianza: {"●".repeat(p.conf.dots)}{"○".repeat(4 - p.conf.dots)} {p.conf.label}</span>
                     </div>
-                    <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>{p.ev.dias_trabajados} días trabajados · {p.ev.dias_sobre_tope} sobre el tope · promedio {p.ev.promedio} · mediana {p.ev.mediana} · p90 {p.ev.p90} · máximo {p.ev.maximo} · SLA en días de carga alta {p.slaAlta != null ? p.slaAlta + "%" : "—"}</div>
-                    {sesion && <button onClick={() => aplicarPropuesta(p)} disabled={aplicando === p.cadete} style={{ marginTop: 8, background: "rgba(46,207,170,0.16)", border: `1px solid ${C.ok}`, borderRadius: 8, color: C.ok, fontSize: 12.5, fontWeight: 700, padding: "5px 14px", cursor: "pointer" }}>{aplicando === p.cadete ? "Aplicando…" : "Aplicar"}</button>}
+                    <div style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>{p.ev.dias_trabajados} días trabajados · {p.ev.dias_sobre_tope} sobre el tope · promedio {p.ev.promedio} · mediana {p.ev.mediana} · p90 {p.ev.p90} · máximo {p.ev.maximo} · SLA en días de carga alta {p.slaAlta != null ? p.slaAlta + "%" : "—"}</div>
+                    {sesion && <button onClick={() => aplicarPropuesta(p)} disabled={aplicando === p.cadete} style={{ marginTop: 8, background: "rgba(46,230,182,0.16)", border: `1px solid ${C.ok}`, borderRadius: 10, color: C.ok, fontSize: 13, fontWeight: 700, padding: "5px 14px", cursor: "pointer" }}>{aplicando === p.cadete ? "Aplicando…" : "Aplicar"}</button>}
                   </div>
                 ))}
                 {propuestas.lunes.map((p) => (
-                  <div key={"l" + p.cadete} style={{ border: "1px solid rgba(239,159,39,0.35)", background: "rgba(239,159,39,0.06)", borderRadius: 10, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>📅 {p.cadete} — carga alta concentrada los {p.dia}s</div>
-                    <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>{p.nDia} de {p.nAlta} días de carga alta fueron {p.dia}s → un tope general no lo arregla; conviene revisar un refuerzo de {p.dia}s. (Tope {p.T} · promedio {p.ev.promedio} · p90 {p.ev.p90})</div>
+                  <div key={"l" + p.cadete} style={{ border: "1px solid rgba(245,192,68,0.35)", background: "rgba(245,192,68,0.06)", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>📅 {p.cadete} — carga alta concentrada los {p.dia}s</div>
+                    <div style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>{p.nDia} de {p.nAlta} días de carga alta fueron {p.dia}s → un tope general no lo arregla; conviene revisar un refuerzo de {p.dia}s. (Tope {p.T} · promedio {p.ev.promedio} · p90 {p.ev.p90})</div>
                   </div>
                 ))}
                 {propuestas.revisar.map((p) => (
-                  <div key={"r" + p.cadete} style={{ border: "1px solid rgba(226,75,74,0.35)", background: "rgba(226,75,74,0.06)", borderRadius: 10, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>⚠️ {p.cadete} — revisar: bajar tope o sumar refuerzo</div>
-                    <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>En {p.dias.length} días con carga ≥90% del tope ({p.T}) el SLA cayó &lt;95%: {p.dias.map((d) => `${d.fecha.slice(8, 10)}/${d.fecha.slice(5, 7)} (${d.carga} env, ${d.sla}%)`).join(" · ")}. Bajar el tope es decisión tuya — los datos muestran cuánto llevan, no cuánto aguantan.</div>
+                  <div key={"r" + p.cadete} style={{ border: "1px solid rgba(232,97,95,0.35)", background: "rgba(232,97,95,0.06)", borderRadius: 10, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>⚠️ {p.cadete} — revisar: bajar tope o sumar refuerzo</div>
+                    <div style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.5 }}>En {p.dias.length} días con carga ≥90% del tope ({p.T}) el SLA cayó &lt;95%: {p.dias.map((d) => `${d.fecha.slice(8, 10)}/${d.fecha.slice(5, 7)} (${d.carga} env, ${d.sla}%)`).join(" · ")}. Bajar el tope es decisión tuya — los datos muestran cuánto llevan, no cuánto aguantan.</div>
                   </div>
                 ))}
               </div>
             )}
-            <div style={{ fontSize: 10.5, color: C.faint, marginTop: 10, lineHeight: 1.5 }}>Ventana: últimas 3 semanas de <code>semanas</code>. SUBIR = días sostenidos por encima del tope con SLA ≥98% (tope propuesto = mín(p90, mediana+10, tope+15)). REVISAR nunca propone número. Fleteros, suplentes (backup) y usuarios internos quedan afuera. Cada cambio aplicado queda registrado en <code>topes_cambios</code>. Ojo: este es el <b>tope personal del cadete</b> (para su rendimiento) — no es el tope del recorrido/carrito, que se ajusta aparte.</div>
+            <div style={{ fontSize: 11, color: C.faint, marginTop: 10, lineHeight: 1.5 }}>Ventana: últimas 3 semanas de <code>semanas</code>. SUBIR = días sostenidos por encima del tope con SLA ≥98% (tope propuesto = mín(p90, mediana+10, tope+15)). REVISAR nunca propone número. Fleteros, suplentes (backup) y usuarios internos quedan afuera. Cada cambio aplicado queda registrado en <code>topes_cambios</code>. Ojo: este es el <b>tope personal del cadete</b> (para su rendimiento) — no es el tope del recorrido/carrito, que se ajusta aparte.</div>
           </div>
         )}
       </div>}
 
       {!esMapa && meta && !meta.finoDisponible && (
-        <div style={{ background: "rgba(239,159,39,0.10)", border: "1px solid rgba(239,159,39,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14 }}>
+        <div style={{ background: "rgba(245,192,68,0.10)", border: "1px solid rgba(245,192,68,0.35)", borderRadius: 14, padding: "10px 14px", fontSize: 13, color: "#f3c886", marginBottom: 14 }}>
           ⚠️ Números aproximados: los CPs que pertenecen a varias zonas (48 de 515, ~30% del volumen) se están repartiendo en partes iguales entre ellas. Con el re-deploy del bridge (mensaje-hermes-zonas.md) la atribución pasa a CP + localidad y queda exacta.
         </div>
       )}
 
       {error && (!esMapa || !zonasConSin.length) && (
-        <div style={{ background: "rgba(226,75,74,0.10)", border: "1px solid rgba(226,75,74,0.35)", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14 }}>
+        <div style={{ background: "rgba(232,97,95,0.10)", border: "1px solid rgba(232,97,95,0.35)", borderRadius: 14, padding: "10px 14px", fontSize: 13, color: "#f1a2a1", marginBottom: 14 }}>
           No pude actualizar recién ({error}). {(recos && recos.length) || zonasConSin.length ? "Muestro el último dato bueno." : "Reintento solo en unos minutos."}
         </div>
       )}
@@ -885,7 +885,7 @@ export default function Zonas() {
       {fotoVacia && (
         <div style={{ color: C.muted, fontSize: 14, padding: "20px 0", lineHeight: 1.6 }}>
           Todavía no hay ningún corte guardado en la base. La foto de las 14:30 aparece cuando corra el primer corte del día.{" "}
-          <button onClick={() => setEscapeVivo(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12.5, padding: "4px 10px", cursor: "pointer" }}>ver dato en vivo</button>
+          <button onClick={() => setEscapeVivo(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 13, padding: "4px 10px", cursor: "pointer" }}>ver dato en vivo</button>
         </div>
       )}
 
@@ -920,7 +920,7 @@ export default function Zonas() {
               const pct = it.pct ?? 0;
               const ancho = Math.min(pct, 1.2) / 1.2;
               return (
-                <div key={nombre} style={{ background: C.card, border: `1px solid ${it.estado === "saturada" ? "rgba(226,75,74,0.45)" : C.border}`, borderRadius: 12, padding: "12px 16px" }}>
+                <div key={nombre} style={{ background: C.card, border: `1px solid ${it.estado === "saturada" ? "rgba(232,97,95,0.45)" : C.border}`, borderRadius: 14, padding: "12px 16px" }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
                     <span style={{ fontSize: 15, fontWeight: 700 }}>{nombre}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: col }}>
@@ -928,13 +928,13 @@ export default function Zonas() {
                     </span>
                     <span style={{ marginLeft: "auto", fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
                       <b>{num(it.total)}</b>{it.tope ? <span style={{ color: C.muted }}> / {num(it.tope)}</span> : null}
-                      {meta && meta.modo !== "foto" && <span style={{ color: C.faint, fontSize: 12.5 }}> · {num(it.entregados)} entregados</span>}
+                      {meta && meta.modo !== "foto" && <span style={{ color: C.faint, fontSize: 13 }}> · {num(it.entregados)} entregados</span>}
                     </span>
                   </div>
-                  {sub && <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 7 }}>{sub}</div>}
+                  {sub && <div style={{ fontSize: 12, color: C.faint, marginBottom: 7 }}>{sub}</div>}
                   {it.tope ? (
-                    <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
-                      <div style={{ width: `${(ancho * 100).toFixed(1)}%`, height: "100%", borderRadius: 4, background: col === C.faint ? C.muted : col, transition: "width .5s" }} />
+                    <div style={{ height: 8, borderRadius: 6, background: "rgba(255,255,255,0.07)", overflow: "hidden", position: "relative" }}>
+                      <div style={{ width: `${(ancho * 100).toFixed(1)}%`, height: "100%", borderRadius: 6, background: col === C.faint ? C.muted : col, transition: "width .5s" }} />
                       <div style={{ position: "absolute", left: `${((1 / 1.2) * 100).toFixed(1)}%`, top: 0, bottom: 0, width: 2, background: "rgba(255,255,255,0.35)" }} />
                     </div>
                   ) : null}
@@ -950,7 +950,7 @@ export default function Zonas() {
               <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }}>
                 Datos sueltos ({num(sinTope.reduce((s, z) => s + z.total, 0) + (meta ? meta.sinZona + meta.sinCp + meta.ambiguos : 0))} envíos)
               </summary>
-              <div style={{ fontSize: 12.5, lineHeight: 1.7, marginTop: 8 }}>
+              <div style={{ fontSize: 13, lineHeight: 1.7, marginTop: 8 }}>
                 {labelsSinMatch.length > 0 && <div>⚠️ Etiquetas de recorrido que no existen en <code>zonas_cp</code> (no reciben volumen): {labelsSinMatch.join(", ")}.</div>}
                 {sinTope.length > 0 && (
                   <div>Zonas sin tope de cadete (aparecen grises en "Por zona"): {sinTope.length} zonas, {num(sinTope.reduce((s2, z) => s2 + z.total, 0))} envíos.</div>

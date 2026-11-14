@@ -5,15 +5,16 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { SECCIONES, adminUsuarios, esAdmin } from "./permisos";
 import { sbFetch } from "./colectasShared";
 import { QrBot } from "./ColectasBot";
+import { FX_FONT } from "./theme";
 
 const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
   glass: "rgba(27,28,46,0.72)", pop: "rgba(20,21,36,0.97)",
   line: "rgba(255,255,255,0.07)", line2: "rgba(255,255,255,0.12)",
   teal: "#2ee6b6", ambar: "#F5C044", rojo: "#E8615F",
-  grotesk: "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+  grotesk: FX_FONT.display,
 };
-const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" };
+const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" };
 const OPERATIVAS = SECCIONES.filter((s) => !s.soloAdmin).map((s) => s.id);
 
 const inicial = (u) => ((u.nombre || u.email || "?").trim()[0] || "?").toUpperCase();
@@ -51,7 +52,7 @@ function Toggle({ on, locked, onClick, label }) {
     <button type="button" onClick={locked ? undefined : onClick} aria-pressed={on} aria-label={label} title={label}
       style={{ width: 34, height: 20, borderRadius: 10, border: "none", padding: 0, position: "relative", cursor: locked ? "default" : "pointer",
         background: on ? (locked ? "rgba(46,230,182,0.28)" : C.teal) : "rgba(255,255,255,0.1)", transition: "background .15s", flexShrink: 0 }}>
-      <span style={{ position: "absolute", top: 2, left: on ? 16 : 2, width: 16, height: 16, borderRadius: 8, background: on ? "#06221a" : "rgba(255,255,255,0.55)", transition: "left .15s",
+      <span style={{ position: "absolute", top: 2, left: on ? 16 : 2, width: 16, height: 16, borderRadius: 10, background: on ? "#06221a" : "rgba(255,255,255,0.55)", transition: "left .15s",
         display: "flex", alignItems: "center", justifyContent: "center" }}>
         {locked && <i className="ti ti-lock" style={{ fontSize: 10, color: on ? C.teal : "#222" }} />}
       </span>
@@ -142,7 +143,7 @@ function Detalle({ u, onCerrar, onCambio }) {
           <Avatar u={u} size={44} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontFamily: C.grotesk, fontSize: 18, fontWeight: 600 }}>{nombreDe(u)}</div>
-            <div style={{ fontSize: 12.5, color: C.ink3, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
+            <div style={{ fontSize: 13, color: C.ink3, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
           </div>
           <button type="button" onClick={onCerrar} style={btn()}>Cerrar <i className="ti ti-x" /></button>
         </div>
@@ -169,7 +170,7 @@ function Detalle({ u, onCerrar, onCambio }) {
 
         <section style={{ marginBottom: 26 }}>
           <label style={labelSt}>Contraseña</label>
-          <div style={{ fontSize: 12.5, color: C.ink3, lineHeight: 1.5, marginBottom: 10 }}>
+          <div style={{ fontSize: 13, color: C.ink3, lineHeight: 1.5, marginBottom: 10 }}>
             La actual no se puede ver: el sistema la guarda cifrada y ni el admin la conoce. Si la olvidó, poné una nueva (o tocá <b style={{ color: C.ink2 }}>Generar</b>) y pasásela.
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -228,7 +229,7 @@ function NuevoUsuario({ onCerrar, onCreado }) {
 
   return (
     <div onClick={onCerrar} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(480px, 100%)", maxHeight: "92vh", overflowY: "auto", background: C.pop, border: `1px solid ${C.line2}`, borderRadius: 18, padding: 22, boxSizing: "border-box", color: C.ink }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(480px, 100%)", maxHeight: "92vh", overflowY: "auto", background: C.pop, border: `1px solid ${C.line2}`, borderRadius: 20, padding: 22, boxSizing: "border-box", color: C.ink }}>
         <div style={{ fontFamily: C.grotesk, fontSize: 19, fontWeight: 600, marginBottom: 18 }}>Nuevo usuario</div>
 
         {listo ? (
@@ -327,7 +328,7 @@ function EstadoBot() {
   return (
     <div style={{ ...card, padding: 16, marginBottom: 16, borderColor: nivel === "ok" ? C.line : color }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: e ? 8 : 0 }}>
-        <span style={{ width: 10, height: 10, borderRadius: 5, background: color, boxShadow: `0 0 10px ${color}` }} />
+        <span style={{ width: 10, height: 10, borderRadius: 6, background: color, boxShadow: `0 0 10px ${color}` }} />
         <i className="ti ti-brand-whatsapp" style={{ fontSize: 18, color: C.ink2 }} />
         <span style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 15, color: nivel === "ok" ? C.ink : color }}>{titulo}</span>
       </div>
@@ -432,7 +433,7 @@ export default function Usuarios() {
                             {admin && <span style={{ fontSize: 10, color: C.teal, fontWeight: 700, letterSpacing: "0.05em" }}>ADMIN</span>}
                             {u.desactivado && <span style={{ fontSize: 10, color: C.rojo, fontWeight: 700, letterSpacing: "0.05em" }}>DESACTIVADO</span>}
                           </span>
-                          <span style={{ display: "block", fontSize: 11.5, color: C.ink3 }}>{u.email} · {haceCuanto(u.ultimo_ingreso)}</span>
+                          <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{u.email} · {haceCuanto(u.ultimo_ingreso)}</span>
                         </span>
                       </button>
                     </td>
@@ -466,7 +467,7 @@ export default function Usuarios() {
                   <Avatar u={u} />
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ display: "block", fontWeight: 600 }}>{nombreDe(u)} {admin && <span style={{ fontSize: 10, color: C.teal }}>ADMIN</span>} {u.desactivado && <span style={{ fontSize: 10, color: C.rojo }}>DESACTIVADO</span>}</span>
-                    <span style={{ display: "block", fontSize: 11.5, color: C.ink3, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</span>
+                    <span style={{ display: "block", fontSize: 12, color: C.ink3, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</span>
                   </span>
                   <i className="ti ti-chevron-right" style={{ color: C.ink3 }} />
                 </button>

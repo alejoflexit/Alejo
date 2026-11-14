@@ -126,14 +126,14 @@ export default function TransitoMapa({ alertas, onCerrar, isMobile }) {
     else if (boundsRef.current) map.fitBounds(boundsRef.current, { padding: [30, 30], maxZoom: 15 });
   };
 
-  const btn = { border: "1px solid rgba(255,255,255,0.12)", background: "rgba(24,25,42,0.92)", color: "#f4f5fa", borderRadius: 10, padding: "0 12px", minHeight: 36, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
+  const btn = { border: "1px solid rgba(255,255,255,0.12)", background: "rgba(24,25,42,0.92)", color: "#f4f5fa", borderRadius: 10, padding: "0 12px", minHeight: 36, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" };
   const dot = (c) => ({ width: 10, height: 4, borderRadius: 2, background: c, display: "inline-block" });
 
   return (
     <div onClick={onCerrar} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(8,8,24,0.62)", display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? 0 : 24 }}>
       <style>{`
         .fx-tr-base { filter: invert(1) hue-rotate(195deg) brightness(0.72) contrast(0.92) saturate(0.35); }
-        .fx-tr-tip { background: rgba(24,25,42,0.96); color: #f4f5fa; border: 1px solid rgba(255,255,255,0.12); border-radius: 9px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
+        .fx-tr-tip { background: rgba(24,25,42,0.96); color: #f4f5fa; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
         .fx-tr-tip.leaflet-tooltip-top:before { border-top-color: rgba(24,25,42,0.96); }
         .fx-tr-tip.leaflet-tooltip-right:before { border-right-color: rgba(24,25,42,0.96); }
         .fx-tr-mapa .leaflet-container { background: #14141f; font-family: inherit; }
@@ -145,7 +145,7 @@ export default function TransitoMapa({ alertas, onCerrar, isMobile }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "14px 14px 10px" : "14px 18px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "'Space Grotesk', -apple-system, sans-serif", fontWeight: 600, fontSize: 16 }}>Mapa de tránsito</div>
-            <div style={{ fontSize: 11.5, color: "#71768e", marginTop: 2, display: "flex", flexWrap: "wrap", gap: "4px 12px", alignItems: "center" }}>
+            <div style={{ fontSize: 12, color: "#71768e", marginTop: 2, display: "flex", flexWrap: "wrap", gap: "4px 12px", alignItems: "center" }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={dot("#3ec46d")} />fluido</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={dot(AMBAR)} />lento</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={dot(ROJO)} />trabado / cortado</span>
@@ -161,7 +161,7 @@ export default function TransitoMapa({ alertas, onCerrar, isMobile }) {
             <button type="button" onClick={() => ir("base")} style={btn}>Base</button>
             <button type="button" onClick={() => ir("amba")} style={btn}>Todo AMBA</button>
           </div>
-          {error && <div style={{ position: "absolute", top: 12, left: 12, right: 12, zIndex: 500, fontSize: 12.5, color: ROJO, background: "rgba(24,25,42,0.95)", borderRadius: 10, padding: "8px 12px" }}>{error}</div>}
+          {error && <div style={{ position: "absolute", top: 12, left: 12, right: 12, zIndex: 500, fontSize: 13, color: ROJO, background: "rgba(24,25,42,0.95)", borderRadius: 10, padding: "8px 12px" }}>{error}</div>}
         </div>
       </div>
     </div>

@@ -33,14 +33,14 @@ export function QrBot() {
   }, [fresco, qr]);
   if (!fresco) {
     return visto ? (
-      <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(46,207,170,0.10)', border: '1px solid rgba(46,207,170,0.4)', color: BRAND.teal, fontSize: 12 }}>
+      <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(46,230,182,0.10)', border: '1px solid rgba(46,230,182,0.4)', color: BRAND.teal, fontSize: 12 }}>
         <i className="ti ti-circle-check" aria-hidden="true" style={{ verticalAlign: '-2px' }} /> QR escaneado: el bot se está reconectando.
       </div>
     ) : null;
   }
   return (
-    <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: 12, borderRadius: 10, background: 'rgba(226,75,74,0.08)', border: '1px solid rgba(226,75,74,0.4)' }}>
-      <div style={{ background: '#fff', padding: 8, borderRadius: 8, lineHeight: 0 }}>
+    <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', padding: 12, borderRadius: 10, background: 'rgba(232,97,95,0.08)', border: '1px solid rgba(232,97,95,0.4)' }}>
+      <div style={{ background: '#fff', padding: 8, borderRadius: 10, lineHeight: 0 }}>
         {img ? <img src={img} alt="QR para vincular el WhatsApp del bot" width={220} height={220} /> : <div style={{ width: 220, height: 220 }} />}
       </div>
       <div style={{ fontSize: 13, lineHeight: 1.6, flex: '1 1 220px' }}>
@@ -170,8 +170,8 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
     setCopiado(c.id); setTimeout(() => setCopiado(x => (x === c.id ? null : x)), 1800);
   };
 
-  const sel = { padding: '6px 8px', fontSize: 12, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: '#0E1E38', color: BRAND.white, outline: 'none', width: '100%' };
-  const chip = activo => ({ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${activo ? BRAND.teal : BRAND.border}`, background: activo ? 'rgba(46,207,170,0.12)' : 'transparent', color: activo ? BRAND.teal : BRAND.muted });
+  const sel = { padding: '6px 8px', fontSize: 12, border: `1px solid ${BRAND.border}`, borderRadius: 10, background: '#0E1E38', color: BRAND.white, outline: 'none', width: '100%' };
+  const chip = activo => ({ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${activo ? BRAND.teal : BRAND.border}`, background: activo ? 'rgba(46,230,182,0.12)' : 'transparent', color: activo ? BRAND.teal : BRAND.muted });
 
   return (
     <>
@@ -184,7 +184,7 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <i className="ti ti-robot" aria-hidden="true" style={{ fontSize: 20, color: BRAND.teal }} />
             <div style={{ fontWeight: 700, fontSize: 16 }}>Bot de confirmación · {seccion === 'NOROESTE' ? 'Noroeste' : seccion === 'SUR' ? 'Sur' : 'CABA'}</div>
-            <div style={{ marginLeft: 8, padding: '2px 10px', borderRadius: 20, background: 'rgba(46,207,170,0.12)', color: BRAND.teal, fontSize: 12, fontWeight: 700 }}>
+            <div style={{ marginLeft: 8, padding: '2px 10px', borderRadius: 20, background: 'rgba(46,230,182,0.12)', color: BRAND.teal, fontSize: 12, fontWeight: 700 }}>
               {prendidos} de {preguntables.length} configurados
             </div>
             <button onClick={onClose} aria-label="Cerrar" style={{ marginLeft: 'auto', border: 'none', background: 'none', color: BRAND.muted, fontSize: 18, cursor: 'pointer' }}>✕</button>
@@ -202,15 +202,15 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
             {nSugeridos > 0 && (
               <button onClick={vincularSugeridos} disabled={vinculando}
                 title="Vincula cada cliente con el grupo que coincide con su nombre. El bot queda apagado."
-                style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: '1px solid rgba(251,191,36,0.45)', background: 'rgba(251,191,36,0.10)', color: '#FBBF24', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 10, border: '1px solid rgba(245,192,68,0.45)', background: 'rgba(245,192,68,0.10)', color: '#F5C044', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 <i className="ti ti-sparkles" aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {vinculando ? 'Vinculando…' : `Vincular ${nSugeridos} sugerido${nSugeridos === 1 ? '' : 's'}`}
               </button>
             )}
           </div>
-          {errorGrupos && <div style={{ marginTop: 8, fontSize: 12, color: '#E24B4A' }}>{errorGrupos}</div>}
+          {errorGrupos && <div style={{ marginTop: 8, fontSize: 12, color: '#E8615F' }}>{errorGrupos}</div>}
           {esAdmin() && estado && (estado.ok === false || estado.pide_qr) && <QrBot />}
           {estado && (estado.ok === false || estado.aviso) && (
-            <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(226,75,74,0.10)', border: '1px solid rgba(226,75,74,0.4)', color: '#F09595', fontSize: 12, lineHeight: 1.5 }}>
+            <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(232,97,95,0.10)', border: '1px solid rgba(232,97,95,0.4)', color: '#F09595', fontSize: 12, lineHeight: 1.5 }}>
               <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign: '-2px' }} />{' '}
               {estado.aviso || (estado.pide_qr ? 'WhatsApp desvinculó el bot y hay que escanear el QR de nuevo.' : 'El WhatsApp del bot no da señal: si sigue así, a las 9 no salen los links.')}
               {estado.ultimo_sync && <> Última señal: {new Date(estado.ultimo_sync).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.</>}
@@ -218,7 +218,7 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
             </div>
           )}
           {estado && estado.feriado && (
-            <div style={{ marginTop: 10, fontSize: 12, color: '#FBBF24' }}>
+            <div style={{ marginTop: 10, fontSize: 12, color: '#F5C044' }}>
               <i className="ti ti-calendar-off" aria-hidden="true" style={{ verticalAlign: '-2px' }} /> Hoy es feriado ({estado.feriado}): el bot no manda links.
             </div>
           )}
@@ -236,12 +236,12 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
               <div key={c.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(140px,1.1fr) minmax(180px,1.6fr) auto auto', gap: 10, alignItems: 'center', padding: '10px 12px', borderBottom: `1px solid ${BRAND.border}`, opacity: c.fija ? 0.55 : 1 }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</div>
-                  <div style={{ fontSize: 11, color: c.fija ? '#FBBF24' : c.bot_habilitado ? (grupoOk ? BRAND.teal : '#FBBF24') : BRAND.muted, marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: c.fija ? '#F5C044' : c.bot_habilitado ? (grupoOk ? BRAND.teal : '#F5C044') : BRAND.muted, marginTop: 2 }}>
                     {c.fija ? 'Fijo — no se pregunta'
                       : c.bot_habilitado ? (grupoOk ? 'Prendido · recibe el link a las 9' : 'Prendido, pero el grupo no puede recibir')
                       : 'Apagado'}
                   </div>
-                  {avisos[c.id] && <div style={{ fontSize: 11, color: '#FBBF24', marginTop: 2 }}>{avisos[c.id]}</div>}
+                  {avisos[c.id] && <div style={{ fontSize: 11, color: '#F5C044', marginTop: 2 }}>{avisos[c.id]}</div>}
                 </div>
 
                 <button type="button" disabled={c.fija || ocupado}
@@ -263,16 +263,16 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
 
                 <button onClick={() => copiar(c)} disabled={c.fija}
                   title="Copiar el link de este cliente (para mandarlo a mano o fijarlo en el grupo)"
-                  style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'transparent', color: copiado === c.id ? BRAND.teal : BRAND.white, fontSize: 12, cursor: c.fija ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                  style={{ padding: '5px 10px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'transparent', color: copiado === c.id ? BRAND.teal : BRAND.white, fontSize: 12, cursor: c.fija ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                   <i className={copiado === c.id ? 'ti ti-check' : 'ti ti-link'} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {copiado === c.id ? 'Copiado' : 'Copiar link'}
                 </button>
 
                 {sugerencias[c.id] && abierto !== c.id && (
-                  <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#FBBF24', marginTop: -2 }}>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#F5C044', marginTop: -2 }}>
                     <i className="ti ti-sparkles" aria-hidden="true" />
                     <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Sugerido: <b>{sugerencias[c.id].nombre_grupo}</b></span>
                     <button onClick={() => configurar(c, false, sugerencias[c.id].chat_id)} disabled={ocupado}
-                      style={{ padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(251,191,36,0.45)', background: 'rgba(251,191,36,0.10)', color: '#FBBF24', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      style={{ padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(245,192,68,0.45)', background: 'rgba(245,192,68,0.10)', color: '#F5C044', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                       Vincular
                     </button>
                   </div>
@@ -295,12 +295,12 @@ export default function ColectasBot({ clientes, estado, onClienteActualizado, on
                           const elegido = o.chat_id === c.chat_id;
                           return (
                             <button key={o.chat_id} onClick={() => configurar(c, c.bot_habilitado, o.chat_id)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', borderRadius: 6, border: 'none', background: elegido ? 'rgba(46,207,170,0.12)' : 'transparent', color: BRAND.white, fontSize: 12, cursor: 'pointer' }}>
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 8px', borderRadius: 6, border: 'none', background: elegido ? 'rgba(46,230,182,0.12)' : 'transparent', color: BRAND.white, fontSize: 12, cursor: 'pointer' }}>
                               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.nombre_grupo}</span>
-                              {o.parecido >= 0.999 && !usadosPor[o.chat_id] && <span style={{ fontSize: 11, color: '#FBBF24' }}>coincide</span>}
+                              {o.parecido >= 0.999 && !usadosPor[o.chat_id] && <span style={{ fontSize: 11, color: '#F5C044' }}>coincide</span>}
                               {usadosPor[o.chat_id] && <span style={{ fontSize: 11, color: BRAND.muted }}>ya es de {usadosPor[o.chat_id]}</span>}
                               {o.estado === 'activo' && <span style={{ fontSize: 11, color: BRAND.muted }}>agente</span>}
-                              {o.estado === 'inactivo' && <span style={{ fontSize: 11, color: '#E24B4A' }}>pausado</span>}
+                              {o.estado === 'inactivo' && <span style={{ fontSize: 11, color: '#E8615F' }}>pausado</span>}
                               {elegido && <i className="ti ti-check" aria-hidden="true" style={{ color: BRAND.teal }} />}
                             </button>
                           );

@@ -3,6 +3,7 @@ import PendingFilters from "./PendingFilters";
 import { pendingPriority, OPEN_STATES, isOpenShipment, matchesSelection, ETIQUETAS, estiloEtiqueta, normalizarEtiqueta } from "./pendingPriority";
 import { getSession, authedFetch } from "./auth";
 import FlexitLoader from "./FlexitLoader";
+import { FX_FONT } from "./theme";
 
 const URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -68,8 +69,8 @@ const cuandoMensaje = value => {
 const recortar = (texto, largo = 72) => { const t = String(texto || "").replace(/\s+/g, " ").trim(); return t.length > largo ? t.slice(0, largo - 1) + "…" : t; };
 const horaCorta = value => { const d = new Date(value); return Number.isNaN(d.getTime()) ? "" : d.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }); };
 const serviceOf = row => ["flex", "ml", "mercado libre"].includes(String(row.origen || "").trim().toLowerCase()) ? "Flex" : "Particular";
-const dayCard = { width:"100%", minHeight:126, textAlign:"left", display:"flex", flexDirection:"column", gap:4, padding:12, border:"1px solid transparent", background:"rgba(255,255,255,.045)", color:"#fff", borderRadius:9, cursor:"pointer" };
-const dayActive = { background:"rgba(46,207,170,.14)", borderColor:"#2ECFAA" };
+const dayCard = { width:"100%", minHeight:126, textAlign:"left", display:"flex", flexDirection:"column", gap:4, padding:12, border:"1px solid transparent", background:"rgba(255,255,255,.045)", color:"#fff", borderRadius:10, cursor:"pointer" };
+const dayActive = { background:"rgba(46,230,182,.14)", borderColor:"#2EE6B6" };
 // Flex en amarillo, elegido por Alejo el 20/09. Ojo: el amarillo tambien marca
 // "Atencion +24 h" en el semaforo y el Flex de la tabla sigue en verde agua.
 const FLEX_ACCENT = "#6de4c3";
@@ -79,21 +80,21 @@ const CRITICO = "#ff8a93";
 // Sin cadete: vacio o solo espacios. Un solo criterio para el chip, las tarjetas,
 // el bloque de arriba y el filtro, asi los numeros coinciden entre si.
 const sinCadete = r => !String(r.cadete || "").trim();
-const dayFlexCount = { fontSize:28, lineHeight:1.05, marginTop:8, color:"#fff" };
+const dayFlexCount = { fontFamily:FX_FONT.display, fontSize:28, lineHeight:1.05, marginTop:8, color:"#fff" };
 const dayFlexZero = { color:"rgba(255,255,255,.45)" };
 const dayPart = { display:"block", marginTop:3, fontSize:11, color:"rgba(255,255,255,.62)" };
-const tarjetaAtras = { width:172, flexShrink:0, textAlign:"left", display:"flex", flexDirection:"column", gap:2, padding:12, borderRadius:9, cursor:"pointer", color:"#fff", border:"1px dashed rgba(255,255,255,.22)", background:"rgba(255,255,255,.04)" };
-const tarjetaAtrasAbierta = { borderStyle:"solid", borderColor:"#2ECFAA", background:"rgba(46,207,170,.1)" };
-const atrasTitulo = { fontSize:10.5, fontWeight:700, letterSpacing:.5, textTransform:"uppercase", color:"rgba(255,255,255,.62)" };
-const atrasNumero = { fontSize:26, lineHeight:1.05, marginTop:4 };
+const tarjetaAtras = { width:172, flexShrink:0, textAlign:"left", display:"flex", flexDirection:"column", gap:2, padding:12, borderRadius:10, cursor:"pointer", color:"#fff", border:"1px dashed rgba(255,255,255,.22)", background:"rgba(255,255,255,.04)" };
+const tarjetaAtrasAbierta = { borderStyle:"solid", borderColor:"#2EE6B6", background:"rgba(46,230,182,.1)" };
+const atrasTitulo = { fontSize:11, fontWeight:700, letterSpacing:.5, textTransform:"uppercase", color:"rgba(255,255,255,.62)" };
+const atrasNumero = { fontFamily:FX_FONT.display, fontSize:26, lineHeight:1.05, marginTop:4 };
 const mesPanel = { width:"100%", marginTop:12, paddingTop:12, borderTop:"1px solid rgba(255,255,255,.1)" };
 const mesCabecera = { display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:10 };
 const mesGrid = { display:"grid", gridTemplateColumns:"repeat(7,minmax(0,1fr))", gap:5, maxWidth:640 };
-const mesDow = { fontSize:9.5, fontWeight:700, letterSpacing:.6, textTransform:"uppercase", textAlign:"center", color:"rgba(255,255,255,.52)", paddingBottom:2 };
-const mesDia = { minHeight:58, textAlign:"left", padding:"5px 6px", borderRadius:8, cursor:"pointer", color:"#fff", border:"1px solid rgba(255,255,255,.08)", background:"rgba(255,255,255,.035)", display:"flex", flexDirection:"column", gap:1 };
+const mesDow = { fontSize:10, fontWeight:700, letterSpacing:.6, textTransform:"uppercase", textAlign:"center", color:"rgba(255,255,255,.52)", paddingBottom:2 };
+const mesDia = { minHeight:58, textAlign:"left", padding:"5px 6px", borderRadius:10, cursor:"pointer", color:"#fff", border:"1px solid rgba(255,255,255,.08)", background:"rgba(255,255,255,.035)", display:"flex", flexDirection:"column", gap:1 };
 const mesDiaVacio = { opacity:.32 };
 const mesDiaFuturo = { opacity:.18, cursor:"default" };
-const mesDiaElegido = { borderColor:"#2ECFAA", background:"rgba(46,207,170,.13)" };
+const mesDiaElegido = { borderColor:"#2EE6B6", background:"rgba(46,230,182,.13)" };
 const mesDiaNumero = { fontSize:11, color:"rgba(255,255,255,.62)" };
 const mesDiaFlex = { fontSize:17, lineHeight:1.1, fontWeight:700, color:"#fff", marginTop:2 };
 const mesDiaFlexCero = { color:"rgba(255,255,255,.4)", fontWeight:400, fontSize:14 };
@@ -497,13 +498,13 @@ export default function PendientesHistoricos() {
     };
   }, [rows, mesAbierto]);
   return <div style={{ color:"#fff" }}>
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:16 }}><div><h2 style={{ margin:0, fontSize:22 }}>Pendientes históricos</h2><div style={{ color:"rgba(255,255,255,.62)", fontSize:12, marginTop:5 }}>Cada envío pendiente, hasta su resolución.</div></div><div style={{ display:"flex", alignItems:"center", gap:12 }}><div style={{ textAlign:"right", color:"rgba(255,255,255,.55)", fontSize:11 }}>Última actualización de datos<br/><b style={{ color:"#fff" }}>{dataAt ? dataAt.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "sin dato"}</b>{sinc ? <div style={{ marginTop:4, color:"rgba(255,255,255,.72)", fontSize:11, maxWidth:260 }}>{sinc}</div> : null}{!sinc && loading && rows.length > 0 ? <div style={{ marginTop:4 }}><span className="fx-refresh" aria-hidden="true">Actualizando…</span></div> : null}</div><button onClick={refrescar} disabled={loading || !!sinc} style={button}>{sinc ? "Actualizando…" : "↻ Actualizar"}</button></div></div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:16 }}><div><h2 style={{ margin:0, fontFamily:FX_FONT.display, fontSize:22 }}>Pendientes históricos</h2><div style={{ color:"rgba(255,255,255,.62)", fontSize:12, marginTop:5 }}>Cada envío pendiente, hasta su resolución.</div></div><div style={{ display:"flex", alignItems:"center", gap:12 }}><div style={{ textAlign:"right", color:"rgba(255,255,255,.55)", fontSize:11 }}>Última actualización de datos<br/><b style={{ color:"#fff" }}>{dataAt ? dataAt.toLocaleString("es-AR", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "sin dato"}</b>{sinc ? <div style={{ marginTop:4, color:"rgba(255,255,255,.72)", fontSize:11, maxWidth:260 }}>{sinc}</div> : null}{!sinc && loading && rows.length > 0 ? <div style={{ marginTop:4 }}><span className="fx-refresh" aria-hidden="true">Actualizando…</span></div> : null}</div><button onClick={refrescar} disabled={loading || !!sinc} style={button}>{sinc ? "Actualizando…" : "↻ Actualizar"}</button></div></div>
     {cargaInicial ? <FlexitLoader label="Cargando pendientes…" sub="Un momento, estamos consultando los envíos." />
     : errorInicial ? <div role="alert" style={errorCard}><b style={{ fontSize:15 }}>Error al consultar los envíos.</b><div style={{ marginTop:6, color:"#ffadb4", fontSize:13 }}>{error}</div><button onClick={load} style={{ ...button, marginTop:14 }}>Reintentar</button></div>
     : <>
     <div style={heroes}>
-    <div style={{ ...urgentHero, margin:0 }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><b>Flex abiertos con más de 48 horas</b></div><button onClick={() => { setVerCadetes(false); setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
-    {sinAsignar.total > 0 && <div style={unassignedHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{sinAsignar.total}</strong><b>Abiertos sin asignar</b></div><button onClick={() => verSinAsignar("")} style={unassignedButton}>Ver sin asignar →</button></div>}
+    <div style={{ ...urgentHero, margin:0 }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontFamily:FX_FONT.display, fontSize:34, lineHeight:1 }}>{rows.filter(r => pendingPriority(r).rank === 3).length}</strong><b>Flex abiertos con más de 48 horas</b></div><button onClick={() => { setVerCadetes(false); setCriticalOnly(true); setDay(""); setService("Flex"); setState([...OPEN_STATES]); setCourier(""); setQuery(""); }} style={urgentButton}>Revisar urgentes →</button></div>
+    {sinAsignar.total > 0 && <div style={unassignedHero}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontFamily:FX_FONT.display, fontSize:34, lineHeight:1 }}>{sinAsignar.total}</strong><b>Abiertos sin asignar</b></div><button onClick={() => verSinAsignar("")} style={unassignedButton}>Ver sin asignar →</button></div>}
     {hayCadetes && <button onClick={() => setVerCadetes(v => !v)} aria-expanded={verCadetes} style={{ ...cadetesHero, ...(verCadetes ? cadetesHeroAbierto : {}) }}><div style={{display:"flex",alignItems:"center",gap:18}}><strong style={{ fontSize:34, lineHeight:1 }}>{porCadete.length}</strong><b>Pendientes por cadete</b></div><span style={cadetesBoton}>{verCadetes ? "Cerrar ▲" : "Ver ▼"}</span></button>}</div>
     {verCadetes && <div style={rankingCaja}>
       <div style={rankingBarra}>
@@ -533,7 +534,7 @@ export default function PendientesHistoricos() {
       {reclamoManual && <div style={{ padding:"10px 12px", borderTop:"1px solid rgba(255,255,255,.08)" }}><small style={muted}>No se pudo copiar solo. Seleccioná el texto y copialo a mano:</small><textarea readOnly value={reclamoManual.texto} onFocus={e => e.target.select()} ref={el => { if (el) { try { el.focus({ preventScroll:true }); el.select(); } catch {} } }} style={mensajeCampo} /></div>}
       {porCadete.length > 5 && <button onClick={() => setCadetesTodos(v => !v)} style={rankingMas}>{cadetesTodos ? "Mostrar solo los 5 primeros ▲" : `Ver los ${porCadete.length} cadetes de la semana ▼`}</button>}
     </div>}
-    {error && <div style={{ ...banner, borderColor:"rgba(226,75,74,.45)", color:"#ffadb4" }}>{error}</div>}
+    {error && <div style={{ ...banner, borderColor:"rgba(232,97,95,.45)", color:"#ffadb4" }}>{error}</div>}
     <div style={calendar}><div style={{ width:"100%", display:"flex", flexWrap:"wrap", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:10 }}><div><b style={{ fontSize:15 }}>Flex abiertos por día</b><small style={muted}>Fecha de origen · ingreso A planta</small></div><div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={muted}>Semana seleccionada</span><button onClick={() => setSemana(v => v - 1)} title="Semana anterior" style={button}>←</button><button onClick={() => setSemana(0)} disabled={semana === 0} style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>Semana actual</button><button onClick={() => setSemana(v => Math.min(0, v + 1))} disabled={semana === 0} title="Semana siguiente" style={{ ...button, opacity: semana === 0 ? .45 : 1 }}>→</button></div></div><div style={{ display:"flex", gap:8, width:"100%", alignItems:"stretch" }}><div style={{ ...daysGrid, flex:1, minWidth:0 }}>{calendarDays.map(({key,d,rs,flex,part,sa,crit}) => <div key={key} style={{ position:"relative" }}><button onClick={() => { setDay(key); setMesAbierto(null); }} style={{ ...dayCard, height:"100%", paddingBottom:38, ...(day===key?dayActive:{}) }}><small style={{ textTransform:"capitalize", fontSize:11, lineHeight:1.1 }}>{d.toLocaleDateString("es-AR", { weekday:"long" })}</small><b style={{ fontSize:12, lineHeight:1.1 }}>{d.getDate()}</b><strong style={{ ...dayFlexCount, ...(crit ? { color:CRITICO } : {}), ...(rs.length && flex ? {} : dayFlexZero) }}>{rs.length ? flex : "—"}</strong><small>{rs.length ? "Flex" : "sin cobertura"}</small>{rs.length > 0 && <small style={dayPart}>+ {part} {part === 1 ? "particular" : "particulares"}</small>}</button>{sa > 0 && <button onClick={() => verSinAsignar(key)} title={"Ver los " + sa + " sin asignar de este día"} style={{ ...chipSinAsignar, position:"absolute", left:12, bottom:10 }}><IconoSinAsignar />{sa} sin asignar</button>}</div>)}</div>
       {anteriores.total > 0 && <button onClick={() => setMesAbierto(mesAbierto ? null : mesDe(argentinaToday()))} style={{ ...tarjetaAtras, ...(mesAbierto ? tarjetaAtrasAbierta : {}) }}>
         <small style={atrasTitulo}>Antes de esta semana</small>
@@ -606,38 +607,38 @@ export default function PendientesHistoricos() {
     </>}
   </div>;
 }
-const errorCard={padding:"22px 20px",border:"1px solid rgba(226,75,74,.45)",background:"rgba(226,75,74,.08)",borderRadius:12,color:"#fff"};const button={border:"1px solid rgba(255,255,255,.16)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:8,padding:"8px 12px",cursor:"pointer"};const banner={padding:"10px 13px",border:"1px solid rgba(239,159,39,.35)",background:"rgba(239,159,39,.08)",borderRadius:8,color:"#f1d39b",fontSize:12,marginBottom:12};const calendar={display:"flex",alignItems:"end",justifyContent:"space-between",gap:12,flexWrap:"wrap",background:"rgba(13,31,55,.86)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:14};const card={background:"rgba(13,31,55,.86)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:14};const th={textAlign:"left",color:"rgba(255,255,255,.55)",fontSize:10,textTransform:"uppercase",padding:"9px 8px"};const td={padding:"12px 8px",verticalAlign:"top"};const muted={display:"block",color:"rgba(255,255,255,.55)",fontSize:11,marginTop:4};const pill={display:"inline-block",padding:"3px 7px",borderRadius:5,background:"rgba(255,255,255,.1)",fontSize:10,marginBottom:4};const flexPill={background:"rgba(46,207,170,.16)",color:"#6de4c3"};const empty={padding:30,textAlign:"center",color:"rgba(255,255,255,.6)"};const copyButton={border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:7,padding:"7px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",minWidth:118};
-const globo={position:"fixed",zIndex:1100,background:"#11233c",border:"1px solid rgba(255,255,255,.16)",borderRadius:12,boxShadow:"0 18px 44px #000a",padding:12,boxSizing:"border-box"};
+const errorCard={padding:"22px 20px",border:"1px solid rgba(232,97,95,.45)",background:"rgba(232,97,95,.08)",borderRadius:14,color:"#fff"};const button={border:"1px solid rgba(255,255,255,.16)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:10,padding:"8px 12px",cursor:"pointer"};const banner={padding:"10px 13px",border:"1px solid rgba(245,192,68,.35)",background:"rgba(245,192,68,.08)",borderRadius:10,color:"#f1d39b",fontSize:12,marginBottom:12};const calendar={display:"flex",alignItems:"end",justifyContent:"space-between",gap:12,flexWrap:"wrap",background:"rgba(13,31,55,.86)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:14};const card={background:"rgba(13,31,55,.86)",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:14};const th={textAlign:"left",color:"rgba(255,255,255,.55)",fontSize:10,textTransform:"uppercase",padding:"9px 8px"};const td={padding:"12px 8px",verticalAlign:"top"};const muted={display:"block",color:"rgba(255,255,255,.55)",fontSize:11,marginTop:4};const pill={display:"inline-block",padding:"3px 7px",borderRadius:6,background:"rgba(255,255,255,.1)",fontSize:10,marginBottom:4};const flexPill={background:"rgba(46,230,182,.16)",color:"#6de4c3"};const empty={padding:30,textAlign:"center",color:"rgba(255,255,255,.6)"};const copyButton={border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:6,padding:"7px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",minWidth:118};
+const globo={position:"fixed",zIndex:1100,background:"#11233c",border:"1px solid rgba(255,255,255,.16)",borderRadius:14,boxShadow:"0 18px 44px #000a",padding:12,boxSizing:"border-box"};
 const globoCabeza={fontSize:10,color:"rgba(255,255,255,.52)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8};
 const globoTags={display:"flex",gap:5,flexWrap:"wrap"};
-const globoTag={fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:999,cursor:"pointer",background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.14)",color:"rgba(255,255,255,.58)"};
-const globoTagNueva={fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:999,cursor:"pointer",background:"transparent",border:"1px dashed rgba(46,207,170,.5)",color:"#6de4c3"};
-const globoTagInput={fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:999,width:104,background:"rgba(255,255,255,.08)",border:"1px solid rgba(46,207,170,.6)",color:"#fff",fontFamily:"inherit"};
+const globoTag={fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:999,cursor:"pointer",background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.14)",color:"rgba(255,255,255,.58)"};
+const globoTagNueva={fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:999,cursor:"pointer",background:"transparent",border:"1px dashed rgba(46,230,182,.5)",color:"#6de4c3"};
+const globoTagInput={fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:999,width:104,background:"rgba(255,255,255,.08)",border:"1px solid rgba(46,230,182,.6)",color:"#fff",fontFamily:"inherit"};
 const globoHilo={margin:"10px 0",borderTop:"1px solid rgba(255,255,255,.08)",borderBottom:"1px solid rgba(255,255,255,.08)",padding:"6px 0",maxHeight:230,overflowY:"auto"};
-const globoVacio={fontSize:11.5,color:"rgba(255,255,255,.45)",padding:"8px 2px"};
+const globoVacio={fontSize:12,color:"rgba(255,255,255,.45)",padding:"8px 2px"};
 const globoLinea={display:"flex",gap:8,alignItems:"flex-start",padding:"5px 0"};
 const globoAutor={fontSize:11,fontWeight:700,color:"#6de4c3",flexShrink:0,minWidth:52};
-const globoTexto={fontSize:12.5,lineHeight:1.45,color:"#e9eef6",flex:1,wordBreak:"break-word",whiteSpace:"pre-wrap"};
+const globoTexto={fontSize:13,lineHeight:1.45,color:"#e9eef6",flex:1,wordBreak:"break-word",whiteSpace:"pre-wrap"};
 const globoHora={fontSize:10,color:"rgba(255,255,255,.4)",flexShrink:0};
-const globoPuntos={width:20,height:20,borderRadius:5,border:"1px solid rgba(255,255,255,.14)",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.6)",fontSize:12,lineHeight:1,cursor:"pointer",padding:0};
-const globoMenu={position:"fixed",zIndex:1200,background:"#12253f",border:"1px solid rgba(255,255,255,.18)",borderRadius:8,padding:4,minWidth:104,boxShadow:"0 10px 26px #0009",display:"flex",flexDirection:"column"};
-const globoMenuItem={textAlign:"left",padding:"6px 9px",borderRadius:5,fontSize:11.5,border:0,background:"none",color:"#fff",cursor:"pointer"};
-const globoEdit={flex:1,background:"rgba(255,255,255,.07)",border:"1px solid rgba(46,207,170,.5)",borderRadius:7,padding:"6px 9px",fontSize:12.5,color:"#fff",fontFamily:"inherit",minWidth:0};
+const globoPuntos={width:20,height:20,borderRadius:6,border:"1px solid rgba(255,255,255,.14)",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.6)",fontSize:12,lineHeight:1,cursor:"pointer",padding:0};
+const globoMenu={position:"fixed",zIndex:1200,background:"#12253f",border:"1px solid rgba(255,255,255,.18)",borderRadius:10,padding:4,minWidth:104,boxShadow:"0 10px 26px #0009",display:"flex",flexDirection:"column"};
+const globoMenuItem={textAlign:"left",padding:"6px 9px",borderRadius:6,fontSize:12,border:0,background:"none",color:"#fff",cursor:"pointer"};
+const globoEdit={flex:1,background:"rgba(255,255,255,.07)",border:"1px solid rgba(46,230,182,.5)",borderRadius:6,padding:"6px 9px",fontSize:13,color:"#fff",fontFamily:"inherit",minWidth:0};
 const globoAccion={border:0,background:"none",color:"#6de4c3",fontSize:11,fontWeight:700,cursor:"pointer",padding:"0 2px",flexShrink:0};
 const globoPie={display:"flex",gap:7,alignItems:"center"};
-const globoInput={flex:1,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",borderRadius:999,padding:"7px 13px",color:"#fff",fontSize:12.5,fontFamily:"inherit",minWidth:0};
-const globoEnviar={width:30,height:30,borderRadius:999,background:"#2ECFAA",color:"#06231c",fontSize:14,fontWeight:800,border:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0};
-const ultimoTexto={fontSize:11.5,lineHeight:1.45,color:"#e9eef6"};
-const ultimoCuando={fontSize:10.5,color:"rgba(255,255,255,.42)"};
+const globoInput={flex:1,background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.14)",borderRadius:999,padding:"7px 13px",color:"#fff",fontSize:13,fontFamily:"inherit",minWidth:0};
+const globoEnviar={width:30,height:30,borderRadius:999,background:"#2EE6B6",color:"#06231c",fontSize:14,fontWeight:800,border:0,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0};
+const ultimoTexto={fontSize:12,lineHeight:1.45,color:"#e9eef6"};
+const ultimoCuando={fontSize:11,color:"rgba(255,255,255,.42)"};
 const ultimoAutor={color:"#6de4c3",fontWeight:700};
-const sinMensaje={color:"rgba(255,255,255,.28)",fontSize:11.5};
+const sinMensaje={color:"rgba(255,255,255,.28)",fontSize:12};
 const burbujas={display:"flex",gap:4,flexWrap:"wrap",marginTop:6};
 const burbuja={display:"inline-block",padding:"2px 8px",borderRadius:999,fontSize:10,fontWeight:700,borderWidth:1,borderStyle:"solid"};
 const contador={position:"absolute",top:-6,right:-6,minWidth:17,height:17,padding:"0 4px",borderRadius:999,background:"#ff6874",color:"#1d1420",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #0d1f37",pointerEvents:"none"};
-const copyIcon={width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:7,fontSize:14,lineHeight:1,cursor:"pointer"};
-const copyButtonOk={borderColor:"#2ECFAA",background:"rgba(46,207,170,.16)",color:"#6de4c3"};
-const mensajeCampo={width:"100%",minHeight:132,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",fontSize:12,lineHeight:1.5,margin:"8px 0 6px",padding:12,borderRadius:8,background:"rgba(255,255,255,.05)",border:"1px solid rgba(46,207,170,.45)",color:"#fff"};
-const mensajePreview={whiteSpace:"pre-wrap",fontFamily:"inherit",fontSize:12,lineHeight:1.5,margin:"8px 0 12px",padding:12,borderRadius:8,background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",color:"#dbe3ef"};
+const copyIcon={width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.06)",color:"#fff",borderRadius:6,fontSize:14,lineHeight:1,cursor:"pointer"};
+const copyButtonOk={borderColor:"#2EE6B6",background:"rgba(46,230,182,.16)",color:"#6de4c3"};
+const mensajeCampo={width:"100%",minHeight:132,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",fontSize:12,lineHeight:1.5,margin:"8px 0 6px",padding:12,borderRadius:10,background:"rgba(255,255,255,.05)",border:"1px solid rgba(46,230,182,.45)",color:"#fff"};
+const mensajePreview={whiteSpace:"pre-wrap",fontFamily:"inherit",fontSize:12,lineHeight:1.5,margin:"8px 0 12px",padding:12,borderRadius:10,background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",color:"#dbe3ef"};
 const overlay={position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:1000,display:"flex",justifyContent:"flex-end"};const drawer={height:"100%",width:"min(430px,100%)",background:"#0d1f37",padding:24,boxSizing:"border-box",overflowY:"auto"};
 
 
@@ -647,26 +648,26 @@ const overlay={position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:1000
 
 
 
-const urgentHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",margin:"0 0 14px",border:"1px solid rgba(255,102,112,.4)",borderLeft:"6px solid #ff6874",borderRadius:9,background:"rgba(90,30,45,.35)"};
-const urgentButton={border:0,borderRadius:7,padding:"10px 16px",background:"#ff6874",color:"#1d1420",fontWeight:800,cursor:"pointer"};
+const urgentHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",margin:"0 0 14px",border:"1px solid rgba(255,102,112,.4)",borderLeft:"6px solid #ff6874",borderRadius:10,background:"rgba(90,30,45,.35)"};
+const urgentButton={border:0,borderRadius:6,padding:"10px 16px",background:"#ff6874",color:"#1d1420",fontWeight:800,cursor:"pointer"};
 const heroes={display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:10,margin:"0 0 14px"};
-const cadetesHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,255,255,.12)",borderLeft:"6px solid #8a94a6",borderRadius:9,background:"rgba(255,255,255,.04)",color:"#fff",font:"inherit",cursor:"pointer",textAlign:"left"};
+const cadetesHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,255,255,.12)",borderLeft:"6px solid #8a94a6",borderRadius:10,background:"rgba(255,255,255,.04)",color:"#fff",font:"inherit",cursor:"pointer",textAlign:"left"};
 const cadetesHeroAbierto={borderColor:"rgba(255,255,255,.28)",background:"rgba(255,255,255,.07)"};
-const cadetesBoton={border:"1px solid rgba(255,255,255,.22)",borderRadius:7,padding:"10px 16px",color:"#dfe5ee",fontWeight:800,fontSize:13};
-const rankingCaja={margin:"-4px 0 14px",border:"1px solid rgba(255,255,255,.1)",borderRadius:9,background:"rgba(255,255,255,.03)",overflowX:"auto"};
+const cadetesBoton={border:"1px solid rgba(255,255,255,.22)",borderRadius:6,padding:"10px 16px",color:"#dfe5ee",fontWeight:800,fontSize:13};
+const rankingCaja={margin:"-4px 0 14px",border:"1px solid rgba(255,255,255,.1)",borderRadius:10,background:"rgba(255,255,255,.03)",overflowX:"auto"};
 const rankingFila={display:"grid",gridTemplateColumns:"minmax(150px,1.6fr) 60px 90px 80px minmax(130px,1.2fr) 130px",gap:10,alignItems:"center",padding:"9px 14px",borderTop:"1px solid rgba(255,255,255,.06)",fontSize:12,minWidth:640};
 const rankingCabeza={borderTop:0,color:"rgba(255,255,255,.55)",fontSize:10,textTransform:"uppercase"};
 const rankingNombre={background:"none",border:0,padding:0,color:"#fff",font:"inherit",fontWeight:700,textAlign:"left",cursor:"pointer",textDecoration:"underline",textDecorationColor:"rgba(255,255,255,.25)",textUnderlineOffset:3};
 const rankingBarra={display:"flex",flexWrap:"wrap",gap:12,alignItems:"center",justifyContent:"space-between",padding:"10px 14px",fontSize:12,minWidth:640};
 const rankingCajita={display:"inline-flex",alignItems:"center",gap:2,border:"1px solid rgba(255,255,255,.1)",borderRadius:10,padding:3};
-const rankingFlecha={width:28,height:28,border:0,borderRadius:7,background:"transparent",color:"rgba(255,255,255,.6)",fontSize:17,lineHeight:1,cursor:"pointer",fontFamily:"inherit"};
-const rankingOpcion={border:0,borderRadius:7,background:"transparent",color:"rgba(255,255,255,.5)",padding:"6px 13px",fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"background .15s, color .15s"};
+const rankingFlecha={width:28,height:28,border:0,borderRadius:6,background:"transparent",color:"rgba(255,255,255,.6)",fontSize:17,lineHeight:1,cursor:"pointer",fontFamily:"inherit"};
+const rankingOpcion={border:0,borderRadius:6,background:"transparent",color:"rgba(255,255,255,.5)",padding:"6px 13px",fontSize:12,cursor:"pointer",fontFamily:"inherit",transition:"background .15s, color .15s"};
 const rankingOpcionOn={background:"rgba(255,255,255,.09)",color:"#fff"};
-const rankingCopiar={display:"inline-flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,.14)",borderRadius:8,background:"transparent",color:"#e6e9f0",padding:"5px 10px",fontSize:11.5,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"};
+const rankingCopiar={display:"inline-flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(255,255,255,.14)",borderRadius:10,background:"transparent",color:"#e6e9f0",padding:"5px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"};
 const rankingCopiarOk={borderColor:"rgba(109,228,195,.5)",color:"#6de4c3"};
 const rankingMas={display:"block",width:"100%",padding:"9px 14px",background:"none",border:0,borderTop:"1px solid rgba(255,255,255,.06)",color:"#6de4c3",font:"inherit",fontSize:12,cursor:"pointer",textAlign:"left"};
-const unassignedHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,140,90,.35)",borderLeft:"6px solid #ff8c5a",borderRadius:9,background:"rgba(90,40,25,.28)"};
-const unassignedButton={border:"1px solid rgba(255,140,90,.6)",borderRadius:7,padding:"10px 16px",background:"transparent",color:"#ffab85",fontWeight:800,cursor:"pointer"};
+const unassignedHero={display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap",padding:"14px 18px",border:"1px solid rgba(255,140,90,.35)",borderLeft:"6px solid #ff8c5a",borderRadius:10,background:"rgba(90,40,25,.28)"};
+const unassignedButton={border:"1px solid rgba(255,140,90,.6)",borderRadius:6,padding:"10px 16px",background:"transparent",color:"#ffab85",fontWeight:800,cursor:"pointer"};
 const chipSinAsignar={display:"inline-flex",alignItems:"center",gap:5,padding:"3px 8px",borderRadius:999,border:"1px solid rgba(255,140,90,.45)",background:"rgba(255,140,90,.14)",color:"#ffab85",fontSize:11,fontWeight:700,lineHeight:1.2,whiteSpace:"nowrap",cursor:"pointer"};
 function IconoSinAsignar() {
   return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4"/><path d="M19 22v.01"/><path d="M19 19a2.003 2.003 0 0 0 .914-3.782a1.98 1.98 0 0 0-2.414.483"/></svg>;

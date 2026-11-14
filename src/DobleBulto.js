@@ -529,11 +529,11 @@ function Escaner({ onCerrar, onGuardado }) {
 
 const CSS = `
 .db{display:flex;flex-direction:column;gap:14px;color:#f4f5fa}
-.db-card{background:rgba(27,28,46,.72);border:1px solid rgba(255,255,255,.06);border-radius:16px;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:16px}
+.db-card{background:rgba(27,28,46,.72);border:1px solid rgba(255,255,255,.06);border-radius:14px;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:16px}
 .db-top{display:flex;align-items:center;justify-content:space-between;gap:16px}
 .db-tit{font-family:'Space Grotesk',-apple-system,'Segoe UI',sans-serif;font-size:19px;font-weight:600;letter-spacing:-.3px}
 .db-sub{font-size:13px;color:#a7adc2;margin-top:4px;line-height:1.45;max-width:620px}
-.db-alerta{border-color:rgba(245,192,68,.35);color:#f4f5fa;font-size:13.5px;line-height:1.5}
+.db-alerta{border-color:rgba(245,192,68,.35);color:#f4f5fa;font-size:14px;line-height:1.5}
 .db-alerta code{font-size:12px;color:#F5C044}
 .db-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:8px 13px;border-radius:10px;cursor:pointer;white-space:nowrap}
 .db-btn:disabled{opacity:.45;cursor:default}
@@ -543,9 +543,9 @@ const CSS = `
 .db-barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .db-esp{flex:1}
 .db-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}
-.db-seg button{background:none;border:0;color:#a7adc2;font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;cursor:pointer}
+.db-seg button{background:none;border:0;color:#a7adc2;font:inherit;font-size:13px;padding:7px 12px;border-radius:10px;cursor:pointer}
 .db-seg button.on{background:rgba(255,255,255,.08);color:#f4f5fa}
-.db-select{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 10px;border-radius:9px;max-width:220px}
+.db-select{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 10px;border-radius:10px;max-width:220px}
 .db-select option{background:#1b1c2e}
 .db-dias{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
 .db-dias button{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);color:#a7adc2;font:inherit;font-size:13px;padding:6px 11px;border-radius:999px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
@@ -557,17 +557,17 @@ const CSS = `
 .db-amb{color:#F5C044}.db-res .db-amb b{color:#F5C044}
 .db-gris{color:#71768e;font-style:normal}
 i.db-amb{font-style:normal}
-.db-vacio{padding:28px 8px;text-align:center;color:#71768e;font-size:13.5px}
-.db-tabla{border:1px solid rgba(255,255,255,.06);border-radius:12px;overflow:hidden}
+.db-vacio{padding:28px 8px;text-align:center;color:#71768e;font-size:14px}
+.db-tabla{border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden}
 .db-f{display:grid;grid-template-columns:62px minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.6fr) 72px minmax(0,1fr) 72px;gap:10px;padding:9px 12px;align-items:center;font-size:13px;border-top:1px solid rgba(255,255,255,.05)}
 .db-f>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-th{border-top:0;background:rgba(255,255,255,.03);font-size:11px;color:#8a8ca6;text-transform:uppercase;letter-spacing:.05em}
 .db-fecha small{display:block;font-size:11px;color:#71768e}
 .db-cod{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;color:#c9cbe0}
 .db-bul{padding:5px 8px;width:62px}
-.db-x{background:none;border:1px solid transparent;color:#71768e;font:inherit;font-size:15px;padding:4px 8px;border-radius:8px;cursor:pointer}
+.db-x{background:none;border:1px solid transparent;color:#71768e;font:inherit;font-size:15px;padding:4px 8px;border-radius:10px;cursor:pointer}
 .db-x.on{border-color:rgba(245,192,68,.4);color:#F5C044;font-size:12px}
-.db-toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);background:rgba(10,12,24,.92);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:12px;padding:11px 16px;font-size:14px;z-index:80}
+.db-toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);background:rgba(10,12,24,.92);border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:14px;padding:11px 16px;font-size:14px;z-index:80}
 .db-c,.db-sep,.db-fab{display:none}
 @media (max-width:700px){
   .db{gap:10px}
@@ -577,10 +577,10 @@ i.db-amb{font-style:normal}
   .db-card{padding:12px}
   .db-barra{gap:8px}
   .db-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%}
-  .db-seg button{padding:9px 4px;font-size:13.5px;white-space:nowrap}
+  .db-seg button{padding:9px 4px;font-size:14px;white-space:nowrap}
   .db-l{display:none}.db-c{display:inline}
   .db-esp{display:none}
-  .db-select{max-width:none;width:100%;padding:10px 12px;font-size:15px;border-radius:11px}
+  .db-select{max-width:none;width:100%;padding:10px 12px;font-size:15px;border-radius:10px}
   .db-dias{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:10px -12px 0;padding:0 12px}
   .db-dias::-webkit-scrollbar{display:none}
   .db-dias button{flex:none;padding:8px 13px;font-size:14px}
@@ -589,18 +589,18 @@ i.db-amb{font-style:normal}
   .db-th{display:none}
   .db-sep{display:flex;justify-content:space-between;align-items:baseline;padding:14px 4px 6px;font-size:12px;color:#8a8ca6;text-transform:uppercase;letter-spacing:.05em}
   .db-sep b{color:#f4f5fa;font-weight:600}
-  .db-f{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"cli cli bul" "dir dir bul" "fecha zona x";gap:2px 10px;padding:10px 12px 8px;margin-bottom:6px;border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(255,255,255,.025)}
+  .db-f{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"cli cli bul" "dir dir bul" "fecha zona x";gap:2px 10px;padding:10px 12px 8px;margin-bottom:6px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.025)}
   .db-f>span:nth-child(1){grid-area:fecha}
   .db-cli{grid-area:cli;font-weight:600;font-size:15px}
   .db-f>span:nth-child(3){display:none}
-  .db-dir{grid-area:dir;color:#c9cbe0;font-size:13.5px}
+  .db-dir{grid-area:dir;color:#c9cbe0;font-size:14px}
   .db-f>span:nth-child(5){grid-area:bul;justify-self:end;align-self:center}
-  .db-zona{grid-area:zona;color:#8a8ca6;font-size:12.5px;align-self:center}
+  .db-zona{grid-area:zona;color:#8a8ca6;font-size:13px;align-self:center}
   .db-f>span:nth-child(7){grid-area:x;justify-self:end}
   .db-dd{display:none}
   .db-fecha{align-self:center}
-  .db-fecha small{display:inline;margin:0;font-size:12.5px;color:#8a8ca6}
-  .db-bul{width:58px;padding:8px 6px;font-size:16px;font-weight:600;text-align:center;border-radius:11px}
+  .db-fecha small{display:inline;margin:0;font-size:13px;color:#8a8ca6}
+  .db-bul{width:58px;padding:8px 6px;font-size:16px;font-weight:600;text-align:center;border-radius:10px}
   .db-x{min-width:36px;min-height:28px;padding:0 8px}
   .db-fab{display:block;position:sticky;bottom:calc(env(safe-area-inset-bottom) + 10px);z-index:20;padding-top:4px}
   .db-fab .db-grande{width:100%;min-height:54px;font-size:16px;border-radius:14px;background:#2ee6b6;border-color:#2ee6b6;color:#062a20;box-shadow:0 10px 30px rgba(0,0,0,.45)}
@@ -629,12 +629,12 @@ i.db-amb{font-style:normal}
 .db-esc-cab{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .db-esc-cli{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;line-height:1.25}
 .db-esc-det{font-size:13px;color:#b9bdd0;margin-top:3px;overflow-wrap:anywhere}
-.db-esc-desc{touch-action:manipulation;min-height:44px;padding:0 12px;border:0;border-radius:12px;background:transparent;color:#b9bdd0;font:inherit;font-size:14px;font-weight:500;cursor:pointer;flex-shrink:0}
-.db-esc-ya{font-size:12.5px;color:#F5C044;line-height:1.4}
+.db-esc-desc{touch-action:manipulation;min-height:44px;padding:0 12px;border:0;border-radius:14px;background:transparent;color:#b9bdd0;font:inherit;font-size:14px;font-weight:500;cursor:pointer;flex-shrink:0}
+.db-esc-ya{font-size:13px;color:#F5C044;line-height:1.4}
 .db-esc-err{font-size:13px;color:#F5C044}
 .db-esc-preg{font-size:14px;color:#b9bdd0}
 .db-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.db-num{touch-action:manipulation;min-height:72px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f4f5fa;font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.db-num{touch-action:manipulation;min-height:72px;border-radius:20px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#f4f5fa;font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .db-num.on{background:#2ee6b6;border-color:#2ee6b6;color:#062a20}
 .db-num.chico{font-family:inherit;font-size:17px;font-weight:600;padding:0 18px}
 .db-num.on.chico,.db-esc-bultos+div .db-num.on{font-family:inherit;font-size:17px}
@@ -651,6 +651,6 @@ i.db-amb{font-style:normal}
 .db-esc-ico.pend{background:rgba(255,255,255,.1);color:#b9bdd0}
 .db-esc-ico.err{background:rgba(245,192,68,.2);color:#F5C044}
 .db-esc-busc{color:#b9bdd0;font-weight:500;font-size:17px}
-.db-esc-reint{min-height:44px;border-radius:12px;border:1px solid rgba(245,192,68,.5);background:rgba(245,192,68,.12);color:#F5C044;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.db-esc-reint{min-height:44px;border-radius:14px;border:1px solid rgba(245,192,68,.5);background:rgba(245,192,68,.12);color:#F5C044;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .db-esc-ico{width:22px;height:22px;border-radius:50%;background:rgba(46,230,182,.18);color:#2ee6b6;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
 `;

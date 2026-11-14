@@ -115,7 +115,7 @@ function colorChofer(nombre) {
 
 // 24 colores bien separados entre sí y visibles sobre el mapa claro.
 const PALETA_CHOFER = [
-  '#E24B4A', '#3A8FD4', '#2ECFAA', '#F5A623', '#9B59B6', '#E91E8C',
+  '#E8615F', '#3A8FD4', '#2EE6B6', '#F5A623', '#9B59B6', '#E91E8C',
   '#16A085', '#D4703A', '#5C6BC0', '#7CB342', '#C2185B', '#00ACC1',
   '#8E24AA', '#43A047', '#FF7043', '#1E88E5', '#F9A825', '#6D4C41',
   '#26C6DA', '#AB47BC', '#9E9D24', '#EC407A', '#3949AB', '#00897B',
@@ -123,17 +123,17 @@ const PALETA_CHOFER = [
 
 const COLOR_ESTADO = {
   blanco:   'rgba(255,255,255,0.45)',
-  amarillo: '#FBBF24',
-  verde:    '#2ECFAA',
-  rojo:     '#E24B4A',
+  amarillo: '#F5C044',
+  verde:    '#2EE6B6',
+  rojo:     '#E8615F',
 };
 
 // Chips-filtro por estado: filtran los pines y a la vez son la leyenda de colores
 // (el circulito de cada chip replica el estilo real del pin de ese estado).
 const FILTROS_ESTADO = [
   { est: 'blanco',   label: 'Pendiente',   color: '#9CA3AF', relleno: 'rgba(148,155,166,0.92)', borde: 'rgba(255,255,255,0.45)' },
-  { est: 'amarillo', label: 'A confirmar', color: '#FBBF24', relleno: 'rgba(251,191,36,0.25)', borde: '#FBBF24' },
-  { est: 'verde',    label: 'Confirmado',  color: '#2ECFAA', relleno: 'rgba(46,207,170,0.25)', borde: '#2ECFAA' },
+  { est: 'amarillo', label: 'A confirmar', color: '#F5C044', relleno: 'rgba(245,192,68,0.25)', borde: '#F5C044' },
+  { est: 'verde',    label: 'Confirmado',  color: '#2EE6B6', relleno: 'rgba(46,230,182,0.25)', borde: '#2EE6B6' },
 ];
 
 // Punto dentro de polígono (ray casting sobre lat/lng)
@@ -218,13 +218,13 @@ export function BuscadorDireccion({ inicial, onElegir }) {
         <input value={texto} onChange={e => setTexto(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') buscar(); }}
           placeholder="Calle y altura, localidad…"
-          style={{ flex: 1, minWidth: 0, padding: '7px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#14171c', color: '#fff', fontSize: 13 }} />
+          style={{ flex: 1, minWidth: 0, padding: '7px 10px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: '#14171c', color: '#fff', fontSize: 13 }} />
         <button onClick={buscar} disabled={buscando}
-          style={{ padding: '0 14px', minHeight: 34, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', fontSize: 13, cursor: 'pointer', touchAction: 'manipulation' }}>
+          style={{ padding: '0 14px', minHeight: 34, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', fontSize: 13, cursor: 'pointer', touchAction: 'manipulation' }}>
           {buscando ? '…' : '🔍 Buscar'}
         </button>
       </div>
-      {error && <div style={{ fontSize: 12, color: '#E24B4A', marginTop: 6 }}>{error}</div>}
+      {error && <div style={{ fontSize: 12, color: '#E8615F', marginTop: 6 }}>{error}</div>}
       {candidatos && !candidatos.length && (
         <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 6 }}>
           Sin resultados por la zona — probá "calle altura, localidad" o poné el pin a mano.
@@ -232,7 +232,7 @@ export function BuscadorDireccion({ inicial, onElegir }) {
       )}
       {candidatos?.map((cand, i) => (
         <button key={i} onClick={() => onElegir(cand)}
-          style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6, padding: '8px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>
+          style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 6, padding: '8px 10px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', fontSize: 12, cursor: 'pointer', touchAction: 'manipulation' }}>
           📍 {cand.nombre}
         </button>
       ))}
@@ -367,9 +367,9 @@ export default function ColectasMapa({
         limitesRef.current = L.geoJSON(geo, {
           pane: 'territorios', interactive: false,
           style: f => ({
-            color: f.properties.capa === 'CABA' ? 'rgba(142,197,255,0.72)' : 'rgba(46,207,170,0.62)',
+            color: f.properties.capa === 'CABA' ? 'rgba(142,197,255,0.72)' : 'rgba(46,230,182,0.62)',
             weight: f.properties.capa === 'CABA' ? 1.15 : 1.4,
-            fillColor: f.properties.capa === 'CABA' ? '#8EC5FF' : '#2ECFAA',
+            fillColor: f.properties.capa === 'CABA' ? '#8EC5FF' : '#2EE6B6',
             fillOpacity: 0.035,
           }),
         });
@@ -497,7 +497,7 @@ export default function ColectasMapa({
 
       if (entry.key !== key) {
         const borde = COLOR_ESTADO[est] || COLOR_ESTADO.blanco;
-        const fondo = est === 'blanco' ? 'rgba(148,155,166,0.92)' : est === 'verde' ? 'rgba(46,207,170,0.22)' : est === 'rojo' ? 'rgba(226,75,74,0.12)' : 'rgba(251,191,36,0.20)';
+        const fondo = est === 'blanco' ? 'rgba(148,155,166,0.92)' : est === 'verde' ? 'rgba(46,230,182,0.22)' : est === 'rojo' ? 'rgba(232,97,95,0.12)' : 'rgba(245,192,68,0.20)';
         const cancelada = est === 'rojo'; // atenuada: es info secundaria, no debe competir con las activas
         // Puntito con la INICIAL del chofer: segunda pista además del color (los colores son
         // únicos por día/pestaña, pero pueden variar entre días — la letra ancla la identidad).
@@ -515,7 +515,7 @@ export default function ColectasMapa({
         // Ancho FIJO (no max-width): cerca del borde del mapa, Leaflet calcula mal el ancho
         // disponible y con max-width el texto colapsaba en una columna finita (bug real 28/07).
         const choferesHtml = sinAsignar
-          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-weight:600;color:#FBBF24">` +
+          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-weight:600;color:#F5C044">` +
             `<span style="width:9px;height:9px;border-radius:50%;border:2px dashed rgba(255,255,255,0.55);flex-shrink:0;box-sizing:border-box"></span>A coordinar</div>`
           : chs.filter(x => x !== 'A coordinar').map(ch =>
               `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-weight:600">` +
@@ -523,7 +523,7 @@ export default function ColectasMapa({
             ).join('');
         entry.marker.setTooltipContent(
           `<div style="width:200px;white-space:normal;overflow-wrap:break-word;font-size:12px;line-height:1.45">` +
-          `<b style="font-size:13px;color:#2ECFAA;display:block;margin-bottom:2px">${escHtml(c.nombre)}</b>` +
+          `<b style="font-size:13px;color:#2EE6B6;display:block;margin-bottom:2px">${escHtml(c.nombre)}</b>` +
           `<span style="color:rgba(255,255,255,0.65)">📍 ${escHtml(dirDelDia)}</span>` +
           choferesHtml +
           `</div>`
@@ -694,7 +694,7 @@ export default function ColectasMapa({
   const clienteSel = sel ? clientes.find(c => c.id === sel) : null;
   const sinUbicarClientes = clientes.filter(c => sinUbicar.includes(c.id));
   const btn = (activo, color = BRAND.teal) => ({
-    display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 9,
+    display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 10,
     border: `1px solid ${activo ? color : BRAND.border}`, background: activo ? `${color}22` : BRAND.faint,
     color: activo ? color : BRAND.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', touchAction: 'manipulation',
   });
@@ -703,28 +703,28 @@ export default function ColectasMapa({
     <div>
       {/* Estilo del tooltip oscuro (Opción B): pisa el blanco default de Leaflet, flecha incluida */}
       <style>{`
-        .flexit-tip { background: rgba(13,27,42,0.95); border: 1px solid rgba(46,207,170,0.4); color: #fff; border-radius: 10px; box-shadow: 0 3px 14px rgba(0,0,0,0.4); padding: 9px 12px; }
-        .flexit-tip.leaflet-tooltip-top:before { border-top-color: rgba(46,207,170,0.55); }
-        .flexit-tip.leaflet-tooltip-bottom:before { border-bottom-color: rgba(46,207,170,0.55); }
-        .flexit-tip.leaflet-tooltip-left:before { border-left-color: rgba(46,207,170,0.55); }
-        .flexit-tip.leaflet-tooltip-right:before { border-right-color: rgba(46,207,170,0.55); }
+        .flexit-tip { background: rgba(13,27,42,0.95); border: 1px solid rgba(46,230,182,0.4); color: #fff; border-radius: 10px; box-shadow: 0 3px 14px rgba(0,0,0,0.4); padding: 9px 12px; }
+        .flexit-tip.leaflet-tooltip-top:before { border-top-color: rgba(46,230,182,0.55); }
+        .flexit-tip.leaflet-tooltip-bottom:before { border-bottom-color: rgba(46,230,182,0.55); }
+        .flexit-tip.leaflet-tooltip-left:before { border-left-color: rgba(46,230,182,0.55); }
+        .flexit-tip.leaflet-tooltip-right:before { border-right-color: rgba(46,230,182,0.55); }
       `}</style>
       {/* Barra de herramientas */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: BRAND.muted }}>
           <span>📅</span>
           <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-            style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#14171c', color: '#fff', fontSize: 13 }} />
+            style={{ padding: '6px 10px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: '#14171c', color: '#fff', fontSize: 13 }} />
         </div>
         <button onClick={() => { setLazo(v => !v); cancelarSeleccion(); setAjustando(false); }} style={btn(lazo, '#8EC5FF')}
           title="Dibujar alrededor de varias colectas para asignarlas juntas">
           ✏️ Lazo
         </button>
-        <button onClick={() => { setAjustando(v => !v); setLazo(false); cancelarSeleccion(); }} style={btn(ajustando, '#FBBF24')}
+        <button onClick={() => { setAjustando(v => !v); setLazo(false); cancelarSeleccion(); }} style={btn(ajustando, '#F5C044')}
           title="Arrastrar los pines para corregir su posición">
           📌 Ajustar pines
         </button>
-        <button onClick={() => setVerLimites(v => !v)} style={btn(verLimites, '#2ECFAA')}
+        <button onClick={() => setVerLimites(v => !v)} style={btn(verLimites, '#2EE6B6')}
           title="Mostrar u ocultar los barrios de CABA y partidos del AMBA">
           🧭 Zonas
         </button>
@@ -739,27 +739,27 @@ export default function ColectasMapa({
         {rojoCount > 0 && (
           <button onClick={() => setVerCanceladas(v => !v)}
             title={verCanceladas ? 'Ocultar las colectas canceladas' : 'Mostrar también las canceladas (sin envíos)'}
-            style={{ ...btn(verCanceladas, '#E24B4A'), height: 30, padding: '0 10px', fontSize: 12 }}>
-            <span style={{ width: 11, height: 11, borderRadius: '50%', flexShrink: 0, boxSizing: 'border-box', background: 'rgba(226,75,74,0.2)', border: '2px solid #E24B4A' }} />
+            style={{ ...btn(verCanceladas, '#E8615F'), height: 30, padding: '0 10px', fontSize: 12 }}>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', flexShrink: 0, boxSizing: 'border-box', background: 'rgba(232,97,95,0.2)', border: '2px solid #E8615F' }} />
             {verCanceladas ? 'Ocultar canceladas' : 'Canceladas'} {rojoCount}
           </button>
         )}
         <span style={{ fontSize: 12, color: BRAND.muted }}>{conPin.length} en el mapa</span>
-        {limitesError && <span style={{ fontSize: 11.5, color: '#E24B4A' }}>Límites no disponibles</span>}
+        {limitesError && <span style={{ fontSize: 12, color: '#E8615F' }}>Límites no disponibles</span>}
         {progreso && (
           <span style={{ fontSize: 12, color: '#8EC5FF' }}>Ubicando clientes… {progreso.hechos}/{progreso.total}</span>
         )}
         {guardado && <span style={{ fontSize: 12, color: BRAND.teal }}>✓ {guardado}</span>}
-        {geoError && <span style={{ fontSize: 12, color: '#E24B4A' }}>⚠️ {geoError}</span>}
+        {geoError && <span style={{ fontSize: 12, color: '#E8615F' }}>⚠️ {geoError}</span>}
         {sinUbicarClientes.length > 0 && (
-          <button onClick={() => setSinUbicarOpen(v => !v)} style={btn(sinUbicarOpen, '#E24B4A')}>
+          <button onClick={() => setSinUbicarOpen(v => !v)} style={btn(sinUbicarOpen, '#E8615F')}>
             Sin ubicar ({sinUbicarClientes.length})
           </button>
         )}
       </div>
 
       {sinUbicarOpen && sinUbicarClientes.length > 0 && (
-        <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(226,75,74,0.3)', background: 'rgba(226,75,74,0.07)' }}>
+        <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(232,97,95,0.3)', background: 'rgba(232,97,95,0.07)' }}>
           <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 8 }}>
             No se pudo encontrar la dirección. Buscala con 🔍 (como en Google Maps), o tocá “Ubicar en el mapa” y después el punto exacto.
           </div>
@@ -786,14 +786,14 @@ export default function ColectasMapa({
       )}
 
       {ubicando && (
-        <div style={{ marginBottom: 8, fontSize: 12, color: '#FBBF24' }}>
+        <div style={{ marginBottom: 8, fontSize: 12, color: '#F5C044' }}>
           Tocá en el mapa dónde va {clientes.find(c => c.id === ubicando)?.nombre}.
           <button onClick={() => setUbicando(null)} style={{ marginLeft: 8, background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 12 }}>Cancelar</button>
         </div>
       )}
 
       {/* Mapa */}
-      <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: `1px solid ${BRAND.border}` }}>
+      <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', border: `1px solid ${BRAND.border}` }}>
         <div ref={contRef} style={{ height: esMovil ? '58vh' : '64vh', minHeight: 320, background: '#1b1e24' }} />
 
         {lazo && (
@@ -823,7 +823,7 @@ export default function ColectasMapa({
                   const hits = leyenda.filter(([ch]) => normBusq(ch).includes(q));
                   if (q && hits.length === 1) setChoferFoco(hits[0][0]);
                 }}
-                style={{ width: 150, boxSizing: 'border-box', height: 28, padding: '0 9px', borderRadius: 7, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                style={{ width: 150, boxSizing: 'border-box', height: 28, padding: '0 9px', borderRadius: 6, border: `1px solid ${BRAND.border}`, background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
             </div>
             {leyenda.filter(([ch]) => !busqChofer.trim() || normBusq(ch).includes(normBusq(busqChofer)) || choferFoco === ch).map(([ch, n]) => {
               const activo = choferFoco === ch;
@@ -832,7 +832,7 @@ export default function ColectasMapa({
                   title={activo ? 'Quitar resaltado' : `Resaltar las de ${ch}`}
                   style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 4px', cursor: 'pointer', minHeight: 26, opacity: choferFoco && !activo ? 0.45 : 1 }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: ch === 'A coordinar' ? 'transparent' : colorDe(ch), border: ch === 'A coordinar' ? '2px dashed rgba(255,255,255,0.55)' : '1px solid rgba(0,0,0,0.4)' }} />
-                  <span style={{ fontSize: 12, color: ch === 'A coordinar' ? '#FBBF24' : '#fff', whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch}</span>
+                  <span style={{ fontSize: 12, color: ch === 'A coordinar' ? '#F5C044' : '#fff', whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch}</span>
                   <span style={{ fontSize: 11, color: BRAND.muted, marginLeft: 'auto' }}>{n}</span>
                 </div>
               );
@@ -851,7 +851,7 @@ export default function ColectasMapa({
         const monto = reg.monto ?? clienteSel.monto;
         const estLbl = { blanco: 'Pendiente', amarillo: 'Con envíos', verde: 'Confirmado' }[est] || est;
         return (
-          <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 960, padding: '12px 14px', borderRadius: 12, border: `1px solid ${BRAND.border}`, background: 'rgba(22,45,66,0.97)', boxShadow: '0 -6px 24px rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
+          <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 960, padding: '12px 14px', borderRadius: 14, border: `1px solid ${BRAND.border}`, background: 'rgba(22,45,66,0.97)', boxShadow: '0 -6px 24px rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 16 }}>{VEHICULOS[clienteSel.vehiculo]?.emoji || '📦'}</span>
               <span style={{ fontSize: 14, fontWeight: 700 }}>{clienteSel.nombre}</span>
@@ -866,7 +866,7 @@ export default function ColectasMapa({
               {VEHICULOS[clienteSel.vehiculo] ? ` · ${VEHICULOS[clienteSel.vehiculo].label}` : ''}
             </div>
             {dirHoy && (
-              <div style={{ fontSize: 12, color: '#FBBF24', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: '#F5C044', marginBottom: 8 }}>
                 📍 Hoy la dirección es otra: {dirHoy} (el pin sigue en la dirección fija)
               </div>
             )}
@@ -910,7 +910,7 @@ export default function ColectasMapa({
 
       {/* Panel de asignación en bloque */}
       {seleccion && (
-        <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 960, padding: '12px 14px', borderRadius: 12, border: '1px solid rgba(142,197,255,0.45)', background: 'rgba(22,45,66,0.97)', boxShadow: '0 -6px 24px rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', maxHeight: 'calc(100% - 16px)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 960, padding: '12px 14px', borderRadius: 14, border: '1px solid rgba(142,197,255,0.45)', background: 'rgba(22,45,66,0.97)', boxShadow: '0 -6px 24px rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', maxHeight: 'calc(100% - 16px)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexShrink: 0 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#8EC5FF' }}>
               {seleccion.ids.filter(id => !seleccion.excluidos.has(id)).length} colecta(s) seleccionada(s)
@@ -937,7 +937,7 @@ export default function ColectasMapa({
                     style={{ width: 17, height: 17, accentColor: '#8EC5FF', cursor: 'pointer', flexShrink: 0 }} />
                   <span style={{ fontSize: 13 }}>{VEHICULOS[c.vehiculo]?.emoji || '📦'} {c.nombre}</span>
                   {yaTiene.length > 0 && (
-                    <span style={{ fontSize: 11, color: '#FBBF24' }}>ya estaba con {yaTiene.join(', ')}</span>
+                    <span style={{ fontSize: 11, color: '#F5C044' }}>ya estaba con {yaTiene.join(', ')}</span>
                   )}
                 </label>
               );
@@ -945,7 +945,7 @@ export default function ColectasMapa({
           </div>
 
           <input value={buscaChofer} onChange={e => setBuscaChofer(e.target.value)} placeholder="🔍 Buscar chofer…"
-            style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#14171c', color: '#fff', fontSize: 13, marginBottom: 8 }} />
+            style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: '#14171c', color: '#fff', fontSize: 13, marginBottom: 8 }} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 150, overflowY: 'auto' }}>
             {choferesFull
               .filter(ch => !buscaChofer || normNombre(ch).includes(normNombre(buscaChofer)))

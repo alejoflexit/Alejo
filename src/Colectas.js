@@ -5,6 +5,7 @@ import {
   SUPABASE_URL, SUPABASE_KEY, sbFetch, todayStr, minutosAR, mergeChoferes, LoginFlexit, NotasHoy,
 } from './colectasShared';
 import ColectasBot from './ColectasBot';
+import { FX_FONT } from "./theme";
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
 const ClienteUbicacion = React.lazy(() => import('./ClienteUbicacion'));
@@ -71,14 +72,14 @@ function LlegadaConfirm({ llego, cerca, nombre, subtitle, onToggle }) {
   const confirm = () => { if (t.current) clearTimeout(t.current); setArmed(false); onToggle(); };
   useEffect(() => () => { if (t.current) clearTimeout(t.current); }, []);
 
-  const borderColor = armed ? '#FBBF24' : (llego ? '#2ECFAA' : 'rgba(255,255,255,0.3)');
+  const borderColor = armed ? '#F5C044' : (llego ? '#2EE6B6' : 'rgba(255,255,255,0.3)');
 
   return (
     <div style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0 }}>
       <div onClick={armed ? confirm : arm}
         title={llego ? 'Tocar para sacar la llegada' : 'Tocar para marcar la llegada'}
         style={{ width:32, height:32, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', touchAction:'manipulation', WebkitUserSelect:'none', userSelect:'none',
-          border:`2px ${armed ? 'dashed' : 'solid'} ${borderColor}`, background: (llego && !armed) ? '#2ECFAA' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17, transition:'all 0.15s' }}>
+          border:`2px ${armed ? 'dashed' : 'solid'} ${borderColor}`, background: (llego && !armed) ? '#2EE6B6' : 'transparent', color:'#0d1b2a', fontWeight:800, fontSize:17, transition:'all 0.15s' }}>
         {(llego && !armed) ? '✓' : ''}
       </div>
       <div style={{ flex:1, minWidth:0 }}>
@@ -89,12 +90,12 @@ function LlegadaConfirm({ llego, cerca, nombre, subtitle, onToggle }) {
         {armed ? (
           <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
             <button onClick={confirm}
-              style={{ display:'flex', alignItems:'center', gap:4, height:30, padding:'0 12px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight:700, whiteSpace:'nowrap', touchAction:'manipulation',
-                border:`1px solid ${llego ? '#E24B4A' : '#2ECFAA'}`, background: llego ? 'rgba(226,75,74,0.15)' : 'rgba(46,207,170,0.15)', color: llego ? '#E24B4A' : '#2ECFAA' }}>
+              style={{ display:'flex', alignItems:'center', gap:4, height:30, padding:'0 12px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:700, whiteSpace:'nowrap', touchAction:'manipulation',
+                border:`1px solid ${llego ? '#E8615F' : '#2EE6B6'}`, background: llego ? 'rgba(232,97,95,0.15)' : 'rgba(46,230,182,0.15)', color: llego ? '#E8615F' : '#2EE6B6' }}>
               {llego ? 'Sacar llegada' : '✓ Confirmar'}
             </button>
             <button onClick={cancel} title="Cancelar"
-              style={{ width:30, height:30, borderRadius:8, cursor:'pointer', touchAction:'manipulation', border:'1px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.6)', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>✕</button>
+              style={{ width:30, height:30, borderRadius:10, cursor:'pointer', touchAction:'manipulation', border:'1px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.6)', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>✕</button>
           </div>
         ) : subtitle}
       </div>
@@ -171,12 +172,12 @@ class MapaBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding:'2rem', textAlign:'center', color:BRAND.muted, border:`1px solid rgba(226,75,74,0.3)`, background:'rgba(226,75,74,0.07)', borderRadius:12 }}>
+        <div style={{ padding:'2rem', textAlign:'center', color:BRAND.muted, border:`1px solid rgba(232,97,95,0.3)`, background:'rgba(232,97,95,0.07)', borderRadius:14 }}>
           <div style={{ fontSize:28, marginBottom:8 }}>🗺️</div>
-          <div style={{ fontSize:14, color:'#E24B4A', marginBottom:6 }}>El mapa se cayó.</div>
-          <div style={{ fontSize:12.5, marginBottom:12 }}>{String(this.state.error?.message || this.state.error)}</div>
+          <div style={{ fontSize:14, color:'#E8615F', marginBottom:6 }}>El mapa se cayó.</div>
+          <div style={{ fontSize:13, marginBottom:12 }}>{String(this.state.error?.message || this.state.error)}</div>
           <button onClick={() => { this.setState({ error: null }); this.props.onVolver?.(); }}
-            style={{ padding:'7px 16px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:13 }}>
+            style={{ padding:'7px 16px', borderRadius:10, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:13 }}>
             Volver a la tabla
           </button>
         </div>
@@ -971,7 +972,7 @@ function ColectasInner({ soloArribos = false, irA }) {
 
   const inpSt = {
     padding:'7px 10px', fontSize:12, border:`1px solid ${BRAND.border}`,
-    borderRadius:8, background:BRAND.faint, color:BRAND.white, outline:'none',
+    borderRadius:10, background:BRAND.faint, color:BRAND.white, outline:'none',
   };
 
   // ── ZONA RENDER ──
@@ -983,7 +984,7 @@ function ColectasInner({ soloArribos = false, irA }) {
         <div style={{ fontSize:32, marginBottom:8 }}>📦</div>
         <div>No hay clientes activos en {tab}.</div>
         <button onClick={() => setNavView('clientes')}
-          style={{ marginTop:12, padding:'6px 16px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:13 }}>
+          style={{ marginTop:12, padding:'6px 16px', borderRadius:10, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:13 }}>
           Ir a Clientes →
         </button>
       </div>
@@ -1063,14 +1064,14 @@ function ColectasInner({ soloArribos = false, irA }) {
                   <React.Fragment key={chofer}>
                     {/* Group header */}
                     <tr onMouseEnter={() => setHoverChofer(chofer)} onMouseLeave={() => setHoverChofer(null)}
-                      style={{ background: isActive ? 'rgba(58,143,212,0.14)' : (isWarn ? 'rgba(251,191,36,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
-                      <td colSpan={nCols} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #FBBF24' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#4A9EFF'}` }}>
+                      style={{ background: isActive ? 'rgba(58,143,212,0.14)' : (isWarn ? 'rgba(245,192,68,0.06)' : 'rgba(255,255,255,0.02)'), transition:'background 0.15s' }}>
+                      <td colSpan={nCols} style={{ padding:'6px 14px', borderBottom:`1px solid ${BRAND.border}`, borderLeft: isWarn ? '3px solid #F5C044' : `3px solid ${amarillosConf === 0 ? BRAND.teal : '#4A9EFF'}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                           <span>
-                            <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#FBBF24':'rgba(255,255,255,0.85)' }}>
+                            <span style={{ fontSize:13, fontWeight:500, color:isWarn?'#F5C044':'rgba(255,255,255,0.85)' }}>
                               {isWarn && <i className="ti ti-alert-triangle" aria-hidden="true" style={{ marginRight:4, verticalAlign:'-2px' }} />}{chofer}
                             </span>
-                            <span style={{ fontSize:12, color:isWarn?'rgba(251,191,36,0.7)':BRAND.teal, marginLeft:6 }}>
+                            <span style={{ fontSize:12, color:isWarn?'rgba(245,192,68,0.7)':BRAND.teal, marginLeft:6 }}>
                               {/* Solo las activas: las "sin envíos" se cuentan aparte en su pliegue (así coincide con "N sin asignar") */}
                               {rows.filter(c => estEf(c) !== 'rojo').length}
                             </span>
@@ -1079,7 +1080,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                               {amarillosConf > 0 && (
                                 <button onClick={() => confirmarTodos(chofer)} title={`Confirmar las ${amarillosConf} colectas de ${chofer} (pasan a verde; no toca las 'sin envíos')`}
-                                  style={{ display:'flex', alignItems:'center', gap:4, height:28, padding:'0 10px', borderRadius:8, border:'1px solid rgba(46,207,170,0.5)', color:'#2ECFAA', background:'rgba(46,207,170,0.1)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+                                  style={{ display:'flex', alignItems:'center', gap:4, height:28, padding:'0 10px', borderRadius:10, border:'1px solid rgba(46,230,182,0.5)', color:'#2EE6B6', background:'rgba(46,230,182,0.1)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
                                   ✓ Todos
                                 </button>
                               )}
@@ -1088,15 +1089,15 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 onClick={() => copyMsg(chofer)}
                                 onMouseEnter={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='1'; }}
                                 onMouseLeave={e => { const t = e.currentTarget.nextSibling; if(t) t.style.opacity='0'; }}
-                                style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, border:`1px solid ${copiedChofer===chofer?'#2ECFAA':'rgba(46,207,170,0.5)'}`, color:'#2ECFAA', background:copiedChofer===chofer?'rgba(46,207,170,0.2)':'rgba(46,207,170,0.1)', fontSize:14, cursor:'pointer', transition:'all 0.2s' }}>
+                                style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:10, border:`1px solid ${copiedChofer===chofer?'#2EE6B6':'rgba(46,230,182,0.5)'}`, color:'#2EE6B6', background:copiedChofer===chofer?'rgba(46,230,182,0.2)':'rgba(46,230,182,0.1)', fontSize:14, cursor:'pointer', transition:'all 0.2s' }}>
                                 {copiedChofer===chofer ? <i className="ti ti-check" aria-hidden="true" /> : <i className="ti ti-brand-whatsapp" aria-hidden="true" style={{ fontSize:16 }} />}
                               </button>
-                              <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', right:0, whiteSpace:'nowrap', background:'#1a2e3a', color:'#2ECFAA', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,207,170,0.3)', pointerEvents:'none', zIndex:400 }}>
+                              <div style={{ opacity:0, transition:'opacity 0.15s', position:'absolute', bottom:'calc(100% + 6px)', right:0, whiteSpace:'nowrap', background:'#1a2e3a', color:'#2EE6B6', fontSize:11, fontWeight:600, padding:'4px 8px', borderRadius:6, border:'1px solid rgba(46,230,182,0.3)', pointerEvents:'none', zIndex:400 }}>
                                 Copiar {chofer}
                               </div>
                             </div>
                             <button onClick={e => abrirMenuChofer(e, chofer)} aria-label={`Más opciones de ${chofer}`} title="Más opciones"
-                              style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:8, border:`1px solid ${menuChofer?.chofer === chofer ? 'rgba(255,255,255,0.18)' : 'transparent'}`, background: menuChofer?.chofer === chofer ? 'rgba(255,255,255,0.08)' : 'none', color: menuChofer?.chofer === chofer ? '#fff' : 'rgba(255,255,255,0.45)', fontSize:18, lineHeight:1, cursor:'pointer', padding:0 }}>
+                              style={{ display:'flex', alignItems:'center', justifyContent:'center', width:28, height:28, borderRadius:10, border:`1px solid ${menuChofer?.chofer === chofer ? 'rgba(255,255,255,0.18)' : 'transparent'}`, background: menuChofer?.chofer === chofer ? 'rgba(255,255,255,0.08)' : 'none', color: menuChofer?.chofer === chofer ? '#fff' : 'rgba(255,255,255,0.45)', fontSize:18, lineHeight:1, cursor:'pointer', padding:0 }}>
                               ⋮
                             </button>
                             </div>
@@ -1113,8 +1114,8 @@ function ColectasInner({ soloArribos = false, irA }) {
                       const unassigned = chs.every(x => x === 'A coordinar');
                       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
 
-                      const ECOLOR  = { blanco:'transparent', amarillo:'#FBBF24', rojo:'#E24B4A', verde:'#2ECFAA' };
-                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#FBBF24', rojo:'#E24B4A', verde:'#2ECFAA' };
+                      const ECOLOR  = { blanco:'transparent', amarillo:'#F5C044', rojo:'#E8615F', verde:'#2EE6B6' };
+                      const EBORDER = { blanco:'rgba(255,255,255,0.2)', amarillo:'#F5C044', rojo:'#E8615F', verde:'#2EE6B6' };
                       const EICON   = { blanco:'', amarillo:'', rojo:'✕', verde:'✓' };
 
                       // Para divididas: el círculo muestra el estado del chofer de ESTA sección
@@ -1170,14 +1171,14 @@ function ColectasInner({ soloArribos = false, irA }) {
                           <td style={{ padding:'8px 8px', fontWeight:500, fontSize:13, textDecoration:estado==='rojo'?'line-through':'none', color:estado==='rojo'?BRAND.muted:undefined }}>
                             {c.nombre}
                             {isDividida && (
-                              <span style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>dividida</span>
+                              <span style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, background:'rgba(245,192,68,0.15)', color:'#F5C044' }}>dividida</span>
                             )}
                             {reg.link_respuesta && (() => {
                               const hora = reg.link_at ? new Date(reg.link_at).toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit', timeZone:'America/Argentina/Buenos_Aires' }) : '';
                               const si = reg.link_respuesta === 'si';
                               return (
                                 <span title={`El cliente respondió por el link${hora ? ' a las ' + hora : ''}${reg.link_bultos ? ' · ~' + reg.link_bultos + ' paquetes' : ''}`}
-                                  style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, whiteSpace:'nowrap', textDecoration:'none', display:'inline-block', background: si ? 'rgba(46,207,170,0.12)' : 'rgba(226,75,74,0.12)', color: si ? '#2ECFAA' : '#E24B4A' }}>
+                                  style={{ marginLeft:6, fontSize:10, padding:'1px 6px', borderRadius:10, whiteSpace:'nowrap', textDecoration:'none', display:'inline-block', background: si ? 'rgba(46,230,182,0.12)' : 'rgba(232,97,95,0.12)', color: si ? '#2EE6B6' : '#E8615F' }}>
                                   <i className="ti ti-link" aria-hidden="true" style={{ verticalAlign:'-1px' }} /> {si ? 'Sí' : 'Hoy no'} {hora}{si && reg.link_bultos ? ` · ${reg.link_bultos}` : ''}
                                 </span>
                               );
@@ -1206,11 +1207,11 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 onChange={ev => setDirEdit({ id:c.id, valor:ev.target.value })}
                                 onKeyDown={ev => { if (ev.key==='Enter') ev.currentTarget.blur(); if (ev.key==='Escape') setDirEdit(null); }}
                                 onBlur={() => { const v = dirEdit.valor.trim(); updateRegistro(c.id, { direccion: (v==='' || v===c.direccion) ? null : v }); setDirEdit(null); }}
-                                style={{ width:200, background:'#14171c', border:'1px solid #2ECFAA', borderRadius:6, color:'#fff', fontSize:12, padding:'3px 6px' }} />
+                                style={{ width:200, background:'#14171c', border:'1px solid #2EE6B6', borderRadius:6, color:'#fff', fontSize:12, padding:'3px 6px' }} />
                             ) : (
                               <span onClick={() => setDirEdit({ id:c.id, valor: reg.direccion || c.direccion || '' })}
                                 title={reg.direccion ? `Dirección de hoy · la fija es: ${c.direccion}` : 'Click para una dirección puntual de hoy'}
-                                style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, maxWidth:210, color: reg.direccion ? '#FBBF24' : undefined }}>
+                                style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, maxWidth:210, color: reg.direccion ? '#F5C044' : undefined }}>
                                 <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{reg.direccion ? '📍 ' : ''}{reg.direccion || c.direccion}</span>
                                 {reg.direccion
                                   ? <button onClick={ev => { ev.stopPropagation(); updateRegistro(c.id, { direccion: null }); }} title="Volver a la dirección fija" style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:0, flexShrink:0 }}>↩</button>
@@ -1225,13 +1226,13 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 onChange={ev => setZonaEdit({ id:c.id, valor:ev.target.value })}
                                 onKeyDown={ev => { if (ev.key==='Enter') ev.currentTarget.blur(); if (ev.key==='Escape') setZonaEdit(null); }}
                                 onBlur={() => { const v = zonaEdit.valor.trim(); updateRegistro(c.id, { zona_barrio: (v==='' || v===(c.zona_barrio||'')) ? null : v }); setZonaEdit(null); }}
-                                style={{ width:120, background:'#14171c', border:'1px solid #2ECFAA', borderRadius:6, color:'#fff', fontSize:12, padding:'3px 6px' }} />
+                                style={{ width:120, background:'#14171c', border:'1px solid #2EE6B6', borderRadius:6, color:'#fff', fontSize:12, padding:'3px 6px' }} />
                             ) : (
                               <span onClick={() => setZonaEdit({ id:c.id, valor: reg.zona_barrio || c.zona_barrio || '' })}
                                 title={reg.zona_barrio ? `Zona de hoy · la fija es: ${c.zona_barrio||'—'}` : 'Click para una zona puntual de hoy'}
                                 style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}>
                                 {(reg.zona_barrio || c.zona_barrio)
-                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, textTransform:'capitalize', background: reg.zona_barrio ? 'rgba(251,191,36,0.15)' : 'rgba(74,158,255,0.15)', color: reg.zona_barrio ? '#FBBF24' : '#4A9EFF' }}>{String(reg.zona_barrio || c.zona_barrio).toLowerCase()}</span>
+                                  ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, textTransform:'capitalize', background: reg.zona_barrio ? 'rgba(245,192,68,0.15)' : 'rgba(74,158,255,0.15)', color: reg.zona_barrio ? '#F5C044' : '#4A9EFF' }}>{String(reg.zona_barrio || c.zona_barrio).toLowerCase()}</span>
                                   : <span style={{ fontSize:11, color:BRAND.muted }}>+ zona</span>}
                                 {reg.zona_barrio
                                   ? <button onClick={ev => { ev.stopPropagation(); updateRegistro(c.id, { zona_barrio: null }); }} title="Volver a la zona fija" style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:13, padding:0 }}>↩</button>
@@ -1245,7 +1246,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                           {conVehiculo && <td style={{ padding:'8px 8px', whiteSpace:'nowrap' }}>
                             {VEHICULOS[c.vehiculo]
                               ? <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`}
-                                  style={{ fontSize:10.5, padding:'2px 8px', borderRadius:20, border:'1px solid rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.55)' }}>
+                                  style={{ fontSize:11, padding:'2px 8px', borderRadius:20, border:'1px solid rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.55)' }}>
                                   {VEHICULOS[c.vehiculo].label.toLowerCase()}
                                 </span>
                               : <span style={{ fontSize:12, color:'rgba(255,255,255,0.18)' }}>—</span>}
@@ -1262,11 +1263,11 @@ function ColectasInner({ soloArribos = false, irA }) {
                                 onChange={e => setMontoEdit({ id:c.id, valor:e.target.value })}
                                 onKeyDown={e => { if (e.key==='Enter') e.currentTarget.blur(); if (e.key==='Escape') setMontoEdit(null); }}
                                 onBlur={() => { const v = montoEdit.valor==='' ? null : Number(montoEdit.valor); updateRegistro(c.id, { monto: (v===null || v===Number(c.monto||0)) ? null : v }); setMontoEdit(null); }}
-                                style={{ width:80, background:'#14171c', border:'1px solid #2ECFAA', borderRadius:6, color:'#fff', fontSize:13, padding:'3px 6px' }} />
+                                style={{ width:80, background:'#14171c', border:'1px solid #2EE6B6', borderRadius:6, color:'#fff', fontSize:13, padding:'3px 6px' }} />
                             ) : (
                               <span onClick={() => setMontoEdit({ id:c.id, valor: (reg.monto ?? c.monto) ?? '' })}
                                 title="Click para cambiar el precio de hoy (el predeterminado no se toca)"
-                                style={{ cursor:'pointer', color: reg.monto!=null ? '#FBBF24' : undefined, display:'inline-flex', alignItems:'center', gap:5 }}>
+                                style={{ cursor:'pointer', color: reg.monto!=null ? '#F5C044' : undefined, display:'inline-flex', alignItems:'center', gap:5 }}>
                                 {(() => {
                                   if (reg.monto != null) return fmtMonto(reg.monto);
                                   const chs = [...new Set((reg.choferes || []).filter(x => x && x !== 'A coordinar'))];
@@ -1286,8 +1287,8 @@ function ColectasInner({ soloArribos = false, irA }) {
                         {activasRows.map(renderRow)}
                         {compactar && rojas.length > 0 && (
                           <tr onClick={() => setRojasOpen(p => ({ ...p, [chofer]: !p[chofer] }))} style={{ cursor:'pointer' }}>
-                            <td colSpan={nCols} style={{ padding:'7px 14px 7px 44px', fontSize:11.5, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
-                              <span style={{ color:'#E24B4A', opacity:0.75, marginRight:7, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
+                            <td colSpan={nCols} style={{ padding:'7px 14px 7px 44px', fontSize:12, color:'rgba(255,255,255,0.5)', borderBottom:`1px solid ${BRAND.border}` }}>
+                              <span style={{ color:'#E8615F', opacity:0.75, marginRight:7, fontSize:12 }}>{rojasOpen[chofer] ? '▾' : '▸'}</span>
                               {rojas.length} sin envíos
                             </td>
                           </tr>
@@ -1307,10 +1308,10 @@ function ColectasInner({ soloArribos = false, irA }) {
     return (
       <>
         {tab !== 'SABADOS' && !esFutura && (() => { const dow = new Date(todayStr() + 'T12:00:00').getDay(); return (dow === 6 || dow === 0) && (
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'10px 14px', marginBottom:14, borderRadius:10, background:'rgba(251,191,36,0.08)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:13 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'10px 14px', marginBottom:14, borderRadius:10, background:'rgba(245,192,68,0.08)', border:'1px solid rgba(245,192,68,0.3)', color:'#F5C044', fontSize:13 }}>
             <span><i className="ti ti-calendar-event" aria-hidden="true" style={{ verticalAlign:'-2px', marginRight:4 }} />Hoy es {dow === 6 ? 'sábado' : 'domingo'}: acá ves cómo quedó la semana ({fecha.slice(8,10)}/{fecha.slice(5,7)}), solo para mirar. Las colectas de {dow === 6 ? 'hoy' : 'ayer'} están en Sábados.</span>
             <button onClick={() => cambiarTab('SABADOS')}
-              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:8, border:'1px solid rgba(251,191,36,0.5)', background:'rgba(251,191,36,0.12)', color:'#FBBF24', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:10, border:'1px solid rgba(245,192,68,0.5)', background:'rgba(245,192,68,0.12)', color:'#F5C044', fontSize:12, fontWeight:600, cursor:'pointer' }}>
               Ir a Sábados →
             </button>
           </div>
@@ -1322,7 +1323,7 @@ function ColectasInner({ soloArribos = false, irA }) {
           {/* Fecha como texto; el calendario abre los últimos días para MIRAR cómo quedaron (no editable) */}
           <div style={{ position:'relative', display:'flex', alignItems:'center', gap:6, fontSize:13, color:'rgba(255,255,255,0.8)', fontWeight:500, textTransform:'capitalize' }}>
             <button onClick={() => setCalAbierto(o => !o)} aria-label="Ver cómo quedó otro día" title="Ver cómo quedó otro día"
-              style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:8, padding:0, cursor:'pointer', border:`1px solid ${calAbierto ? 'rgba(255,255,255,0.18)' : 'transparent'}`, background: calAbierto ? 'rgba(255,255,255,0.08)' : 'none', color: calAbierto ? '#fff' : BRAND.muted }}>
+              style={{ width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:10, padding:0, cursor:'pointer', border:`1px solid ${calAbierto ? 'rgba(255,255,255,0.18)' : 'transparent'}`, background: calAbierto ? 'rgba(255,255,255,0.08)' : 'none', color: calAbierto ? '#fff' : BRAND.muted }}>
               <i className="ti ti-calendar" aria-hidden="true" style={{ fontSize:16 }} />
             </button>
             {`${new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long' })} ${fecha.slice(8,10)}/${fecha.slice(5,7)}`}
@@ -1341,16 +1342,16 @@ function ColectasInner({ soloArribos = false, irA }) {
               if (diaSiguiente && diaSiguiente > base) dias.push(diaSiguiente);
               return (<>
                 <div onClick={() => setCalAbierto(false)} style={{ position:'fixed', inset:0, zIndex:299 }} />
-                <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:300, background:'#0E1E38', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, padding:10, boxShadow:'0 12px 30px rgba(0,0,0,0.45)', textTransform:'none' }}>
+                <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:300, background:'#0E1E38', border:'1px solid rgba(255,255,255,0.12)', borderRadius:14, padding:10, boxShadow:'0 12px 30px rgba(0,0,0,0.45)', textTransform:'none' }}>
                   <div style={{ fontSize:11, color:BRAND.muted, letterSpacing:'0.04em', marginBottom:8 }}>{diaSiguiente && diaSiguiente > base ? 'VER CÓMO QUEDÓ… O CARGAR MAÑANA' : 'VER CÓMO QUEDÓ…'}</div>
                   <div style={{ display:'flex', gap:6 }}>
                     {dias.map(f => {
                       const esBase = f === base, esSel = f === fecha && !esBase, esSig = f === diaSiguiente;
                       return (
                         <button key={f} onClick={() => verDia(f)} title={esSig ? 'Cargar el día siguiente (editable)' : esBase ? undefined : 'Solo para mirar'}
-                          style={{ width:44, padding:'6px 0', borderRadius:8, cursor:'pointer', fontFamily:'inherit', fontSize:11, lineHeight:1.3,
-                            border:`1px solid ${esBase ? 'rgba(46,207,170,0.5)' : esSig ? 'rgba(251,191,36,0.55)' : esSel ? 'rgba(74,158,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                            background: esSig && esSel ? 'rgba(251,191,36,0.15)' : esSel ? 'rgba(74,158,255,0.15)' : 'none', color: esBase ? '#5CF2C4' : esSig ? '#FBBF24' : esSel ? '#8EC5FF' : BRAND.white }}>
+                          style={{ width:44, padding:'6px 0', borderRadius:10, cursor:'pointer', fontFamily:'inherit', fontSize:11, lineHeight:1.3,
+                            border:`1px solid ${esBase ? 'rgba(46,230,182,0.5)' : esSig ? 'rgba(245,192,68,0.55)' : esSel ? 'rgba(74,158,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                            background: esSig && esSel ? 'rgba(245,192,68,0.15)' : esSel ? 'rgba(74,158,255,0.15)' : 'none', color: esBase ? '#5CF2C4' : esSig ? '#F5C044' : esSel ? '#8EC5FF' : BRAND.white }}>
                           {new Date(f + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'short' }).replace('.', '')}
                           <b style={{ display:'block', fontSize:14, fontWeight:600 }}>{f.slice(8,10)}</b>
                           {esSig && <i className="ti ti-pencil" aria-hidden="true" style={{ fontSize:11 }} />}
@@ -1374,16 +1375,16 @@ function ColectasInner({ soloArribos = false, irA }) {
               style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:2 }}>✕</button>
           )}
           {sinAsignar > 0 && (
-            <div style={{ padding:'3px 12px', borderRadius:20, background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.3)', color:'#FBBF24', fontSize:12, fontWeight:600 }}>
+            <div style={{ padding:'3px 12px', borderRadius:20, background:'rgba(245,192,68,0.12)', border:'1px solid rgba(245,192,68,0.3)', color:'#F5C044', fontSize:12, fontWeight:600 }}>
               <i className="ti ti-alert-triangle" aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {sinAsignar} sin asignar
             </div>
           )}
           {SECCIONES_BOT.includes(tab) && !soloLectura && (() => { const preg = seccionClientes.filter(c => !c.fija); const on = preg.filter(c => c.bot_habilitado).length;
             const caido = botEstado && (botEstado.ok === false || botEstado.aviso);
-            const col = caido ? '#E24B4A' : '#2ECFAA';
+            const col = caido ? '#E8615F' : '#2EE6B6';
             return (
             <button onClick={() => setBotPanel(true)} title={caido ? (botEstado.aviso || 'El bot de WhatsApp no da señal') : 'Configurar el bot que manda el link de confirmación a las 9'}
-              style={{ padding:'4px 12px', borderRadius:20, border:`1px solid ${caido ? 'rgba(226,75,74,0.5)' : 'rgba(46,207,170,0.4)'}`, background: caido ? 'rgba(226,75,74,0.10)' : 'rgba(46,207,170,0.08)', color: col, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+              style={{ padding:'4px 12px', borderRadius:20, border:`1px solid ${caido ? 'rgba(232,97,95,0.5)' : 'rgba(46,230,182,0.4)'}`, background: caido ? 'rgba(232,97,95,0.10)' : 'rgba(46,230,182,0.08)', color: col, fontSize:12, fontWeight:600, cursor:'pointer' }}>
               <i className={`ti ${caido ? 'ti-alert-triangle' : 'ti-link'}`} aria-hidden="true" style={{ verticalAlign:'-2px' }} /> {caido ? (botEstado.pide_qr ? 'Bot pide QR' : `Bot sin señal${botEstado.ultimo_sync ? ' desde ' + horaSync(botEstado.ultimo_sync) : ''}`) : `Bot de confirmación ${on}/${preg.length}`}
             </button>
           ); })()}
@@ -1396,7 +1397,7 @@ function ColectasInner({ soloArribos = false, irA }) {
               onClose={() => setBotPanel(false)}
             />
           )}
-          <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E24B4A':saveStatus==='saving'?BRAND.muted:'#2ECFAA' }}>
+          <div style={{ marginLeft:'auto', fontSize:12, color: saveStatus==='error'?'#E8615F':saveStatus==='saving'?BRAND.muted:'#2EE6B6' }}>
             {saveStatus==='saving' && 'Guardando...'}
             {saveStatus==='saved'  && '✓ Guardado'}
             {saveStatus==='error'  && '✗ Error al guardar'}
@@ -1407,10 +1408,10 @@ function ColectasInner({ soloArribos = false, irA }) {
         {seccionClientes.length > 0 && (
           <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
             {[
-              { key:'verde',   label:'Confirmado', color:'#2ECFAA', bg:'rgba(46,207,170,0.1)',  border:'rgba(46,207,170,0.3)'  },
-              { key:'amarillo',label:'Con envíos',  color:'#FBBF24', bg:'rgba(251,191,36,0.1)', border:'rgba(251,191,36,0.3)'  },
+              { key:'verde',   label:'Confirmado', color:'#2EE6B6', bg:'rgba(46,230,182,0.1)',  border:'rgba(46,230,182,0.3)'  },
+              { key:'amarillo',label:'Con envíos',  color:'#F5C044', bg:'rgba(245,192,68,0.1)', border:'rgba(245,192,68,0.3)'  },
               { key:'blanco',  label:'Pendiente',   color:BRAND.muted, bg:'rgba(255,255,255,0.04)', border:'rgba(255,255,255,0.12)' },
-              { key:'rojo',    label:'Sin envíos',  color:'#E24B4A', bg:'rgba(226,75,74,0.08)', border:'rgba(226,75,74,0.25)'  },
+              { key:'rojo',    label:'Sin envíos',  color:'#E8615F', bg:'rgba(232,97,95,0.08)', border:'rgba(232,97,95,0.25)'  },
             ].map(({ key, label, color, bg, border }) => conteoEstados[key] ? (
               <div key={key} onClick={() => setFiltroEstado(filtroEstado === key ? null : key)}
                 title={filtroEstado === key ? 'Quitar filtro' : `Ver solo ${label.toLowerCase()}`}
@@ -1449,11 +1450,11 @@ function ColectasInner({ soloArribos = false, irA }) {
         )}
 
         {fechaVolver !== null && esFutura && (
-          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'8px 12px', marginBottom:12, borderRadius:10, background:'rgba(251,191,36,0.1)', border:'1px solid rgba(251,191,36,0.45)', color:'#FBBF24', fontSize:13 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'8px 12px', marginBottom:12, borderRadius:10, background:'rgba(245,192,68,0.1)', border:'1px solid rgba(245,192,68,0.45)', color:'#F5C044', fontSize:13 }}>
             <i className="ti ti-alert-triangle" aria-hidden="true" />
             <span><b>Estás cargando el {new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long' })} {fecha.slice(8,10)}/{fecha.slice(5,7)}, no hoy.</b> Lo que cambies queda guardado para ese día.</span>
             <button onClick={() => verDia(fechaVolver)}
-              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:8, border:'1px solid rgba(251,191,36,0.5)', background:'rgba(251,191,36,0.12)', color:'#FBBF24', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:10, border:'1px solid rgba(245,192,68,0.5)', background:'rgba(245,192,68,0.12)', color:'#F5C044', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
               Volver a hoy
             </button>
           </div>
@@ -1463,7 +1464,7 @@ function ColectasInner({ soloArribos = false, irA }) {
             <i className="ti ti-lock" aria-hidden="true" />
             <span>Estás viendo el {new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long' })} {fecha.slice(8,10)}/{fecha.slice(5,7)} · solo para mirar, no se puede editar</span>
             <button onClick={() => verDia(fechaVolver)}
-              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:8, border:'1px solid rgba(74,158,255,0.5)', background:'rgba(74,158,255,0.12)', color:'#8EC5FF', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+              style={{ marginLeft:'auto', padding:'4px 12px', borderRadius:10, border:'1px solid rgba(74,158,255,0.5)', background:'rgba(74,158,255,0.12)', color:'#8EC5FF', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
               Volver a hoy
             </button>
           </div>
@@ -1497,7 +1498,7 @@ function ColectasInner({ soloArribos = false, irA }) {
           <div style={{ color:BRAND.muted, padding:'2.5rem', textAlign:'center', fontSize:13 }}>
             Sin resultados con el filtro actual.
             <button onClick={() => { setFiltroEstado(null); setBusqueda(''); }}
-              style={{ marginLeft:8, padding:'3px 10px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:12 }}>
+              style={{ marginLeft:8, padding:'3px 10px', borderRadius:10, border:`1px solid ${BRAND.teal}`, background:'transparent', color:BRAND.teal, cursor:'pointer', fontSize:12 }}>
               Limpiar filtros
             </button>
           </div>
@@ -1561,23 +1562,23 @@ function ColectasInner({ soloArribos = false, irA }) {
 
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
           {pagosData.map(p => (
-            <div key={p.cadete} style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'1rem 1.25rem' }}>
+            <div key={p.cadete} style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:14, padding:'1rem 1.25rem' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
                 <div>
                   <div style={{ fontSize:16, fontWeight:700 }}>{p.cadete}</div>
                   <div style={{ fontSize:12, color:BRAND.muted, marginTop:2 }}>{label}</div>
                 </div>
-                <div style={{ fontSize:22, fontWeight:700, color:BRAND.teal }}>{fmtMonto(p.monto)}</div>
+                <div style={{ fontFamily:FX_FONT.display, fontSize:22, fontWeight:700, color:BRAND.teal }}>{fmtMonto(p.monto)}</div>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
                 {[
                   ['Asignadas', p.total, BRAND.white],
-                  ['Confirmadas', p.confirmadas, '#2ECFAA'],
+                  ['Confirmadas', p.confirmadas, '#2EE6B6'],
                   ['Promedio', p.confirmadas ? fmtMonto(Math.round(p.monto/p.confirmadas)) : '—', BRAND.white],
                 ].map(([lbl, val, color]) => (
-                  <div key={lbl} style={{ background:BRAND.navyMid, borderRadius:8, padding:'10px', textAlign:'center' }}>
+                  <div key={lbl} style={{ background:BRAND.navyMid, borderRadius:10, padding:'10px', textAlign:'center' }}>
                     <div style={{ fontSize:11, color:BRAND.muted, marginBottom:4 }}>{lbl}</div>
-                    <div style={{ fontSize:18, fontWeight:700, color }}>{val}</div>
+                    <div style={{ fontFamily:FX_FONT.display, fontSize:18, fontWeight:700, color }}>{val}</div>
                   </div>
                 ))}
               </div>
@@ -1595,7 +1596,7 @@ function ColectasInner({ soloArribos = false, irA }) {
     const tabBtn = active => ({
       padding:'4px 12px', fontSize:12, fontWeight:600, borderRadius:20, cursor:'pointer',
       border:`1px solid ${active?BRAND.teal:BRAND.border}`,
-      background:active?'rgba(46,207,170,0.12)':BRAND.faint,
+      background:active?'rgba(46,230,182,0.12)':BRAND.faint,
       color:active?BRAND.teal:BRAND.muted,
     });
 
@@ -1610,13 +1611,13 @@ function ColectasInner({ soloArribos = false, irA }) {
             ))}
           </div>
           <button onClick={() => { setShowForm(true); setEditId(null); setClienteForm(emptyForm); setPreciosForm([]); setPreciosError(''); setConfirmarSoloSab(false); setMapaForm(false); }}
-            style={{ marginLeft:'auto', padding:'6px 14px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'rgba(46,207,170,0.1)', color:BRAND.teal, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+            style={{ marginLeft:'auto', padding:'6px 14px', borderRadius:10, border:`1px solid ${BRAND.teal}`, background:'rgba(46,230,182,0.1)', color:BRAND.teal, fontSize:13, fontWeight:600, cursor:'pointer' }}>
             + Agregar cliente
           </button>
         </div>
 
         {showForm && (
-          <div style={{ background:BRAND.navyCard, border:'1px solid rgba(46,207,170,0.3)', borderRadius:12, padding:'1.25rem', marginBottom:16 }}>
+          <div style={{ background:BRAND.navyCard, border:'1px solid rgba(46,230,182,0.3)', borderRadius:14, padding:'1.25rem', marginBottom:16 }}>
             <div style={{ fontSize:14, fontWeight:700, marginBottom:12 }}>{editId ? 'Editar cliente' : 'Nuevo cliente'}</div>
             {(() => {
               // Todos los campos con la misma altura y el rótulo en una sola línea: antes el time input,
@@ -1663,20 +1664,20 @@ function ColectasInner({ soloArribos = false, irA }) {
                     setConfirmarSoloSab(false);
                     setClienteForm(p => ({ ...p, opera_sabados: v === 'si', ...(p.seccion === 'SABADOS' ? { seccion: p.zona_sabado || 'CABA' } : {}) }));
                   }}
-                  style={{ ...ctlSt, color: (confirmarSoloSab || clienteForm.seccion === 'SABADOS') ? '#FFB020' : ctlSt.color }}>
+                  style={{ ...ctlSt, color: (confirmarSoloSab || clienteForm.seccion === 'SABADOS') ? '#F5C044' : ctlSt.color }}>
                   <option value="no">No opera sábados</option>
                   <option value="si">Opera sábados</option>
                   <option value="solo">Solo opera sábados</option>
                 </select>
               </div>
               {confirmarSoloSab && clienteForm.seccion !== 'SABADOS' && (
-                <div style={{ gridColumn:'1 / -1', padding:'10px 12px', borderRadius:8, background:'rgba(255,176,32,0.10)', border:'1px solid rgba(255,176,32,0.35)', fontSize:13, color:'#FFB020', lineHeight:1.45, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                <div style={{ gridColumn:'1 / -1', padding:'10px 12px', borderRadius:10, background:'rgba(245,192,68,0.10)', border:'1px solid rgba(245,192,68,0.35)', fontSize:13, color:'#F5C044', lineHeight:1.45, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
                   <span style={{ flex:'1 1 260px' }}>⚠ Con esto el cliente <b>solo va a aparecer los sábados</b> (solapa Sábados). Deja de aparecer de lunes a viernes.</span>
                   <span style={{ display:'flex', gap:8 }}>
                     <button type="button" onClick={() => { setConfirmarSoloSab(false); setClienteForm(p => ({ ...p, seccion: 'SABADOS', zona_sabado: p.seccion !== 'SABADOS' ? p.seccion : p.zona_sabado, opera_sabados: false })); }}
-                      style={{ padding:'6px 12px', borderRadius:7, border:'none', background:'#FFB020', color:'#1a1200', fontWeight:700, fontSize:12.5, cursor:'pointer' }}>Sí, solo sábados</button>
+                      style={{ padding:'6px 12px', borderRadius:6, border:'none', background:'#F5C044', color:'#1a1200', fontWeight:700, fontSize:13, cursor:'pointer' }}>Sí, solo sábados</button>
                     <button type="button" onClick={() => setConfirmarSoloSab(false)}
-                      style={{ padding:'6px 12px', borderRadius:7, border:'1px solid rgba(255,255,255,0.18)', background:'transparent', color:'rgba(255,255,255,0.75)', fontSize:12.5, cursor:'pointer' }}>Cancelar</button>
+                      style={{ padding:'6px 12px', borderRadius:6, border:'1px solid rgba(255,255,255,0.18)', background:'transparent', color:'rgba(255,255,255,0.75)', fontSize:13, cursor:'pointer' }}>Cancelar</button>
                   </span>
                 </div>
               )}
@@ -1702,11 +1703,11 @@ function ColectasInner({ soloArribos = false, irA }) {
                     onChange={e => setPreciosForm(arr => arr.map((x, j) => j === i ? { ...x, monto: e.target.value } : x))}
                     style={{ ...ctlSt, flex:1 }} />
                   <button type="button" title="Quitar" onClick={() => setPreciosForm(arr => arr.filter((_, j) => j !== i))}
-                    style={{ height:36, minWidth:36, borderRadius:8, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, cursor:'pointer', fontSize:15 }}>×</button>
+                    style={{ height:36, minWidth:36, borderRadius:10, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, cursor:'pointer', fontSize:15 }}>×</button>
                 </div>
               ))}
               <button type="button" onClick={() => setPreciosForm(arr => [...arr, { chofer:'', monto:'' }])}
-                style={{ padding:'5px 12px', borderRadius:8, border:`1px dashed ${BRAND.border}`, background:'none', color:BRAND.white, fontSize:12, cursor:'pointer' }}>
+                style={{ padding:'5px 12px', borderRadius:10, border:`1px dashed ${BRAND.border}`, background:'none', color:BRAND.white, fontSize:12, cursor:'pointer' }}>
                 + Agregar precio de un chofer
               </button>
               {preciosError && <div style={{ fontSize:12, color:'#F87171', marginTop:8 }}>{preciosError}</div>}
@@ -1720,11 +1721,11 @@ function ColectasInner({ soloArribos = false, irA }) {
                   {ubicado ? (clienteForm.geo_fuente === 'manual' ? '📍 Ubicado a mano' : '📍 Ubicado automático (por la dirección)') : 'Sin ubicar — se ubica sola por la dirección al abrir el Mapa'}
                 </span>
                 <button type="button" onClick={() => setMapaForm(v => !v)}
-                  style={{ padding:'5px 12px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.white, fontSize:12, cursor:'pointer' }}>
+                  style={{ padding:'5px 12px', borderRadius:10, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.white, fontSize:12, cursor:'pointer' }}>
                   {mapaForm ? 'Cerrar mapa' : ubicado ? 'Ver / cambiar en el mapa' : 'Ubicar en el mapa'}
                 </button>
               </div>
-              {dirCambio && <div style={{ fontSize:12, color:'#FBBF24', marginTop:6 }}>La dirección cambió desde que se ubicó el pin: revisalo en el mapa.</div>}
+              {dirCambio && <div style={{ fontSize:12, color:'#F5C044', marginTop:6 }}>La dirección cambió desde que se ubicó el pin: revisalo en el mapa.</div>}
               {mapaForm && (
                 <div style={{ marginTop:10 }}>
                   <React.Suspense fallback={<div style={{ fontSize:12, color:BRAND.muted, padding:12 }}>Cargando mapa…</div>}>
@@ -1738,11 +1739,11 @@ function ColectasInner({ soloArribos = false, irA }) {
             })()}
             <div style={{ display:'flex', gap:8, marginTop:14 }}>
               <button onClick={saveCliente}
-                style={{ padding:'7px 18px', borderRadius:8, border:'none', background:BRAND.teal, color:'#0d1b2a', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                style={{ padding:'7px 18px', borderRadius:10, border:'none', background:BRAND.teal, color:'#0d1b2a', fontWeight:700, fontSize:13, cursor:'pointer' }}>
                 {editId ? 'Guardar cambios' : 'Agregar'}
               </button>
               <button onClick={() => { setShowForm(false); setEditId(null); setMapaForm(false); }}
-                style={{ padding:'7px 14px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, fontSize:13, cursor:'pointer' }}>
+                style={{ padding:'7px 14px', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'none', color:BRAND.muted, fontSize:13, cursor:'pointer' }}>
                 Cancelar
               </button>
             </div>
@@ -1767,9 +1768,9 @@ function ColectasInner({ soloArribos = false, irA }) {
                   </td>
                   <td style={{ padding:'8px 12px' }}>
                     {c.seccion === 'SABADOS'
-                      ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(255,176,32,0.15)', color:'#FFB020' }}>Solo sábados{c.zona_sabado ? ` · ${c.zona_sabado}` : ''}</span>
+                      ? <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(245,192,68,0.15)', color:'#F5C044' }}>Solo sábados{c.zona_sabado ? ` · ${c.zona_sabado}` : ''}</span>
                       : <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'rgba(74,158,255,0.15)', color:'#4A9EFF' }}>{c.seccion}</span>}
-                    {c.opera_sabados && <span style={{ marginLeft:4, fontSize:10, padding:'2px 6px', borderRadius:20, background:'rgba(251,191,36,0.15)', color:'#FBBF24' }}>🗓️ Sáb</span>}
+                    {c.opera_sabados && <span style={{ marginLeft:4, fontSize:10, padding:'2px 6px', borderRadius:20, background:'rgba(245,192,68,0.15)', color:'#F5C044' }}>🗓️ Sáb</span>}
                     {VEHICULOS[c.vehiculo] && (
                       <span title={`Vehículo: ${VEHICULOS[c.vehiculo].label}`}
                         style={{ marginLeft:4, fontSize:10, padding:'2px 8px', borderRadius:20, border:'1px solid rgba(255,255,255,0.14)', background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.55)' }}>
@@ -1780,14 +1781,14 @@ function ColectasInner({ soloArribos = false, irA }) {
                   <td style={{ padding:'8px 12px', fontSize:12, color:BRAND.muted }}>{c.zona_barrio||'—'}</td>
                   <td style={{ padding:'8px 12px', fontWeight:500, fontSize:13, whiteSpace:'nowrap' }}>{fmtMonto(c.monto)}</td>
                   <td style={{ padding:'8px 12px' }}>
-                    <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:c.activo?'rgba(46,207,170,0.12)':'rgba(255,255,255,0.05)', color:c.activo?'#2ECFAA':BRAND.muted }}>
+                    <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:c.activo?'rgba(46,230,182,0.12)':'rgba(255,255,255,0.05)', color:c.activo?'#2EE6B6':BRAND.muted }}>
                       {c.activo ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
                   <td style={{ padding:'8px 12px' }}>
                     <div style={{ display:'flex', gap:6 }}>
                       <button onClick={() => toggleFija(c)} title={c.seccion === 'SABADOS' ? "Colecta fija: arranca todos los sábados en naranja (Con envíos)" : "Colecta fija: arranca todos los días en naranja (Con envíos), sábados incluidos si tiene ficha de sábado"}
-                        style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${c.fija?'#FBBF24':'rgba(255,255,255,0.15)'}`, background:c.fija?'rgba(251,191,36,0.12)':'none', color:c.fija?'#FBBF24':BRAND.muted, fontSize:11, cursor:'pointer', fontWeight:c.fija?700:400 }}>
+                        style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${c.fija?'#F5C044':'rgba(255,255,255,0.15)'}`, background:c.fija?'rgba(245,192,68,0.12)':'none', color:c.fija?'#F5C044':BRAND.muted, fontSize:11, cursor:'pointer', fontWeight:c.fija?700:400 }}>
                         {c.fija ? '📌 Fija' : '📌 Fijar'}
                       </button>
                       <button onClick={() => editCliente(c)}
@@ -1795,7 +1796,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                         Editar
                       </button>
                       <button onClick={() => toggleActivo(c)}
-                        style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${c.activo?'rgba(226,75,74,0.3)':'rgba(46,207,170,0.3)'}`, background:'none', color:c.activo?'#E24B4A':'#2ECFAA', fontSize:11, cursor:'pointer' }}>
+                        style={{ padding:'3px 10px', borderRadius:6, border:`1px solid ${c.activo?'rgba(232,97,95,0.3)':'rgba(46,230,182,0.3)'}`, background:'none', color:c.activo?'#E8615F':'#2EE6B6', fontSize:11, cursor:'pointer' }}>
                         {c.activo ? 'Desactivar' : 'Activar'}
                       </button>
                     </div>
@@ -1823,13 +1824,13 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
         </div>
 
-        <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'1.25rem', marginBottom:16 }}>
+        <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:14, padding:'1.25rem', marginBottom:16 }}>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:14 }}>
             {choferesFull.map(ch => {
               const esManual = choferesManuales.includes(ch) && !choferesList.includes(ch);
               return (
                 <div key={ch} title={esManual ? 'Agregado a mano — queda guardado, el sync no lo pisa' : 'Viene de LightData (métricas)'}
-                  style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:20, background: esManual ? 'rgba(46,207,170,0.08)' : BRAND.navyMid, border:`1px solid ${esManual ? 'rgba(46,207,170,0.45)' : BRAND.border}`, fontSize:13 }}>
+                  style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:20, background: esManual ? 'rgba(46,230,182,0.08)' : BRAND.navyMid, border:`1px solid ${esManual ? 'rgba(46,230,182,0.45)' : BRAND.border}`, fontSize:13 }}>
                   <span>{esManual ? '📌' : '👤'}</span>
                   <span>{ch}</span>
                   <button onClick={() => { if (choferesManuales.includes(ch)) quitarChoferManual(ch); if (choferesList.includes(ch)) setChoferesList(prev => prev.filter(x => x !== ch)); }}
@@ -1859,19 +1860,19 @@ function ColectasInner({ soloArribos = false, irA }) {
           }} style={{ display:'flex', gap:8 }}>
             <input name="chofer" placeholder="Nombre del chofer..." style={{ ...inpSt, padding:'7px 12px', flex:1, maxWidth:240 }} />
             <button type="submit"
-              style={{ padding:'7px 16px', borderRadius:8, border:`1px solid ${BRAND.teal}`, background:'rgba(46,207,170,0.1)', color:BRAND.teal, cursor:'pointer', fontSize:13, fontWeight:600 }}>
+              style={{ padding:'7px 16px', borderRadius:10, border:`1px solid ${BRAND.teal}`, background:'rgba(46,230,182,0.1)', color:BRAND.teal, cursor:'pointer', fontSize:13, fontWeight:600 }}>
               + Agregar
             </button>
           </form>
           {choferAviso && (
-            <div style={{ marginTop:8, fontSize:12, color:choferAviso.startsWith('⚠️') ? '#FBBF24' : BRAND.teal, lineHeight:1.5 }}>{choferAviso}</div>
+            <div style={{ marginTop:8, fontSize:12, color:choferAviso.startsWith('⚠️') ? '#F5C044' : BRAND.teal, lineHeight:1.5 }}>{choferAviso}</div>
           )}
         </div>
 
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:8, border:`1px solid ${BRAND.border}` }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderRadius:10, border:`1px solid ${BRAND.border}` }}>
           <span style={{ fontSize:12, color:BRAND.muted }}>💡 Los 👤 se sincronizan solos desde métricas (LightData). Los 📌 los agregaste a mano: quedan guardados y el sync no los pisa.</span>
           <button onClick={syncChoferes} disabled={syncingChoferes}
-            style={{ padding:'5px 12px', borderRadius:8, border:`1px solid ${BRAND.border}`, background:'transparent', color:syncingChoferes ? BRAND.muted : BRAND.teal, cursor:syncingChoferes ? 'default' : 'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap', marginLeft:12 }}>
+            style={{ padding:'5px 12px', borderRadius:10, border:`1px solid ${BRAND.border}`, background:'transparent', color:syncingChoferes ? BRAND.muted : BRAND.teal, cursor:syncingChoferes ? 'default' : 'pointer', fontSize:12, fontWeight:600, whiteSpace:'nowrap', marginLeft:12 }}>
             {syncingChoferes ? 'Sincronizando...' : '↺ Sincronizar desde métricas'}
           </button>
         </div>
@@ -2003,9 +2004,9 @@ function ColectasInner({ soloArribos = false, irA }) {
           <input type="text" value={busquedaArribos} onChange={e => setBusquedaArribos(e.target.value)}
             placeholder="Buscar cadete..." style={{ ...inpSt, padding:'5px 10px', width:180 }} />
           {saveStatus === 'error' && (
-            <div style={{ fontSize:12, marginTop:2, color:'#E24B4A' }}>✗ Error al guardar</div>
+            <div style={{ fontSize:12, marginTop:2, color:'#E8615F' }}>✗ Error al guardar</div>
           )}
-          <div title={gpsPos.error || ''} style={{ fontSize:11, color: gpsPos.estado === 'activo' ? '#2ECFAA' : gpsPos.estado === 'error' ? '#E24B4A' : BRAND.muted }}>
+          <div title={gpsPos.error || ''} style={{ fontSize:11, color: gpsPos.estado === 'activo' ? '#2EE6B6' : gpsPos.estado === 'error' ? '#E8615F' : BRAND.muted }}>
             {gpsPos.estado === 'activo' ? `● GPS activo · ${gpsPos.frescos} posiciones recientes`
               : gpsPos.estado === 'error' ? '● GPS no disponible · se usa la ETA'
               : gpsPos.estado === 'sin-posiciones' ? '○ GPS conectado · sin posiciones recientes'
@@ -2021,27 +2022,27 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
         ) : (
           <>
-            <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:12, padding:'16px 18px', marginBottom:16 }}>
+            <div style={{ background:BRAND.navyCard, border:`1px solid ${BRAND.border}`, borderRadius:14, padding:'16px 18px', marginBottom:16 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
                 <span style={{ fontSize:14, fontWeight:600, color:BRAND.white }}>{llegados} de {total} cadetes llegaron</span>
-                <span style={{ fontSize:24, fontWeight:800, color: pct===100 ? '#2ECFAA' : '#FBBF24' }}>{pct}%</span>
+                <span style={{ fontFamily:FX_FONT.display, fontSize:24, fontWeight:800, color: pct===100 ? '#2EE6B6' : '#F5C044' }}>{pct}%</span>
               </div>
               <div style={{ height:12, borderRadius:20, background:'rgba(255,255,255,0.08)', overflow:'hidden' }}>
-                <div style={{ width:`${pct}%`, height:'100%', borderRadius:20, background: pct===100 ? '#2ECFAA' : 'linear-gradient(90deg,#FBBF24,#2ECFAA)', transition:'width 0.3s' }} />
+                <div style={{ width:`${pct}%`, height:'100%', borderRadius:20, background: pct===100 ? '#2EE6B6' : 'linear-gradient(90deg,#F5C044,#2EE6B6)', transition:'width 0.3s' }} />
               </div>
               {faltan.length > 0 && (
                 <div style={{ fontSize:12, color:BRAND.muted, marginTop:10 }}>
-                  <b style={{ color:'#FBBF24' }}>Faltan {faltan.length}:</b> {faltan.map(c => c.cadete).join(', ')}
+                  <b style={{ color:'#F5C044' }}>Faltan {faltan.length}:</b> {faltan.map(c => c.cadete).join(', ')}
                 </div>
               )}
               {faltan.length === 0 && (
-                <div style={{ fontSize:12, color:'#2ECFAA', marginTop:10, fontWeight:600 }}>✓ Llegaron todos 🎉</div>
+                <div style={{ fontSize:12, color:'#2EE6B6', marginTop:10, fontWeight:600 }}>✓ Llegaron todos 🎉</div>
               )}
               {zonasArr.length > 1 && (
                 <>
                   <button onClick={() => { if (zonasArribosAbierto) setZonaArribos(null); setZonasArribosAbierto(!zonasArribosAbierto); }}
                     aria-expanded={zonasArribosAbierto}
-                    style={{ marginTop:10, padding:'6px 0', background:'transparent', border:'none', color:'#2ECFAA', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
+                    style={{ marginTop:10, padding:'6px 0', background:'transparent', border:'none', color:'#2EE6B6', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
                     <span style={{ display:'inline-block', transform: zonasArribosAbierto ? 'rotate(180deg)' : 'none', fontSize:11 }}>▼</span>
                     {zonasArribosAbierto ? (zonaActiva ? 'Por zona · tocá la zona de nuevo para ver todas' : 'Ocultar zonas') : 'Ver por zona'}
                   </button>
@@ -2051,7 +2052,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                         const on = zonaActiva === z.id;
                         return (
                           <button key={z.id} onClick={() => setZonaArribos(on ? null : z.id)} aria-pressed={on}
-                            style={{ display:'flex', alignItems:'center', gap:10, minHeight:40, padding:'0 8px', borderRadius:8, cursor:'pointer', fontFamily:'inherit',
+                            style={{ display:'flex', alignItems:'center', gap:10, minHeight:40, padding:'0 8px', borderRadius:10, cursor:'pointer', fontFamily:'inherit',
                               background: on ? 'rgba(255,255,255,0.06)' : 'transparent', border:`1px solid ${on ? z.color : 'transparent'}` }}>
                             <span style={{ width:72, textAlign:'left', fontSize:13, fontWeight:600, color:z.color }}>{z.label}</span>
                             <span style={{ flex:1, height:6, borderRadius:3, background:'rgba(255,255,255,0.08)', overflow:'hidden', display:'block' }}>
@@ -2093,14 +2094,14 @@ function ColectasInner({ soloArribos = false, irA }) {
                 const cerca = cercaGps || cercaEta;
                 return (
                   <div key={c.cadete}
-                    style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px 14px', borderRadius:12, width:'100%',
-                      border:`1px solid ${llego ? 'rgba(46,207,170,0.4)' : cerca ? 'rgba(251,191,36,0.55)' : BRAND.border}`,
-                      background: llego ? 'rgba(46,207,170,0.08)' : cerca ? 'rgba(251,191,36,0.07)' : BRAND.faint,
+                    style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px 14px', borderRadius:14, width:'100%',
+                      border:`1px solid ${llego ? 'rgba(46,230,182,0.4)' : cerca ? 'rgba(245,192,68,0.55)' : BRAND.border}`,
+                      background: llego ? 'rgba(46,230,182,0.08)' : cerca ? 'rgba(245,192,68,0.07)' : BRAND.faint,
                       animation: cerca ? 'flexitTiemble 3s ease-in-out infinite' : 'none', transition:'all 0.15s' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10, width:'100%' }}>
                     <LlegadaConfirm llego={llego} cerca={cerca} nombre={c.cadete} onToggle={() => toggleLlego(c.cadete)}
                       subtitle={
-                        <div style={{ fontSize:12, color: llego ? '#2ECFAA' : cerca ? '#FBBF24' : BRAND.muted }}>
+                        <div style={{ fontSize:12, color: llego ? '#2EE6B6' : cerca ? '#F5C044' : BRAND.muted }}>
                           {llego ? `llegó ${hora}`
                             : cercaGps ? `está por llegar · a ${gp.dist < 1000 ? gp.dist + ' m' : (gp.dist/1000).toFixed(1) + ' km'} del depósito`
                             : cercaEta ? `está por llegar · ETA ${eta}`
@@ -2117,7 +2118,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                             editing={etaEdit === c.cadete} onEditingChange={v => setEtaEdit(v ? c.cadete : null)} />
                           {eta && etaEdit !== c.cadete && (
                             <button onClick={() => setEta(c.cadete, '')} title="Restablecer hora"
-                              style={{ width:26, height:26, borderRadius:8, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+                              style={{ width:26, height:26, borderRadius:10, border:`1px solid ${BRAND.border}`, background:BRAND.faint, color:BRAND.muted, fontSize:12, cursor:'pointer', lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
                           )}
                         </div>
                       )}
@@ -2129,7 +2130,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                         return (
                           <div onClick={(e) => { e.stopPropagation(); abrirDetalle(c.cadete); }}
                             title="Ver localidades que trae (tocar)"
-                            style={{ display:'flex', alignItems:'center', gap:4, height:26, padding:'0 9px', borderRadius:14, cursor:'pointer', border:'1px solid rgba(46,207,170,0.45)', background: detAbierto ? 'rgba(46,207,170,0.15)' : 'transparent', color:'#2ECFAA', fontSize:12, fontWeight:700 }}>
+                            style={{ display:'flex', alignItems:'center', gap:4, height:26, padding:'0 9px', borderRadius:14, cursor:'pointer', border:'1px solid rgba(46,230,182,0.45)', background: detAbierto ? 'rgba(46,230,182,0.15)' : 'transparent', color:'#2EE6B6', fontSize:12, fontWeight:700 }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="M12 3l8 4.5v9l-8 4.5l-8 -4.5v-9l8 -4.5" />
                               <path d="M12 12l8 -4.5" />
@@ -2144,7 +2145,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                       {/* Botón reloj fijo a la derecha del paquete: abre la edición de hora estimada */}
                       <button onClick={() => setEtaEdit(c.cadete)}
                         title={eta ? `Hora estimada ${eta} · tocar para editar` : 'Poner hora estimada'}
-                        style={{ width:28, height:28, borderRadius:14, border:'1px solid rgba(46,207,170,0.45)', background:'transparent', color:'#2ECFAA', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        style={{ width:28, height:28, borderRadius:14, border:'1px solid rgba(46,230,182,0.45)', background:'transparent', color:'#2EE6B6', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <circle cx="12" cy="12" r="9" />
                           <path d="M12 7v5l3 3" />
@@ -2218,7 +2219,7 @@ function ColectasInner({ soloArribos = false, irA }) {
             {s}
             {sinConfirmar > 0 && (
               <span title={`${sinConfirmar} con envíos sin confirmar`}
-                style={{ fontSize:11, fontWeight:700, color:'#FBBF24', lineHeight:1, marginLeft:-4, transform:'translateY(-6px)' }}>
+                style={{ fontSize:11, fontWeight:700, color:'#F5C044', lineHeight:1, marginLeft:-4, transform:'translateY(-6px)' }}>
                 {sinConfirmar}
               </span>
             )}
@@ -2229,9 +2230,9 @@ function ColectasInner({ soloArribos = false, irA }) {
         {[['tabla','table','Tabla'],['mapa','map-2','Mapa']].map(([v,ico,lbl]) => (
           <button key={v} onClick={() => setVistaColectas(v)}
             title={v === 'mapa' ? 'Ver las colectas del día en el mapa y asignar por lazo' : 'Ver la tabla por chofer'}
-            style={{ display:'inline-flex', alignItems:'center', gap:5, height:32, padding:'0 12px', borderRadius:8, cursor:'pointer', fontSize:12.5, fontWeight:600, touchAction:'manipulation',
+            style={{ display:'inline-flex', alignItems:'center', gap:5, height:32, padding:'0 12px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:600, touchAction:'manipulation',
               border:`1px solid ${vistaColectas===v ? BRAND.teal : BRAND.border}`,
-              background: vistaColectas===v ? 'rgba(46,207,170,0.12)' : BRAND.faint,
+              background: vistaColectas===v ? 'rgba(46,230,182,0.12)' : BRAND.faint,
               color: vistaColectas===v ? BRAND.teal : BRAND.muted }}>
             <i className={`ti ti-${ico}`} aria-hidden="true" style={{ fontSize:15 }} />{lbl}
           </button>
@@ -2253,9 +2254,9 @@ function ColectasInner({ soloArribos = false, irA }) {
     return (
       <div>
         {error && (
-          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ background:'rgba(232,97,95,0.15)', color:'#E8615F', border:'1px solid rgba(232,97,95,0.3)', padding:'10px 14px', borderRadius:10, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             {error}
-            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
+            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E8615F', cursor:'pointer', fontSize:16 }}>✕</button>
           </div>
         )}
         {renderArribos()}
@@ -2272,13 +2273,13 @@ function ColectasInner({ soloArribos = false, irA }) {
         const cant = seccionClientes.filter(c => (registros[c.id]?.choferes || []).includes(m.chofer)).length;
         const qn = normNombre(m.q || '');
         const sugeridos = qn ? choferesFull.filter(ch => ch !== m.chofer && normNombre(ch).includes(qn)).slice(0, 8) : [];
-        const panel = { position:'fixed', top:m.y, left, width:W, zIndex:1200, background:'#0E1E38', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, padding: m.paso === 'menu' ? 4 : 12, boxShadow:'0 12px 30px rgba(0,0,0,0.45)', color:BRAND.white, fontSize:13 };
+        const panel = { position:'fixed', top:m.y, left, width:W, zIndex:1200, background:'#0E1E38', border:'1px solid rgba(255,255,255,0.12)', borderRadius:14, padding: m.paso === 'menu' ? 4 : 12, boxShadow:'0 12px 30px rgba(0,0,0,0.45)', color:BRAND.white, fontSize:13 };
         return (<>
           <div onClick={() => setMenuChofer(null)} style={{ position:'fixed', inset:0, zIndex:1199 }} />
           {m.paso === 'menu' ? (
             <div role="menu" style={panel}>
               <button role="menuitem" onClick={() => setMenuChofer({ ...m, paso:'pasar' })}
-                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'9px 10px', borderRadius:8, border:'none', background:'none', color:BRAND.white, fontSize:13, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'9px 10px', borderRadius:10, border:'none', background:'none', color:BRAND.white, fontSize:13, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
                 <span style={{ color:BRAND.muted }}>⇄</span> Pasar colectas a otro chofer
               </button>
             </div>
@@ -2297,7 +2298,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                 <div style={{ marginTop:6, maxHeight:220, overflowY:'auto' }}>
                   {sugeridos.map(ch => (
                     <button key={ch} onClick={() => setMenuChofer({ ...m, a: ch, q: ch })}
-                      style={{ width:'100%', display:'block', padding:'7px 8px', borderRadius:8, border:'none', background:'none', color:BRAND.white, fontSize:13, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+                      style={{ width:'100%', display:'block', padding:'7px 8px', borderRadius:10, border:'none', background:'none', color:BRAND.white, fontSize:13, cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
                       {ch}
                     </button>
                   ))}
@@ -2305,7 +2306,7 @@ function ColectasInner({ soloArribos = false, irA }) {
               )}
               {!m.a && qn && sugeridos.length === 0 && <div style={{ marginTop:8, fontSize:12, color:BRAND.muted }}>Ningún chofer con ese nombre.</div>}
               <button disabled={!m.a} onClick={() => { pasarColectas(m.chofer, m.a); setMenuChofer(null); }}
-                style={{ marginTop:10, width:'100%', height:34, borderRadius:8, border:'none', background:'#2ECFAA', color:'#04150f', fontWeight:600, fontSize:13, cursor: m.a ? 'pointer' : 'default', opacity: m.a ? 1 : 0.4, fontFamily:'inherit' }}>
+                style={{ marginTop:10, width:'100%', height:34, borderRadius:10, border:'none', background:'#2EE6B6', color:'#04150f', fontWeight:600, fontSize:13, cursor: m.a ? 'pointer' : 'default', opacity: m.a ? 1 : 0.4, fontFamily:'inherit' }}>
                 {m.a ? `Pasar a ${m.a}` : 'Elegí un chofer'}
               </button>
             </div>
@@ -2327,7 +2328,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                 display:'inline-flex', alignItems:'center', gap:6, flexShrink:0,
                 padding:'7px 14px', borderRadius:20, cursor:'pointer',
                 border:`1px solid ${active ? BRAND.teal : BRAND.border}`,
-                background: active ? 'rgba(46,207,170,0.12)' : BRAND.faint,
+                background: active ? 'rgba(46,230,182,0.12)' : BRAND.faint,
                 color: active ? BRAND.teal : BRAND.muted,
                 fontSize:13, fontWeight:600, whiteSpace:'nowrap', touchAction:'manipulation',
               }}>
@@ -2358,7 +2359,7 @@ function ColectasInner({ soloArribos = false, irA }) {
                   <button key={item.id} onClick={() => setNavView(item.id)} style={{
                     display:'flex', alignItems:'center', gap:8,
                     width:'100%', padding:'8px 14px', border:'none', cursor:'pointer',
-                    background: active ? 'rgba(46,207,170,0.1)' : 'transparent',
+                    background: active ? 'rgba(46,230,182,0.1)' : 'transparent',
                     color: active ? BRAND.teal : BRAND.muted,
                     fontSize:13, fontWeight: active ? 600 : 400,
                     borderLeft: active ? `2px solid ${BRAND.teal}` : '2px solid transparent',
@@ -2381,9 +2382,9 @@ function ColectasInner({ soloArribos = false, irA }) {
         </div>
 
         {error && (
-          <div style={{ background:'rgba(226,75,74,0.15)', color:'#E24B4A', border:'1px solid rgba(226,75,74,0.3)', padding:'10px 14px', borderRadius:8, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ background:'rgba(232,97,95,0.15)', color:'#E8615F', border:'1px solid rgba(232,97,95,0.3)', padding:'10px 14px', borderRadius:10, fontSize:13, marginBottom:'1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             {error}
-            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E24B4A', cursor:'pointer', fontSize:16 }}>✕</button>
+            <button onClick={() => setError('')} style={{ background:'none', border:'none', color:'#E8615F', cursor:'pointer', fontSize:16 }}>✕</button>
           </div>
         )}
 

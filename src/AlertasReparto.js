@@ -138,11 +138,11 @@ export default function AlertasReparto({ onIrMonitoreo }) {
   }, [cola.length]);
 
   const cartel = aviso && (
-    <div role="status" style={{ position: "fixed", left: "50%", bottom: 20, transform: "translateX(-50%)", zIndex: 3001, background: C.pop, border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "0 12px 40px rgba(0,0,0,0.45)", padding: "10px 14px", color: C.ink, fontSize: 13.5, display: "flex", alignItems: "center", gap: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div role="status" style={{ position: "fixed", left: "50%", bottom: 20, transform: "translateX(-50%)", zIndex: 3001, background: C.pop, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: "0 12px 40px rgba(0,0,0,0.45)", padding: "10px 14px", color: C.ink, fontSize: 14, display: "flex", alignItems: "center", gap: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <span>{aviso.copiado ? <>Reclamo de <b>{aviso.cadete}</b> copiado</> : aviso.texto ? <>Reclamo de <b>{aviso.cadete}</b> listo</> : <>{aviso.cadete} ya no tiene pendientes para reclamar</>}</span>
       {!aviso.copiado && aviso.texto && (
         <button onClick={async () => { try { await navigator.clipboard.writeText(aviso.texto); setAviso({ ...aviso, copiado: true }); } catch (e) {} }}
-          style={{ background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.35)", color: C.teal, borderRadius: 8, padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Copiar</button>
+          style={{ background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.35)", color: C.teal, borderRadius: 10, padding: "5px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Copiar</button>
       )}
       <button onClick={() => setAviso(null)} aria-label="Cerrar" style={{ background: "none", border: "none", color: C.ink3, fontSize: 14, cursor: "pointer" }}>✕</button>
     </div>
@@ -157,18 +157,18 @@ export default function AlertasReparto({ onIrMonitoreo }) {
   return (<>
     {cartel}
     <div role="alertdialog" aria-label="Cadete frenado"
-      style={{ position: "fixed", right: 16, bottom: 16, width: 360, maxWidth: "calc(100vw - 32px)", zIndex: 3000, background: C.pop, border: `1px solid rgba(232,97,95,0.5)`, borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.5)", padding: "14px 16px", color: C.ink, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      style={{ position: "fixed", right: 16, bottom: 16, width: 360, maxWidth: "calc(100vw - 32px)", zIndex: 3000, background: C.pop, border: `1px solid rgba(232,97,95,0.5)`, borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,0.5)", padding: "14px 16px", color: C.ink, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 4, background: C.rojo }} />
-        <span style={{ fontWeight: 700, fontSize: 14.5 }}>Ojo, {cola.length === 1 ? "cadete frenado" : `${cola.length} cadetes frenados`}</span>
+        <span style={{ width: 8, height: 8, borderRadius: 6, background: C.rojo }} />
+        <span style={{ fontWeight: 700, fontSize: 14 }}>Ojo, {cola.length === 1 ? "cadete frenado" : `${cola.length} cadetes frenados`}</span>
         <button onClick={() => setCola([])} aria-label="Cerrar" style={{ marginLeft: "auto", background: "none", border: "none", color: C.ink3, fontSize: 16, cursor: "pointer" }}>✕</button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto" }}>
         {cola.map((it) => (
           <button key={it.nombre} onClick={() => ver(it.nombre)}
             style={{ textAlign: "left", background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 10px", cursor: "pointer", color: C.ink }}>
-            <div style={{ fontWeight: 600, fontSize: 13.5 }}>{it.nombre}</div>
-            <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 2 }}>{it.texto}</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{it.nombre}</div>
+            <div style={{ fontSize: 13, color: C.ink2, marginTop: 2 }}>{it.texto}</div>
           </button>
         ))}
       </div>
@@ -228,11 +228,11 @@ export function ActivarAvisos({ compacto = false } = {}) {
     } catch (e) { setEstado("error"); }
   };
   const st = compacto
-    ? { display: "inline-flex", alignItems: "center", gap: 6, background: C.soft, border: `1px solid ${C.line}`, borderRadius: 999, color: C.ink2, padding: "5px 12px", fontSize: 12.5, fontFamily: "inherit" }
+    ? { display: "inline-flex", alignItems: "center", gap: 6, background: C.soft, border: `1px solid ${C.line}`, borderRadius: 999, color: C.ink2, padding: "5px 12px", fontSize: 13, fontFamily: "inherit" }
     : { background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink2, padding: "8px 12px", fontSize: 13 };
   if (estado === "cargando" || estado === "no") return null;
   if (estado === "activo") return <span style={st} title="Avisos en esta compu activados: te llegan aunque la app esté cerrada">
-    {compacto && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 4, background: C.teal }} />}{compacto ? "Avisos" : "Avisos en esta compu: activados"}</span>;
+    {compacto && <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 6, background: C.teal }} />}{compacto ? "Avisos" : "Avisos en esta compu: activados"}</span>;
   if (estado === "bloqueado") return <span style={st} title="Habilitalos desde el candado de la barra de direcciones → Notificaciones">{compacto ? "Avisos bloqueados" : "Avisos bloqueados en el navegador"}</span>;
   return (
     <button onClick={activar} style={{ ...st, cursor: "pointer" }}>

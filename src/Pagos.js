@@ -7,6 +7,7 @@ import { login, logout, getSession, authedFetch } from './auth';
 import PagosPagador from './PagosPagador';
 import LiqWhatsapp from './LiqWhatsapp';
 import { montoColecta, cargarPreciosChofer } from './colectasShared';
+import { FX_FONT } from "./theme";
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -16,9 +17,9 @@ const BRAND = {
   navy:     "#0d1b2a",
   navyMid:  "#112236",
   navyCard: "#162d42",
-  teal:     "#2ECFAA",
-  red:      "#E24B4A",
-  amber:    "#FFB020",
+  teal:     "#2EE6B6",
+  red:      "#E8615F",
+  amber:    "#F5C044",
   white:    "#FFFFFF",
   muted:    "rgba(255,255,255,0.62)",
   faint:    "rgba(255,255,255,0.06)",
@@ -33,7 +34,7 @@ const MEDIOS_PAGO = {
   mercadopago: { nombre: 'Mercado Pago', color: '#009EE3', text: '#7FD4F4' },
   // Pago dividido (un cadete que factura pero cobra una parte en mano): el detalle de cuánto
   // fue por cada medio vive en pagos_cierres.pagos y se ve en la pantalla Pagar.
-  efectivo:    { nombre: 'Efectivo',     color: '#2ECFAA', text: '#7FE3C9' },
+  efectivo:    { nombre: 'Efectivo',     color: '#2EE6B6', text: '#7FE3C9' },
   mixto:       { nombre: 'Dividido',     color: '#8B7BE8', text: '#B7ADF0' },
   // Parte facturada de una división cuyo banco todavía no se eligió: Alejo solo define
   // montos; Galicia o Mercado Pago lo decide Adrián en Pagar al pagarla (2026-08-06).
@@ -612,12 +613,12 @@ function LoginPagos({ onOk }) {
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const inp = { width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${err ? '#FF5C5C' : 'rgba(255,255,255,0.18)'}`, background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, boxSizing: 'border-box', outline: 'none' };
+  const inp = { width: '100%', padding: '12px 14px', borderRadius: 14, border: `1px solid ${err ? '#E8615F' : 'rgba(255,255,255,0.18)'}`, background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, boxSizing: 'border-box', outline: 'none' };
   return (
     <div style={{ minHeight: '62vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 400, maxWidth: '94vw', padding: '36px 32px', borderRadius: 22, border: '1px solid rgba(46,207,170,0.22)', background: 'linear-gradient(165deg, rgba(46,207,170,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))', textAlign: 'center' }}>
+      <div style={{ width: 400, maxWidth: '94vw', padding: '36px 32px', borderRadius: 20, border: '1px solid rgba(46,230,182,0.22)', background: 'linear-gradient(165deg, rgba(46,230,182,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))', textAlign: 'center' }}>
         <div style={{ fontSize: 30, marginBottom: 10 }}>💰</div>
-        <div style={{ fontSize: 20, fontWeight: 800 }}>Liquidaciones</div>
+        <div style={{ fontFamily:FX_FONT.display, fontSize: 20, fontWeight: 800 }}>Liquidaciones</div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4, marginBottom: 22 }}>Ingresá con tu usuario del equipo</div>
         <form onSubmit={async e => {
           e.preventDefault(); if (busy) return; setBusy(true); setErr('');
@@ -627,8 +628,8 @@ function LoginPagos({ onOk }) {
         }}>
           <input type="email" autoFocus autoComplete="username" value={em} onChange={e => { setEm(e.target.value); setErr(''); }} placeholder="Email" style={{ ...inp, marginBottom: 10 }} />
           <input type="password" autoComplete="current-password" value={pw} onChange={e => { setPw(e.target.value); setErr(''); }} placeholder="Contraseña" style={inp} />
-          {err && <div style={{ color: '#FF5C5C', fontSize: 12.5, marginTop: 8 }}>{err}</div>}
-          <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 16, padding: '13px 10px', borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(46,207,170,0.35)', background: 'rgba(46,207,170,0.12)', color: '#2ECFAA' }}>{busy ? 'Entrando…' : 'Entrar'}</button>
+          {err && <div style={{ color: '#E8615F', fontSize: 13, marginTop: 8 }}>{err}</div>}
+          <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 16, padding: '13px 10px', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(46,230,182,0.35)', background: 'rgba(46,230,182,0.12)', color: '#2EE6B6' }}>{busy ? 'Entrando…' : 'Entrar'}</button>
         </form>
       </div>
     </div>
@@ -859,8 +860,8 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
   const [drafts, setDrafts] = useState({}); // id -> campos editados pendientes
   useEffect(() => { setCpFiltroTier('todos'); }, [cpSel]); // al abrir/cambiar de cadete, arranca sin filtro
 
-  const inp = { padding: '5px 8px', fontSize: 12.5, border: `1px solid ${BRAND.border}`, borderRadius: 6, background: BRAND.faint, color: BRAND.white, outline: 'none' };
-  const btn = { padding: '5px 12px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(46,207,170,0.35)', background: 'rgba(46,207,170,0.12)', color: BRAND.teal };
+  const inp = { padding: '5px 8px', fontSize: 13, border: `1px solid ${BRAND.border}`, borderRadius: 6, background: BRAND.faint, color: BRAND.white, outline: 'none' };
+  const btn = { padding: '5px 12px', fontSize: 12, fontWeight: 700, borderRadius: 10, cursor: 'pointer', border: '1px solid rgba(46,230,182,0.35)', background: 'rgba(46,230,182,0.12)', color: BRAND.teal };
 
   const doAction = useCallback(async (fn) => {
     setBusy(true); setErr('');
@@ -940,10 +941,10 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
 
   return (
     <div>
-      {err && <div style={{ background: 'rgba(226,75,74,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{err}</div>}
+      {err && <div style={{ background: 'rgba(232,97,95,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '8px 12px', borderRadius: 10, fontSize: 13, marginBottom: 12 }}>{err}</div>}
 
       {/* Alta rápida de cadete */}
-      <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+      <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: 14, marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: BRAND.teal }}>Alta de cadete nuevo</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={inp} placeholder="Nombre LightData (exacto)" value={nuevoCadete.nombre_lightdata} onChange={e => setNuevoCadete(s => ({ ...s, nombre_lightdata: e.target.value, nombre: s.nombre || e.target.value }))} />
@@ -968,12 +969,12 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
       </div>
 
       {/* Tabla de tarifas */}
-      <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14, marginBottom: 16, overflowX: 'auto' }}>
+      <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: 14, marginBottom: 16, overflowX: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.teal }}>Cadetes ({tarifas.length})</div>
           <input style={inp} placeholder="Buscar..." value={filtro} onChange={e => setFiltro(e.target.value)} />
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920, fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920, fontSize: 13 }}>
           <thead>
             <tr style={{ color: BRAND.muted, textAlign: 'left' }}>
               <th style={{ padding: '4px 6px' }}>Nombre LightData</th>
@@ -999,7 +1000,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                 <tr key={t.id}
                   onMouseEnter={() => setHoverId(t.id)}
                   onMouseLeave={() => setHoverId(h => (h === t.id ? null : h))}
-                  style={{ borderTop: `1px solid ${BRAND.border}`, background: isDirty ? 'rgba(255,176,32,0.10)' : isSel ? 'rgba(46,207,170,0.10)' : hoverId === t.id ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
+                  style={{ borderTop: `1px solid ${BRAND.border}`, background: isDirty ? 'rgba(245,192,68,0.10)' : isSel ? 'rgba(46,230,182,0.10)' : hoverId === t.id ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
                   <td style={{ padding: '5px 6px', fontWeight: 600, borderLeft: `3px solid ${isSel ? BRAND.teal : 'transparent'}` }}>{t.nombre_lightdata || <span style={{ color: BRAND.amber }}>{t.nombre} (sin nombre_lightdata)</span>}</td>
                   <td style={{ padding: '5px 6px' }}>
                     <input type="checkbox" checked={!!draftVal(t, 'factura')} onChange={e => setDraft(t.id, 'factura', e.target.checked)} />
@@ -1055,13 +1056,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                         const nCp = (cpTarifas || []).filter(o => norm(o.nombre_lightdata) === norm(t.nombre_lightdata)).length;
                         return (
                           <button title={nCp ? `${nCp} tarifa(s) por CP — abrir` : 'Tarifas por CP (T1/T2/T3)'} onClick={() => setCpSel(t.nombre_lightdata)}
-                            style={{ position: 'relative', width: 30, height: 28, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, cursor: 'pointer', border: `1px solid ${nCp ? BRAND.teal : BRAND.border}`, color: nCp ? BRAND.teal : BRAND.muted, background: nCp ? 'rgba(46,207,170,0.10)' : BRAND.faint }}>
+                            style={{ position: 'relative', width: 30, height: 28, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, cursor: 'pointer', border: `1px solid ${nCp ? BRAND.teal : BRAND.border}`, color: nCp ? BRAND.teal : BRAND.muted, background: nCp ? 'rgba(46,230,182,0.10)' : BRAND.faint }}>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7.5 7.5h.01M3 12V5a2 2 0 0 1 2-2h7l9 9-7 7-9-9z" /></svg>
-                            {nCp > 0 && <span style={{ position: 'absolute', top: -6, right: -6, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, background: BRAND.teal, color: '#04121a', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{nCp}</span>}
+                            {nCp > 0 && <span style={{ position: 'absolute', top: -6, right: -6, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 10, background: BRAND.teal, color: '#04121a', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{nCp}</span>}
                           </button>
                         );
                       })()}
-                      <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 4, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
+                      <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 4, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(232,97,95,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
                     </div>
                   </td>
                 </tr>
@@ -1090,7 +1091,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
               <label style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: BRAND.muted }}>
                 <span style={{ fontWeight: 700 }}>Base</span>
                 <span style={{ ...inp, width: 92, opacity: 0.7 }}>{baseSel != null ? money(baseSel) : '—'}</span>
-                <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[0] || 0}</b> {(envPorTier[0] || 0) === 1 ? 'envío' : 'envíos'}</span>
+                <span style={{ fontSize: 11, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[0] || 0}</b> {(envPorTier[0] || 0) === 1 ? 'envío' : 'envíos'}</span>
               </label>
               {[1, 2, 3].map(tr => {
                 const tc = tr === 1 ? BRAND.teal : tr === 2 ? BRAND.amber : BRAND.red;
@@ -1102,7 +1103,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                       onBlur={e => { const s = e.target.value.trim(); const cur = tierAmt(tr); if (s === '' && cur == null) return; if (s !== '' && Number(s) === cur) return; guardarTierAmt(tr, s); }}
                       style={{ ...inp, width: 92 }} />
-                    <span style={{ fontSize: 10.5, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[tr] || 0}</b> {(envPorTier[tr] || 0) === 1 ? 'envío' : 'envíos'}</span>
+                    <span style={{ fontSize: 11, color: BRAND.muted, textAlign: 'left', marginTop: 4 }}><b style={{ color: BRAND.white, fontSize: 13 }}>{envPorTier[tr] || 0}</b> {(envPorTier[tr] || 0) === 1 ? 'envío' : 'envíos'}</span>
                   </label>
                 );
               })}
@@ -1118,7 +1119,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                   const on = cpFiltroTier === k;
                   return (
                     <button key={String(k)} disabled={vacio} onClick={() => setCpFiltroTier(k)}
-                      style={{ padding: '3px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 20, cursor: vacio ? 'default' : 'pointer',
+                      style={{ padding: '3px 11px', fontSize: 12, fontWeight: 700, borderRadius: 20, cursor: vacio ? 'default' : 'pointer',
                         border: `1px solid ${on ? c : BRAND.border}`, background: on ? 'rgba(255,255,255,0.08)' : BRAND.faint,
                         color: on ? c : vacio ? 'rgba(255,255,255,0.25)' : BRAND.muted, opacity: vacio ? 0.5 : 1 }}>
                       {lbl}{k !== 'todos' ? ` ${n}` : ''}
@@ -1129,7 +1130,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
             )}
 
             {cpRows.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 12 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 12 }}>
                 <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}>
                   <th style={{ padding: '4px 6px' }}>CP</th><th style={{ padding: '4px 6px' }}>Localidad</th>
                   <th style={{ padding: '4px 6px', textAlign: 'right' }}>Entregas</th>
@@ -1142,9 +1143,9 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                   ) : cpRowsShown.map(({ cp, cantidad, localidad, tier, precio, fuente, falta }) => {
                     const tc = colorTier(tier || 0);
                     return (
-                    <tr key={cp} style={{ borderTop: `1px solid ${BRAND.border}`, background: falta ? 'rgba(255,176,32,0.06)' : 'transparent' }}>
+                    <tr key={cp} style={{ borderTop: `1px solid ${BRAND.border}`, background: falta ? 'rgba(245,192,68,0.06)' : 'transparent' }}>
                       <td style={{ padding: '5px 6px' }}>{cp}</td>
-                      <td style={{ padding: '5px 6px', color: BRAND.muted, fontSize: 11.5 }}>{localidad || '—'}</td>
+                      <td style={{ padding: '5px 6px', color: BRAND.muted, fontSize: 12 }}>{localidad || '—'}</td>
                       <td style={{ padding: '5px 6px', textAlign: 'right', color: BRAND.muted }}>{cantidad || '—'}</td>
                       <td style={{ padding: '5px 6px' }}>
                         <select value={tier || ''} disabled={busy} onChange={e => asignarTier(cp, Number(e.target.value) || 0)} style={{ ...inp, padding: '3px 6px', width: 78 }}>
@@ -1179,9 +1180,9 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
       )}
 
       {/* Reglas de alias */}
-      <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 14 }}>
+      <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: BRAND.teal }}>Reglas de alias (merge / aparte / ignorar)</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 10 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 10 }}>
           <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}>
             <th style={{ padding: '4px 6px' }}>Nombre LightData</th><th style={{ padding: '4px 6px' }}>Regla</th><th style={{ padding: '4px 6px' }}>Paga como</th><th style={{ padding: '4px 6px' }}>Detalle</th><th></th>
           </tr></thead>
@@ -1193,7 +1194,7 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                 <td style={{ padding: '5px 6px' }}>{a.paga_como || '—'}</td>
                 <td style={{ padding: '5px 6px', color: BRAND.muted }}>{a.detalle || ''}</td>
                 <td style={{ padding: '5px 6px' }}>
-                  <button style={{ ...btn, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(226,75,74,0.1)' }} disabled={busy} onClick={() => doAction(async () => {
+                  <button style={{ ...btn, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(232,97,95,0.1)' }} disabled={busy} onClick={() => doAction(async () => {
                     await sb(`pagos_cadete_alias?nombre_lightdata=eq.${encodeURIComponent(a.nombre_lightdata)}`, { method: 'DELETE' });
                   })}>Borrar</button>
                 </td>
@@ -1237,7 +1238,7 @@ function CantidadInput({ value, original, editado, onCommit, onRestore, disabled
   const [text, setText] = useState(String(value));
   const [focused, setFocused] = useState(false);
   useEffect(() => { if (!focused) setText(String(value)); }, [value, focused]);
-  const inpSt = { padding: '4px 8px', width: 80, fontSize: 13, textAlign: 'right', border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield', opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' };
+  const inpSt = { padding: '4px 8px', width: 80, fontSize: 13, textAlign: 'right', border: `1px solid ${BRAND.border}`, borderRadius: 10, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield', opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' };
   const commit = () => {
     const t = text.trim();
     const n = Number(t);
@@ -1270,7 +1271,7 @@ function ColectaInput({ value, editado, onCommit, onRestore, disabled }) {
   const [text, setText] = useState(String(Math.round(value || 0)));
   const [open, setOpen] = useState(false);
   useEffect(() => { if (!open) setText(String(Math.round(value || 0))); }, [value, open]);
-  const inpSt = { padding: '4px 8px', width: 96, fontSize: 13, textAlign: 'right', border: `1.5px solid ${BRAND.teal}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield' };
+  const inpSt = { padding: '4px 8px', width: 96, fontSize: 13, textAlign: 'right', border: `1.5px solid ${BRAND.teal}`, borderRadius: 10, background: BRAND.faint, color: BRAND.white, outline: 'none', MozAppearance: 'textfield' };
   const commit = () => {
     setOpen(false);
     const digits = text.replace(/[^\d]/g, ''); // pesos enteros; tolera "$100.000"
@@ -1335,16 +1336,16 @@ function FilaDarAlta({ item, onAlta, onIgnorar, busy, note }) {
   const [factura, setFactura] = useState(false);
   const resumen = [item.entregas ? `${item.entregas} entregas` : null, item.colectas ? `${item.colectas} colectas` : null].filter(Boolean).join(' · ') || '—';
   const inp = { padding: '4px 8px', fontSize: 12, border: `1px solid ${BRAND.border}`, borderRadius: 6, background: BRAND.faint, color: BRAND.white, outline: 'none' };
-  const btn = (bg, col, bd) => ({ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 8, cursor: busy ? 'default' : 'pointer', border: `1px solid ${bd}`, background: bg, color: col });
-  const lbl = { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: BRAND.muted, cursor: 'pointer' };
+  const btn = (bg, col, bd) => ({ padding: '3px 10px', fontSize: 11, fontWeight: 700, borderRadius: 10, cursor: busy ? 'default' : 'pointer', border: `1px solid ${bd}`, background: bg, color: col });
+  const lbl = { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: BRAND.muted, cursor: 'pointer' };
   const puedeConfirmar = !busy && (fletero || precio !== '');
   return (
     <div style={{ padding: '6px 0', borderTop: `1px solid ${BRAND.border}` }}>
-      {note && <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 4 }}>{note}</div>}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, flexWrap: 'wrap' }}>
+      {note && <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 4 }}>{note}</div>}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
         <span style={{ flex: 1, fontWeight: 600, minWidth: 120 }}>{item.nombre}</span>
         <span style={{ color: BRAND.muted }}>{resumen}</span>
-        <button onClick={() => setOpen(o => !o)} disabled={busy} style={btn('rgba(46,207,170,0.1)', BRAND.teal, BRAND.teal)}>Dar de alta</button>
+        <button onClick={() => setOpen(o => !o)} disabled={busy} style={btn('rgba(46,230,182,0.1)', BRAND.teal, BRAND.teal)}>Dar de alta</button>
         {onIgnorar && <button onClick={() => onIgnorar(item.nombre)} disabled={busy} title="Basura o ya pagado aparte: deja de mostrarlo. Si vuelve a aparecer, te aviso." style={btn(BRAND.faint, BRAND.muted, BRAND.border)}>Ocultar</button>}
       </div>
       {open && (
@@ -1727,9 +1728,9 @@ function PagosInner({ session }) {
   // Nombre del alcance activo (para los rótulos de KPIs y de la barra). '' = toda la semana.
   const alcanceLbl = filtroMetodo === 'transferencia' ? 'transferencias' : filtroMetodo === 'efectivo' ? 'efectivo' : '';
 
-  const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '1rem 1.1rem' };
+  const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: '1rem 1.1rem' };
   // Selector de semana como desplegable: muestra el rango completo ("20/07 al 25/07") con flechita.
-  const selSt = { padding: '6px 32px 6px 12px', fontSize: 13, fontWeight: 600, border: `1px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.faint, color: BRAND.white, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-opacity='0.6' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center' };
+  const selSt = { padding: '6px 32px 6px 12px', fontSize: 13, fontWeight: 600, border: `1px solid ${BRAND.border}`, borderRadius: 10, background: BRAND.faint, color: BRAND.white, outline: 'none', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-opacity='0.6' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center' };
   // Últimas ~26 semanas (lunes), más la seleccionada si quedara fuera del rango.
   const semanasOpts = useMemo(() => {
     const arr = [];
@@ -1741,7 +1742,7 @@ function PagosInner({ session }) {
   const onSemana = (v) => { setSemanaLunes(v); };
   const btnPill = (active) => ({ padding: '5px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? BRAND.blue : BRAND.border}`, background: active ? 'rgba(76,141,255,0.15)' : BRAND.faint, color: active ? BRAND.blue : BRAND.muted });
   // Botón del segmented control (Semana / Pagar): activo = fondo azul, inactivo = transparente.
-  const segBtn = (active) => ({ padding: '7px 18px', fontSize: 12.5, fontWeight: 700, border: 'none', borderRadius: 9, cursor: 'pointer', background: active ? BRAND.blue : 'transparent', color: active ? '#0d1b2a' : BRAND.muted });
+  const segBtn = (active) => ({ padding: '7px 18px', fontSize: 13, fontWeight: 700, border: 'none', borderRadius: 10, cursor: 'pointer', background: active ? BRAND.blue : 'transparent', color: active ? '#0d1b2a' : BRAND.muted });
   const thSt = { padding: '10px 12px', position: 'sticky', top: 0, zIndex: 3, background: BRAND.navyCard }; // Tarea 6: header sticky
   const thNum = { ...thSt, textAlign: 'right' };
 
@@ -1961,12 +1962,12 @@ function PagosInner({ session }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Flujos principales: Semana / Pagar en un segmented control */}
-          <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.22)', border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 3 }}>
+          <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.22)', border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: 3 }}>
             <button onClick={() => setVista('tabla')} style={segBtn(vista === 'tabla')}>Semana</button>
             {isAdmin && <button onClick={() => setVista('pagador')} style={segBtn(vista === 'pagador')}>Pagar</button>}
           </div>
           {/* Secundarios: Colectas (referencia) y Config (engranaje) */}
-          <button onClick={() => setVista('colectas')} title="Resumen de lo que se paga por colectas (la gestión del día está en la sección Colectas del menú)" style={{ background: 'none', border: 'none', color: vista === 'colectas' ? BRAND.blue : BRAND.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 8px', borderRadius: 8 }}>📋 Colectas</button>
+          <button onClick={() => setVista('colectas')} title="Resumen de lo que se paga por colectas (la gestión del día está en la sección Colectas del menú)" style={{ background: 'none', border: 'none', color: vista === 'colectas' ? BRAND.blue : BRAND.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 8px', borderRadius: 10 }}>📋 Colectas</button>
           {isAdmin && <button onClick={() => setVista('config')} title="Config de cadetes" style={{ width: 34, height: 34, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: `1px solid ${vista === 'config' ? BRAND.blue : BRAND.border}`, background: vista === 'config' ? 'rgba(76,141,255,0.12)' : BRAND.faint, color: vista === 'config' ? BRAND.blue : BRAND.muted, cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>⚙</button>}
         </div>
         <div style={{ fontSize: 12, color: BRAND.muted }}>
@@ -1974,7 +1975,7 @@ function PagosInner({ session }) {
         </div>
       </div>
 
-      {error && <div style={{ background: 'rgba(226,75,74,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
+      {error && <div style={{ background: 'rgba(232,97,95,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
       {vista === 'config' && isAdmin && (
         <ConfigCadetes tarifas={tarifas} alias={alias} cpOverrides={cpOverrides} cpTarifas={cpTarifas} cpsPorCadete={calc.cpsPorCadete} onRefresh={refreshConfig} />
@@ -1999,7 +2000,7 @@ function PagosInner({ session }) {
             const totMonto = filasCol.reduce((t, r) => t + r.monto, 0);
             return (
               <>
-                <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 10 }}>Solo lectura — la colecta se gestiona en la pestaña Colectas. Estos montos son los que entran a la columna "Colecta" de la liquidación.</div>
+                <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 10 }}>Solo lectura — la colecta se gestiona en la pestaña Colectas. Estos montos son los que entran a la columna "Colecta" de la liquidación.</div>
                 {filasCol.length === 0 && <div style={{ color: BRAND.muted, padding: '2.5rem', textAlign: 'center' }}>Sin colectas confirmadas para esta semana.</div>}
                 {filasCol.length > 0 && (
                   <div style={{ ...cardSt, padding: 0, overflow: 'auto', marginBottom: 16 }}>
@@ -2030,9 +2031,9 @@ function PagosInner({ session }) {
                           </tr>
                           {abierto && dets.map(d => (
                             <tr key={r.chofer + '::' + d.cliente} style={{ borderBottom: `1px solid ${BRAND.border}`, background: BRAND.navyMid || 'rgba(255,255,255,0.02)' }}>
-                              <td colSpan={2} style={{ padding: '6px 12px 6px 34px', fontSize: 12.5, color: BRAND.muted }}>{d.cliente}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', fontSize: 12.5, color: BRAND.muted }}>{d.cantidad}</td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', fontSize: 12.5, color: BRAND.muted }}>{money(d.monto)}</td>
+                              <td colSpan={2} style={{ padding: '6px 12px 6px 34px', fontSize: 13, color: BRAND.muted }}>{d.cliente}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', fontSize: 13, color: BRAND.muted }}>{d.cantidad}</td>
+                              <td style={{ padding: '6px 12px', textAlign: 'right', fontSize: 13, color: BRAND.muted }}>{money(d.monto)}</td>
                             </tr>
                           ))}
                           </React.Fragment>
@@ -2077,11 +2078,11 @@ function PagosInner({ session }) {
             {nEdiciones > 0 && (
               <span style={{ position: 'relative' }}>
                 <button onClick={() => setMenuEdiciones(v => !v)} title="cantidades y colectas editadas a mano; se guardan en este navegador y en Supabase, y sobreviven a confirmar"
-                  style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(255,176,32,0.12)', border: '1px solid rgba(255,176,32,0.3)', borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}>
+                  style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, background: 'rgba(245,192,68,0.12)', border: '1px solid rgba(245,192,68,0.3)', borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}>
                   &#9999;&#65039; {nEdiciones} {nEdiciones === 1 ? 'edición' : 'ediciones'} a mano &#9662;
                 </button>
                 {menuEdiciones && (
-                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 10, minWidth: 270, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: 10, minWidth: 270, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: BRAND.white }}>Ediciones a mano</span>
                       <button onClick={() => { setOverridesPersist({}); setColectaOvPersist({}); setMenuEdiciones(false); }} style={{ fontSize: 11, color: BRAND.amber, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>restaurar todo</button>
@@ -2108,7 +2109,7 @@ function PagosInner({ session }) {
             <div className="pg-acciones" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               {isAdmin && (
                 <button onClick={() => setWaOpen(true)} title="mandar el mensaje de liquidación desde tu WhatsApp a los cadetes de esta vista"
-                  style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.border}`, borderRadius: 8, cursor: 'pointer', background: BRAND.faint, color: BRAND.white, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.border}`, borderRadius: 10, cursor: 'pointer', background: BRAND.faint, color: BRAND.white, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ti ti-brand-whatsapp" style={{ fontSize: 15 }} /> Enviar por WhatsApp
                 </button>
               )}
@@ -2121,7 +2122,7 @@ function PagosInner({ session }) {
                   } catch (e) { setError(`No se pudo exportar el Excel: ${e.message}`); }
                   finally { setExportando(false); }
                 }}
-                style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 8, cursor: exportando || cargando ? 'default' : 'pointer', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, opacity: exportando || cargando ? 0.55 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, border: `1px solid ${BRAND.teal}`, borderRadius: 10, cursor: exportando || cargando ? 'default' : 'pointer', background: 'rgba(46,230,182,0.1)', color: BRAND.teal, opacity: exportando || cargando ? 0.55 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <i className={`ti ${exportando ? 'ti-loader-2' : 'ti-file-spreadsheet'}`} style={{ fontSize: 15 }} /> {exportando ? 'Generando…' : 'Exportar Excel'}
               </button>
             </div>
@@ -2129,7 +2130,7 @@ function PagosInner({ session }) {
 
           {/* Aviso de guardado fallido: nunca mostrar como "guardado" algo que no llegó a Supabase */}
           {saveWarn && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '9px 14px', borderRadius: 10, border: '1px solid rgba(226,75,74,0.45)', background: 'rgba(226,75,74,0.10)', fontSize: 12.5, color: '#FF9B9A' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '9px 14px', borderRadius: 10, border: '1px solid rgba(232,97,95,0.45)', background: 'rgba(232,97,95,0.10)', fontSize: 13, color: '#FF9B9A' }}>
               <span style={{ flex: 1 }}>{saveWarn}</span>
               <button onClick={() => setSaveWarn('')} style={{ background: 'none', border: 'none', color: '#FF9B9A', cursor: 'pointer', fontSize: 14, padding: 0 }}>✕</button>
             </div>
@@ -2137,7 +2138,7 @@ function PagosInner({ session }) {
 
           {/* Conflicto entre borradores de este navegador y la nube: se decide, no se pisa en silencio */}
           {conflictoLocal && (
-            <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,176,32,0.4)', background: 'rgba(255,176,32,0.08)', fontSize: 12.5 }}>
+            <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(245,192,68,0.4)', background: 'rgba(245,192,68,0.08)', fontSize: 13 }}>
               <div style={{ fontWeight: 700, color: BRAND.amber, marginBottom: 6 }}>
                 Este navegador tenía {conflictoLocal.difs.length} ajuste{conflictoLocal.difs.length > 1 ? 's' : ''} distinto{conflictoLocal.difs.length > 1 ? 's' : ''} a lo guardado en la nube
               </div>
@@ -2148,8 +2149,8 @@ function PagosInner({ session }) {
                 {conflictoLocal.difs.length > 6 && <div>…y {conflictoLocal.difs.length - 6} más</div>}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={descartarLocales} style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>Quedarme con la nube</button>
-                <button onClick={subirLocales} style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: '1px solid rgba(255,176,32,0.5)', background: 'rgba(255,176,32,0.15)', color: BRAND.amber }}>Subir los de este navegador</button>
+                <button onClick={descartarLocales} style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 10, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>Quedarme con la nube</button>
+                <button onClick={subirLocales} style={{ padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 10, cursor: 'pointer', border: '1px solid rgba(245,192,68,0.5)', background: 'rgba(245,192,68,0.15)', color: BRAND.amber }}>Subir los de este navegador</button>
               </div>
             </div>
           )}
@@ -2180,14 +2181,14 @@ function PagosInner({ session }) {
                   const fmtVal = (v) => v === null || v === undefined ? '(sin ajuste)' : (ev.tipo === 'colecta' ? money(Number(v)) : typeof v === 'object' ? JSON.stringify(v) : String(v));
                   const accColor = ev.accion === 'eliminar' ? '#FF9B9A' : ev.accion === 'revertir' ? BRAND.blue : ev.accion === 'crear' ? BRAND.teal : BRAND.amber;
                   return (
-                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: `1px solid ${BRAND.border}`, fontSize: 12.5 }}>
+                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: `1px solid ${BRAND.border}`, fontSize: 13 }}>
                       <span style={{ flex: '0 0 118px', color: BRAND.muted }}>{new Date(ev.created_at).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                      <span style={{ flex: '0 0 74px', fontWeight: 700, color: accColor, textTransform: 'uppercase', fontSize: 10.5 }}>{ev.accion}</span>
+                      <span style={{ flex: '0 0 74px', fontWeight: 700, color: accColor, textTransform: 'uppercase', fontSize: 11 }}>{ev.accion}</span>
                       <span style={{ flex: 1, fontWeight: 600 }}>{nombre} <span style={{ color: BRAND.muted, fontWeight: 400 }}>· {ev.tipo}</span></span>
                       <span style={{ flex: '0 0 auto', color: BRAND.muted }}>{fmtVal(ev.valor_anterior)} &#8594; <b style={{ color: BRAND.white }}>{fmtVal(ev.valor_nuevo)}</b></span>
                       <span style={{ flex: '0 0 150px', color: BRAND.muted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={(ev.usuario || '') + (ev.motivo ? ' · ' + ev.motivo : '')}>{ev.usuario}{ev.motivo ? ' · ' + ev.motivo : ''}</span>
                       <button disabled={histBusy} onClick={() => revertirEvento(ev)} title="volver al valor anterior a este cambio (queda registrado en el historial)"
-                        style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 7, cursor: histBusy ? 'default' : 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white, opacity: histBusy ? 0.5 : 1 }}>↺ Revertir</button>
+                        style={{ flex: '0 0 auto', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 6, cursor: histBusy ? 'default' : 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white, opacity: histBusy ? 0.5 : 1 }}>↺ Revertir</button>
                     </div>
                   );
                 })}
@@ -2259,9 +2260,9 @@ function PagosInner({ session }) {
                   const pend = Math.max(0, avance.total - avance.confirmados);
                   const kpi = (lbl, val, sub, subColor, extra) => (
                     <div key={lbl} style={{ ...cardSt, padding: '12px 14px', ...(extra || {}) }}>
-                      <div style={{ fontSize: 10.5, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{lbl}</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: BRAND.white, marginTop: 4 }}>{val}</div>
-                      {sub && <div style={{ fontSize: 11.5, color: subColor || BRAND.muted, marginTop: 2 }}>{sub}</div>}
+                      <div style={{ fontSize: 11, color: BRAND.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{lbl}</div>
+                      <div style={{ fontFamily:FX_FONT.display, fontSize: 20, fontWeight: 800, color: BRAND.white, marginTop: 4 }}>{val}</div>
+                      {sub && <div style={{ fontSize: 12, color: subColor || BRAND.muted, marginTop: 2 }}>{sub}</div>}
                     </div>
                   );
                   // Con un método filtrado, el otro se apaga: la tanda que estás haciendo queda
@@ -2277,7 +2278,7 @@ function PagosInner({ session }) {
               </div>
               {/* Progreso de confirmación */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: BRAND.muted, marginBottom: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: BRAND.muted, marginBottom: 5 }}>
                   <span>Confirmación{alcanceLbl ? <> · <b style={{ color: BRAND.white }}>solo {alcanceLbl}</b></> : ' de la semana'}</span>
                   <span><b style={{ color: BRAND.white }}>{avance.confirmados}</b> / {avance.total}{avance.faltaConfirmarMonto > 0 ? ` · falta ${money(avance.faltaConfirmarMonto)}` : ''}</span>
                 </div>
@@ -2289,7 +2290,7 @@ function PagosInner({ session }) {
               {/* Tabla principal — la columna Cadete queda fija al deslizar de costado (09/11: en el celu, al
                   llegar a Estado/Confirmar no se veía de quién era la fila) */}
               <style>{`.pg-fija{position:sticky;left:0;z-index:2;box-shadow:6px 0 10px -6px rgba(0,0,0,.55)}
-@media (max-width:700px){.pg-fija{max-width:128px;min-width:110px;white-space:normal;overflow-wrap:anywhere;font-size:12.5px}}`}</style>
+@media (max-width:700px){.pg-fija{max-width:128px;min-width:110px;white-space:normal;overflow-wrap:anywhere;font-size:13px}}`}</style>
               <div style={{ ...cardSt, padding: 0, overflow: 'auto', maxHeight: '72vh', marginBottom: 20 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720, fontSize: 13 }}>
                   <thead>
@@ -2320,7 +2321,7 @@ function PagosInner({ session }) {
                       const autoConf = cierre?.detalle?.auto?.cantidad;
                       const nuevas = (autoConf != null && !f.esFletero) ? (f.cantidadOriginal - autoConf) : 0;
                       const desvio = trabada && nuevas > 0;
-                      const rowTint = open ? 'rgba(46,207,170,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(226,75,74,0.06)' : (i % 2 ? 'rgba(255,255,255,0.022)' : 'transparent');
+                      const rowTint = open ? 'rgba(46,230,182,0.05)' : hoverKey === f.key ? 'rgba(255,255,255,0.04)' : f.faltaPrecio ? 'rgba(232,97,95,0.06)' : (i % 2 ? 'rgba(255,255,255,0.022)' : 'transparent');
                       return (
                         <React.Fragment key={f.key}>
                           <tr
@@ -2329,14 +2330,14 @@ function PagosInner({ session }) {
                             style={{ borderTop: `1px solid ${BRAND.border}`, background: rowTint }}>
                             <td className="pg-fija" onClick={() => setExpandido(open ? null : f.key)} title="ver / ocultar detalle" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}`, background: `linear-gradient(${rowTint}, ${rowTint}), ${BRAND.navyCard}` }}>
                               <span style={{ borderBottom: `1px dotted ${BRAND.muted}` }}>{f.nombre}</span>
-                              {f.esFletero && <span title="fletero: solo colectas" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 8, color: BRAND.muted, border: `1px solid ${BRAND.border}` }}>fletero</span>}
+                              {f.esFletero && <span title="fletero: solo colectas" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, color: BRAND.muted, border: `1px solid ${BRAND.border}` }}>fletero</span>}
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
                               <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>{open ? '▲' : '▾'}</span>
                             </td>
-                            <td style={{ padding: '8px 12px', background: (f.cantEditado || f.splitEditado) ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
+                            <td style={{ padding: '8px 12px', background: (f.cantEditado || f.splitEditado) ? 'rgba(245,192,68,0.12)' : 'transparent' }}>
                               {f.esFletero ? (
-                                <span title="cantidad de colectas de la semana" style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{f.colectasCant} col.</span>
+                                <span title="cantidad de colectas de la semana" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>{f.colectasCant} col.</span>
                               ) : (
                               <CantidadInput
                                 value={f.cantidad}
@@ -2355,7 +2356,7 @@ function PagosInner({ session }) {
                                 {desvio && <span title={`entraron ${nuevas} entrega(s) nueva(s) después de confirmar — el automático ahora da ${money(f.monto)}. Reabrí si querés actualizarlo`} style={{ color: BRAND.amber, cursor: 'help' }}>⚠️</span>}
                               </span>
                             )}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', background: f.colectaEditado ? 'rgba(255,176,32,0.12)' : 'transparent' }}>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', background: f.colectaEditado ? 'rgba(245,192,68,0.12)' : 'transparent' }}>
                               <ColectaInput
                                 value={f.colecta}
                                 editado={f.colectaEditado}
@@ -2384,7 +2385,7 @@ function PagosInner({ session }) {
                                 if (av || copiado) return (
                                   <button onClick={e => { e.stopPropagation(); toggleAviso(f); }}
                                     title="ya le avisaste — tocá para desmarcar y volver a copiar el mensaje"
-                                    style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: 'rgba(46,207,170,0.12)', border: '1px solid rgba(46,207,170,0.45)', borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: BRAND.teal, whiteSpace: 'nowrap' }}>
+                                    style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: 'rgba(46,230,182,0.12)', border: '1px solid rgba(46,230,182,0.45)', borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 11, fontWeight: 700, color: BRAND.teal, whiteSpace: 'nowrap' }}>
                                     {copiado ? '✓ Copiado' : '✓ Avisado'}
                                   </button>
                                 );
@@ -2399,7 +2400,7 @@ function PagosInner({ session }) {
                               {(calc.colectaItems.get(f.key) || []).length > 0 && (
                                 <button onClick={e => { e.stopPropagation(); copiarDetalleColectas(f); }}
                                   title="copiar el detalle de colectas día por día (fecha · cliente · monto) para cruzarlo con el cadete. No lo marca como avisado."
-                                  style={{ marginLeft: 4, fontSize: colCopiadoKey === f.key ? 10.5 : 13, fontWeight: 700, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${colCopiadoKey === f.key ? 'rgba(46,207,170,0.45)' : BRAND.border}`, cursor: 'pointer', color: colCopiadoKey === f.key ? BRAND.teal : BRAND.muted, verticalAlign: 'middle', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                                  style={{ marginLeft: 4, fontSize: colCopiadoKey === f.key ? 10.5 : 13, fontWeight: 700, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${colCopiadoKey === f.key ? 'rgba(46,230,182,0.45)' : BRAND.border}`, cursor: 'pointer', color: colCopiadoKey === f.key ? BRAND.teal : BRAND.muted, verticalAlign: 'middle', lineHeight: 1, whiteSpace: 'nowrap' }}>
                                   {colCopiadoKey === f.key ? '✓ Copiado' : '📋'}
                                 </button>
                               )}
@@ -2432,7 +2433,7 @@ function PagosInner({ session }) {
                                     const mp = MEDIOS_PAGO[p.via] || { nombre: p.via, text: BRAND.muted };
                                     return (
                                       <span key={k} title={p.pagado ? 'ya pagada' : 'todavía sin pagar'}
-                                        style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20, whiteSpace: 'nowrap',
+                                        style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 20, whiteSpace: 'nowrap',
                                           color: mp.text, background: BRAND.chipBg, border: `1px solid ${BRAND.border}`, opacity: p.pagado ? 0.55 : 1 }}>
                                         {p.pagado ? '✓ ' : ''}{mp.nombre} {money(p.monto)}{p.alias ? ` · ${p.alias}` : ''}
                                       </span>
@@ -2444,7 +2445,7 @@ function PagosInner({ session }) {
                                     const suma = cierre.pagos.reduce((a, p) => a + (+p.monto || 0), 0);
                                     const dif = Math.round((f.total || 0) - suma);
                                     if (Math.abs(dif) <= 1) return null;
-                                    return <span title="el total cambió después de dividir — volvé a dividir" style={{ fontSize: 10.5, fontWeight: 700, color: BRAND.amber, whiteSpace: 'nowrap' }}>⚠ {dif > 0 ? `faltan ${money(dif)}` : `sobran ${money(-dif)}`}</span>;
+                                    return <span title="el total cambió después de dividir — volvé a dividir" style={{ fontSize: 11, fontWeight: 700, color: BRAND.amber, whiteSpace: 'nowrap' }}>⚠ {dif > 0 ? `faltan ${money(dif)}` : `sobran ${money(-dif)}`}</span>;
                                   })()}
                                 </span>
                               )}
@@ -2455,7 +2456,7 @@ function PagosInner({ session }) {
                                 const m = cierre?.pagado ? MEDIOS_PAGO[cierre.pagado_via] : null;
                                 if (!m) return <span style={{ color: 'rgba(255,255,255,0.28)' }}>—</span>;
                                 return (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 600, color: m.text, whiteSpace: 'nowrap' }}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: m.text, whiteSpace: 'nowrap' }}>
                                     <span style={{ width: 9, height: 9, borderRadius: '50%', background: m.color, display: 'inline-block', flexShrink: 0 }} />
                                     {m.nombre}
                                   </span>
@@ -2467,21 +2468,21 @@ function PagosInner({ session }) {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
                                 {cierre && cierre.estado === 'excluido' ? (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.muted, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>🚫 Fuera de la semana</span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.muted, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>🚫 Fuera de la semana</span>
                                     <button disabled={busyAccion} onClick={() => incluirChofer(cierre)} title="volver a incluirlo en esta semana"
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.teal, cursor: 'pointer', fontSize: 11, fontWeight: 700, padding: '1px 8px', lineHeight: 1.5 }}>volver a incluir</button>
                                   </span>
                                 ) : (!cierre || cierre.estado === 'borrador') ? (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                     <button disabled={busyAccion} onClick={() => confirmarChofer(f, cierre)}
-                                      style={{ padding: '4px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,207,170,0.12)', color: BRAND.teal }}>Confirmar</button>
+                                      style={{ padding: '4px 12px', fontSize: 12, fontWeight: 700, borderRadius: 10, cursor: 'pointer', border: `1px solid ${BRAND.teal}`, background: 'rgba(46,230,182,0.12)', color: BRAND.teal }}>Confirmar</button>
                                     {/* Sacarlo de la semana: gris y chiquito al lado de Confirmar. Es la
                                         salida para el que aparece en LightData pero no hay que pagarle. */}
                                     <button disabled={busyAccion} onClick={() => excluirChofer(f, cierre)} title="no pagarle esta semana: lo saca de la tabla y de los totales"
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 7px', lineHeight: 1.4 }}>✕</button>
                                   </span>
                                 ) : cierre.pagado ? (
-                                  <span title="ya se pagó — no se puede reabrir" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.white, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                                  <span title="ya se pagó — no se puede reabrir" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.white, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                                     <span style={{ color: BRAND.teal }}>✓</span> Pagado
                                     {/* Quién lo marcó y cuándo — rastro para auditar (evita el "¿quién le pagó a este?") */}
                                     {(cierre.pagado_por || cierre.pagado_at) && (
@@ -2492,7 +2493,7 @@ function PagosInner({ session }) {
                                   </span>
                                 ) : (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.muted, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>✓ Confirmado</span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: BRAND.muted, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>✓ Confirmado</span>
                                     <button disabled={busyAccion} onClick={() => reabrirChofer(cierre)} title="reabrir para editar (mientras no esté pagado)"
                                       style={{ background: 'none', border: `1px solid ${BRAND.border}`, borderRadius: 6, color: BRAND.muted, cursor: 'pointer', fontSize: 12, padding: '1px 6px', lineHeight: 1.4 }}>↺</button>
                                     <button disabled={busyAccion} onClick={() => excluirChofer(f, cierre)} title="no pagarle esta semana: lo saca de la tabla y de los totales"
@@ -2515,13 +2516,13 @@ function PagosInner({ session }) {
                               <tr>
                                 <td colSpan={nCols} style={{ padding: '11px 16px', background: 'rgba(139,123,232,0.07)', borderLeft: `3px solid ${MEDIOS_PAGO.mixto.color}` }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{f.nombre}</span>
-                                    <span style={{ display: 'inline-flex', gap: 4, padding: 3, borderRadius: 9, background: 'rgba(0,0,0,0.22)', border: `1px solid ${BRAND.border}` }}>
-                                      <button onClick={() => setDivTipo('mixto')} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: divTipo === 'mixto' ? '#04121a' : BRAND.muted, background: divTipo === 'mixto' ? BRAND.teal : 'transparent' }}>Factura + efectivo</button>
-                                      <button onClick={() => setDivTipo('dos_facturas')} style={{ padding: '4px 9px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, color: dosFacturas ? '#04121a' : BRAND.muted, background: dosFacturas ? BRAND.teal : 'transparent' }}>Dos facturas</button>
+                                    <span style={{ fontSize: 13, fontWeight: 700 }}>{f.nombre}</span>
+                                    <span style={{ display: 'inline-flex', gap: 4, padding: 3, borderRadius: 10, background: 'rgba(0,0,0,0.22)', border: `1px solid ${BRAND.border}` }}>
+                                      <button onClick={() => setDivTipo('mixto')} style={{ padding: '4px 9px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: divTipo === 'mixto' ? '#04121a' : BRAND.muted, background: divTipo === 'mixto' ? BRAND.teal : 'transparent' }}>Factura + efectivo</button>
+                                      <button onClick={() => setDivTipo('dos_facturas')} style={{ padding: '4px 9px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: dosFacturas ? '#04121a' : BRAND.muted, background: dosFacturas ? BRAND.teal : 'transparent' }}>Dos facturas</button>
                                     </span>
                                     <span style={{ fontSize: 12, color: BRAND.muted }}>{dosFacturas ? 'Factura 1' : 'Factura'} por</span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.28)', border: `1px solid ${excede ? BRAND.red : BRAND.border}`, borderRadius: 9, padding: '4px 10px' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.28)', border: `1px solid ${excede ? BRAND.red : BRAND.border}`, borderRadius: 10, padding: '4px 10px' }}>
                                       <span style={{ color: BRAND.muted, fontSize: 13 }}>$</span>
                                       <input autoFocus inputMode="numeric" value={divFactura} onChange={e => setDivFactura(e.target.value.replace(/[^0-9]/g, ''))}
                                         placeholder="0" style={{ width: 110, textAlign: 'right', background: 'transparent', border: 'none', color: BRAND.white, fontSize: 14, fontWeight: 700, outline: 'none' }} />
@@ -2531,34 +2532,34 @@ function PagosInner({ session }) {
                                     {dosFacturas ? (
                                       <>
                                         <input value={divAlias1} onChange={e => setDivAlias1(e.target.value)} placeholder="Alias factura 1"
-                                          style={{ width: 150, padding: '6px 9px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 12, outline: 'none' }} />
+                                          style={{ width: 150, padding: '6px 9px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 12, outline: 'none' }} />
                                         <span style={{ fontSize: 11, color: BRAND.muted }}>Factura 2 {money(resto)}</span>
                                         <input value={divAlias2} onChange={e => setDivAlias2(e.target.value)} placeholder="Alias factura 2"
-                                          style={{ width: 150, padding: '6px 9px', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 12, outline: 'none' }} />
+                                          style={{ width: 150, padding: '6px 9px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 12, outline: 'none' }} />
                                       </>
                                     ) : (
                                       <span style={{ fontSize: 11, color: BRAND.muted }}>y el resto en efectivo · el banco lo elige Adrián en Pagar</span>
                                     )}
                                     <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                                       {excede
-                                        ? <span style={{ color: BRAND.red, fontSize: 12.5, fontWeight: 700 }}>No puede facturar más que el total ({money(total)}).</span>
-                                        : <span style={{ fontSize: 12.5, fontWeight: 700 }}>
+                                        ? <span style={{ color: BRAND.red, fontSize: 13, fontWeight: 700 }}>No puede facturar más que el total ({money(total)}).</span>
+                                        : <span style={{ fontSize: 13, fontWeight: 700 }}>
                                             <span style={{ color: mp.text }}>🏦 {mp.nombre} {money(fact)}</span>
                                             <span style={{ color: BRAND.muted, fontWeight: 400 }}> + </span>
                                             <span style={{ color: dosFacturas ? mp.text : MEDIOS_PAGO.efectivo.text }}>{dosFacturas ? '🏦 Transferencia' : '💵 Efectivo'} {money(resto)}</span>
                                           </span>}
                                       {yaDividido && (
                                         <button onClick={() => guardarDivision(f, cierre, [])} disabled={busyAccion}
-                                          style={{ background: 'none', border: 'none', color: BRAND.amber, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>quitar división</button>
+                                          style={{ background: 'none', border: 'none', color: BRAND.amber, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>quitar división</button>
                                       )}
                                       <button onClick={() => { setDivKey(null); setDivFactura(''); setDivTipo('mixto'); setDivAlias1(''); setDivAlias2(''); }}
-                                        style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
+                                        style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
                                       <button disabled={busyAccion || excede || fact <= 0 || resto <= 0 || !aliasesOk}
                                         onClick={() => guardarDivision(f, cierre, dosFacturas
                                           ? [{ via: 'transferencia', monto: fact, alias: divAlias1 }, { via: 'transferencia', monto: resto, alias: divAlias2 }]
                                           : [{ via: 'transferencia', monto: fact }, { via: 'efectivo', monto: resto }])}
                                         title="quedan dos pagos separados en la pantalla Pagar; no marca nada como pagado"
-                                        style={{ padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0 || resto <= 0 || !aliasesOk) ? 'not-allowed' : 'pointer',
+                                        style={{ padding: '5px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, border: 'none', cursor: (excede || fact <= 0 || resto <= 0 || !aliasesOk) ? 'not-allowed' : 'pointer',
                                           background: (excede || fact <= 0 || resto <= 0 || !aliasesOk) ? 'rgba(255,255,255,0.08)' : BRAND.teal, color: (excede || fact <= 0 || resto <= 0 || !aliasesOk) ? BRAND.muted : '#04121a' }}>
                                         {dosFacturas ? 'Guardar dos facturas' : 'Dividir en dos pagos'}
                                       </button>
@@ -2570,8 +2571,8 @@ function PagosInner({ session }) {
                           })()}
                           {open && (
                             <tr>
-                              <td colSpan={nCols} style={{ padding: '10px 16px', background: 'rgba(46,207,170,0.05)', borderLeft: `3px solid ${BRAND.teal}` }}>
-                                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: BRAND.muted, marginBottom: 10 }}>
+                              <td colSpan={nCols} style={{ padding: '10px 16px', background: 'rgba(46,230,182,0.05)', borderLeft: `3px solid ${BRAND.teal}` }}>
+                                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: BRAND.muted, marginBottom: 10 }}>
                                   {f.esFletero ? (
                                     <>
                                       <span>Fletero — cobra el monto de cada colecta</span>
@@ -2601,7 +2602,7 @@ function PagosInner({ session }) {
                                         {tiers.map(({ t, lbl, c }) => (
                                           <div key={t} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                                             <span style={{ fontSize: 12, fontWeight: 800, color: c }}>{lbl} <span style={{ fontSize: 10, color: BRAND.muted, fontWeight: 400 }}>× {money(Math.round(f.split.amts[t]))}</span></span>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 8, overflow: 'hidden', background: 'rgba(0,0,0,0.22)' }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${BRAND.border}`, borderRadius: 10, overflow: 'hidden', background: 'rgba(0,0,0,0.22)' }}>
                                               <button disabled={trabada} onClick={() => setSplitCount(f, t, (cur[t] || 0) - 1)} style={{ ...stepBtn, cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1 }}>−</button>
                                               <input type="text" inputMode="numeric" disabled={trabada} value={cur[t] || 0} onChange={e => setSplitCount(f, t, e.target.value.replace(/[^\d]/g, ''))} style={stepInp} />
                                               <button disabled={trabada} onClick={() => setSplitCount(f, t, (cur[t] || 0) + 1)} style={{ ...stepBtn, cursor: trabada ? 'not-allowed' : 'pointer', opacity: trabada ? 0.5 : 1 }}>+</button>
@@ -2609,13 +2610,13 @@ function PagosInner({ session }) {
                                           </div>
                                         ))}
                                         <div style={{ fontSize: 12, color: BRAND.muted }}>Total: <b style={{ color: BRAND.white, fontSize: 14 }}>{totalEnv}</b> env · <b style={{ color: BRAND.white, fontSize: 14 }}>{money(f.monto)}</b></div>
-                                        {editadoSplit && <button onClick={() => revertSplit(f)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline' }}>↩ volver al automático</button>}
+                                        {editadoSplit && <button onClick={() => revertSplit(f)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>↩ volver al automático</button>}
                                       </div>
-                                      <div style={{ fontSize: 10.5, color: BRAND.muted, marginTop: 6 }}>La base (qué CP es cada tarifa) se define en Config. Este ajuste vale solo para esta semana y se congela al cerrar.</div>
+                                      <div style={{ fontSize: 11, color: BRAND.muted, marginTop: 6 }}>La base (qué CP es cada tarifa) se define en Config. Este ajuste vale solo para esta semana y se congela al cerrar.</div>
                                     </div>
                                   );
                                 })()}
-                                {f.fallbackInfo && <div style={{ fontSize: 11.5, color: BRAND.amber, marginBottom: 8 }}>⚠ {f.fallbackInfo}</div>}
+                                {f.fallbackInfo && <div style={{ fontSize: 12, color: BRAND.amber, marginBottom: 8 }}>⚠ {f.fallbackInfo}</div>}
                                 <div style={{ fontSize: 11, color: BRAND.muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Descuentos de la semana</div>
                                 {f.ajusteRows.map(a => (
                                   <div key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, padding: '9px 12px', borderRadius: 10, background: 'rgba(0,0,0,0.18)', marginBottom: 7, maxWidth: 640 }}>
@@ -2625,9 +2626,9 @@ function PagosInner({ session }) {
                                   </div>
                                 ))}
                                 <div style={{ display: 'flex', gap: 8, marginTop: 12, maxWidth: 640 }}>
-                                  <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} disabled={descLock} style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 13.5, outline: 'none', opacity: descLock ? 0.55 : 1 }} />
-                                  <input className="no-spin" placeholder="Monto" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} disabled={descLock} style={{ width: 130, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontWeight: 700, fontSize: 13.5, textAlign: 'right', outline: 'none', opacity: descLock ? 0.55 : 1 }} />
-                                  <button onClick={() => agregarAjuste(f, cierre)} disabled={busyAccion || descLock} title={descLock ? 'chofer ya pagado — no se puede editar' : ''} style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, borderRadius: 10, cursor: descLock ? 'not-allowed' : 'pointer', border: `1px solid rgba(226,75,74,0.4)`, background: 'rgba(226,75,74,0.12)', color: BRAND.red, opacity: descLock ? 0.5 : 1, whiteSpace: 'nowrap' }}>Descontar</button>
+                                  <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(s => ({ ...s, concepto: e.target.value }))} disabled={descLock} style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 14, outline: 'none', opacity: descLock ? 0.55 : 1 }} />
+                                  <input className="no-spin" placeholder="Monto" type="number" value={ajusteForm.monto} onChange={e => setAjusteForm(s => ({ ...s, monto: e.target.value }))} disabled={descLock} style={{ width: 130, padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontWeight: 700, fontSize: 14, textAlign: 'right', outline: 'none', opacity: descLock ? 0.55 : 1 }} />
+                                  <button onClick={() => agregarAjuste(f, cierre)} disabled={busyAccion || descLock} title={descLock ? 'chofer ya pagado — no se puede editar' : ''} style={{ padding: '10px 16px', fontSize: 13, fontWeight: 800, borderRadius: 10, cursor: descLock ? 'not-allowed' : 'pointer', border: `1px solid rgba(232,97,95,0.4)`, background: 'rgba(232,97,95,0.12)', color: BRAND.red, opacity: descLock ? 0.5 : 1, whiteSpace: 'nowrap' }}>Descontar</button>
                                 </div>
                                 {f.ajusteRows.length > 0 && (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BRAND.border}`, fontSize: 13, maxWidth: 640 }}>
@@ -2635,7 +2636,7 @@ function PagosInner({ session }) {
                                     <span style={{ fontWeight: 800, color: BRAND.red, fontSize: 15, fontVariantNumeric: 'tabular-nums' }}>−{money(f.ajusteTotal)}</span>
                                   </div>
                                 )}
-                                <div style={{ fontSize: 10.5, color: BRAND.muted, marginTop: 6 }}>La colecta se edita en la pestaña Colectas. Acá se muestra solo lectura.</div>
+                                <div style={{ fontSize: 11, color: BRAND.muted, marginTop: 6 }}>La colecta se edita en la pestaña Colectas. Acá se muestra solo lectura.</div>
                               </td>
                             </tr>
                           )}
@@ -2686,7 +2687,7 @@ function PagosInner({ session }) {
                 {/* 1 · Choferes por dar de alta (junta entregas y colectas de desconocidos) */}
                 {porDarAlta.length > 0 && (
                   <TarjetaRevisar icon="🆕" titulo="Choferes por dar de alta" count={porDarAlta.length} color={BRAND.amber}>
-                    <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 2 }}>Aparecieron esta semana pero no están en Config. Dales de alta con su precio (o marcá Fletero si solo hacen colectas). Si no es un chofer o ya lo pagaste aparte, "Ocultar".</div>
+                    <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 2 }}>Aparecieron esta semana pero no están en Config. Dales de alta con su precio (o marcá Fletero si solo hacen colectas). Si no es un chofer o ya lo pagaste aparte, "Ocultar".</div>
                     {porDarAlta.map(item => (
                       <FilaDarAlta key={item.key} item={item} busy={busyAccion}
                         onAlta={(nombre, opts) => altaCadete(nombre, opts)}
@@ -2708,7 +2709,7 @@ function PagosInner({ session }) {
                 )}
 
                 {nAccion === 0 && (
-                  <div style={{ fontSize: 12.5, color: BRAND.muted, marginBottom: hayInfo ? 12 : 0 }}>✓ Nada por resolver esta semana.</div>
+                  <div style={{ fontSize: 13, color: BRAND.muted, marginBottom: hayInfo ? 12 : 0 }}>✓ Nada por resolver esta semana.</div>
                 )}
 
                 {/* ── Información (no accionable): separado del bloque de arriba ── */}
@@ -2721,7 +2722,7 @@ function PagosInner({ session }) {
                         color={BRAND.amber}
                         right={<span style={{ fontSize: 11, color: BRAND.amber }}>⚠ revisá</span>}
                         onToggle={() => setRevExpand(r => ({ ...r, ignorados: !igExpanded }))} expanded={igExpanded}>
-                        <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Los ocultaste antes pero volvieron con bastante volumen. Si alguno se volvió fijo (o lo ocultaste sin querer), dalo de alta.</div>
+                        <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 6 }}>Los ocultaste antes pero volvieron con bastante volumen. Si alguno se volvió fijo (o lo ocultaste sin querer), dalo de alta.</div>
                         {ignoradosActivos.map((ig, i) => (
                           <FilaDarAlta key={i} item={{ key: ig.raw, nombre: ig.raw, entregas: ig.cantidad, colectas: 0 }} busy={busyAccion}
                             onAlta={(nombre, opts) => altaCadete(nombre, opts)} />
@@ -2738,7 +2739,7 @@ function PagosInner({ session }) {
                         <TarjetaRevisar icon="🕳" titulo="Entregas sin cadete en LightData" count={calc.sinCadete.length} color={BRAND.muted}
                           right={<span style={{ fontSize: 11, color: BRAND.muted }}>{rango}</span>}
                           onToggle={() => setRevExpand(r => ({ ...r, sinCadete: !r.sinCadete }))} expanded={!!revExpand.sinCadete}>
-                          <div style={{ fontSize: 11.5, color: BRAND.muted, marginBottom: 6 }}>Envíos entregados que en LightData no tienen cadete asignado. No es algo que des de alta acá: se corrige asignando el cadete en LightData.</div>
+                          <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 6 }}>Envíos entregados que en LightData no tienen cadete asignado. No es algo que des de alta acá: se corrige asignando el cadete en LightData.</div>
                           {Object.entries(porFecha).sort().map(([d, n]) => (
                             <div key={d} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '3px 0', borderTop: `1px solid ${BRAND.border}` }}>
                               <span>{fmtDM(d)}</span><span style={{ color: BRAND.muted }}>{n} entrega{n === 1 ? '' : 's'}</span>
@@ -2750,7 +2751,7 @@ function PagosInner({ session }) {
 
                     {calc.aparte.length > 0 && (
                       <TarjetaRevisar icon="💰" titulo="Pagos aparte (fleteros — no suman al total)" count={calc.aparte.length} color={BRAND.muted}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                           <thead><tr style={{ color: BRAND.muted, textAlign: 'left' }}><th style={{ padding: '4px 6px' }}>Cadete</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Cant.</th><th style={{ padding: '4px 6px', textAlign: 'right' }}>Monto</th></tr></thead>
                           <tbody>
                             {calc.aparte.map(f => (
@@ -2781,9 +2782,9 @@ function SoloAdmin() {
   return (
     <div style={{ maxWidth: 440, margin: '80px auto', textAlign: 'center', color: 'rgba(255,255,255,0.85)' }}>
       <div style={{ fontSize: 42, marginBottom: 12 }}>🔒</div>
-      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Sección solo para administradores</div>
+      <div style={{ fontFamily:FX_FONT.display, fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Sección solo para administradores</div>
       <div style={{ fontSize: 14, marginBottom: 18, color: 'rgba(255,255,255,0.6)' }}>Las liquidaciones son confidenciales. Ingresá con la cuenta de administrador.</div>
-      <button onClick={() => { logout(); window.location.reload(); }} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: '#fff', cursor: 'pointer' }}>Cambiar de cuenta</button>
+      <button onClick={() => { logout(); window.location.reload(); }} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: '#fff', cursor: 'pointer' }}>Cambiar de cuenta</button>
     </div>
   );
 }

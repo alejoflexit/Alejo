@@ -2,6 +2,7 @@
 // Viven acá para no duplicarlas en copias que después divergen.
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { login, authedFetch, getToken, getSession } from './auth';
+import { FX, FX_FONT } from "./theme";
 
 export const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -35,7 +36,7 @@ export const BRAND = {
   navyMid: "#112236",
   navyCard:"#162d42",
   navySide:"#0a1520",
-  teal:    "#2ECFAA",
+  teal:    FX.color.teal,
   white:   "#FFFFFF",
   muted:   "rgba(255,255,255,0.62)",
   faint:   "rgba(255,255,255,0.06)",
@@ -116,7 +117,7 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
           const warn = ch === 'A coordinar';
           return (
             <div key={i} onClick={() => { setEditIdx(i); setQuery(''); setOpen(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 20, border: `1px solid ${warn ? '#FBBF24' : '#2ECFAA'}`, background: warn ? '#FBBF24' : '#2ECFAA', fontSize: 11, fontWeight: 700, color: '#14171c', cursor: 'pointer', userSelect: 'none' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 20, border: `1px solid ${warn ? '#F5C044' : '#2EE6B6'}`, background: warn ? '#F5C044' : '#2EE6B6', fontSize: 11, fontWeight: 700, color: '#14171c', cursor: 'pointer', userSelect: 'none' }}>
               {ch}
               {chs.length > 1 && (
                 <span onClick={e => remove(i, e)} style={{ color: 'rgba(0,0,0,0.45)', fontSize: 12, lineHeight: 1 }}>✕</span>
@@ -143,8 +144,8 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
           <div style={{ maxHeight: 185, overflowY: 'auto' }}>
             {!chs.every(x => x === 'A coordinar') && (
               <div onClick={() => { onUpdate({ choferes: ['A coordinar'], confirmado_por: [] }); setOpen(false); setQuery(''); }}
-                style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: '#E24B4A', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(226,75,74,0.08)'}
+                style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: '#E8615F', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(232,97,95,0.08)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 × Desasignar
               </div>
@@ -163,7 +164,7 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
               </div>
             )}
             {sugerir && !query && ayuda && (
-              <div style={{ background: 'rgba(46,207,170,0.05)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '4px 0' }}>
+              <div style={{ background: 'rgba(46,230,182,0.05)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '4px 0' }}>
                 {ayuda === 'cargando' && <div style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Buscando…</div>}
                 {Array.isArray(ayuda) && ayuda.length === 0 && <div style={{ padding: '6px 12px', fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>Sin datos para sugerir (nadie la hizo y no hay nadie cerca).</div>}
                 {Array.isArray(ayuda) && ayuda.map(s => (
@@ -179,7 +180,7 @@ export function ChoferPicker({ chs, choferesList, onUpdate, hideChips, abrirArri
             )}
             {filtered.slice(0, 12).map(ch => (
               <div key={ch} onClick={() => assign(ch)}
-                style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: ch === 'A coordinar' ? '#FBBF24' : '#fff' }}
+                style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer', color: ch === 'A coordinar' ? '#F5C044' : '#fff' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 {ch}
@@ -225,12 +226,12 @@ export function LoginFlexit({ titulo, subtitulo, icono, onOk }) {
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const inp = { width: '100%', padding: '12px 14px', borderRadius: 12, border: `1px solid ${err ? '#FF5C5C' : 'rgba(255,255,255,0.18)'}`, background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, boxSizing: 'border-box', outline: 'none' };
+  const inp = { width: '100%', padding: '12px 14px', borderRadius: 14, border: `1px solid ${err ? '#E8615F' : 'rgba(255,255,255,0.18)'}`, background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: 15, boxSizing: 'border-box', outline: 'none' };
   return (
     <div style={{ minHeight: '62vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 400, maxWidth: '94vw', padding: '36px 32px', borderRadius: 22, border: '1px solid rgba(46,207,170,0.22)', background: 'linear-gradient(165deg, rgba(46,207,170,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))', textAlign: 'center' }}>
+      <div style={{ width: 400, maxWidth: '94vw', padding: '36px 32px', borderRadius: 20, border: '1px solid rgba(46,230,182,0.22)', background: 'linear-gradient(165deg, rgba(46,230,182,0.09), rgba(58,143,212,0.06) 55%, rgba(255,255,255,0.02))', textAlign: 'center' }}>
         <div style={{ fontSize: 30, marginBottom: 10 }}>{icono || '📦'}</div>
-        <div style={{ fontSize: 20, fontWeight: 800 }}>{titulo}</div>
+        <div style={{ fontFamily:FX_FONT.display, fontSize: 20, fontWeight: 800 }}>{titulo}</div>
         <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4, marginBottom: 22 }}>{subtitulo || 'Ingresá con tu usuario del equipo'}</div>
         <form onSubmit={async e => {
           e.preventDefault(); if (busy) return; setBusy(true); setErr('');
@@ -240,8 +241,8 @@ export function LoginFlexit({ titulo, subtitulo, icono, onOk }) {
         }}>
           <input type="email" autoFocus autoComplete="username" value={em} onChange={e => { setEm(e.target.value); setErr(''); }} placeholder="Email" style={{ ...inp, marginBottom: 10 }} />
           <input type="password" autoComplete="current-password" value={pw} onChange={e => { setPw(e.target.value); setErr(''); }} placeholder="Contraseña" style={inp} />
-          {err && <div style={{ color: '#FF5C5C', fontSize: 12.5, marginTop: 8 }}>{err}</div>}
-          <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 16, padding: '13px 10px', borderRadius: 12, fontSize: 14.5, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(46,207,170,0.35)', background: 'rgba(46,207,170,0.12)', color: '#2ECFAA' }}>{busy ? 'Entrando…' : 'Entrar'}</button>
+          {err && <div style={{ color: '#E8615F', fontSize: 13, marginTop: 8 }}>{err}</div>}
+          <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 16, padding: '13px 10px', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', border: '1px solid rgba(46,230,182,0.35)', background: 'rgba(46,230,182,0.12)', color: '#2EE6B6' }}>{busy ? 'Entrando…' : 'Entrar'}</button>
         </form>
       </div>
     </div>
@@ -605,9 +606,9 @@ export function NotasHoy({ fecha, soloAusencias = false, irAPizarra }) {
   const mover = n => { quitar(n.id); posponerNota(n).catch(recargar); };
 
   return (
-    <div style={{ marginBottom: 14, padding: '11px 14px', borderRadius: 12, border: '1px solid rgba(251,191,36,0.35)', background: 'rgba(251,191,36,0.07)' }}>
+    <div style={{ marginBottom: 14, padding: '11px 14px', borderRadius: 14, border: '1px solid rgba(245,192,68,0.35)', background: 'rgba(245,192,68,0.07)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#FBBF24' }}>📋 {soloAusencias ? 'Ausencias de hoy' : 'Notas para hoy'} ({visibles.length})</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#F5C044' }}>📋 {soloAusencias ? 'Ausencias de hoy' : 'Notas para hoy'} ({visibles.length})</span>
         {irAPizarra && <button onClick={irAPizarra} style={{ marginLeft: 'auto', border: 'none', background: 'none', color: BRAND.teal, cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>Abrir pizarra →</button>}
       </div>
       {visibles.map(n => {
@@ -618,15 +619,15 @@ export function NotasHoy({ fecha, soloAusencias = false, irAPizarra }) {
           <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <span style={{ fontSize: 14 }}>{t.emoji}</span>
             <div style={{ flex: 1, minWidth: 150, fontSize: 13, color: '#fff' }}>
-              {urgente && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#fff', background: '#E24B4A', borderRadius: 5, padding: '1px 6px', marginRight: 6 }}>⚡ AHORA</span>}
-              {conHora && <span style={{ fontSize: 10.5, fontWeight: 800, color: '#1a1500', background: '#FBBF24', borderRadius: 5, padding: '1px 6px', marginRight: 6 }}>⏰ {n.hora_limite}</span>}
+              {urgente && <span style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: '#E8615F', borderRadius: 6, padding: '1px 6px', marginRight: 6 }}>⚡ AHORA</span>}
+              {conHora && <span style={{ fontSize: 11, fontWeight: 800, color: '#1a1500', background: '#F5C044', borderRadius: 6, padding: '1px 6px', marginRight: 6 }}>⏰ {n.hora_limite}</span>}
               {textoNota(n)}
               {n.tipo === 'ausencia' && n.cubre && <span style={{ color: BRAND.teal, fontWeight: 600 }}> · cubre {n.cubre}</span>}
               <span style={{ display: 'block', fontSize: 11, color: BRAND.muted, marginTop: 1 }}>{n.autor}</span>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => hacer(n)} style={{ minHeight: 32, border: '1px solid rgba(46,207,170,0.45)', background: 'rgba(46,207,170,0.1)', color: BRAND.teal, borderRadius: 8, padding: '0 11px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✓ Hecho</button>
-              {n.tipo !== 'ausencia' && <button onClick={() => mover(n)} title="Posponer a mañana" style={{ minHeight: 32, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', borderRadius: 8, padding: '0 11px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>→ Mañana</button>}
+              <button onClick={() => hacer(n)} style={{ minHeight: 32, border: '1px solid rgba(46,230,182,0.45)', background: 'rgba(46,230,182,0.1)', color: BRAND.teal, borderRadius: 10, padding: '0 11px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>✓ Hecho</button>
+              {n.tipo !== 'ausencia' && <button onClick={() => mover(n)} title="Posponer a mañana" style={{ minHeight: 32, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: '#fff', borderRadius: 10, padding: '0 11px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>→ Mañana</button>}
             </div>
           </div>
         );

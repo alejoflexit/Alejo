@@ -5,6 +5,7 @@ import { slaMeli } from "./slaShared";
 import CierreTurno from "./CierreTurno";
 import { ABRIR_CADETE_KEY, ActivarAvisos } from "./AlertasReparto";
 import { sbFetch, todayStr } from "./colectasShared";
+import { FX_FONT } from "./theme";
 
 // Monitoreo — avance del reparto POR CADETE, en vivo, + detector de caída de datos.
 // Fuente: bridge del VPS GET /reparto (Excel A planta = hoy, obs=2, cache 3 min). El bridge clasifica
@@ -20,9 +21,9 @@ const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
   glass: "rgba(27,28,46,0.72)", line: "rgba(255,255,255,0.06)", soft: "rgba(255,255,255,0.05)",
   teal: "#2ee6b6", ambar: "#F5C044", rojo: "#E8615F",
-  grotesk: "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+  grotesk: FX_FONT.display,
 };
-const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 16, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" };
+const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 14, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" };
 const PUNTO = { ok: C.teal, atencion: C.ambar, critico: C.rojo, neutro: C.ink3 };
 const num = (n) => new Intl.NumberFormat("es-AR").format(Math.round(n || 0));
 function minutosDe(iso) {
@@ -141,7 +142,7 @@ export default function Monitoreo() {
     return (
       <div style={{ ...card, padding: 28, maxWidth: 620 }}>
         <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8, color: C.ink }}>Falta activar el monitoreo en el servidor</div>
-        <div style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 14, color: C.ink2, lineHeight: 1.6 }}>
           Falta correr <code>deploy-bridge.sh</code> en el VPS (endpoint <code>/reparto</code>). Después esta pantalla arranca sola.
         </div>
       </div>
@@ -190,7 +191,7 @@ export default function Monitoreo() {
               const on = filtro === k && !busca;
               return (
                 <button key={k} onClick={() => { setFiltro(k); setBusca(""); }}
-                  style={{ background: on ? "rgba(255,255,255,0.09)" : "none", border: "none", borderRadius: 8, color: on ? C.ink : C.ink2, padding: "6px 12px", fontSize: 13, fontWeight: on ? 600 : 500, cursor: "pointer" }}>
+                  style={{ background: on ? "rgba(255,255,255,0.09)" : "none", border: "none", borderRadius: 10, color: on ? C.ink : C.ink2, padding: "6px 12px", fontSize: 13, fontWeight: on ? 600 : 500, cursor: "pointer" }}>
                   {lbl} <span style={{ color: C.ink3 }}>{cuenta[k]}</span>
                 </button>
               );
@@ -213,7 +214,7 @@ export default function Monitoreo() {
           </div>
         )}
         {filtro === "nuevos" && !busca && <Incorporaciones hist={hist} hoy={hoyISO} cadetesHoy={cadetes} />}
-        <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 14, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 12, color: C.ink3, marginTop: 14, lineHeight: 1.6 }}>
           Mismas reglas que Métricas. Flex en riesgo = en camino, en planta o sin estado sin un Nadie/reprogramado antes de las 21 (historial de hoy o ayer): sería demorado si el día cerrara ahora.
           Repro 21hs = Nadie o reprogramado a las 21:00 o después sin intento previo. Particulares sin visita = en camino, en planta o sin estado.
           Frenado = lleva envíos sin intento y no entrega hace 60' o más. Nuevo = está en sus primeras {NUEVO_JORNADAS} jornadas según Métricas;
@@ -226,10 +227,10 @@ export default function Monitoreo() {
 
 function Punto({ tono }) {
   if (!tono) return null;
-  return <span aria-hidden="true" style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, background: PUNTO[tono] || PUNTO.neutro, flexShrink: 0 }} />;
+  return <span aria-hidden="true" style={{ display: "inline-block", width: 7, height: 7, borderRadius: 6, background: PUNTO[tono] || PUNTO.neutro, flexShrink: 0 }} />;
 }
 
-const chip = { display: "inline-flex", alignItems: "center", gap: 6, background: C.soft, border: `1px solid ${C.line}`, borderRadius: 999, color: C.ink2, padding: "5px 12px", fontSize: 12.5, fontFamily: "inherit" };
+const chip = { display: "inline-flex", alignItems: "center", gap: 6, background: C.soft, border: `1px solid ${C.line}`, borderRadius: 999, color: C.ink2, padding: "5px 12px", fontSize: 13, fontFamily: "inherit" };
 
 // Estado del dato en una línea chica arriba a la derecha; el cartel grande aparece solo si hay problema.
 function ChipSalud({ salud, error, datos, ahoraReal, ahoraDato }) {
@@ -255,7 +256,7 @@ function CopiarReclamo({ texto }) {
   };
   return (
     <button onClick={copiar} title="Copia el mensaje con los pendientes (Flex y particulares) para mandarle por WhatsApp"
-      style={{ background: "none", border: "none", padding: "2px 0", fontSize: 11.5, color: ok ? C.teal : C.ink3, cursor: "pointer", fontFamily: "inherit" }}>
+      style={{ background: "none", border: "none", padding: "2px 0", fontSize: 12, color: ok ? C.teal : C.ink3, cursor: "pointer", fontFamily: "inherit" }}>
       {ok ? "Reclamo copiado" : "Copiar reclamo"}
     </button>
   );
@@ -279,7 +280,7 @@ function SaludBanner({ salud, error, datos, ahoraReal, ahoraDato }) {
         <span style={{ fontWeight: 600, fontSize: 14 }}>{titulo}</span>
         {detalle && <span style={{ fontSize: 13, color: C.ink2 }}> · {detalle}</span>}
         {salud.huecos && salud.huecos.length > 0 && (
-          <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 3 }}>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 3 }}>
             Hoy hubo {salud.huecos.length === 1 ? "un tramo" : `${salud.huecos.length} tramos`} sin datos: {salud.huecos.map((h) => `${hhmm(h.desde)}–${hhmm(h.hasta)}`).join(" · ")}
           </div>
         )}
@@ -313,7 +314,7 @@ function Actividad({ datos, huecos, ahora }) {
           );
         })}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: C.ink3, marginTop: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.ink3, marginTop: 4 }}>
         {[10, 13, 16, 19, 21, 23].map((h) => <span key={h}>{h}h</span>)}
       </div>
     </div>
@@ -377,9 +378,9 @@ function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
           </div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          <span aria-hidden="true" style={{ width: 26, height: 26, borderRadius: 13, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0,
+          <span aria-hidden="true" style={{ width: 26, height: 26, borderRadius: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0,
             background: alerta ? "rgba(232,97,95,0.14)" : C.soft, color: alerta ? C.rojo : C.ink2 }}>{iniciales(c.nombre)}</span>
-          <span style={{ fontWeight: 600, fontSize: 14.5 }}>{c.nombre}</span>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{c.nombre}</span>
           {c.antig && <EtiquetaNuevo a={c.antig} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink2 }}>
             <Punto tono={tonoEstado(c.estado)} />{c.estado.label}
@@ -394,7 +395,7 @@ function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
           <div title="con intento" style={{ width: `${Math.max(0, pctGest - pct).toFixed(1)}%`, height: "100%", background: C.teal, opacity: 0.3, transition: "width .5s" }} />
         </div>
         {(peligro.length > 0 || queda.length > 0) && (
-          <div style={{ fontSize: 12.5, color: C.ink2, marginBottom: 9, display: "flex", gap: 10, alignItems: "baseline" }}>
+          <div style={{ fontSize: 13, color: C.ink2, marginBottom: 9, display: "flex", gap: 10, alignItems: "baseline" }}>
             <span style={{ flex: 1 }}>
               {peligro.length > 0 && (
                 <span style={{ color: C.ink, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -421,7 +422,7 @@ function FilaCadete({ id, c, ahora, abierto, onToggle, sinAlertas }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: (c.detalle || []).length ? 12 : 0 }}>
               <span style={{ fontSize: 11, color: C.ink3, alignSelf: "center", marginRight: 2 }}>Entregas por hora</span>
               {Array.from({ length: hMax - hMin + 1 }, (_, i) => hMin + i).map((h) => (
-                <span key={h} style={{ background: C.soft, borderRadius: 7, padding: "3px 9px", fontSize: 12, color: C.ink2 }}>
+                <span key={h} style={{ background: C.soft, borderRadius: 6, padding: "3px 9px", fontSize: 12, color: C.ink2 }}>
                   {h}h <span style={{ color: C.ink, fontWeight: 600 }}>{c.entH[h] || 0}</span>
                 </span>
               ))}
@@ -457,7 +458,7 @@ function DetalleEnvios({ detalle, nombre }) {
           <div key={k} style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 11, color: C.ink3, marginBottom: 3 }}>{t} · {xs.length}</div>
             {xs.map((d) => (
-              <div key={d.id} style={{ fontSize: 12.5, color: C.ink2, lineHeight: 1.6 }}>
+              <div key={d.id} style={{ fontSize: 13, color: C.ink2, lineHeight: 1.6 }}>
                 <span style={{ color: C.ink, fontFamily: C.grotesk }}>#{d.id}</span>{d.cliente ? ` · ${d.cliente}` : ""} · {d.dir || "sin dirección"} · <span style={{ color: C.ink3 }}>{capital(d.est || "sin estado")}</span>
               </div>
             ))}
@@ -465,7 +466,7 @@ function DetalleEnvios({ detalle, nombre }) {
         );
       })}
       <button onClick={copiar}
-        style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 9, color: copiado ? C.teal : C.ink2, padding: "6px 12px", fontSize: 12.5, cursor: "pointer" }}>
+        style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, color: copiado ? C.teal : C.ink2, padding: "6px 12px", fontSize: 13, cursor: "pointer" }}>
         {copiado ? "Copiado" : "Copiar envíos"}
       </button>
     </div>
@@ -488,13 +489,13 @@ function AvisoNuevos({ nuevos, onVer }) {
   return (
     <button type="button" onClick={onVer}
       style={{ ...card, display: "flex", gap: 10, alignItems: "baseline", width: "100%", boxSizing: "border-box", marginTop: 8, padding: "10px 14px", textAlign: "left", cursor: "pointer",
-        background: "rgba(245,192,68,0.06)", border: "1px solid rgba(245,192,68,0.22)", borderRadius: 16, color: C.ink, font: "inherit" }}>
+        background: "rgba(245,192,68,0.06)", border: "1px solid rgba(245,192,68,0.22)", borderRadius: 14, color: C.ink, font: "inherit" }}>
       <Punto tono="atencion" />
-      <span style={{ flex: 1, minWidth: 0, fontSize: 13.5 }}>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 14 }}>
         <b style={{ fontWeight: 600 }}>{nuevos.length === 1 ? "1 cadete nuevo hoy" : `${nuevos.length} cadetes nuevos hoy`}</b>
         <span style={{ color: C.ink2 }}> · {nombres}{resto}</span>
       </span>
-      <span style={{ fontSize: 12.5, color: C.ambar, fontWeight: 600, whiteSpace: "nowrap" }}>Ver nuevos →</span>
+      <span style={{ fontSize: 13, color: C.ambar, fontWeight: 600, whiteSpace: "nowrap" }}>Ver nuevos →</span>
     </button>
   );
 }
@@ -507,11 +508,11 @@ function Incorporaciones({ hist, hoy, cadetesHoy }) {
   return (
     <div style={{ marginTop: 18 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "0 2px 8px" }}>
-        <span style={{ fontWeight: 600, fontSize: 14.5 }}>Incorporaciones del último mes</span>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>Incorporaciones del último mes</span>
         <span style={{ fontSize: 12, color: C.ink3 }}>{lista.length} cadete{lista.length === 1 ? "" : "s"} · datos de Métricas hasta ayer</span>
       </div>
       {lista.length === 0 ? (
-        <div style={{ ...card, padding: 18, color: C.ink2, fontSize: 13.5 }}>No entró nadie nuevo en los últimos {RECIENTES_DIAS} días.</div>
+        <div style={{ ...card, padding: 18, color: C.ink2, fontSize: 14 }}>No entró nadie nuevo en los últimos {RECIENTES_DIAS} días.</div>
       ) : (
         <div style={{ ...card, padding: "4px 14px" }}>
           {lista.map((f, i) => {
@@ -539,7 +540,7 @@ function Incorporaciones({ hist, hoy, cadetesHoy }) {
                       const fl = (d.dem || 0) + (d.d21 || 0);
                       return (
                         <span key={d.f} title={`${ddmm(d.f)}: ${d.n} envíos · ${d.ml} Flex · ${d.dem} demorados · ${d.d21} post-21${d.fin ? ` · terminó ${d.fin}` : ""}`}
-                          style={{ background: C.soft, border: `1px solid ${fl ? "rgba(232,97,95,0.25)" : C.line}`, borderRadius: 7, padding: "3px 8px", fontSize: 11.5, color: C.ink2, whiteSpace: "nowrap" }}>
+                          style={{ background: C.soft, border: `1px solid ${fl ? "rgba(232,97,95,0.25)" : C.line}`, borderRadius: 6, padding: "3px 8px", fontSize: 12, color: C.ink2, whiteSpace: "nowrap" }}>
                           {ddmm(d.f)} · {d.n} env · <span style={{ color: slaColor(s), fontWeight: 600 }}>{fmtSla(s)}</span>{d.fin ? <span style={{ color: C.ink3 }}> · fin {d.fin}</span> : null}
                         </span>
                       );
@@ -577,7 +578,7 @@ function BandaAlerta({ cadetes, ahora, onIr, pausada }) {
           const m = minSinEntregar(c, ahora);
           return (
             <button key={c.nombre} onClick={() => onIr(c.nombre)}
-              style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 8, padding: "4px 10px", fontSize: 12.5, color: C.ink2, cursor: "pointer" }}>
+              style={{ background: C.soft, border: `1px solid ${C.line}`, borderRadius: 10, padding: "4px 10px", fontSize: 13, color: C.ink2, cursor: "pointer" }}>
               <b style={{ color: C.ink }}>{c.nombre}</b> · {c.flexRiesgo} Flex · {c.e ? hace(m) : "sin entregas"}
             </button>
           );

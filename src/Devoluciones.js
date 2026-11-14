@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import jsQR from "jsqr";
 import { authedFetch, getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
+import { FX_FONT } from "./theme";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
@@ -24,9 +25,9 @@ const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
   glass: "rgba(27,28,46,0.72)", line: "rgba(255,255,255,0.06)", soft: "rgba(255,255,255,0.05)",
   teal: "#2ee6b6", ambar: "#F5C044",
-  grotesk: "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+  grotesk: FX_FONT.display,
 };
-const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 16, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" };
+const card = { background: C.glass, border: `1px solid ${C.line}`, borderRadius: 14, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" };
 const num = (n) => new Intl.NumberFormat("es-AR").format(Math.round(n || 0));
 const plata = (n) => (n ? "$" + num(n) : "—");
 const fecha = (iso) => (iso ? new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)) : "—");
@@ -535,13 +536,13 @@ function FiltroFecha({ desde, hasta, onCambiar, ayuda }) {
       </button>
       {abierto && (
         <div className="dv-pop">
-          <div style={{ fontSize: 11.5, color: C.ink3, padding: "4px 8px 8px", lineHeight: 1.4 }}>{ayuda}</div>
+          <div style={{ fontSize: 12, color: C.ink3, padding: "4px 8px 8px", lineHeight: 1.4 }}>{ayuda}</div>
           <button className={!activo ? "on" : ""} onClick={() => { onCambiar("", ""); setAbierto(false); }}>Todas las fechas</button>
           {rapidos.map(([lbl, a, b]) => (
             <button key={lbl} className={elegido && elegido[0] === lbl ? "on" : ""} onClick={() => { onCambiar(a, b); setAbierto(false); }}>{lbl}</button>
           ))}
           <div className="dv-pop-rango">
-            <div style={{ fontSize: 11.5, color: C.ink3, marginBottom: 6 }}>Personalizado</div>
+            <div style={{ fontSize: 12, color: C.ink3, marginBottom: 6 }}>Personalizado</div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input type="date" value={d} max={h || undefined} onChange={(e) => setD(e.target.value)} aria-label="Desde" />
               <span style={{ color: C.ink3, fontSize: 12 }}>a</span>
@@ -620,7 +621,7 @@ function Fila({ c, remito, ubicacion, codigosLugar = [], onLugar, lugarSeller, a
           <div style={{ fontSize: 13, color: C.ink2, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {c.direccion ? <>{c.direccion}{c.localidad ? <span style={{ color: C.ink3 }}>, {c.localidad}</span> : null}</> : <span style={{ color: C.ink3 }}>Sin dirección</span>}
           </div>
-          <div style={{ fontSize: 11.5, color: C.ink3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 12, color: C.ink3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {c.ml_venta_id ? `Venta ${c.ml_venta_id}` : `Tracking ${c.tracking || "—"}`} · #{c.did}<span className="dv-show-m"> · <b style={{ color: C.ink2, fontWeight: 600 }}>{ch ? `${ch.trajo ? "lo trajo " : ""}${ch.nombre}` : c.etapa === "retiro" ? "sin asignar" : "sin chofer"}</b></span>
           </div>
           {c.marca && ultNota && <div style={{ fontSize: 12, color: C.ink2, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {ultNota.texto} <span style={{ color: C.ink3 }}>· {ultNota.por} · {fechaCorta(ultNota.at)}</span>{notas.length > 1 ? <span style={{ color: C.ink3 }}> · {notas.length} notas</span> : null}</div>}
@@ -759,7 +760,7 @@ function Progreso({ casos, r, diario, eventos, remitos, onReclamar, onDevolver }
         <div className="dv-franja-det">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: 700, fontSize: 13.5 }}>Meta de hoy</span>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>Meta de hoy</span>
               <Info texto={`Dos cosas por día: reclamarle a cada cadete que tiene paquetes con más de ${LIMITE_CALLE} días en la calle, y devolver al cliente ${meta} envíos (la meta sale de lo vencido en depósito y queda fija en el día). Cumplir las dos suma un día a la racha. Los domingos no cuentan.`} />
             </div>
             <button className="dv-meta" onClick={onReclamar}>
@@ -776,7 +777,7 @@ function Progreso({ casos, r, diario, eventos, remitos, onReclamar, onDevolver }
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: 700, fontSize: 13.5 }}>Esta semana</span>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>Esta semana</span>
               <Info texto="Lo que se hizo de lunes a hoy, comparado con la semana pasada completa." />
             </div>
             <div className="dv-sem">
@@ -842,7 +843,7 @@ function ReclamosModal({ grupos, trajo, onEnviar, onCerrar }) {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 17, letterSpacing: "-0.01em" }}>Reclamar a cadetes</div>
-              <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 3 }}>{reales.length} cadetes · {num(tot.p)} paquetes en la calle · {plata(tot.v)}</div>
+              <div style={{ fontSize: 13, color: C.ink3, marginTop: 3 }}>{reales.length} cadetes · {num(tot.p)} paquetes en la calle · {plata(tot.v)}</div>
             </div>
             <button className="dv-x" onClick={onCerrar} aria-label="Cerrar">✕</button>
           </div>
@@ -876,7 +877,7 @@ function ReclamosModal({ grupos, trajo, onEnviar, onCerrar }) {
                       {g.vencidos > 0 && <span className="dv-dot" style={{ background: C.ambar, margin: 0 }} title={`${g.vencidos} con +${LIMITE_CALLE} días`} />}
                       <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.cadete}</span>
                     </span>
-                    <span style={{ display: "block", fontSize: 11.5, color: C.ink3, marginTop: 2 }}>
+                    <span style={{ display: "block", fontSize: 12, color: C.ink3, marginTop: 2 }}>
                       {env ? "copiado recién" : g.ultimo ? `reclamado ${hace(g.ultimo)}` : "nunca reclamado"}{g.vencidos ? ` · ${g.vencidos} con +${LIMITE_CALLE} d` : ""}
                     </span>
                   </span>
@@ -885,7 +886,7 @@ function ReclamosModal({ grupos, trajo, onEnviar, onCerrar }) {
                   <span className="n">{g.camb}</span>
                   <span className="n dv-rt-x">{g.recl}</span>
                   <span className="n dv-rt-x" style={{ color: g.trajo ? C.teal : C.ink3 }}>{g.trajo}</span>
-                  <span className="n" style={{ color: C.ink2, fontSize: 12.5 }}>{millones(g.valor)}</span>
+                  <span className="n" style={{ color: C.ink2, fontSize: 13 }}>{millones(g.valor)}</span>
                   <span className="n" onClick={(e) => e.stopPropagation()}>
                     <button className={"dv-btn" + (env ? "" : " pri")} onClick={() => enviar(g)}>{env ? "Copiado ✓" : "Copiar"}</button>
                   </span>
@@ -1028,7 +1029,7 @@ function CargarGestionar({ choferes, inicial = "", onGuardado, onCerrar, toast }
         <div className="dv-modal-cuerpo" style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
           <input ref={input} type="file" accept="image/*" capture="environment" multiple style={{ display: "none" }} onChange={(e) => { agregar(e.target.files); e.target.value = ""; }} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {fotos.map((f, i) => <img key={i} src={f.url} alt={`Foto ${i + 1}`} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8 }} />)}
+            {fotos.map((f, i) => <img key={i} src={f.url} alt={`Foto ${i + 1}`} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 10 }} />)}
             <button className="dv-btn" style={{ width: fotos.length ? 72 : "100%", height: 72, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }} onClick={() => input.current.click()}>
               <IcoCamara size={20} />{fotos.length ? "" : "Sacar foto del paquete y la etiqueta"}
             </button>
@@ -1096,8 +1097,8 @@ function Gestionar({ items, casos, onCambio, onAgregar, onIngreso, toast }) {
             </div>
             <div style={{ flex: "1 1 260px", minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>{it.estado === "pendiente" ? "Sin identificar" : it.estado === "vinculado" ? `Vinculado a #${it.did}${caso ? ` · ${caso.cliente}` : ""}` : "Resuelto"}</div>
-              <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 2 }}>Lo trajo {it.cadete || "—"} · {fecha(it.creado_at)} · cargó {it.creado_por || "—"}</div>
-              {it.estado === "pendiente" && <div style={{ fontSize: 12.5, color: d >= 3 ? C.ambar : C.ink3, marginTop: 2 }}>{d === 0 ? "Cargado hoy" : `Hace ${d} día${d > 1 ? "s" : ""} sin resolver`}</div>}
+              <div style={{ fontSize: 13, color: C.ink3, marginTop: 2 }}>Lo trajo {it.cadete || "—"} · {fecha(it.creado_at)} · cargó {it.creado_por || "—"}</div>
+              {it.estado === "pendiente" && <div style={{ fontSize: 13, color: d >= 3 ? C.ambar : C.ink3, marginTop: 2 }}>{d === 0 ? "Cargado hoy" : `Hace ${d} día${d > 1 ? "s" : ""} sin resolver`}</div>}
               <div className="dv-notas" style={{ marginTop: 8 }}>
                 {it.nota && <div className="dv-nota"><span>{it.nota}</span><small>{it.creado_por || "—"} · {fecha(it.creado_at)}</small></div>}
                 {(it.notas || []).map((n, i) => <div key={i} className="dv-nota"><span>{n.texto}</span><small>{n.por || "—"} · {fecha(n.at)}</small></div>)}
@@ -1176,7 +1177,7 @@ function VincularEnvio({ item, casos, onElegir, onCerrar }) {
       <div className="dv-modal" style={{ width: "min(560px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Vincular a un envío">
         <div className="dv-modal-cab">
           <div style={{ fontWeight: 700, fontSize: 16 }}>¿De qué envío es?</div>
-          {item.nota && <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 4 }}>Nota: {item.nota}</div>}
+          {item.nota && <div style={{ fontSize: 13, color: C.ink3, marginTop: 4 }}>Nota: {item.nota}</div>}
           <input className="dv-input" autoFocus style={{ width: "100%", marginTop: 10 }} placeholder="Venta, tracking, #envío, dirección o destinatario" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
@@ -1326,11 +1327,11 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
       <div className="dv-escaner-arriba">
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700 }}>Ingreso a depósito</div>
-          <div style={{ fontSize: 12.5, opacity: .8, marginTop: 2 }}>Apuntá a la etiqueta del paquete (QR o código de barras). Entra solo.</div>
+          <div style={{ fontSize: 13, opacity: .8, marginTop: 2 }}>Apuntá a la etiqueta del paquete (QR o código de barras). Entra solo.</div>
         </div>
         <button className="dv-btn" onClick={onCerrar} style={{ background: "rgba(0,0,0,.5)" }}>Terminar ({nOk})</button>
       </div>
-      {flash && <div className={"dv-escaner-flash " + (flash.tipo === "ok" ? "" : flash.tipo === "ya" ? "info" : "aviso")}><b>{flash.tipo === "ok" ? "✓ " : ""}{flash.titulo}</b>{flash.donde && <div className="dv-donde">Guardalo en <b>{flash.donde}</b></div>}{flash.sub && <div style={{ fontSize: 12.5, opacity: .85, marginTop: 2 }}>{flash.sub}</div>}</div>}
+      {flash && <div className={"dv-escaner-flash " + (flash.tipo === "ok" ? "" : flash.tipo === "ya" ? "info" : "aviso")}><b>{flash.tipo === "ok" ? "✓ " : ""}{flash.titulo}</b>{flash.donde && <div className="dv-donde">Guardalo en <b>{flash.donde}</b></div>}{flash.sub && <div style={{ fontSize: 13, opacity: .85, marginTop: 2 }}>{flash.sub}</div>}</div>}
       {error && !flash && <div className="dv-escaner-flash aviso">{error}</div>}
       <div className="dv-ing-abajo">
         <form onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { ultimo.current = { t: "", at: 0 }; procesar(manual.trim()); setManual(""); } }} style={{ display: "flex", gap: 8 }}>
@@ -1343,7 +1344,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
               <div key={l.id} className="dv-ing-fila">
                 <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "!" : l.tipo === "elegir" ? "?" : "·"}</span>
                 <span style={{ minWidth: 0, flex: 1 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b>
-                  <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 11.5, opacity: .75, overflow: "hidden", lineHeight: 1.35 }}>{l.sub}</span>
+                  <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 12, opacity: .75, overflow: "hidden", lineHeight: 1.35 }}>{l.sub}</span>
                   {l.candidatos && l.candidatos.map((k) => (
                     <button key={k.did} className="dv-btn" style={{ display: "block", width: "100%", textAlign: "left", marginTop: 6, background: "rgba(0,0,0,.5)", fontSize: 12 }}
                       onClick={() => { setLecturas((x) => x.filter((y) => y.id !== l.id)); procesarCaso(k, Date.now(), `por la etiqueta del envío original`); }}>
@@ -1389,9 +1390,9 @@ function ListosModal({ grupos, ubic = {}, onArmar, onCerrar }) {
                 {[...new Set(g.casos.map((c) => c.ubicacion_manual).filter(Boolean))].map((u) => <span key={u} className="dv-tag ub" style={{ marginLeft: 4 }}>+ {g.casos.filter((c) => c.ubicacion_manual === u).length} en {u}</span>)}
                 <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{g.casos.length} paquete{g.casos.length !== 1 ? "s" : ""} · {plata(g.valor)}{g.casos.length > MAX_POR_REMITO ? ` · ${Math.ceil(g.casos.length / MAX_POR_REMITO)} remitos (de a ${MAX_POR_REMITO})` : ""}</span>
               </span>
-              <span style={{ textAlign: "right", fontSize: 12.5 }}>
+              <span style={{ textAlign: "right", fontSize: 13 }}>
                 <b style={{ fontFamily: C.grotesk, fontSize: 15, color: g.vencidos ? C.ambar : C.ink }}>{g.maxDias} d</b>
-                <span style={{ display: "block", fontSize: 11.5, color: g.vencidos ? C.ambar : C.ink3 }}>{g.vencidos ? `${g.vencidos} vencido${g.vencidos > 1 ? "s" : ""}` : "el más viejo"}</span>
+                <span style={{ display: "block", fontSize: 12, color: g.vencidos ? C.ambar : C.ink3 }}>{g.vencidos ? `${g.vencidos} vencido${g.vencidos > 1 ? "s" : ""}` : "el más viejo"}</span>
               </span>
             </label>
           ))}
@@ -1437,7 +1438,7 @@ function ArmarRemitoModal({ previa, yaEnRemito, choferes, onConfirmar, onCerrar 
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {previa.map((g, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13.5 }}><span>{g.cliente}</span><b>{g.casos.length} envío{g.casos.length !== 1 ? "s" : ""}</b></div>)}
+            {previa.map((g, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}><span>{g.cliente}</span><b>{g.casos.length} envío{g.casos.length !== 1 ? "s" : ""}</b></div>)}
             {yaEnRemito > 0 && <div style={{ fontSize: 12, color: C.ambar }}>{yaEnRemito} envío(s) ya estaban en otro remito y no se incluyen.</div>}
           </div>
           <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
@@ -1484,7 +1485,7 @@ function Visor({ items, inicio = 0, onCerrar, acciones, digital, vistaInicial = 
       <div className="dv-visor-cab" onClick={(e) => e.stopPropagation()}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titulo}</div>
-          {it.sub && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.65)", marginTop: 2 }}>{it.sub}</div>}
+          {it.sub && <div style={{ fontSize: 13, color: "rgba(255,255,255,.65)", marginTop: 2 }}>{it.sub}</div>}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
           {digital && (
@@ -1493,7 +1494,7 @@ function Visor({ items, inicio = 0, onCerrar, acciones, digital, vistaInicial = 
               <button className={vista === "digital" ? "on" : ""} onClick={() => setVista("digital")}>Remito digital</button>
             </div>
           )}
-          {items.length > 1 && <span style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", marginRight: 4 }}>{i + 1} de {items.length}</span>}
+          {items.length > 1 && <span style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginRight: 4 }}>{i + 1} de {items.length}</span>}
           {acciones && acciones(it)}
           {url && vista === "foto" && <a className="dv-btn" href={url} download={`${(it.titulo || "remito").split(" ")[0]}.jpg`}>Descargar</a>}
           <button className="dv-btn" onClick={onCerrar} aria-label="Cerrar">✕</button>
@@ -1715,7 +1716,7 @@ function Carpetas({ remitos, casosDe, onImprimir, toast, subiendo, onReemplazar,
                   <button className="dv-btn" style={{ flex: 1 }} onClick={() => { setVisorVista("digital"); setVisor(enVista.indexOf(r)); }}>Ver remito</button>
                   <MasAcciones rem={r} subiendo={subiendo === r.codigo} onReemplazar={(f) => onReemplazar(r, f)} onImprimir={() => onImprimir(r)} />
                 </div>
-                {r.calidad && r.calidad.problemas && r.calidad.problemas.length > 0 && <div style={{ fontSize: 11.5, color: C.ambar, marginTop: 6 }}>{textoCalidad(r.calidad)} · revisar</div>}
+                {r.calidad && r.calidad.problemas && r.calidad.problemas.length > 0 && <div style={{ fontSize: 12, color: C.ambar, marginTop: 6 }}>{textoCalidad(r.calidad)} · revisar</div>}
                 {(r.fotos_anteriores || []).length > 0 && <div style={{ fontSize: 11, color: C.ink3, marginTop: 6 }}>Foto reemplazada ({r.fotos_anteriores.length} anterior{r.fotos_anteriores.length > 1 ? "es" : ""} guardada{r.fotos_anteriores.length > 1 ? "s" : ""})</div>}
               </div>
             </div>
@@ -1820,7 +1821,7 @@ function NoReconocidas({ fallidos, remitos, onAsignar, onDescartar }) {
             </button>
             <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ fontSize: 12, color: C.ambar }}>{f.motivo}{f.calidad && f.calidad.problemas && f.calidad.problemas.length ? ` · ${textoCalidad(f.calidad).toLowerCase()}` : ""}</div>
-              <div style={{ fontSize: 11.5, color: C.ink3 }}>{fecha(f.at)} · {f.por || "—"}</div>
+              <div style={{ fontSize: 12, color: C.ink3 }}>{fecha(f.at)} · {f.por || "—"}</div>
               <select className="dv-input" value={elegido[f.id] || ""} onChange={(e) => setElegido((x) => ({ ...x, [f.id]: e.target.value }))} aria-label="Remito al que corresponde">
                 <option value="">¿De qué remito es?</option>
                 {abiertos.map((r) => <option key={r.id} value={r.codigo}>{r.codigo} · {r.cliente} ({(r.dids || []).length})</option>)}
@@ -1966,7 +1967,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
       <div className="dv-escaner-arriba">
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 700, color: listo ? "#2ee6b6" : "#fff" }}>{listo ? "✓ " : ""}{texto}</div>
-          <div style={{ fontSize: 12.5, opacity: .8, marginTop: 2 }}>{listo ? "Encuadrá la hoja entera, con la firma, y sacá la foto." : "Apuntá a la hoja “Remito seller” (la que tiene QR). Si no lo toma, sacá la foto igual."}</div>
+          <div style={{ fontSize: 13, opacity: .8, marginTop: 2 }}>{listo ? "Encuadrá la hoja entera, con la firma, y sacá la foto." : "Apuntá a la hoja “Remito seller” (la que tiene QR). Si no lo toma, sacá la foto igual."}</div>
           {camara && !listo && <div style={{ fontSize: 11, opacity: .5, marginTop: 2 }}>Cámara {camara} · buscando…</div>}
         </div>
         <button className="dv-btn" onClick={onCerrar} style={{ background: "rgba(0,0,0,.5)" }}>Terminar ({tomados.size})</button>
@@ -1978,7 +1979,7 @@ function Escaner({ remitos, onLectura, onRepetir, onCerrar }) {
               <img src={ultima.url} alt={`Última foto, remito ${ultima.codigo}`} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{ultima.codigo}</div>
-                <div style={{ fontSize: 11.5, color: ultima.aviso ? "#F5C044" : "rgba(255,255,255,.7)" }}>{ultima.aviso || "¿Se ve la firma?"}</div>
+                <div style={{ fontSize: 12, color: ultima.aviso ? "#F5C044" : "rgba(255,255,255,.7)" }}>{ultima.aviso || "¿Se ve la firma?"}</div>
                 <div style={{ fontSize: 11, opacity: .7, marginTop: 2 }}>Para repetirla, apuntá a ese QR y sacá otra</div>
               </div>
             </>
@@ -2330,7 +2331,7 @@ function medirCalidad(cv) {
 
 // ---------------- Impresión del remito ----------------
 // Logo oficial de Flexit (SVG que mandó Alejo 24/10): nítido en cualquier impresora
-const LOGO_REMITO = `<svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 114" fill="none" aria-label="Flexit"><path fill="#0F0241" d="M234.446 34.42c16.655-.737 29.075 4.518 36.717 19.99 2.888 5.848 4.935 18.996 2.754 25.076-10.862.686-22.81-.272-33.791.096-6.01.2-12.867.105-18.85-.164 4.19 12.894 19.216 15.822 30.614 9.578 1.262-.692 3.067-2.711 4.373-3.746 2.329.525 4.71 2.223 6.881 3.427 1.575 1.051 6.442 3.915 8.021 4.688-.819 2.05-1.873 3.31-3.285 4.968-11.122 13.058-38.972 13.94-51.944 3.377-25.258-20.565-16.172-62.852 18.51-67.29m-13.681 30.555h18.218c2.366.008 16.02.336 16.991-.442 0-1.192-1.054-3.334-1.588-4.429-2.83-5.791-9.269-8.972-15.556-8.938q-.28 0-.561.028c-9.503.493-14.654 4.832-17.504 13.781"/><path fill="#0F0241" d="M307.535 55.652a519 519 0 0 1 13.408-18.514c.778-1.029 7.077-.729 8.686-.725l12.776.045c-.172.494-.464 1.28-.758 1.707-6.622 9.602-13.778 18.826-20.321 28.483-1.037 1.53-1.72 2.586-3.066 3.855 1.139 2.079 24.136 34.862 25.445 35.779.08.057.097.221.124.318-.559.253-1.942.283-2.619.328-6.069.012-12.438.113-18.483-.032-2.96-2.493-9.106-12.486-11.907-15.98-1.148-1.436-2.061-3.21-3.568-4.56a472 472 0 0 0-8.982 12.524c-1.656 2.341-3.329 5.016-5.314 7.072-1.2 1.215-3.664 1.03-5.291 1.01-5.676-.069-11.513.118-17.172-.137 1.745-1.861 7.675-10.372 9.395-12.84 5.347-7.664 11.389-15.522 16.604-23.215-1-1.112-2.631-3.503-3.55-4.77l-7.856-11.044-7.421-10.223c-1.643-2.25-4.378-5.876-5.591-8.321 6.191.404 15.782-.51 21.565.168l8.711 12.17c1.252 1.756 3.759 5.429 5.185 6.902M164.95 6.296l4.863-.046c-.31 4.63-.059 12.46-.044 17.313l-.161-.004c-8.819-.142-14.543 3.52-14.622 12.853l11.656.05c-.28 2.956-.289 14.744.043 17.452-2.732-.19-8.636.032-11.675.04l.018 52.994c-3.772-.06-7.688-.009-11.472-.013l-7.213.017c.138-3.745.011-8.357.009-12.167L136.344 69c-.001-4.88-.1-10.171.066-15.023a363 363 0 0 0-9.952-.012q-.105-8.761.002-17.522l9.975-.031c-.76-18.574 10.283-29.216 28.515-30.116m237.238 10.513.356.176c-.236 5.35-.126 14.055.029 19.395 5.239.13 10.797.061 16.059.072-.163 2.63-.248 15.2.137 17.457-5.099-.136-11.143.036-16.289.079.157 1.812.039 5.485.035 7.425l-.019 14.44c-.004 15.166 1.427 14.537 16.122 14.312-.323 4.349-.073 12.086-.029 16.642-4.656 1.135-8.692.803-13.462.761-21.762-1.86-21.089-15.45-21.091-33.223l.004-20.402-12.004.019-.002-17.494c3.968-.082 8.121-.035 12.106-.05-.083-4.633-.247-9.654.095-14.265a9 9 0 0 1 1.749-.661c5.396-1.447 10.727-3.585 16.204-4.683M175.157 6.256h18.763c-.361 2.834-.115 10.94-.11 14.28l-.001 28.951.006 37.422c-.006 5.4-.321 15.14.152 20.082-1.457-.173-4.914-.075-6.487-.073l-12.328.05z"/><path fill="#60C9C6" d="M49.498 37.584c1.636 1.727 12.73 17.842 13.24 19.681-.082.671-.728 1.819-1.118 2.397-2.778 4.125-5.655 8.252-8.518 12.32-.625.888-2.733 4.164-3.261 4.66-2.643 2.683-13.48 20.021-15.44 20.562-1.384.383-24.757.307-25.435-.098-.219-.13-.427-.543-.481-.783-.172-.764.142-1.907.505-2.588 1.476-2.774 4.67-6.77 6.617-9.458L27.08 68.369c2.38-3.267 6.034-8.053 8.02-11.375l.207-.005c4.88-6.141 9.451-13.053 14.19-19.405Z"/><path fill="#02C4B8" d="M49.497 37.584c1.636 1.727 12.73 17.842 13.241 19.681-.082.671-.729 1.819-1.118 2.397-2.779 4.125-5.655 8.252-8.518 12.32-.626.888-2.734 4.164-3.262 4.66-3.542-3.069-7.557-9.953-10.427-13.848-1.273-1.727-3.29-3.982-4.106-5.805 4.879-6.141 9.45-13.053 14.19-19.405"/><path fill="#60C9C6" d="M46.681 17.155c4.385-.28 9.753-.07 14.234-.134 2.568-.036 8.233-.137 10.526.189 2.125 2.454 5.74 7.848 7.744 10.71 2.392 3.417 5.266 6.966 7.533 10.25 1.122 1.167 2.506 3.415 3.462 4.82l4.529 6.535c1.466 2.137 4.528 5.727 5.222 8.02C98.47 59.64 87.1 76.378 86.356 76.83c-5.189-6.032-9.337-13.197-14.32-19.397l-.295.067c-.714-1.442-1.604-2.764-2.584-4.039-5.633-7.392-10.837-15.125-16.198-22.716-2.24-3.173-6.995-8.765-7.913-12.361.38-.34 1.192-.904 1.635-1.229"/><path fill="#02C4B8" d="M86.718 38.17c1.122 1.167 2.506 3.415 3.462 4.82l4.529 6.535c1.466 2.137 4.528 5.727 5.222 8.02C98.47 59.64 87.1 76.378 86.356 76.83c-5.189-6.032-9.337-13.197-14.32-19.397.15-1.07 4.07-5.874 4.865-6.86 2.075-2.569 7.03-11.199 9.817-12.403"/><path fill="#0F0241" d="m347.989 36.46 18.392-.02c.269 6.284-.031 14.904-.031 21.397l.051 49.078-18.421.041z"/><path fill="#97E4C7" d="M72.036 57.433c4.983 6.2 9.131 13.365 14.32 19.397-.935.93-3.124 4.307-4.035 5.61-2.98 4.262-5.931 8.604-9.03 12.782-.815.914-1.383 2.072-2.727 2.112-7.608.231-15.258-.089-22.869.133-.876.121-2.823-.907-2.533-1.91.418-1.441 1.817-3.655 2.679-4.847a2440 2440 0 0 0 18.953-26.59c1.436-2.042 3.284-4.777 4.947-6.618zM35.1 56.995c-6.09-8.049-11.677-16.14-17.543-24.344l-5.79-8.039c-.93-1.266-2.01-2.497-2.841-3.826-.314-.502-.56-1.048-.562-1.65-.003-.538.3-1.054.676-1.422 1.13-1.108 22.242-.668 25.404-.675 1.65 1.515 6.062 8.043 7.684 10.394 2.338 3.39 5.033 6.84 7.37 10.151-4.74 6.353-9.311 13.264-14.19 19.405z"/><path fill="#0F0241" d="M354.79 5.727a11.46 11.46 0 0 1 10.948 3.784 11.45 11.45 0 0 1 2.054 11.395 11.46 11.46 0 0 1-8.941 7.362c-6.166.99-11.989-3.137-13.095-9.28-1.107-6.142 2.911-12.039 9.034-13.26Z"/></svg>`;
+const LOGO_REMITO = `<svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 114" fill="none" aria-label="Flexit"><path fill="#0F0241" d="M234.446 34.42c16.655-.737 29.075 4.518 36.717 19.99 2.888 5.848 4.935 18.996 2.754 25.076-10.862.686-22.81-.272-33.791.096-6.01.2-12.867.105-18.85-.164 4.19 12.894 19.216 15.822 30.614 9.578 1.262-.692 3.067-2.711 4.373-3.746 2.329.525 4.71 2.223 6.881 3.427 1.575 1.051 6.442 3.915 8.021 4.688-.819 2.05-1.873 3.31-3.285 4.968-11.122 13.058-38.972 13.94-51.944 3.377-25.258-20.565-16.172-62.852 18.51-67.29m-13.681 30.555h18.218c2.366.008 16.02.336 16.991-.442 0-1.192-1.054-3.334-1.588-4.429-2.83-5.791-9.269-8.972-15.556-8.938q-.28 0-.561.028c-9.503.493-14.654 4.832-17.504 13.781"/><path fill="#0F0241" d="M307.535 55.652a519 519 0 0 1 13.408-18.514c.778-1.029 7.077-.729 8.686-.725l12.776.045c-.172.494-.464 1.28-.758 1.707-6.622 9.602-13.778 18.826-20.321 28.483-1.037 1.53-1.72 2.586-3.066 3.855 1.139 2.079 24.136 34.862 25.445 35.779.08.057.097.221.124.318-.559.253-1.942.283-2.619.328-6.069.012-12.438.113-18.483-.032-2.96-2.493-9.106-12.486-11.907-15.98-1.148-1.436-2.061-3.21-3.568-4.56a472 472 0 0 0-8.982 12.524c-1.656 2.341-3.329 5.016-5.314 7.072-1.2 1.215-3.664 1.03-5.291 1.01-5.676-.069-11.513.118-17.172-.137 1.745-1.861 7.675-10.372 9.395-12.84 5.347-7.664 11.389-15.522 16.604-23.215-1-1.112-2.631-3.503-3.55-4.77l-7.856-11.044-7.421-10.223c-1.643-2.25-4.378-5.876-5.591-8.321 6.191.404 15.782-.51 21.565.168l8.711 12.17c1.252 1.756 3.759 5.429 5.185 6.902M164.95 6.296l4.863-.046c-.31 4.63-.059 12.46-.044 17.313l-.161-.004c-8.819-.142-14.543 3.52-14.622 12.853l11.656.05c-.28 2.956-.289 14.744.043 17.452-2.732-.19-8.636.032-11.675.04l.018 52.994c-3.772-.06-7.688-.009-11.472-.013l-7.213.017c.138-3.745.011-8.357.009-12.167L136.344 69c-.001-4.88-.1-10.171.066-15.023a363 363 0 0 0-9.952-.012q-.105-8.761.002-17.522l9.975-.031c-.76-18.574 10.283-29.216 28.515-30.116m237.238 10.513.356.176c-.236 5.35-.126 14.055.029 19.395 5.239.13 10.797.061 16.059.072-.163 2.63-.248 15.2.137 17.457-5.099-.136-11.143.036-16.289.079.157 1.812.039 5.485.035 7.425l-.019 14.44c-.004 15.166 1.427 14.537 16.122 14.312-.323 4.349-.073 12.086-.029 16.642-4.656 1.135-8.692.803-13.462.761-21.762-1.86-21.089-15.45-21.091-33.223l.004-20.402-12.004.019-.002-17.494c3.968-.082 8.121-.035 12.106-.05-.083-4.633-.247-9.654.095-14.265a9 9 0 0 1 1.749-.661c5.396-1.447 10.727-3.585 16.204-4.683M175.157 6.256h18.763c-.361 2.834-.115 10.94-.11 14.28l-.001 28.951.006 37.422c-.006 5.4-.321 15.14.152 20.082-1.457-.173-4.914-.075-6.487-.073l-12.328.05z"/><path fill="#60C9C6" d="M49.498 37.584c1.636 1.727 12.73 17.842 13.24 19.681-.082.671-.728 1.819-1.118 2.397-2.778 4.125-5.655 8.252-8.518 12.32-.625.888-2.733 4.164-3.261 4.66-2.643 2.683-13.48 20.021-15.44 20.562-1.384.383-24.757.307-25.435-.098-.219-.13-.427-.543-.481-.783-.172-.764.142-1.907.505-2.588 1.476-2.774 4.67-6.77 6.617-9.458L27.08 68.369c2.38-3.267 6.034-8.053 8.02-11.375l.207-.005c4.88-6.141 9.451-13.053 14.19-19.405Z"/><path fill="#2EE6B6" d="M49.497 37.584c1.636 1.727 12.73 17.842 13.241 19.681-.082.671-.729 1.819-1.118 2.397-2.779 4.125-5.655 8.252-8.518 12.32-.626.888-2.734 4.164-3.262 4.66-3.542-3.069-7.557-9.953-10.427-13.848-1.273-1.727-3.29-3.982-4.106-5.805 4.879-6.141 9.45-13.053 14.19-19.405"/><path fill="#60C9C6" d="M46.681 17.155c4.385-.28 9.753-.07 14.234-.134 2.568-.036 8.233-.137 10.526.189 2.125 2.454 5.74 7.848 7.744 10.71 2.392 3.417 5.266 6.966 7.533 10.25 1.122 1.167 2.506 3.415 3.462 4.82l4.529 6.535c1.466 2.137 4.528 5.727 5.222 8.02C98.47 59.64 87.1 76.378 86.356 76.83c-5.189-6.032-9.337-13.197-14.32-19.397l-.295.067c-.714-1.442-1.604-2.764-2.584-4.039-5.633-7.392-10.837-15.125-16.198-22.716-2.24-3.173-6.995-8.765-7.913-12.361.38-.34 1.192-.904 1.635-1.229"/><path fill="#2EE6B6" d="M86.718 38.17c1.122 1.167 2.506 3.415 3.462 4.82l4.529 6.535c1.466 2.137 4.528 5.727 5.222 8.02C98.47 59.64 87.1 76.378 86.356 76.83c-5.189-6.032-9.337-13.197-14.32-19.397.15-1.07 4.07-5.874 4.865-6.86 2.075-2.569 7.03-11.199 9.817-12.403"/><path fill="#0F0241" d="m347.989 36.46 18.392-.02c.269 6.284-.031 14.904-.031 21.397l.051 49.078-18.421.041z"/><path fill="#97E4C7" d="M72.036 57.433c4.983 6.2 9.131 13.365 14.32 19.397-.935.93-3.124 4.307-4.035 5.61-2.98 4.262-5.931 8.604-9.03 12.782-.815.914-1.383 2.072-2.727 2.112-7.608.231-15.258-.089-22.869.133-.876.121-2.823-.907-2.533-1.91.418-1.441 1.817-3.655 2.679-4.847a2440 2440 0 0 0 18.953-26.59c1.436-2.042 3.284-4.777 4.947-6.618zM35.1 56.995c-6.09-8.049-11.677-16.14-17.543-24.344l-5.79-8.039c-.93-1.266-2.01-2.497-2.841-3.826-.314-.502-.56-1.048-.562-1.65-.003-.538.3-1.054.676-1.422 1.13-1.108 22.242-.668 25.404-.675 1.65 1.515 6.062 8.043 7.684 10.394 2.338 3.39 5.033 6.84 7.37 10.151-4.74 6.353-9.311 13.264-14.19 19.405z"/><path fill="#0F0241" d="M354.79 5.727a11.46 11.46 0 0 1 10.948 3.784 11.45 11.45 0 0 1 2.054 11.395 11.46 11.46 0 0 1-8.941 7.362c-6.166.99-11.989-3.137-13.095-9.28-1.107-6.142 2.911-12.039 9.034-13.26Z"/></svg>`;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 async function imprimirRemitos(remitos, ventana) {
   const w = ventana || window.open("", "_blank");
@@ -2373,10 +2374,10 @@ async function imprimirRemitos(remitos, ventana) {
     .marca .logo{height:13mm;width:auto;display:block;margin:-1mm 0 2mm -1mm}.tit{font-size:22px;font-weight:700;margin-top:6px}.cod{font-size:28px;font-weight:800;margin-top:2px;letter-spacing:.02em}
     .qr{text-align:center;font-size:10px;letter-spacing:.15em;color:#444}.qr img{width:38mm;height:38mm;display:block}
     .meta{display:flex;gap:28px;margin:14px 0}.meta span{display:block;font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.08em}.meta b{font-size:15px}
-    table{width:100%;border-collapse:collapse;font-size:11.5px}th{text-align:left;border-bottom:1px solid #111;padding:6px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#444}td{border-bottom:1px solid #ddd;padding:6px 4px;vertical-align:top}
+    table{width:100%;border-collapse:collapse;font-size:12px}th{text-align:left;border-bottom:1px solid #111;padding:6px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#444}td{border-bottom:1px solid #ddd;padding:6px 4px;vertical-align:top}
     td small{display:block;color:#555;font-size:10px;margin-top:2px}
     .meta .ch b{min-width:60mm;display:inline-block}.meta b.vacio{border-bottom:1px solid #111;height:18px}
-    .copia{font-size:11px;letter-spacing:.15em;color:#444;border:1px solid #111;padding:6px 10px;border-radius:4px}
+    .copia{font-size:11px;letter-spacing:.15em;color:#444;border:1px solid #111;padding:6px 10px;border-radius:6px}
     .leyenda{margin-top:18px;font-size:12px}
     footer{margin-top:auto;padding-top:40px}
     footer.f4{display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1fr;gap:16px;padding-top:56px}
@@ -2396,7 +2397,7 @@ const CSS = `
 .dv-etapa.on{border-color:rgba(46,230,182,.45)!important;background:linear-gradient(180deg,rgba(46,230,182,.07),rgba(27,28,46,.72) 70%)!important;box-shadow:0 0 0 1px rgba(46,230,182,.12),0 0 35px rgba(0,255,180,.06)}
 .dv-etapa:focus-visible{border-color:rgba(46,230,182,.45)!important}
 .dv-etapa-sub{display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap}
-.dv-etapa-sub button{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#a7adc2;font:inherit;font-size:12.5px;padding:5px 10px;border-radius:8px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.dv-etapa-sub button{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#a7adc2;font:inherit;font-size:13px;padding:5px 10px;border-radius:10px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .dv-etapa-sub button b{color:#f4f5fa;font-weight:600}
 .dv-etapa-sub button.on{background:rgba(46,230,182,.12);border-color:rgba(46,230,182,.35);color:#f4f5fa}
 .dv-etapa-sub button.v.on{background:rgba(245,192,68,.1);border-color:rgba(245,192,68,.35)}
@@ -2410,13 +2411,13 @@ const CSS = `
 .dv-info.abajo .dv-tip{bottom:auto;top:calc(100% + 8px);text-transform:none;letter-spacing:normal}
 .dv-info:hover .dv-tip,.dv-info:focus .dv-tip{opacity:1;visibility:visible}
 .dv-otros .dv-tip{left:auto;right:-10px;transform:none}
-.dv-pop{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:260px;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:6px;display:flex;flex-direction:column;box-shadow:0 16px 44px rgba(0,0,0,.45)}
-.dv-pop>button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:8px;cursor:pointer}
+.dv-pop{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:260px;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:6px;display:flex;flex-direction:column;box-shadow:0 16px 44px rgba(0,0,0,.45)}
+.dv-pop>button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:10px;cursor:pointer}
 .dv-pop>button.on{background:rgba(46,230,182,.1);color:#2ee6b6}
 @media (hover:hover){.dv-pop>button:hover{background:rgba(255,255,255,.06)}}
 .dv-pop-rango{border-top:1px solid rgba(255,255,255,.07);margin-top:6px;padding:10px 8px 4px}
-.dv-pop-rango input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#f4f5fa;font:inherit;font-size:12px;padding:6px;color-scheme:dark}
-.dv-franja{border:1px solid rgba(255,255,255,.06);border-radius:12px;background:rgba(255,255,255,.025)}
+.dv-pop-rango input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#f4f5fa;font:inherit;font-size:12px;padding:6px;color-scheme:dark}
+.dv-franja{border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.025)}
 .dv-franja.ok{border-color:rgba(46,230,182,.3)}
 .dv-franja-linea{display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%;background:none;border:0;padding:10px 16px;color:#a7adc2;font:inherit;font-size:13px;cursor:pointer;text-align:left}
 .dv-fr-item{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}.dv-fr-item b{color:#f4f5fa}.dv-fr-item b.ok{color:#2ee6b6}
@@ -2424,7 +2425,7 @@ const CSS = `
 .dv-mini{display:inline-block;width:110px;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.dv-mini>span{display:block;height:100%;background:#2ee6b6;border-radius:99px}
 .dv-franja-det{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:28px;padding:4px 16px 16px;border-top:1px solid rgba(255,255,255,.05);margin-top:2px;padding-top:14px}
 @container dv (max-width:820px){.dv-franja-det{grid-template-columns:minmax(0,1fr)}.dv-fr-semana{display:none}}
-.dv-racha{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#a7adc2;white-space:nowrap}
+.dv-racha{display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#a7adc2;white-space:nowrap}
 .dv-meta{display:block;width:100%;background:none;border:0;padding:0;margin-top:12px;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .dv-meta-t{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#a7adc2;margin-bottom:6px}.dv-meta-t b{color:#f4f5fa;font-variant-numeric:tabular-nums}
 .dv-bar{height:8px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}.dv-bar>div{height:100%;border-radius:999px;transition:width .4s ease}
@@ -2432,21 +2433,21 @@ const CSS = `
 .dv-sem>div{display:grid;grid-template-columns:1fr auto 56px;gap:8px;align-items:baseline;font-size:13px;color:#a7adc2}
 .dv-sem b{color:#f4f5fa;font-variant-numeric:tabular-nums;text-align:right}.dv-sem>div>span:last-child{font-size:12px;text-align:right}
 .dv-modal.ancho{width:min(860px,100%)}
-.dv-rt{display:grid;grid-template-columns:minmax(0,1fr) 52px 52px 52px 52px 52px 76px 92px;gap:8px;align-items:center;padding:10px 18px;font-size:13.5px}
+.dv-rt{display:grid;grid-template-columns:minmax(0,1fr) 52px 52px 52px 52px 52px 76px 92px;gap:8px;align-items:center;padding:10px 18px;font-size:14px}
 .dv-rt .n{text-align:right;font-variant-numeric:tabular-nums}
 .dv-rt-head{font-size:11px;color:#71768e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.06);padding-top:8px;padding-bottom:8px}
 .dv-rt-fila{border-bottom:1px solid rgba(255,255,255,.05)}.dv-rt-fila>.dv-rt{cursor:pointer}.dv-rt-fila.ab{background:rgba(255,255,255,.025)}.dv-rt-fila.hecho{opacity:.55}
-.dv-rec-item{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:#c9cde0;padding:3px 0}
+.dv-rec-item{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:#c9cde0;padding:3px 0}
 @media (max-width:640px){.dv-rt{grid-template-columns:minmax(0,1fr) 40px 40px 40px 70px;padding:10px 12px}.dv-rt-x,.dv-rt>span:nth-child(7){display:none}}
-.dv-miga{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px;color:#71768e}
+.dv-miga{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px;color:#71768e}
 .dv-miga button{background:none;border:0;padding:2px 0;font:inherit;color:#a7adc2;cursor:pointer}.dv-miga button.on{color:#f4f5fa;font-weight:600}
 .dv-carpetas{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
-.dv-carpeta{display:flex;gap:12px;align-items:center;text-align:left;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 14px;color:inherit;font:inherit;cursor:pointer}
+.dv-carpeta{display:flex;gap:12px;align-items:center;text-align:left;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px 14px;color:inherit;font:inherit;cursor:pointer}
 @media (hover:hover){.dv-carpeta:hover{border-color:rgba(46,230,182,.3);background:rgba(46,230,182,.04)}}
 .dv-carpeta-n{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dv-carpeta-s{display:block;font-size:12px;color:#71768e;margin-top:2px}
 .dv-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
-.dv-foto{border:1px solid rgba(255,255,255,.07);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.02)}
+.dv-foto{border:1px solid rgba(255,255,255,.07);border-radius:14px;overflow:hidden;background:rgba(255,255,255,.02)}
 .dv-foto-img{display:flex;align-items:center;justify-content:center;height:220px;background:#0d0e1c;overflow:hidden}
 .dv-foto-img img{width:100%;height:100%;object-fit:cover;object-position:top}
 .dv-subir-btns{display:flex;gap:8px;flex-wrap:wrap}
@@ -2461,10 +2462,10 @@ const CSS = `
 .dv-visor{position:fixed;inset:0;z-index:9999;background:rgba(6,7,16,.92);display:flex;flex-direction:column;color:#f4f5fa}
 .dv-visor-cab{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;flex-wrap:wrap}
 .dv-visor-img{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 64px 8px;overflow:auto}
-.dv-visor-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;cursor:zoom-in;background:#fff}
+.dv-visor-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;cursor:zoom-in;background:#fff}
 .dv-visor-img.zoom{align-items:flex-start;justify-content:flex-start}
 .dv-visor-img.zoom img{max-width:none;max-height:none;width:200%;cursor:zoom-out}
-.dv-visor-flecha{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.45);color:#fff;font-size:32px;line-height:1;cursor:pointer}
+.dv-visor-flecha{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;border-radius:14px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.45);color:#fff;font-size:32px;line-height:1;cursor:pointer}
 .dv-visor-flecha.izq{left:12px}.dv-visor-flecha.der{right:12px}
 .dv-visor-flecha:disabled{opacity:.25;cursor:default}
 .dv-visor-pie{text-align:center;font-size:12px;color:rgba(255,255,255,.45);padding:6px 0 calc(env(safe-area-inset-bottom) + 10px)}
@@ -2472,10 +2473,10 @@ const CSS = `
 .dv-rd{width:min(860px,100%);margin:0 auto;background:#16172a;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:18px 20px;color:#f4f5fa}
 .dv-rd-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px}
 .dv-rd-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 16px;padding:14px 0}
-.dv-rd-meta span{display:block;font-size:11.5px;color:#8a8ca6}.dv-rd-meta b{display:block;font-weight:600;font-size:14px}.dv-rd-meta small{display:block;font-size:11.5px;color:#8a8ca6}
+.dv-rd-meta span{display:block;font-size:12px;color:#8a8ca6}.dv-rd-meta b{display:block;font-weight:600;font-size:14px}.dv-rd-meta small{display:block;font-size:12px;color:#8a8ca6}
 .dv-rd-tabla{border:1px solid rgba(255,255,255,.07);border-radius:10px;overflow:hidden}
 .dv-rd-f{display:grid;grid-template-columns:32px minmax(0,1.2fr) minmax(0,1.5fr) 80px 96px;gap:10px;padding:9px 12px;font-size:13px;align-items:center;border-top:1px solid rgba(255,255,255,.05)}
-.dv-rd-f small{display:block;font-size:11.5px;color:#8a8ca6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dv-rd-f small{display:block;font-size:12px;color:#8a8ca6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dv-rd-th{border-top:0;background:rgba(255,255,255,.03);font-size:11px;color:#8a8ca6;text-transform:uppercase;letter-spacing:.05em}
 @media (max-width:620px){.dv-rd-f{grid-template-columns:24px minmax(0,1fr) 84px}.dv-rd-f>:nth-child(3),.dv-rd-f>:nth-child(4){display:none}}
 .dv-ing-abajo{position:absolute;left:0;right:0;bottom:0;padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.85) 30%);display:flex;flex-direction:column;gap:10px}
@@ -2484,53 +2485,53 @@ const CSS = `
 .dv-listo{display:flex;gap:12px;align-items:center;padding:10px 8px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer}
 .dv-listo:first-child{border-top:0}
 .dv-celu{display:flex;flex-direction:column;gap:10px}
-.dv-celu-btn{display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;border-radius:16px;border:1px solid rgba(46,230,182,.4);background:rgba(18,40,44,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#2ee6b6;font:inherit;text-align:left;cursor:pointer}
+.dv-celu-btn{display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;border-radius:14px;border:1px solid rgba(46,230,182,.4);background:rgba(18,40,44,.92);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#2ee6b6;font:inherit;text-align:left;cursor:pointer}
 .dv-celu-btn:nth-child(n+2){border-color:rgba(255,255,255,.14);background:rgba(27,28,46,.92);color:#f4f5fa}
-.dv-celu-btn b{display:block;font-size:16px;color:#f4f5fa}.dv-celu-btn small{display:block;font-size:12.5px;color:#a7adc2;margin-top:2px}
+.dv-celu-btn b{display:block;font-size:16px;color:#f4f5fa}.dv-celu-btn small{display:block;font-size:13px;color:#a7adc2;margin-top:2px}
 .dv-celu-btn:active{transform:scale(.98)}
-.dv-celu-pc{border:1px solid rgba(245,192,68,.4);background:rgba(245,192,68,.1);color:#F5C044;border-radius:12px;padding:11px 14px;font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
+.dv-celu-pc{border:1px solid rgba(245,192,68,.4);background:rgba(245,192,68,.1);color:#F5C044;border-radius:14px;padding:11px 14px;font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
 .dv-celu-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.dv-celu-stat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(27,28,46,.72);color:#a7adc2;font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+.dv-celu-stat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(27,28,46,.72);color:#a7adc2;font:inherit;font-size:13px;text-align:left;cursor:pointer}
 .dv-celu-stat b{font-family:'Space Grotesk',sans-serif;font-size:24px;color:#f4f5fa;line-height:1.1}
-.dv-celu-stat small{font-size:11.5px;color:#F5C044}
+.dv-celu-stat small{font-size:12px;color:#F5C044}
 .dv-celu-stat.on{border-color:rgba(46,230,182,.45);background:rgba(46,230,182,.07)}
 .dv-tag.ub{color:#c9cbe0;border-color:rgba(255,255,255,.18)}
 .dv-donde{margin:8px 0 2px;font-size:15px}.dv-donde b{font-family:'Space Grotesk',sans-serif;font-size:30px;color:#2ee6b6;margin-left:6px;vertical-align:-3px}
 .dv-notas{margin-top:12px;padding:10px 12px;border:1px solid rgba(255,255,255,.07);border-radius:10px;background:rgba(255,255,255,.02);display:flex;flex-direction:column;gap:6px}
 .dv-nota{display:flex;flex-direction:column;font-size:13px;border-left:2px solid rgba(46,230,182,.35);padding-left:8px}
-.dv-nota small{font-size:11.5px;color:#8a8ca6}
+.dv-nota small{font-size:12px;color:#8a8ca6}
 .dv-otras{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:rgba(46,230,182,.06);border-bottom:1px solid rgba(46,230,182,.2);font-size:13px;color:#c9cbe0}
 .dv-tanda{width:100%;display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
-.dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:13.5px}
+.dv-tanda-fila{display:flex;gap:10px;align-items:center;font-size:14px}
 .dv-tanda-ico{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);color:#a7adc2;flex-shrink:0}
 .dv-tanda-ico.ok{background:rgba(46,230,182,.15);color:#2ee6b6}.dv-tanda-ico.mal{background:rgba(245,192,68,.15);color:#F5C044}
 .dv-escaner{position:fixed;inset:0;z-index:90;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
 .dv-escaner-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.dv-escaner-marco{position:absolute;inset:max(90px,12%) 7% max(130px,16%);border:3px solid rgba(255,255,255,.55);border-radius:18px;transition:border-color .15s,box-shadow .15s;pointer-events:none}
+.dv-escaner-marco{position:absolute;inset:max(90px,12%) 7% max(130px,16%);border:3px solid rgba(255,255,255,.55);border-radius:20px;transition:border-color .15s,box-shadow .15s;pointer-events:none}
 .dv-escaner-marco.ok{border-color:#2ee6b6;box-shadow:0 0 0 9999px rgba(46,230,182,.12)}
 .dv-escaner-marco.aviso{border-color:#F5C044}
 .dv-escaner-marco.flash{box-shadow:0 0 0 9999px rgba(255,255,255,.35)}
 .dv-escaner-abajo{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.8))}
 .dv-escaner-ultima{display:flex;gap:10px;align-items:center;width:150px;min-height:64px}
-.dv-escaner-ultima img{width:48px;height:64px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,.4);flex-shrink:0}
+.dv-escaner-ultima img{width:48px;height:64px;object-fit:cover;border-radius:10px;border:1px solid rgba(255,255,255,.4);flex-shrink:0}
 .dv-escaner-disparo{width:76px;height:76px;border-radius:50%;border:5px solid rgba(255,255,255,.45);background:rgba(255,255,255,.25);cursor:pointer;flex-shrink:0;transition:transform .1s}
 .dv-escaner-disparo.on{border-color:#fff;background:#2ee6b6}
 .dv-escaner-disparo:active{transform:scale(.92)}
 .dv-escaner-disparo:disabled{cursor:default}
 .dv-escaner-arriba{position:absolute;top:0;left:0;right:0;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;background:linear-gradient(rgba(0,0,0,.75),rgba(0,0,0,0))}
-.dv-escaner-flash{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translateX(-50%);background:rgba(10,12,24,.9);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
+.dv-escaner-flash{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 28px);transform:translateX(-50%);background:rgba(10,12,24,.9);border:1px solid rgba(46,230,182,.5);color:#fff;border-radius:14px;padding:12px 16px;font-size:15px;font-weight:600;max-width:calc(100vw - 32px);text-align:center}
 .dv-escaner-flash.aviso{border-color:rgba(245,192,68,.6)}.dv-escaner-flash.info{border-color:rgba(255,255,255,.3);font-weight:500}
 .dv-barra-filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(255,255,255,.06);border-radius:14px;background:rgba(255,255,255,.02)}
 .dv-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .dv-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:3px}
-.dv-seg button{background:none;border:0;color:#a7adc2;font:inherit;font-size:13px;padding:7px 14px;border-radius:8px;cursor:pointer}
+.dv-seg button{background:none;border:0;color:#a7adc2;font:inherit;font-size:13px;padding:7px 14px;border-radius:10px;cursor:pointer}
 .dv-seg.sm button{padding:5px 11px;font-size:12px}
 .dv-seg button.on{background:rgba(255,255,255,.08);color:#f4f5fa}
-.dv-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:9px;cursor:pointer;white-space:nowrap}
+.dv-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}
 .dv-btn.pri{background:rgba(46,230,182,.12);border-color:rgba(46,230,182,.3);color:#2ee6b6}
 .dv-btn.on{border-color:rgba(255,255,255,.25)}
 .dv-btn:disabled{opacity:.5;cursor:default}
-.dv-input{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:9px;min-width:0;flex:1 1 220px;outline:none}
+.dv-input{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:10px;min-width:0;flex:1 1 220px;outline:none}
 .dv-input:focus{border-color:rgba(46,230,182,.35)}
 .dv-head,.dv-linea{display:grid;grid-template-columns:28px minmax(0,1fr) 170px 120px 100px 56px;gap:12px;align-items:center;padding:10px 16px}
 .dv-head{font-size:11px;color:#71768e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,.06)}
@@ -2548,21 +2549,21 @@ const CSS = `
 @container dv (max-width:700px){.dv-head,.dv-linea{grid-template-columns:24px minmax(0,1fr) 80px 36px;gap:8px;padding:10px 12px}.dv-hide-m{display:none!important}.dv-show-m{display:inline}.dv-det{padding:4px 12px 14px 12px}}
 .dv-barra{position:sticky;bottom:12px;margin:0 auto;z-index:50;display:flex;gap:8px;align-items:center;background:rgba(22,23,38,.96);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(720px,100%);flex-wrap:wrap;color:#f4f5fa;font-size:13px}
 .dv-menu{position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1c2e;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:4px;display:flex;flex-direction:column;min-width:190px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
-.dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:7px;cursor:pointer}
+.dv-menu button{background:none;border:0;color:#f4f5fa;font:inherit;font-size:13px;padding:8px 10px;text-align:left;border-radius:6px;cursor:pointer}
 @media (hover:hover){.dv-menu button:hover{background:rgba(255,255,255,.06)}}
 .dv-modal-fondo{position:fixed;inset:0;z-index:70;background:rgba(5,6,14,.66);display:flex;align-items:center;justify-content:center;padding:16px}
-.dv-modal{background:#16172a;border:1px solid rgba(255,255,255,.09);border-radius:18px;width:min(600px,100%);max-height:min(86vh,900px);display:flex;flex-direction:column;color:#f4f5fa;box-shadow:0 30px 90px rgba(0,0,0,.55);overflow:hidden}
+.dv-modal{background:#16172a;border:1px solid rgba(255,255,255,.09);border-radius:20px;width:min(600px,100%);max-height:min(86vh,900px);display:flex;flex-direction:column;color:#f4f5fa;box-shadow:0 30px 90px rgba(0,0,0,.55);overflow:hidden}
 .dv-modal-cab{padding:18px 18px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
 .dv-modal-cuerpo{overflow-y:auto;padding:4px 18px;flex:1;overscroll-behavior:contain}
 .dv-modal-pie{padding:12px 18px;border-top:1px solid rgba(255,255,255,.06);font-size:12px;color:#71768e;line-height:1.45}
-.dv-x{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#a7adc2;width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:13px}
+.dv-x{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#a7adc2;width:32px;height:32px;border-radius:10px;cursor:pointer;font-size:13px}
 .dv-rec{padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)}.dv-rec:last-child{border-bottom:0}
 .dv-rec.hecho{opacity:.55}
 .dv-rec-fila{display:flex;align-items:center;gap:10px;cursor:pointer}
 .dv-rec-acc{display:flex;gap:8px;margin-top:10px}
 .dv-chev{color:#71768e;font-size:16px;transition:transform .15s;line-height:1}
 .dv-pill{font-size:11px;color:#F5C044;background:rgba(245,192,68,.08);border:1px solid rgba(245,192,68,.25);border-radius:999px;padding:1px 8px}
-.dv-prev{white-space:pre-wrap;font-family:inherit;font-size:12.5px;line-height:1.5;color:#c9cde0;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px;margin:10px 0 0;max-height:240px;overflow:auto}
+.dv-prev{white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.5;color:#c9cde0;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px;margin:10px 0 0;max-height:240px;overflow:auto}
 .dv-btn.wa{background:rgba(37,211,102,.1);border-color:rgba(37,211,102,.28);color:#5be38f}
 @media (max-width:560px){.dv-modal-fondo{align-items:flex-end;padding:0}.dv-modal{border-radius:18px 18px 0 0;max-height:92vh}.dv-rec-acc .dv-btn{flex:1}}
 .dv-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:60;background:#f4f5fa;color:#111;border-radius:10px;padding:10px 14px;font-size:13px;max-width:calc(100vw - 32px);box-shadow:0 12px 40px rgba(0,0,0,.35)}

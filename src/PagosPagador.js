@@ -13,9 +13,9 @@ const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 
 const BRAND = {
   navyCard: "#162d42",
-  teal:     "#2ECFAA",
-  red:      "#E24B4A",
-  amber:    "#FFB020",
+  teal:     "#2EE6B6",
+  red:      "#E8615F",
+  amber:    "#F5C044",
   azul:     "#3A8FD4",
   blue:     "#4C8DFF",
   white:    "#FFFFFF",
@@ -29,7 +29,7 @@ const MEDIOS = {
   mercadopago: { nombre: 'Mercado Pago', logo: LOGO_MP,      color: '#009EE3' },
   // Efectivo solo aparece dentro del pago dividido: un cadete que factura pero cobra una parte
   // en mano. Para el pago simple los medios siguen siendo los dos bancarios.
-  efectivo:    { nombre: 'Efectivo',     logo: null,         color: '#2ECFAA', soloDividido: true },
+  efectivo:    { nombre: 'Efectivo',     logo: null,         color: '#2EE6B6', soloDividido: true },
 };
 const MEDIOS_SIMPLES = Object.keys(MEDIOS).filter(k => !MEDIOS[k].soloDividido);
 
@@ -168,9 +168,9 @@ function CopyField({ label, valor, display, campoKey, copiado, setCopiado }) {
   const isCopiado = copiado === campoKey;
   return (
     <span onClick={() => copiar(valor, setCopiado, campoKey)} title={`Tocar para copiar ${label}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12.5,
-        padding: '5px 10px', borderRadius: 8, background: isCopiado ? 'rgba(46,207,170,0.15)' : BRAND.faint,
-        border: `1px solid ${isCopiado ? 'rgba(46,207,170,0.4)' : BRAND.border}` }}>
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13,
+        padding: '5px 10px', borderRadius: 10, background: isCopiado ? 'rgba(46,230,182,0.15)' : BRAND.faint,
+        border: `1px solid ${isCopiado ? 'rgba(46,230,182,0.4)' : BRAND.border}` }}>
       <span style={{ color: BRAND.muted }}>{label}</span>
       <span style={{ fontWeight: 600, color: BRAND.white, wordBreak: 'break-all' }}>{display || valor}</span>
       <span style={{ fontSize: 12, color: isCopiado ? BRAND.teal : BRAND.muted }}>{isCopiado ? '✓' : '📋'}</span>
@@ -520,7 +520,7 @@ export default function PagosPagador({ tarifas }) {
     } finally { setBusyId(null); }
   }
 
-  const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: '12px 14px' };
+  const cardSt = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: '12px 14px' };
   const pill = (active, color = BRAND.teal) => ({ padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: 'pointer', border: `1px solid ${active ? color : BRAND.border}`, background: active ? `${color}26` : BRAND.faint, color: active ? color : BRAND.muted });
 
   return (
@@ -529,7 +529,7 @@ export default function PagosPagador({ tarifas }) {
         <span style={{ fontSize: 13, color: BRAND.muted }}>Semana:</span>
         {semanas.length > 0 && (
           <select value={semanaSel || ''} onChange={e => setSemanaSel(e.target.value)}
-            style={{ padding: '6px 10px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>
+            style={{ padding: '6px 10px', fontSize: 13, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>
             {semanas.map(s => <option key={s} value={s}>{fmtSemanaLabel(s)}</option>)}
           </select>
         )}
@@ -543,13 +543,13 @@ export default function PagosPagador({ tarifas }) {
             <input autoFocus placeholder="tu nombre" defaultValue={QUIENES_PAGAN.includes(quienPaga) ? '' : quienPaga}
               onKeyDown={e => { if (e.key === 'Enter') { elegirQuienPaga(e.target.value); setOtroNombre(false); } if (e.key === 'Escape') setOtroNombre(false); }}
               onBlur={e => { if (e.target.value.trim()) elegirQuienPaga(e.target.value); setOtroNombre(false); }}
-              style={{ padding: '6px 10px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white, width: 120 }} />
+              style={{ padding: '6px 10px', fontSize: 13, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white, width: 120 }} />
           ) : (
             <select value={QUIENES_PAGAN.includes(quienPaga) || !quienPaga ? quienPaga : '__actual'}
               onChange={e => { if (e.target.value === '__otro') setOtroNombre(true); else elegirQuienPaga(e.target.value); }}
-              style={{ padding: '6px 10px', fontSize: 13, fontWeight: 700, borderRadius: 8,
+              style={{ padding: '6px 10px', fontSize: 13, fontWeight: 700, borderRadius: 10,
                 border: `1px solid ${quienPaga ? BRAND.border : BRAND.amber}`,
-                background: quienPaga ? BRAND.faint : 'rgba(255,176,32,0.14)', color: quienPaga ? BRAND.white : BRAND.amber }}>
+                background: quienPaga ? BRAND.faint : 'rgba(245,192,68,0.14)', color: quienPaga ? BRAND.white : BRAND.amber }}>
               <option value="" disabled>elegí tu nombre</option>
               {QUIENES_PAGAN.map(n => <option key={n} value={n}>{n}</option>)}
               {quienPaga && !QUIENES_PAGAN.includes(quienPaga) && <option value="__actual">{quienPaga}</option>}
@@ -559,7 +559,7 @@ export default function PagosPagador({ tarifas }) {
         </span>
       </div>
 
-      {error && <div style={{ background: 'rgba(226,75,74,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
+      {error && <div style={{ background: 'rgba(232,97,95,0.15)', color: BRAND.red, border: `1px solid ${BRAND.red}`, padding: '10px 14px', borderRadius: 10, fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
       {!loadingSemanas && semanas.length === 0 && (
         <div style={{ color: BRAND.muted, fontSize: 13 }}>Alejo todavía no cerró ninguna semana.</div>
@@ -672,12 +672,12 @@ export default function PagosPagador({ tarifas }) {
                       <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: 4, minWidth: 210, boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
                         {f.factura && f.facturaOk && (
                           <button onClick={() => { marcarFactura(f, false); setMenuId(null); }} disabled={busy}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 8 }}>🗑 Quitar factura</button>
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.amber, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 10 }}>🗑 Quitar factura</button>
                         )}
                         {/* Vuelve a "Falta confirmar" en Semana para editar o dividir; sale de esta pantalla */}
                         <button onClick={() => volverASemana(f)} disabled={busy}
                           title="revierte la confirmación: sale de Pagar y en Semana vuelve a 'Falta confirmar' para editarlo o dividirlo"
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.azul, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 8 }}>↩ Volver a Semana</button>
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: BRAND.azul, cursor: 'pointer', fontSize: 13, padding: '8px 10px', borderRadius: 10 }}>↩ Volver a Semana</button>
                       </div>
                     </>
                   )}
@@ -692,11 +692,11 @@ export default function PagosPagador({ tarifas }) {
                   onDrop={aceptaDrop ? (e => { e.preventDefault(); setDragKey(null); subirFactura(f, e.dataTransfer.files && e.dataTransfer.files[0]); }) : undefined}
                   title={aceptaDrop && !f.facturaOk ? 'arrastrá acá el PDF o la foto de la factura: se guarda y se marca sola' : undefined}
                   style={{ ...cardSt, padding: '15px 16px', opacity: f.pagado ? 0.5 : 1, display: 'flex', flexDirection: 'column', gap: 11,
-                    background: enDrag ? 'rgba(46,207,170,0.10)' : BRAND.navyCard,
-                    borderColor: enDrag ? BRAND.teal : f.pagado ? 'rgba(46,207,170,0.3)' : sinFactura ? 'rgba(255,176,32,0.4)' : BRAND.border }}>
+                    background: enDrag ? 'rgba(46,230,182,0.10)' : BRAND.navyCard,
+                    borderColor: enDrag ? BRAND.teal : f.pagado ? 'rgba(46,230,182,0.3)' : sinFactura ? 'rgba(245,192,68,0.4)' : BRAND.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     {/* Método de pago (cómo se le paga) — badge neutro */}
-                    <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 10.5, fontWeight: 600, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'rgba(255,255,255,0.06)', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                    <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'rgba(255,255,255,0.06)', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                       {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
                     </span>
                     {/* Estado de la factura (requisito, separado del método) — solo transferencia */}
@@ -707,11 +707,11 @@ export default function PagosPagador({ tarifas }) {
                         // Con archivo adjunto el chip es un botón: abre la factura guardada.
                         // Los últimos 4 del comprobante van a la vista — es la referencia de Adrián.
                         ? <button onClick={() => verFactura(f)} title="ver la factura guardada"
-                            style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                            style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                             <span style={{ color: BRAND.teal }}>✓</span> 📄 Factura{f.facturaNro ? <b style={{ color: BRAND.white }}> …{f.facturaNro}</b> : ''}
                           </button>
-                        : <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}><span style={{ color: BRAND.teal }}>✓</span> Factura recibida</span>)
-                      : <span title="arrastrá el PDF o la foto de la factura sobre esta fila" style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(255,176,32,0.14)', border: '1px solid rgba(255,176,32,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
+                        : <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}><span style={{ color: BRAND.teal }}>✓</span> Factura recibida</span>)
+                      : <span title="arrastrá el PDF o la foto de la factura sobre esta fila" style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(245,192,68,0.14)', border: '1px solid rgba(245,192,68,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
                     )}
                     {/* Archivo adjunto pero sin número (foto o PDF escaneado): los 4 últimos se cargan a mano */}
                     {f.factura && f.facturaFile && !f.facturaNro && !f.pagado && (
@@ -719,9 +719,9 @@ export default function PagosPagador({ tarifas }) {
                         <input value={nroDraft[f.key] || ''} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setNroDraft(d => ({ ...d, [f.key]: v })); }}
                           onKeyDown={e => { if (e.key === 'Enter') guardarNroFactura(f, nroDraft[f.key]); }}
                           placeholder="últimos 4" inputMode="numeric"
-                          style={{ width: 74, padding: '3px 8px', fontSize: 11.5, borderRadius: 8, border: `1px solid ${BRAND.amber}`, background: 'rgba(255,176,32,0.10)', color: BRAND.white }} />
+                          style={{ width: 74, padding: '3px 8px', fontSize: 12, borderRadius: 10, border: `1px solid ${BRAND.amber}`, background: 'rgba(245,192,68,0.10)', color: BRAND.white }} />
                         <button onClick={() => guardarNroFactura(f, nroDraft[f.key])} disabled={busy}
-                          style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>OK</button>
+                          style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${BRAND.border}`, background: BRAND.faint, color: BRAND.white }}>OK</button>
                       </span>
                     )}
                     <span style={{ fontWeight: 700, fontSize: 15, minWidth: 130, textDecoration: f.pagado ? 'line-through' : 'none' }}>
@@ -729,7 +729,7 @@ export default function PagosPagador({ tarifas }) {
                       {/* El cadete dividido aparece dos veces: hay que poder distinguir de un
                           vistazo cuál de las dos partes es cada fila y sobre cuánto es. */}
                       {f.parte != null && (
-                        <span style={{ marginLeft: 7, fontSize: 10.5, fontWeight: 700, color: BRAND.azul, background: 'rgba(58,143,212,0.14)', border: '1px solid rgba(58,143,212,0.4)', borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                        <span style={{ marginLeft: 7, fontSize: 11, fontWeight: 700, color: BRAND.azul, background: 'rgba(58,143,212,0.14)', border: '1px solid rgba(58,143,212,0.4)', borderRadius: 20, padding: '2px 8px', whiteSpace: 'nowrap' }}>
                           parte {f.parte + 1} de {f.partes} · total {money(f.totalCierre)}
                         </span>
                       )}
@@ -738,9 +738,9 @@ export default function PagosPagador({ tarifas }) {
                     {f.pagado ? (() => {
                       const m = MEDIOS[f.pagadoVia];
                       return (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', borderRadius: 10, fontSize: 12.5, fontWeight: 800, whiteSpace: 'nowrap',
-                          color: m ? m.color : BRAND.teal, background: m ? `${m.color}1f` : 'rgba(46,207,170,0.12)', border: `1px solid ${m ? m.color : BRAND.teal}66` }}>
-                          {m && m.logo ? <img src={m.logo} alt="" width="20" height="20" style={{ display: 'block', borderRadius: 4 }} /> : m ? '💵' : '✓'}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', borderRadius: 10, fontSize: 13, fontWeight: 800, whiteSpace: 'nowrap',
+                          color: m ? m.color : BRAND.teal, background: m ? `${m.color}1f` : 'rgba(46,230,182,0.12)', border: `1px solid ${m ? m.color : BRAND.teal}66` }}>
+                          {m && m.logo ? <img src={m.logo} alt="" width="20" height="20" style={{ display: 'block', borderRadius: 6 }} /> : m ? '💵' : '✓'}
                           {m ? m.nombre : 'Pagado'}
                           {/* Quién marcó el pago y cuándo — el rastro que faltaba cuando hubo un doble pago */}
                           {(f.pagadoPor || f.pagadoAt) && (
@@ -769,7 +769,7 @@ export default function PagosPagador({ tarifas }) {
                           title={armado === f.key ? 'tocá de nuevo para confirmar' : 'cuando mandó la factura: se habilita el pago'}
                           style={{ height: 36, padding: '0 16px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', whiteSpace: 'nowrap',
                             border: `1px solid ${BRAND.amber}`,
-                            background: armado === f.key ? BRAND.amber : 'rgba(255,176,32,0.12)',
+                            background: armado === f.key ? BRAND.amber : 'rgba(245,192,68,0.12)',
                             color: armado === f.key ? '#2b1a00' : BRAND.amber }}>
                           {armado === f.key ? '¿Seguro? tocá otra vez' : 'Mandó factura'}
                         </button>
@@ -785,7 +785,7 @@ export default function PagosPagador({ tarifas }) {
                       return (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <button onClick={() => marcarPagado(f, via)} disabled={busy}
-                            style={{ height: 36, padding: '0 14px', borderRadius: 10, fontSize: 12.5, fontWeight: 800, cursor: busy ? 'wait' : 'pointer', color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}`, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                            style={{ height: 36, padding: '0 14px', borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: busy ? 'wait' : 'pointer', color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}`, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
                             {m.logo ? <img src={m.logo} alt="" width="22" height="22" style={{ display: 'block' }} /> : '💵'} Sí, {via === 'efectivo' ? 'pagué en efectivo' : m.nombre} {money(f.total)}
                           </button>
                           <button onClick={() => setPickId(null)} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>cancelar</button>
@@ -795,7 +795,7 @@ export default function PagosPagador({ tarifas }) {
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         {MEDIOS_SIMPLES.map(k => MEDIOS[k]).map((m, i) => { const k = MEDIOS_SIMPLES[i]; return (
                           <button key={k} onClick={() => marcarPagado(f, k)} disabled={busy} title={`Marcar pagado por ${m.nombre}`}
-                            style={{ height: 36, padding: '0 13px', borderRadius: 10, fontSize: 12.5, fontWeight: 800, cursor: busy ? 'wait' : 'pointer', color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}`, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                            style={{ height: 36, padding: '0 13px', borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: busy ? 'wait' : 'pointer', color: m.color, background: `${m.color}1f`, border: `1px solid ${m.color}`, display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
                             <img src={m.logo} alt="" width="22" height="22" style={{ display: 'block' }} /> {m.nombre}
                           </button>
                         ); })}

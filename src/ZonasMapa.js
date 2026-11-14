@@ -5,7 +5,7 @@ import { agruparPuntos, nivelZona, normMapa, resolverCentroZona } from "./zonasM
 
 const C = {
   card: "#1A1A4A", border: "rgba(255,255,255,0.08)", text: "#fff",
-  muted: "rgba(255,255,255,0.58)", ok: "#2ECFAA", warn: "#EF9F27", crit: "#E24B4A",
+  muted: "rgba(255,255,255,0.58)", ok: "#2EE6B6", warn: "#F5C044", crit: "#E8615F",
   noTop: "#8795A8", base: "#263548",
 };
 
@@ -178,20 +178,20 @@ export default function ZonasMapa({ zonas = [], meta, filtro = "" }) {
         .flexit-map-numero { font-size:12px;font-variant-numeric:tabular-nums; }
         .flexit-map-burbuja.es-grupo .flexit-map-numero { font-size:13px; }
         .flexit-map-cantidad { font-size:8.5px;font-weight:800;opacity:.76;margin-top:2px; }
-        .flexit-map-nombre { position:absolute;left:50%;top:39px;transform:translateX(-50%);background:rgba(10,20,34,.9);color:#fff;border:1px solid rgba(255,255,255,.14);padding:2px 6px;border-radius:5px;font-size:9.5px;font-weight:700;box-shadow:0 2px 7px rgba(0,0,0,.35); }
+        .flexit-map-nombre { position:absolute;left:50%;top:39px;transform:translateX(-50%);background:rgba(10,20,34,.9);color:#fff;border:1px solid rgba(255,255,255,.14);padding:2px 6px;border-radius:6px;font-size:10px;font-weight:700;box-shadow:0 2px 7px rgba(0,0,0,.35); }
         .flexit-zona-popup .leaflet-popup-content-wrapper,.flexit-zona-popup .leaflet-popup-tip { background:#0d1b2a;color:#fff; }
         .flexit-mapa-modo:focus-visible { outline:2px solid ${C.ok};outline-offset:2px; }
         @media (max-width:600px) { .flexit-mapa-ayuda { display:none; } .flexit-map-nombre { display:none; } }
       `}</style>
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
         <div style={{ padding: "9px 12px", display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 12.5, color: C.muted }}>
+          <span style={{ fontSize: 13, color: C.muted }}>
             <b style={{ color: C.text }}>{num(meta?.asignados)}</b> envíos ubicados{estadoDato ? <span style={{ color: C.ok }}> · {estadoDato}</span> : null}
           </span>
-          <div style={{ display: "flex", background: "rgba(255,255,255,.045)", border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }} aria-label="Qué zonas mostrar">
+          <div style={{ display: "flex", background: "rgba(255,255,255,.045)", border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }} aria-label="Qué zonas mostrar">
             {[["todas", "Todas"], ["alertas", `Alertas ${alertas}`]].map(([k, label]) => (
               <button key={k} className="flexit-mapa-modo" onClick={() => setModo(k)} aria-pressed={modo === k}
-                style={{ minHeight: 36, background: modo === k ? "rgba(46,207,170,.16)" : "transparent", border: "none", color: modo === k ? C.ok : C.muted, padding: "0 11px", fontSize: 12, fontWeight: modo === k ? 800 : 600, cursor: "pointer" }}>
+                style={{ minHeight: 36, background: modo === k ? "rgba(46,230,182,.16)" : "transparent", border: "none", color: modo === k ? C.ok : C.muted, padding: "0 11px", fontSize: 12, fontWeight: modo === k ? 800 : 600, cursor: "pointer" }}>
                 {label}
               </button>
             ))}
@@ -199,20 +199,20 @@ export default function ZonasMapa({ zonas = [], meta, filtro = "" }) {
           {ubicaciones.pendientes.length > 0 && (
             <span title={ubicaciones.pendientes.map((z) => z.zona).join(", ")} style={{ fontSize: 11, color: C.warn }}>ⓘ {ubicaciones.pendientes.length} por ubicar</span>
           )}
-          <span className="flexit-mapa-ayuda" style={{ marginLeft: "auto", fontSize: 11.5, color: C.muted }}>Tocá un grupo para acercar · tocá una zona para ver el detalle</span>
+          <span className="flexit-mapa-ayuda" style={{ marginLeft: "auto", fontSize: 12, color: C.muted }}>Tocá un grupo para acercar · tocá una zona para ver el detalle</span>
         </div>
         {error && <div style={{ padding: 12, color: C.crit, fontSize: 13 }}>No pude cargar la referencia geográfica ({error}).</div>}
         {!error && (!geo || !localidades) && <div style={{ padding: 12, color: C.muted, fontSize: 13 }}>Preparando el mapa…</div>}
         <div style={{ position: "relative" }}>
           <div ref={contRef} role="region" aria-label="Mapa operativo de envíos por zona" style={{ height: "clamp(500px, calc(100vh - 225px), 760px)", minHeight: 500, background: "#101827" }} />
           {visibles.length === 0 && geo && localidades && (
-            <div style={{ position: "absolute", zIndex: 800, left: "50%", top: 18, transform: "translateX(-50%)", background: "rgba(13,27,42,.94)", border: `1px solid ${C.ok}`, borderRadius: 999, color: C.text, fontSize: 12.5, fontWeight: 700, padding: "8px 13px", boxShadow: "0 4px 14px rgba(0,0,0,.35)", whiteSpace: "nowrap" }}>
+            <div style={{ position: "absolute", zIndex: 800, left: "50%", top: 18, transform: "translateX(-50%)", background: "rgba(13,27,42,.94)", border: `1px solid ${C.ok}`, borderRadius: 999, color: C.text, fontSize: 13, fontWeight: 700, padding: "8px 13px", boxShadow: "0 4px 14px rgba(0,0,0,.35)", whiteSpace: "nowrap" }}>
               {mensajeVacio}
             </div>
           )}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, fontSize: 11.5, color: C.muted }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, fontSize: 12, color: C.muted }}>
         <span><b style={{ color: C.ok }}>●</b> En orden</span><span><b style={{ color: C.warn }}>●</b> Al límite</span><span><b style={{ color: C.crit }}>●</b> Saturada</span><span><b style={{ color: C.noTop }}>●</b> Sin tope</span>
         <span style={{ marginLeft: "auto" }}>Los bordes son referencia; las burbujas son las zonas operativas · centros de <a href="https://www.argentina.gob.ar/georef" target="_blank" rel="noreferrer" style={{ color: C.muted }}>GeoRef</a>.</span>
       </div>

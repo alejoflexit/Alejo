@@ -4,6 +4,7 @@ import { slaMeli } from "./slaShared";
 import { useClima, textoNivel, Lluvia, CieloFX } from "./Clima";
 import { useTransito, TransitoChip, textoAviso, esFuturo } from "./Transito";
 import AvisoFeriados from "./AvisoFeriados";
+import { FX, FX_FONT } from "./theme";
 import {
   sbFetch, todayStr, minutosAR,
   NOTA_TIPOS, ordenarNotas, resolverNota, posponerNota, useNotasRealtime, aplicarCambioNota, textoNota,
@@ -39,12 +40,12 @@ const Icon = ({ id, size = 20, color = "currentColor", w = 1.8 }) => (
 
 // ── Paleta premium (recetas del skill flexit-design) ──
 const C = {
-  ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
-  glass: "rgba(27,28,46,0.72)", glassSoft: "rgba(27,28,46,0.6)", pop: "rgba(24,25,42,0.92)",
-  line: "rgba(255,255,255,0.06)",
-  teal: "#2ee6b6", ambar: "#F5C044", rojo: "#E8615F", azul: "#5BA8E8", lila: "#bd8ed8",
-  shadow: "0 20px 60px rgba(0,0,0,0.28)",
-  grotesk: "'Space Grotesk', -apple-system, 'Segoe UI', sans-serif",
+  ink: FX.color.ink, ink2: FX.color.ink2, ink3: FX.color.ink3,
+  glass: FX.color.glass, glassSoft: FX.color.glassSoft, pop: FX.color.pop,
+  line: FX.color.line,
+  teal: FX.color.teal, ambar: FX.color.ambar, rojo: FX.color.rojo, azul: FX.color.azul, lila: FX.color.lila,
+  shadow: FX.shadow.card,
+  grotesk: FX_FONT.display,
 };
 const cardBase = {
   position: "relative", background: C.glass, border: `1px solid ${C.line}`, borderRadius: 20,
@@ -60,25 +61,25 @@ function LoginWidget({ session, onLogin, onLogout }) {
   const [open, setOpen] = useState(false);
   const [em, setEm] = useState(""); const [pw, setPw] = useState("");
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
-  const inp = { padding: "9px 11px", borderRadius: 9, border: `1px solid ${C.line}`, background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, outline: "none" };
+  const inp = { padding: "9px 11px", borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 13, outline: "none" };
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr("");
     try { await onLogin(em, pw); setOpen(false); setEm(""); setPw(""); }
     catch { setErr("Email o contraseña incorrectos"); } finally { setBusy(false); }
   };
   if (session) return (
-    <button onClick={onLogout} title={session.email} style={{ padding: "8px 12px", borderRadius: 11, border: `1px solid ${C.line}`, background: C.glassSoft, color: C.ink2, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Salir</button>
+    <button onClick={onLogout} title={session.email} style={{ padding: "8px 12px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.glassSoft, color: C.ink2, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Salir</button>
   );
   return (
     <div style={{ position: "relative" }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ padding: "9px 14px", borderRadius: 11, border: "1px solid rgba(46,230,182,0.3)", background: "rgba(46,230,182,0.12)", color: C.teal, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Ingresar</button>
+      <button onClick={() => setOpen((o) => !o)} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid rgba(46,230,182,0.3)", background: "rgba(46,230,182,0.12)", color: C.teal, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Ingresar</button>
       {open && (
-        <form onSubmit={submit} style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 250, padding: 14, borderRadius: 16, border: `1px solid ${C.line}`, background: C.pop, boxShadow: C.shadow, zIndex: 60, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#fff" }}>Ingresar al equipo</div>
+        <form onSubmit={submit} style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 250, padding: 14, borderRadius: 14, border: `1px solid ${C.line}`, background: C.pop, boxShadow: C.shadow, zIndex: 60, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>Ingresar al equipo</div>
           <input type="email" autoFocus autoComplete="username" placeholder="Email" value={em} onChange={(e) => { setEm(e.target.value); setErr(""); }} style={inp} />
           <input type="password" autoComplete="current-password" placeholder="Contraseña" value={pw} onChange={(e) => { setPw(e.target.value); setErr(""); }} style={inp} />
-          {err && <div style={{ color: C.rojo, fontSize: 11.5 }}>{err}</div>}
-          <button type="submit" disabled={busy} style={{ padding: 9, borderRadius: 9, border: "1px solid rgba(46,230,182,0.35)", background: "rgba(46,230,182,0.14)", color: C.teal, fontSize: 13, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Entrando…" : "Entrar"}</button>
+          {err && <div style={{ color: C.rojo, fontSize: 12 }}>{err}</div>}
+          <button type="submit" disabled={busy} style={{ padding: 9, borderRadius: 10, border: "1px solid rgba(46,230,182,0.35)", background: "rgba(46,230,182,0.14)", color: C.teal, fontSize: 13, fontWeight: 700, cursor: busy ? "default" : "pointer" }}>{busy ? "Entrando…" : "Entrar"}</button>
         </form>
       )}
     </div>
@@ -99,17 +100,17 @@ function Buzon({ notas, onIr, onResolver }) {
   const n = pendientes.length;
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ position: "relative", width: 40, height: 40, borderRadius: 12, background: C.glassSoft, border: `1px solid ${C.line}`, color: C.ink2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ position: "relative", width: 40, height: 40, borderRadius: 14, background: C.glassSoft, border: `1px solid ${C.line}`, color: C.ink2, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Icon id="bell" size={20} />
-        {n > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 11, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", border: "2px solid #0F0F1B", fontFamily: C.grotesk }}>{n}</span>}
+        {n > 0 && <span style={{ position: "absolute", top: -5, right: -5, minWidth: 20, height: 20, borderRadius: 10, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", border: "2px solid #0F0F1B", fontFamily: C.grotesk }}>{n}</span>}
       </button>
       {open && (
         <div style={{ position: "absolute", top: 54, right: 0, width: 340, maxWidth: "calc(100vw - 32px)", background: C.pop, border: `1px solid ${C.line}`, borderRadius: 20, boxShadow: C.shadow, overflow: "hidden", zIndex: 60, WebkitBackdropFilter: "blur(18px)", backdropFilter: "blur(18px)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px" }}>
             <span style={{ fontFamily: C.grotesk, fontWeight: 600, fontSize: 14 }}>Buzón del equipo</span>
-            <span onClick={() => { setOpen(false); onIr("pizarra"); }} style={{ fontSize: 11.5, color: C.teal, cursor: "pointer", fontWeight: 600 }}>Abrir pizarra →</span>
+            <span onClick={() => { setOpen(false); onIr("pizarra"); }} style={{ fontSize: 12, color: C.teal, cursor: "pointer", fontWeight: 600 }}>Abrir pizarra →</span>
           </div>
-          {n === 0 && <div style={{ padding: "8px 16px 18px", fontSize: 12.5, color: C.ink3 }}>Sin notas pendientes. Todo tranquilo.</div>}
+          {n === 0 && <div style={{ padding: "8px 16px 18px", fontSize: 13, color: C.ink3 }}>Sin notas pendientes. Todo tranquilo.</div>}
           {pendientes.slice(0, 6).map((nt) => {
             const t = NOTA_TIPOS[nt.tipo] || {};
             const col = nt.tipo === "ausencia" ? C.rojo : nt.tipo === "colecta" ? C.lila : C.azul;
@@ -118,10 +119,10 @@ function Buzon({ notas, onIr, onResolver }) {
                 <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.grotesk, fontWeight: 600, fontSize: 12, color: col, background: col + "26" }}>{(nt.autor || "?")[0].toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600 }}>{nt.autor || "—"} <span style={{ color: C.ink3, fontWeight: 400 }}>· {t.label}</span></div>
-                  <div style={{ fontSize: 12.5, color: C.ink2, lineHeight: 1.4, marginTop: 2 }}>{textoNota(nt)}</div>
+                  <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.4, marginTop: 2 }}>{textoNota(nt)}</div>
                   {nt.tipo === "ausencia" && nt.cubre && <div style={{ fontSize: 11, color: C.teal, marginTop: 2 }}>cubre {nt.cubre}</div>}
                 </div>
-                <button onClick={() => onResolver(nt)} title="Marcar hecho" style={{ alignSelf: "center", border: "1px solid rgba(46,230,182,0.4)", background: "rgba(46,230,182,0.1)", color: C.teal, borderRadius: 9, padding: "6px 9px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>✓</button>
+                <button onClick={() => onResolver(nt)} title="Marcar hecho" style={{ alignSelf: "center", border: "1px solid rgba(46,230,182,0.4)", background: "rgba(46,230,182,0.1)", color: C.teal, borderRadius: 10, padding: "6px 9px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>✓</button>
               </div>
             );
           })}
@@ -132,7 +133,7 @@ function Buzon({ notas, onIr, onResolver }) {
 }
 
 
-const mini = { border: "1px solid rgba(255,255,255,0.09)", background: "rgba(255,255,255,0.05)", color: "#fff", borderRadius: 9, padding: "7px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", minHeight: 34, whiteSpace: "nowrap" };
+const mini = { border: "1px solid rgba(255,255,255,0.09)", background: "rgba(255,255,255,0.05)", color: "#fff", borderRadius: 10, padding: "7px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", minHeight: 34, whiteSpace: "nowrap" };
 const miniOk = { ...mini, border: "1px solid rgba(46,230,182,0.4)", color: "#2ee6b6", background: "rgba(46,230,182,0.1)" };
 
 // ── Easter egg: Paco, la mascota secreta de Flexit ──
@@ -167,12 +168,12 @@ function PacoEgg({ onClose }) {
           <div onClick={(e) => e.stopPropagation()} style={{ ...cardBase, background: "rgba(24,25,42,0.97)", maxWidth: 440, width: "100%", padding: "26px 28px", color: C.ink, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
             <div className="paco-egg-sprite" aria-hidden="true" />
             <div style={{ fontSize: 19, fontWeight: 700, fontFamily: C.grotesk, marginBottom: 6, textAlign: "center" }}>🧉 ¡Encontraste a Paco!</div>
-            <div style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.5, marginBottom: 18 }}>
+            <div style={{ fontSize: 14, color: C.ink2, lineHeight: 1.5, marginBottom: 18 }}>
               Llevátelo a tu escritorio: queda flotando en la pantalla, siempre visible, tomando mate.
               Doble clic sobre él te abre Flexit. Solo para Windows.
             </div>
             <a href={`${process.env.PUBLIC_URL || ""}/paco-widget.zip`} download="paco-widget.zip"
-              style={{ display: "block", textAlign: "center", background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.4)", color: C.teal, borderRadius: 12, padding: "12px 16px", fontSize: 14, fontWeight: 700, textDecoration: "none", fontFamily: C.grotesk }}>
+              style={{ display: "block", textAlign: "center", background: "rgba(46,230,182,0.12)", border: "1px solid rgba(46,230,182,0.4)", color: C.teal, borderRadius: 14, padding: "12px 16px", fontSize: 14, fontWeight: 700, textDecoration: "none", fontFamily: C.grotesk }}>
               ⬇ Descargar instalador (ZIP)
             </a>
             <div style={{ fontSize: 12, color: C.ink3, margin: "8px 0 16px", textAlign: "center" }}>
@@ -180,7 +181,7 @@ function PacoEgg({ onClose }) {
             </div>
             <div style={{ fontSize: 12, color: C.ink2, marginBottom: 6 }}>O si preferís, pegá esto en PowerShell:</div>
             <div onClick={copiar} title="Clic para copiar"
-              style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.line}`, borderRadius: 9, padding: "9px 12px", fontSize: 11.5, fontFamily: "Consolas, monospace", color: copiado ? C.teal : C.ink2, cursor: "pointer", wordBreak: "break-all" }}>
+              style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${C.line}`, borderRadius: 10, padding: "9px 12px", fontSize: 12, fontFamily: "Consolas, monospace", color: copiado ? C.teal : C.ink2, cursor: "pointer", wordBreak: "break-all" }}>
               {copiado ? "✓ Copiado — pegalo en PowerShell y Enter" : cmd}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
@@ -194,7 +195,7 @@ function PacoEgg({ onClose }) {
 }
 
 // ── Piezas visuales del Home (rediseño 10/10: escritorio con menú lateral + fila de indicadores) ──
-const tileSt = { ...cardBase, borderRadius: 16, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 9, textAlign: "left", color: C.ink, font: "inherit", minWidth: 0 };
+const tileSt = { ...cardBase, borderRadius: 14, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 9, textAlign: "left", color: C.ink, font: "inherit", minWidth: 0 };
 const tileCap = { fontSize: 12, fontWeight: 600, color: C.ink3, display: "flex", alignItems: "center", gap: 6 };
 const tileNum = (mobile) => ({ fontFamily: C.grotesk, fontWeight: 600, fontSize: mobile ? 26 : 32, letterSpacing: "-0.8px", lineHeight: 1, fontVariantNumeric: "tabular-nums" });
 const tileSub = { fontSize: 12, color: C.ink3, lineHeight: 1.35 };
@@ -477,8 +478,8 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
 
   // ── Foco de hoy: franja fina si está todo bien; tarjeta protagonista (ámbar) si hay algo que hacer ──
   const focoTitulo = { fontFamily: C.grotesk, fontSize: isMobile ? 20 : 23, fontWeight: 600, letterSpacing: "-0.5px", margin: "6px 0 4px", lineHeight: 1.2 };
-  const focoBajada = { fontSize: 13.5, color: C.ink2, lineHeight: 1.5 };
-  const ctaAmbar = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.ambar, color: "#1a1406", fontWeight: 700, fontSize: 13.5, border: "none", borderRadius: 12, padding: "0 18px", minHeight: 44, cursor: "pointer", whiteSpace: "nowrap", width: isMobile ? "100%" : "auto" };
+  const focoBajada = { fontSize: 14, color: C.ink2, lineHeight: 1.5 };
+  const ctaAmbar = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.ambar, color: "#1a1406", fontWeight: 700, fontSize: 14, border: "none", borderRadius: 14, padding: "0 18px", minHeight: 44, cursor: "pointer", whiteSpace: "nowrap", width: isMobile ? "100%" : "auto" };
   const focoAccion = (() => {
     if (foco === "colectas") return { titulo: `${col.sinChofer} colecta${col.sinChofer === 1 ? "" : "s"} sin chofer`, bajada: <>Asignalas <b style={{ color: C.ambar }}>antes de las 14:00</b> para evitar demoras en el reparto.</>, cta: "Abrir colectas", go: () => onNav("colectas") };
     if (foco === "arribos") return { titulo: `Van llegando: ${col.llegaron} de ${col.totalArr} cadetes`, bajada: <>{col.totalArr - col.llegaron === 1 ? "Falta" : "Faltan"} <b style={{ color: C.ambar }}>{col.totalArr - col.llegaron}</b> por llegar al depósito. Marcá a cada uno cuando entra.</>, cta: "Abrir arribos", go: () => onNav("arribos") };
@@ -488,10 +489,10 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     return null;
   })();
   const focoEl = focoAccion ? (
-    <section aria-label="Foco de hoy" style={{ ...cardBase, borderRadius: 18, padding: isMobile ? "18px" : "20px 24px", borderColor: "rgba(245,192,68,0.35)", background: "linear-gradient(100deg, rgba(245,192,68,0.12), transparent 60%), " + C.glass, display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center", justifyContent: "space-between", gap: isMobile ? 14 : 20 }}>
+    <section aria-label="Foco de hoy" style={{ ...cardBase, borderRadius: 20, padding: isMobile ? "18px" : "20px 24px", borderColor: "rgba(245,192,68,0.35)", background: "linear-gradient(100deg, rgba(245,192,68,0.12), transparent 60%), " + C.glass, display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center", justifyContent: "space-between", gap: isMobile ? 14 : 20 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 14, minWidth: 0 }}>
         {!isMobile && (
-          <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 12, background: "rgba(245,192,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 14, background: "rgba(245,192,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.ambar} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg>
           </span>
         )}
@@ -522,7 +523,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     const fuerte = r.nivel === "fuerte";
     const color = fuerte ? C.rojo : C.ambar;
     return (
-      <div style={{ ...cardBase, borderRadius: 16, padding: isMobile ? "14px 16px" : "14px 20px", borderColor: fuerte ? "rgba(232,97,95,0.45)" : "rgba(245,192,68,0.4)", background: `linear-gradient(135deg, ${fuerte ? "rgba(232,97,95,0.10)" : "rgba(245,192,68,0.08)"}, transparent 70%), ${C.glass}` }}>
+      <div style={{ ...cardBase, borderRadius: 14, padding: isMobile ? "14px 16px" : "14px 20px", borderColor: fuerte ? "rgba(232,97,95,0.45)" : "rgba(245,192,68,0.4)", background: `linear-gradient(135deg, ${fuerte ? "rgba(232,97,95,0.10)" : "rgba(245,192,68,0.08)"}, transparent 70%), ${C.glass}` }}>
         {hoyMal && <Lluvia intensidad={clima.ahora || r.nivel} rafagas={clima.actual ? clima.actual.rafagas : 0} />}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <IconoClima nivel={r.nivel} size={28} />
@@ -587,10 +588,10 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
 
   // ── Arribos: cuántos llegaron y QUIÉN falta ──
   const arribosEl = session && col && col.totalArr > 0 && (
-    <article style={{ ...cardBase, borderRadius: 16, padding: isMobile ? 16 : "20px 22px", display: "flex", flexDirection: "column", gap: 12, flex: isMobile ? "none" : "3 1 380px", minWidth: 0 }}>
+    <article style={{ ...cardBase, borderRadius: 14, padding: isMobile ? 16 : "20px 22px", display: "flex", flexDirection: "column", gap: 12, flex: isMobile ? "none" : "3 1 380px", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={cardTitle}>Arribos</h2>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", color: C.teal }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal }} />EN VIVO</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: C.teal }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.teal }} />EN VIVO</span>
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ ...tileNum(isMobile), fontSize: isMobile ? 34 : 42 }}>{col.llegaron}</span>
@@ -621,10 +622,10 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
 
   // ── Notas del equipo ──
   const notasEl = session && (
-    <article style={{ ...cardBase, borderRadius: 16, padding: isMobile ? "14px 16px" : "20px 22px", display: "flex", flexDirection: "column", gap: 6, flex: isMobile ? "none" : "2 1 300px", minWidth: 0 }}>
+    <article style={{ ...cardBase, borderRadius: 14, padding: isMobile ? "14px 16px" : "20px 22px", display: "flex", flexDirection: "column", gap: 6, flex: isMobile ? "none" : "2 1 300px", minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={cardTitle}>Notas del equipo</h2>
-        <button type="button" onClick={() => onNav("pizarra")} style={{ background: "none", border: "none", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 12.5, padding: "6px 0" }}>+ Nueva</button>
+        <button type="button" onClick={() => onNav("pizarra")} style={{ background: "none", border: "none", color: C.teal, fontWeight: 600, cursor: "pointer", fontSize: 13, padding: "6px 0" }}>+ Nueva</button>
       </div>
       {notasHoy.length === 0 ? (
         <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "row" : "column", alignItems: "center", justifyContent: "center", gap: 10, padding: isMobile ? "4px 0" : "14px 0", textAlign: isMobile ? "left" : "center", fontSize: 13, color: C.ink2 }}>
@@ -644,8 +645,8 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
               <div key={n.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 0", borderTop: `1px solid ${C.line}`, flexWrap: "wrap" }}>
                 <div title={t.label} style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.grotesk, fontWeight: 600, fontSize: 12, color: col2, background: col2 + "22" }}>{(n.autor || "?")[0].toUpperCase()}</div>
                 <div style={{ flex: 1, minWidth: 150, fontSize: 13 }}>
-                  {urg && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: C.rojo, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>AHORA</span>}
-                  {hora && <span style={{ fontSize: 10, fontWeight: 800, color: "#1a1500", background: C.ambar, borderRadius: 5, padding: "1px 6px", marginRight: 6 }}>{n.hora_limite}</span>}
+                  {urg && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: C.rojo, borderRadius: 6, padding: "1px 6px", marginRight: 6 }}>AHORA</span>}
+                  {hora && <span style={{ fontSize: 10, fontWeight: 800, color: "#1a1500", background: C.ambar, borderRadius: 6, padding: "1px 6px", marginRight: 6 }}>{n.hora_limite}</span>}
                   {textoNota(n)}
                   {n.tipo === "ausencia" && n.cubre && <span style={{ color: C.teal, fontWeight: 600 }}> · cubre {n.cubre}</span>}
                   <span style={{ display: "block", fontSize: 11, color: C.ink3, marginTop: 1 }}>{n.autor}{t.label ? ` · ${t.label}` : ""}</span>
@@ -666,14 +667,14 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   );
 
   const sinSesionEl = !session && (
-    <div style={{ ...cardBase, borderRadius: 16, padding: "16px 18px", fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
+    <div style={{ ...cardBase, borderRadius: 14, padding: "16px 18px", fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
       Ingresá arriba a la derecha para ver colectas, arribos y las notas del equipo en vivo.
     </div>
   );
 
   const buscarBtn = session && puedeVer("envio") && (
     <button type="button" onClick={() => onNav("envio")} aria-label="Buscar envío"
-      style={{ display: "flex", alignItems: "center", gap: 10, height: isMobile ? 46 : 42, width: isMobile ? "100%" : 280, boxSizing: "border-box", padding: "0 14px", borderRadius: 12, border: `1px solid rgba(255,255,255,0.08)`, background: C.glassSoft, color: C.ink3, cursor: "pointer", fontSize: isMobile ? 15 : 13, textAlign: "left" }}
+      style={{ display: "flex", alignItems: "center", gap: 10, height: isMobile ? 46 : 42, width: isMobile ? "100%" : 280, boxSizing: "border-box", padding: "0 14px", borderRadius: 14, border: `1px solid rgba(255,255,255,0.08)`, background: C.glassSoft, color: C.ink3, cursor: "pointer", fontSize: isMobile ? 15 : 13, textAlign: "left" }}
       onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(46,230,182,0.35)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -694,7 +695,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
     </div>
   );
   const logoEl = (size) => (
-    <div onClick={clickLogoEgg} style={{ width: size, height: size, borderRadius: 12, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)", userSelect: "none" }}>
+    <div onClick={clickLogoEgg} style={{ width: size, height: size, borderRadius: 14, overflow: "hidden", flexShrink: 0, boxShadow: "inset 0 0 0 1px rgba(46,230,182,0.25)", userSelect: "none" }}>
       <img src={logo} alt="Flexit" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
     </div>
   );
@@ -728,9 +729,9 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
         <nav aria-label="Módulos" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 8 }}>
           {modulos.map((d) => (
             <button key={d.id} type="button" onClick={() => onNav(d.id)} style={{ ...cardBase, borderRadius: 14, padding: "14px 6px", minHeight: 78, textAlign: "center", cursor: "pointer", color: C.ink2 }}>
-              {d.id === "pizarra" && comBadge > 0 && <span style={{ position: "absolute", top: 8, right: 10, minWidth: 18, height: 18, borderRadius: 9, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
+              {d.id === "pizarra" && comBadge > 0 && <span style={{ position: "absolute", top: 8, right: 10, minWidth: 18, height: 18, borderRadius: 10, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
               <div style={{ color: C.teal, marginBottom: 7, display: "flex", justifyContent: "center" }}><Icon id={d.id} size={22} /></div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, fontFamily: C.grotesk }}>{d.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, fontFamily: C.grotesk }}>{d.label}</div>
             </button>
           ))}
         </nav>
@@ -741,14 +742,14 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   // ════════════════ ESCRITORIO ════════════════
   // El menú queda pegado a la izquierda y el contenido se centra en el espacio que sobra
   // (tope 1320 px): en pantallas anchas no queda todo amontonado a la izquierda.
-  const navItem = (activo) => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", borderRadius: 10, border: "none", background: activo ? "rgba(46,230,182,0.10)" : "transparent", color: activo ? C.ink : C.ink2, fontSize: 13.5, fontWeight: activo ? 600 : 500, cursor: activo ? "default" : "pointer", textAlign: "left", transition: "background .15s ease, color .15s ease" });
+  const navItem = (activo) => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", borderRadius: 10, border: "none", background: activo ? "rgba(46,230,182,0.10)" : "transparent", color: activo ? C.ink : C.ink2, fontSize: 14, fontWeight: activo ? 600 : 500, cursor: activo ? "default" : "pointer", textAlign: "left", transition: "background .15s ease, color .15s ease" });
   return (
     <div style={{ minHeight: "calc(100vh - 3rem)", display: "flex", alignItems: "flex-start", gap: 28 }}>
       {fondo}
       {eggPaco && <PacoEgg onClose={() => setEggPaco(false)} />}
 
       {/* Menú lateral — reemplaza la fila de accesos de abajo */}
-      <nav aria-label="Módulos" style={{ position: "sticky", top: 24, zIndex: 2, width: 216, flexShrink: 0, height: "calc(100vh - 48px)", boxSizing: "border-box", padding: "18px 12px", borderRadius: 18, background: "rgba(15,15,27,0.55)", border: `1px solid ${C.line}`, display: "flex", flexDirection: "column", gap: 3, fontFamily: fuente }}>
+      <nav aria-label="Módulos" style={{ position: "sticky", top: 24, zIndex: 2, width: 216, flexShrink: 0, height: "calc(100vh - 48px)", boxSizing: "border-box", padding: "18px 12px", borderRadius: 20, background: "rgba(15,15,27,0.55)", border: `1px solid ${C.line}`, display: "flex", flexDirection: "column", gap: 3, fontFamily: fuente }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px 18px" }}>
           {logoEl(36)}
           <span style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 17, color: C.ink }}>Flexit</span>
@@ -763,7 +764,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.ink2; }}>
             <Icon id={d.id} size={18} />
             {d.label}
-            {d.id === "pizarra" && comBadge > 0 && <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
+            {d.id === "pizarra" && comBadge > 0 && <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 10, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
           </button>
         ))}
         <div style={{ flex: 1, minHeight: 16 }} />
@@ -772,7 +773,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: C.grotesk, fontWeight: 600, fontSize: 13, color: C.ink, flexShrink: 0 }}>{(usuario || session.email || "?")[0].toUpperCase()}</div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{usuario || "Equipo"}</div>
-              <div style={{ fontSize: 11.5, color: C.ink3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.email}</div>
+              <div style={{ fontSize: 12, color: C.ink3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.email}</div>
             </div>
             {onLogout && <button type="button" onClick={onLogout} style={{ background: "none", border: "none", color: C.ink3, fontSize: 12, cursor: "pointer", padding: 6, flexShrink: 0 }}>Salir</button>}
           </div>

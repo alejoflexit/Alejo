@@ -79,7 +79,7 @@ function QrImagen({ valor }) {
     import('qrcode').then(m => m.toDataURL(valor, { width: 260, margin: 2 })).then(setImg).catch(() => setImg(''));
   }, [valor]);
   if (!img) return <div style={{ width: 260, height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 12 }}>Cargando QR…</div>;
-  return <img src={img} alt="QR para vincular tu WhatsApp" width={260} height={260} style={{ background: '#fff', borderRadius: 8, padding: 6 }} />;
+  return <img src={img} alt="QR para vincular tu WhatsApp" width={260} height={260} style={{ background: '#fff', borderRadius: 10, padding: 6 }} />;
 }
 
 export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, filas, metodoInicial, tarifas, avisados, armarMensaje, sb, norm, BRAND, onCerrar, onAvisadosCambio, onTarifasCambio }) {
@@ -240,8 +240,8 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
   const fin = activos.length ? activos[activos.length - 1].enviar_desde : null;
 
   const btn = (primario, dis) => ({
-    padding: '8px 14px', fontSize: 13, fontWeight: 700, borderRadius: 9, cursor: dis ? 'default' : 'pointer', opacity: dis ? 0.5 : 1,
-    border: `1px solid ${primario ? BRAND.teal : BRAND.border}`, background: primario ? 'rgba(46,207,170,0.14)' : BRAND.faint, color: primario ? BRAND.teal : BRAND.white,
+    padding: '8px 14px', fontSize: 13, fontWeight: 700, borderRadius: 10, cursor: dis ? 'default' : 'pointer', opacity: dis ? 0.5 : 1,
+    border: `1px solid ${primario ? BRAND.teal : BRAND.border}`, background: primario ? 'rgba(46,230,182,0.14)' : BRAND.faint, color: primario ? BRAND.teal : BRAND.white,
   });
   const chipEstado = (() => {
     if (!salud) return { t: 'Cargando…', c: BRAND.muted };
@@ -263,12 +263,12 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
     return (
       <div key={x.f.key} onClick={e => { if (elegible && !e.target.closest('a,button,input')) toggle(x.f.key); }}
         style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 10px', marginTop: 6, borderRadius: 10, cursor: elegible ? 'pointer' : 'default',
-          border: `1px solid ${marcado ? BRAND.teal : BRAND.border}`, background: marcado ? 'rgba(46,207,170,0.07)' : 'transparent' }}>
+          border: `1px solid ${marcado ? BRAND.teal : BRAND.border}`, background: marcado ? 'rgba(46,230,182,0.07)' : 'transparent' }}>
         <input type="checkbox" checked={marcado} disabled={!elegible} onChange={() => toggle(x.f.key)}
           style={{ width: 20, height: 20, marginTop: 2, flex: '0 0 auto', accentColor: BRAND.teal }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{x.f.nombre}</span>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>{x.f.nombre}</span>
             {x.guardado && escribiendo === undefined && (
               <button onClick={() => setNumeros(p => ({ ...p, [x.f.key]: mostrarWhatsapp(x.guardado) }))} title="cambiar número"
                 style={{ background: 'none', border: 'none', padding: 0, color: BRAND.muted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline dotted' }}>{mostrarWhatsapp(x.guardado)}</button>
@@ -277,7 +277,7 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
               // Plan B sin servidor: abre tu WhatsApp con el mensaje escrito; vos tocás enviar. Marca "Avisado".
               <a href={`https://wa.me/${x.guardado.replace(/@c\.us$/, '')}?text=${encodeURIComponent(x.texto)}`}
                 target="_blank" rel="noopener noreferrer" onClick={() => onAbrirWhatsapp && onAbrirWhatsapp(x.f)}
-                style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, border: `1px solid ${BRAND.border}`, borderRadius: 7, padding: '2px 8px', textDecoration: 'none' }}>
+                style={{ fontSize: 12, fontWeight: 700, color: BRAND.teal, border: `1px solid ${BRAND.border}`, borderRadius: 6, padding: '2px 8px', textDecoration: 'none' }}>
                 Abrir en WhatsApp
               </a>
             )}
@@ -292,9 +292,9 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
               <input type="tel" inputMode="tel" placeholder="Celular, ej. 11 2233 4455" value={escribiendo || ''}
                 onChange={e => setNumeros(p => ({ ...p, [x.f.key]: e.target.value }))}
                 onKeyDown={e => { if (e.key === 'Enter') guardarNumero(x, escribiendo); }}
-                style={{ width: 190, padding: '6px 9px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.navy, color: BRAND.white }} />
+                style={{ width: 190, padding: '6px 9px', fontSize: 13, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: BRAND.navy, color: BRAND.white }} />
               <button disabled={!escribiendo} onClick={() => guardarNumero(x, escribiendo)} style={{ ...btn(false, !escribiendo), padding: '5px 10px', fontSize: 12 }}>Guardar</button>
-              {escribiendo && normalizarWhatsapp(escribiendo) && <span style={{ fontSize: 11.5, color: BRAND.muted }}>{mostrarWhatsapp(normalizarWhatsapp(escribiendo))}</span>}
+              {escribiendo && normalizarWhatsapp(escribiendo) && <span style={{ fontSize: 12, color: BRAND.muted }}>{mostrarWhatsapp(normalizarWhatsapp(escribiendo))}</span>}
               {x.guardado && <button onClick={() => setNumeros(p => { const n = { ...p }; delete n[x.f.key]; return n; })} style={{ background: 'none', border: 'none', color: BRAND.muted, fontSize: 12, cursor: 'pointer' }}>cancelar</button>}
               {x.sug && !x.sug.ambiguo && escribiendo === undefined && (
                 <span style={{ fontSize: 12, color: BRAND.muted }}>
@@ -311,7 +311,7 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
               )}
             </div>
           )}
-          <div style={{ marginTop: 5, fontSize: 12.5, color: BRAND.muted, whiteSpace: 'pre-wrap' }}>{x.texto}</div>
+          <div style={{ marginTop: 5, fontSize: 13, color: BRAND.muted, whiteSpace: 'pre-wrap' }}>{x.texto}</div>
         </div>
       </div>
     );
@@ -326,11 +326,11 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
             <div style={{ fontSize: 15, fontWeight: 800 }}>Enviar por WhatsApp <span style={{ color: BRAND.muted, fontWeight: 500 }}>· {semanaTxt}</span></div>
             <button onClick={onCerrar} aria-label="cerrar" style={{ background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 18, padding: 4 }}>✕</button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8, fontSize: 12.5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8, fontSize: 13 }}>
             <span style={{ color: BRAND.muted }}>Tu WhatsApp:</span>
             <span style={{ color: chipEstado.c, fontWeight: 700 }}>{chipEstado.t}</span>
             {salud && salud.estado && !conectado && (
-              <span style={{ color: BRAND.muted, fontSize: 11.5 }}>servidor: {salud.estado}{salud.estado_at ? ` · ${hora(salud.estado_at)}` : ''}{salud.ultimo_error ? ` · ${salud.ultimo_error}` : ''}</span>
+              <span style={{ color: BRAND.muted, fontSize: 12 }}>servidor: {salud.estado}{salud.estado_at ? ` · ${hora(salud.estado_at)}` : ''}{salud.ultimo_error ? ` · ${salud.ultimo_error}` : ''}</span>
             )}
             {!conectado && !qrFresco && <button disabled={busy} onClick={conectar} style={{ ...btn(false, busy), padding: '4px 10px', fontSize: 12 }}>{salud && salud.estado ? 'Conectar ahora' : 'Vincular mi WhatsApp'}</button>}
             {conectado && <button disabled={busy} onClick={conectar} title="vuelve a leer tus contactos para sugerir números" style={{ ...btn(false, busy), padding: '4px 10px', fontSize: 12 }}>Actualizar contactos</button>}
@@ -343,10 +343,10 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
               const on = metodo === m; const n = pendientesDe(m);
               return (
                 <button key={m} onClick={() => cambiarMetodo(m)}
-                  style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700,
                     background: on ? BRAND.navyCard : 'transparent', color: on ? BRAND.white : BRAND.muted, boxShadow: on ? '0 1px 3px rgba(0,0,0,.35)' : 'none' }}>
                   <div>{l}</div>
-                  <div style={{ fontSize: 11.5, fontWeight: 500, marginTop: 1, color: on ? BRAND.teal : BRAND.muted }}>{n ? `${n} por avisar` : 'todos avisados ✓'}</div>
+                  <div style={{ fontSize: 12, fontWeight: 500, marginTop: 1, color: on ? BRAND.teal : BRAND.muted }}>{n ? `${n} por avisar` : 'todos avisados ✓'}</div>
                 </button>
               );
             })}
@@ -376,7 +376,7 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
 
           {/* Por avisar: con número (para elegir) y sin número (cargarlo) */}
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, margin: '4px 0 2px' }}>
-            <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: BRAND.muted }}>Por avisar · {conNumero.length}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: BRAND.muted }}>Por avisar · {conNumero.length}</div>
             {conNumero.some(puedeElegir) && <button onClick={() => setElegidos(new Set(conNumero.filter(puedeElegir).map(x => x.f.key)))}
               style={{ background: 'none', border: 'none', color: BRAND.teal, fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Elegir todos</button>}
           </div>
@@ -385,7 +385,7 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
 
           {sinNumero.length > 0 && (
             <>
-              <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: BRAND.muted, margin: '18px 0 2px' }}>Sin número · {sinNumero.length}</div>
+              <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: BRAND.muted, margin: '18px 0 2px' }}>Sin número · {sinNumero.length}</div>
               <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 4 }}>{contactos.length ? 'Si aparece una sugerencia de tus contactos, tocá "Usar".' : 'Escribí el celular y tocá Guardar.'}</div>
               {sinNumero.map(renderFila)}
             </>
@@ -394,7 +394,7 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
           {avisadosTab.length > 0 && (
             <>
               <button onClick={() => setVerAvisados(v => !v)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', margin: '18px 0 2px', padding: '6px 0', background: 'none', border: 'none', cursor: 'pointer', color: BRAND.muted, fontSize: 11.5, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', margin: '18px 0 2px', padding: '6px 0', background: 'none', border: 'none', cursor: 'pointer', color: BRAND.muted, fontSize: 12, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase' }}>
                 <span style={{ display: 'inline-block', width: 10 }}>{verAvisados ? '▾' : '▸'}</span> Ya avisados · {avisadosTab.length}
               </button>
               {verAvisados && avisadosTab.map(renderFila)}
@@ -404,11 +404,11 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
 
         {/* pie */}
         <div style={{ padding: '12px 18px', borderTop: `1px solid ${BRAND.border}` }}>
-          {err && <div style={{ fontSize: 12.5, color: BRAND.amber, marginBottom: 8 }}>{err}</div>}
-          {msg && !err && <div style={{ fontSize: 12.5, color: BRAND.muted, marginBottom: 8 }}>{msg}</div>}
+          {err && <div style={{ fontSize: 13, color: BRAND.amber, marginBottom: 8 }}>{err}</div>}
+          {msg && !err && <div style={{ fontSize: 13, color: BRAND.muted, marginBottom: 8 }}>{msg}</div>}
           {!confirmar ? (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12.5, color: BRAND.muted }}>{aMandar.length} elegido{aMandar.length === 1 ? '' : 's'} · {metodo === 'transferencia' ? 'transferencia' : 'efectivo'}</span>
+              <span style={{ fontSize: 13, color: BRAND.muted }}>{aMandar.length} elegido{aMandar.length === 1 ? '' : 's'} · {metodo === 'transferencia' ? 'transferencia' : 'efectivo'}</span>
               {aMandar.length > 0 && <button onClick={() => setElegidos(new Set())} style={{ ...btn(false, false), padding: '5px 10px', fontSize: 12 }}>Desmarcar</button>}
               <button disabled={!aMandar.length || busy} onClick={() => setConfirmar(true)} style={{ ...btn(true, !aMandar.length || busy), marginLeft: 'auto' }}>{aMandar.length ? `Mandar ${aMandar.length} mensaje${aMandar.length === 1 ? '' : 's'}…` : 'Mandar mensajes…'}</button>
             </div>
@@ -420,7 +420,7 @@ export default function LiqWhatsapp({ onAbrirWhatsapp, semanaLunes, semanaTxt, f
                   <button onClick={() => setProgramar(true)} style={{ ...btn(programar, false), padding: '4px 11px', fontSize: 12 }}>Programar</button>
                   {programar && (
                     <input type="datetime-local" value={cuando} onChange={e => setCuando(e.target.value)}
-                      style={{ padding: '4px 8px', fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: BRAND.navy, color: BRAND.white, colorScheme: 'dark' }} />
+                      style={{ padding: '4px 8px', fontSize: 13, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: BRAND.navy, color: BRAND.white, colorScheme: 'dark' }} />
                   )}
                 </div>
                 Se mandan <b>{aMandar.length}</b> mensaje{aMandar.length === 1 ? '' : 's'} desde <b>tu WhatsApp</b>{programar && cuando ? <>, desde el <b>{hora(new Date(cuando).toISOString())}</b></> : ' ya'}, de a uno cada ~30 s
