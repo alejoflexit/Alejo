@@ -28,6 +28,8 @@ const ICONS = {
   pendientes: (<><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v6h6" /><path d="M12 7v5l3 2" /></>),
   devoluciones: (<><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></>),
   doblebulto: (<><rect x="2" y="12" width="9" height="9" rx="1.5" /><rect x="13" y="12" width="9" height="9" rx="1.5" /><rect x="7.5" y="3" width="9" height="9" rx="1.5" /></>),
+  extraviados: (<><path d="M21 8 12 3 3 8v8l9 5 9-5Z" /><path d="M3 8l9 5 9-5M12 13v8" /><path d="m15.5 15.5 3 3m0-3-3 3" /></>),
+  zonas: (<><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" /><circle cx="12" cy="10" r="2.5" /></>),
   bell: (<><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></>),
   arrow: (<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>),
   check: (<><path d="M20 6 9 17l-5-5" /></>),
@@ -469,12 +471,15 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   })();
   const colCompleto = !!(col && col.totalCol > 0 && col.sinChofer === 0 && col.confirmadas === col.totalCol);
 
-  const modulos = [
-    { id: "metricas", label: "Métricas" }, { id: "colectas", label: "Colectas" }, { id: "arribos", label: "Arribos" }, { id: "monitoreo", label: "Monitoreo" },
-    { id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }, { id: "pagos", label: "Pagos" }, { id: "pendientes", label: "Históricos" },
-    { id: "devoluciones", label: "Devoluciones" }, { id: "doblebulto", label: "Doble bulto" }, { id: "extraviados", label: "Extraviados" },
-  ].filter((d) => puedeVer(d.id))
-    .concat(session && esAdmin() ? [{ id: "usuarios", label: "Usuarios" }] : []); // solo el admin
+  // Mismos grupos que el menú de App.js (NAV_GRUPOS, 13/11/2026)
+  const gruposModulos = [
+    { titulo: "En vivo", items: [{ id: "metricas", label: "Métricas" }, { id: "monitoreo", label: "Monitoreo" }, { id: "zonas", label: "Zonas" }, { id: "arribos", label: "Arribos" }, { id: "colectas", label: "Colectas" }] },
+    { titulo: "Depósito", items: [{ id: "devoluciones", label: "Devoluciones" }, { id: "doblebulto", label: "Doble bulto" }, { id: "extraviados", label: "Extraviados" }, { id: "pendientes", label: "Históricos" }] },
+    { titulo: "Atención", items: [{ id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }] },
+    { titulo: "Administración", items: [{ id: "pagos", label: "Liquidaciones", soloAdmin: true }, { id: "usuarios", label: "Usuarios", soloAdmin: true }] },
+  ].map((g) => ({ ...g, items: g.items.filter((d) => (d.soloAdmin ? !!(session && esAdmin()) : true) && puedeVer(d.id)) }))
+    .filter((g) => g.items.length);
+  const modulos = gruposModulos.flatMap((g) => g.items);
 
   // ── Foco de hoy: franja fina si está todo bien; tarjeta protagonista (ámbar) si hay algo que hacer ──
   const focoTitulo = { fontFamily: C.grotesk, fontSize: isMobile ? 20 : 23, fontWeight: 600, letterSpacing: "-0.5px", margin: "6px 0 4px", lineHeight: 1.2 };
@@ -742,14 +747,14 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   // ════════════════ ESCRITORIO ════════════════
   // El menú queda pegado a la izquierda y el contenido se centra en el espacio que sobra
   // (tope 1320 px): en pantallas anchas no queda todo amontonado a la izquierda.
-  const navItem = (activo) => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", borderRadius: 10, border: "none", background: activo ? "rgba(46,230,182,0.10)" : "transparent", color: activo ? C.ink : C.ink2, fontSize: 14, fontWeight: activo ? 600 : 500, cursor: activo ? "default" : "pointer", textAlign: "left", transition: "background .15s ease, color .15s ease" });
+  const navItem = (activo) => ({ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "8px 12px", borderRadius: 10, border: "none", background: activo ? "rgba(46,230,182,0.10)" : "transparent", color: activo ? C.ink : C.ink2, fontSize: 14, fontWeight: activo ? 600 : 500, cursor: activo ? "default" : "pointer", textAlign: "left", transition: "background .15s ease, color .15s ease" });
   return (
     <div style={{ minHeight: "calc(100vh - 3rem)", display: "flex", alignItems: "flex-start", gap: 28 }}>
       {fondo}
       {eggPaco && <PacoEgg onClose={() => setEggPaco(false)} />}
 
       {/* Menú lateral — reemplaza la fila de accesos de abajo */}
-      <nav aria-label="Módulos" style={{ position: "sticky", top: 24, zIndex: 2, width: 216, flexShrink: 0, height: "calc(100vh - 48px)", boxSizing: "border-box", padding: "18px 12px", borderRadius: 20, background: "rgba(15,15,27,0.55)", border: `1px solid ${C.line}`, display: "flex", flexDirection: "column", gap: 3, fontFamily: fuente }}>
+      <nav aria-label="Módulos" style={{ position: "sticky", top: 24, zIndex: 2, width: 216, flexShrink: 0, height: "calc(100vh - 48px)", overflowY: "auto", boxSizing: "border-box", padding: "18px 12px", borderRadius: 20, background: "rgba(15,15,27,0.55)", border: `1px solid ${C.line}`, display: "flex", flexDirection: "column", gap: 3, fontFamily: fuente }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 6px 18px" }}>
           {logoEl(36)}
           <span style={{ fontFamily: C.grotesk, fontWeight: 700, fontSize: 17, color: C.ink }}>Flexit</span>
@@ -758,7 +763,10 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.teal} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z" /></svg>
           Inicio
         </button>
-        {modulos.map((d) => (
+        {gruposModulos.map((g) => (
+          <React.Fragment key={g.titulo}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: C.ink3, textTransform: "uppercase", letterSpacing: "0.08em", padding: "12px 12px 3px" }}>{g.titulo}</div>
+          {g.items.map((d) => (
           <button key={d.id} type="button" onClick={() => onNav(d.id)} style={navItem(false)}
             onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = C.ink; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.ink2; }}>
@@ -766,6 +774,8 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
             {d.label}
             {d.id === "pizarra" && comBadge > 0 && <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 10, background: C.rojo, color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", fontFamily: C.grotesk }}>{comBadge}</span>}
           </button>
+          ))}
+          </React.Fragment>
         ))}
         <div style={{ flex: 1, minHeight: 16 }} />
         {session && (
