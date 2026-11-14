@@ -15,7 +15,6 @@ import { bridgeFetch } from './bridge';
 //    llevaba todo el CP (Villa Real "32" cuando tenía 2 reales). Se desambigua con la localidad.
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
-const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
 const REFRESH_MS = 5 * 60 * 1000; // igual al cache del bridge
 const UMBRAL_LIMITE = 0.85;       // ≥85% del tope = "al límite"
@@ -41,9 +40,7 @@ function minutosAR() {
 const fechaLargaAR = (iso) => new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", weekday: "long", day: "2-digit", month: "2-digit" }).format(new Date(iso + "T12:00:00-03:00"));
 
 async function supa(pathQuery) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${pathQuery}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  });
+  const r = await authedFetch(`${SUPABASE_URL}/rest/v1/${pathQuery}`); // con sesión (seguridad 13/11)
   if (!r.ok) throw new Error(`Supabase ${pathQuery.split("?")[0]} → ${r.status}`);
   return r.json();
 }

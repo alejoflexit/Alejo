@@ -7,7 +7,7 @@
 1. **El repo `alejoflexit/alejo` es PÚBLICO.** Todo el código, las migraciones (el esquema de la base) y el historial completo se pueden leer sin login.
 2. **La contraseña del usuario `beto` de LightData está en el historial público** (estuvo escrita en `automation/*.js` desde junio hasta el 10/11). Mientras no se cambie, cualquiera puede entrar a LightData como beto.
 3. **La clave del bridge del VPS estaba en el frontend** (5 pantallas + `automation/colecta_snapshot.js`). Con ella cualquiera podía leer el GPS de los cadetes (`/geo`), el reparto, la colecta y el QR de cualquier envío.
-4. 11 tablas con lectura anónima + `reportes_bug` con escritura anónima (pendiente de la auditoría del 02/08). A confirmar con la consulta en vivo.
+4. Consulta en vivo (13/11): 17 tablas con lectura anónima, `reportes_bug` con alta anónima, y funciones SECURITY DEFINER ejecutables sin login. Las graves: `aplicar_correccion_dem21` y `aplicar_horas` (reescriben métricas de un día) y las 23 `atlas_*` (leen y escriben el proyecto Atlas: cualquiera podía meter texto en el digest de WhatsApp).
 5. No se encontraron en el historial: claves service_role, tokens de GitHub, de Anthropic ni de Telegram. El JWT que aparece es el `anon` (público por diseño).
 
 ## Arreglo de la clave del bridge (en curso)
@@ -21,7 +21,13 @@
   4. Borrar `LEGACY_KEY` y el respaldo de `src/bridge.js`, y el literal de `automation/colecta_snapshot.js`.
 - Efecto buscado: sin sesión, Monitoreo / Zonas / Colectas en vivo dejan de mostrar datos (piden iniciar sesión).
 
+## Cierre de lo anónimo (migración 20261113230000_seguridad_cerrar_anonimo.sql)
+- Código: App.js (`supabaseFetch`), Zonas.js (`supa`) y Analisis.js (`sbGet`) pasan a `authedFetch`. Desplegado ANTES de la migración.
+- Migración: 13 tablas pasan a lectura solo con sesión; `reportes_bug` alta solo con sesión; `aplicar_correccion_dem21` y `aplicar_horas` solo service_role.
+- Fuera a propósito: links de colecta, funciones del VPS con clave propia, `transito_*` de noticias, `atlas_*` (ver abajo), triggers.
+
 ## Pendiente
 - Decidir si el repo pasa a privado (ojo: GitHub Actions en privado incluye 2.000 min/mes gratis; hoy se usan ~3.600).
 - Cambiar la contraseña de `beto` en LightData (o darlo de baja).
 - RLS: cerrar lectura anónima de las tablas que confirme la consulta en vivo (antes, pasar sus lecturas a `authedFetch`).
+- Atlas: confirmar en n8n qué clave usa la credencial de Supabase. Si es la anon/publishable, pasarla a service_role y después revocar `atlas_*` a anon/authenticated.

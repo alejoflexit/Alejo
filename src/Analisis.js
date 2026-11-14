@@ -12,7 +12,6 @@ import { FX_FONT } from "./theme";
 // Regla de oro: una sola fórmula de SLA (slaMeli) usada en toda la pestaña.
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
-const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
 // Umbrales calibrables (mismos valores que el prototipo aprobado 2026-07-23).
 const CFG = {
@@ -97,9 +96,7 @@ function slaColor(s) { return s == null ? C.muted : s < CFG.slaCritico ? C.crit 
 function horColor(v) { return v == null ? C.muted : v <= 100 - CFG.tarde_post21 * 100 ? C.crit : v <= 100 - CFG.tarde_post21 * 50 ? C.warn : C.good; }
 
 async function sbGet(path) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  });
+  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/${path}`); // con sesión (seguridad 13/11)
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
