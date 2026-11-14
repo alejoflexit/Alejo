@@ -6,6 +6,7 @@ import CierreTurno from "./CierreTurno";
 import { ABRIR_CADETE_KEY, ActivarAvisos } from "./AlertasReparto";
 import { sbFetch, todayStr } from "./colectasShared";
 import { FX_FONT } from "./theme";
+import { bridgeFetch } from './bridge';
 
 // Monitoreo — avance del reparto POR CADETE, en vivo, + detector de caída de datos.
 // Fuente: bridge del VPS GET /reparto (Excel A planta = hoy, obs=2, cache 3 min). El bridge clasifica
@@ -13,8 +14,6 @@ import { FX_FONT } from "./theme";
 // historial interno de LightData. Reglas y criterios: wiki analisis/spec-monitoreo-reparto.
 // Estética: la del Inicio (vidrio, grises, un solo acento). Color solo en un punto chico de estado.
 
-const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/reparto";
-const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // misma key que Arribos/Zonas (riesgo aceptado, ver spec-lightdata-bridge)
 const REFRESH_MS = 3 * 60 * 1000;
 
 const C = {
@@ -68,10 +67,10 @@ export default function Monitoreo() {
     if (enCurso.current) return;
     enCurso.current = true; setCargando(true);
     try {
-      const r = await fetch(BRIDGE_URL, { headers: { "x-bridge-key": BRIDGE_KEY }, cache: "no-store" });
+      const r = await bridgeFetch("reparto");
       if (r.status === 404) { setSinEndpoint(true); return; }
       const j = await r.json().catch(() => null);
-      if (!r.ok || !j || !j.porCadete) throw new Error((j && j.error) || `bridge → ${r.status}`);
+      if (!r.ok || !j || !j.porCadete) throw new Error((j && j.error) || (r.status === 401 ? "Iniciá sesión para ver el reparto en vivo" : `bridge → ${r.status}`));
       setSinEndpoint(false); setDatos(j); setError(null); hayDatos.current = true;
     } catch (e) {
       setError({ msg: String(e.message || e) }); // conserva el último dato bueno

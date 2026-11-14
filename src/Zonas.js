@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { getSession, authedFetch } from "./auth";
 import { slaMeli } from "./slaShared";
 import ZonasMapa from "./ZonasMapa";
+import { bridgeFetch } from './bridge';
 
 // Zonas — saturación por TERRITORIO y por zona, EN VIVO (spec-zonas-en-vivo).
 // Fuente: bridge del VPS GET /zonas (Excel de ENVIOS con Fecha Flexit = hoy, cache 5 min).
@@ -13,8 +14,6 @@ import ZonasMapa from "./ZonasMapa";
 //    Liniers/Monte Castro/Versalles/Villa Luro/Villa Real). Con el CP solo, una zona chica se
 //    llevaba todo el CP (Villa Real "32" cuando tenía 2 reales). Se desambigua con la localidad.
 
-const BRIDGE_ZONAS_URL = "https://srv1801226.hstgr.cloud/bridge/zonas";
-const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // misma key que Arribos (riesgo aceptado, ver spec-lightdata-bridge)
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
 
@@ -359,10 +358,10 @@ export default function Zonas() {
     setCargando(true);
     try {
       const mapas = await cargarMapas();
-      const r = await fetch(`${BRIDGE_ZONAS_URL}`, { headers: { "x-bridge-key": BRIDGE_KEY } });
+      const r = await bridgeFetch("zonas");
       const j = await r.json().catch(() => null);
       if (r.status === 404 || (j && j.error === "ruta desconocida")) { setSinEndpoint(true); setError(null); return; }
-      if (!r.ok || !j || (!j.porDet && !j.porCP)) throw new Error((j && j.error) || `bridge → ${r.status}`);
+      if (!r.ok || !j || (!j.porDet && !j.porCP)) throw new Error((j && j.error) || (r.status === 401 ? "Iniciá sesión para ver las zonas en vivo" : `bridge → ${r.status}`));
       setSinEndpoint(false);
 
       const { cpZonas, todasZonas } = mapas;

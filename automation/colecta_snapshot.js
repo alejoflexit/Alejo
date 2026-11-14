@@ -12,7 +12,9 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 // Bridge LightData (VPS) — solo lectura; la key ya es visible en el bundle de la app
 // (riesgo aceptado, ver spec-lightdata-bridge). Misma key que src/Colectas.js.
 const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
-const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b";
+// La clave viene del secreto BRIDGE_KEY de GitHub. El literal es SOLO para la transición:
+// borrarlo cuando se rote la clave del VPS (ver ESTADO-SEGURIDAD.md).
+const BRIDGE_KEY = process.env.BRIDGE_KEY || "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b";
 
 // misma normalización que src/Colectas.js
 function normNombre(s) {

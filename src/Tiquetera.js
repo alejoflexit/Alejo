@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { login, logout, getSession, authedFetch, getToken } from "./auth";
 import { FX_FONT } from "./theme";
+import { bridgeFetch } from './bridge';
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yYrDNXJECjKQJaa7xx4dww_iwugKOnI";
@@ -20,8 +21,6 @@ async function sb(path, options = {}) {
 }
 
 // LightData API externa (mismo mecanismo que la verificación de demorados en App.js)
-const BRIDGE_QR_URL = "https://srv1801226.hstgr.cloud/bridge/envio-qr";
-const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // misma key que Arribos/Zonas/Monitoreo
 const TOKEN_EMPRESA = "ldae_125_6e2c8f1d4a9b3d7c5f0a2e8b1c4d7a96";
 const ID_EMPRESA = 125;
 
@@ -181,7 +180,7 @@ function PanelEnvio({ caso }) {
     let vivo = true;
     (async () => {
       try {
-        const r = await fetch(`${BRIDGE_QR_URL}?did=${encodeURIComponent(envioId)}`, { headers: { "x-bridge-key": BRIDGE_KEY }, cache: "no-store" });
+        const r = await bridgeFetch("envio-qr", { did: String(envioId) });
         const j = r.ok ? await r.json() : null;
         if (!j || !j.qr) return;
         const m = await import("qrcode");

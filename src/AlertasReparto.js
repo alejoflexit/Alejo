@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { armarCadetes, enAlerta, HORA_ALERTA, saludDatos, minSinEntregar, hace, hhmm, mensajeReclamo } from "./monitoreoShared";
 import { sbFetch } from "./colectasShared";
 import { getSession } from "./auth";
+import { bridgeFetch } from './bridge';
 
 // Alertas del reparto en TODA la app (pedido 26/10): cuando un cadete queda frenado con Flex en
 // riesgo, salta un pop-up esté donde esté el usuario dentro de la app, y si la pestaña no está a la
@@ -9,8 +10,6 @@ import { getSession } from "./auth";
 // Misma regla que la banda de Monitoreo y el vigía de Telegram (enAlerta). Una vez por cadete por día
 // y por navegador. Con la data caída no alerta por cadete (todos parecen frenados).
 
-const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/reparto";
-const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // misma key que Monitoreo (riesgo aceptado)
 const CADA_MS = 3 * 60 * 1000;
 const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e", rojo: "#E8615F", teal: "#2ee6b6",
@@ -39,7 +38,7 @@ export default function AlertasReparto({ onIrMonitoreo }) {
   const copiarReclamo = useCallback(async (cadete) => {
     let texto = null;
     try {
-      const r = await fetch(BRIDGE_URL, { headers: { "x-bridge-key": BRIDGE_KEY }, cache: "no-store" });
+      const r = await bridgeFetch("reparto");
       const d = await r.json();
       const c = d && d.porCadete && d.porCadete[cadete];
       if (c) texto = mensajeReclamo({ ...c, nombre: cadete }, ahoraAR(d.actualizado).min);
@@ -64,7 +63,7 @@ export default function AlertasReparto({ onIrMonitoreo }) {
     if (a.dow === "Sun" || a.min < HORA_ALERTA || a.min > 23 * 60) return;
     let d;
     try {
-      const r = await fetch(BRIDGE_URL, { headers: { "x-bridge-key": BRIDGE_KEY }, cache: "no-store" });
+      const r = await bridgeFetch("reparto");
       if (!r.ok) return;
       d = await r.json();
     } catch (e) { return; }

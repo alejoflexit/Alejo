@@ -1,0 +1,46 @@
+name: Supabase · deploy de funciones
+
+# Despliega funciones de supabase/functions/ sin depender de la PC de nadie.
+# Secretos de GitHub necesarios:
+#   SUPABASE_ACCESS_TOKEN  token personal de Supabase (Account › Access Tokens)
+#   BRIDGE_KEY             clave del bridge del VPS (la misma de /root/flexit/bridge.key)
+# Al desplegar `bridge` también carga BRIDGE_KEY como secreto de la función.
+
+on:
+  workflow_dispatch:
+    inputs:
+      funcion:
+        description: 'Función a desplegar'
+        required: true
+        default: 'bridge'
+        type: choice
+        options: [bridge, refrescar-envios, devoluciones-accion, admin-usuarios]
+  push:
+    branches: [main]
+    paths: ['supabase/functions/bridge/**']
+
+concurrency:
+  group: supabase-funciones
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: svlagoosmxxcsbevkrhy
+      FUNCION: ${{ inputs.funcion || 'bridge' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Secreto de la función bridge
+        if: env.FUNCION == 'bridge'
+        env:
+          BRIDGE_KEY: ${{ secrets.BRIDGE_KEY }}
+        run: |
+          test -n "$BRIDGE_KEY" || { echo "Falta el secreto BRIDGE_KEY en GitHub"; exit 1; }
+          supabase secrets set --project-ref "$PROJECT_REF" BRIDGE_KEY="$BRIDGE_KEY"
+      - name: Deploy
+        run: supabase functions deploy "$FUNCION" --project-ref "$PROJECT_REF" --use-api

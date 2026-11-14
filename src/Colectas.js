@@ -6,16 +6,13 @@ import {
 } from './colectasShared';
 import ColectasBot from './ColectasBot';
 import { FX_FONT } from "./theme";
+import { bridgeFetch } from './bridge';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
 const ClienteUbicacion = React.lazy(() => import('./ClienteUbicacion'));
 
-// Bridge LightData (VPS) — solo lectura, riesgo aceptado de exponer la key en el bundle (ver spec-lightdata-bridge)
-const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta";
-const BRIDGE_GEO_URL = "https://srv1801226.hstgr.cloud/bridge/geo"; // GPS de cadetes (proximidad al depósito)
-const BRIDGE_DETALLE_URL = "https://srv1801226.hstgr.cloud/bridge/colecta-detalle"; // detalle por zona+localidad de lo que trae cada cadete
+// Bridge LightData (VPS): se accede vía src/bridge.js (función de Supabase con sesión; la clave no va en el front)
 const GEO_ALERTA_M = 800; // umbral: alerta cuando el cadete está a <= 800 m de la base
-const BRIDGE_KEY = "db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b"; // clave del bridge (/root/flexit/bridge.key en el VPS) — visible en el bundle, riesgo aceptado (ver spec-lightdata-bridge)
 
 const SECCIONES = ['CABA', 'SUR', 'NOROESTE', 'SABADOS'];
 // Secciones con bot de confirmación por link (piloto CABA 10/2026; Sur y Noroeste desde 22/10)
@@ -610,8 +607,8 @@ function ColectasInner({ soloArribos = false, irA }) {
       const ctrl = new AbortController();
       ctrlActual = ctrl;
       const timer = setTimeout(() => ctrl.abort(), 10000);
-      fetch(`${BRIDGE_URL}?fecha=${encodeURIComponent(fechaLD)}`, { headers: { 'x-bridge-key': BRIDGE_KEY }, signal: ctrl.signal })
-        .then(r => { if (!r.ok) throw new Error('bridge ' + r.status); return r.json(); })
+      bridgeFetch('colecta', { fecha: fechaLD }, { signal: ctrl.signal })
+        .then(r => { if (!r.ok) throw new Error(r.status === 401 ? 'Iniciá sesión para ver la colecta en vivo' : 'bridge ' + r.status); return r.json(); })
         .then(json => {
           if (cancelado) return;
           const porChofer = {}; const idPorChofer = {};
@@ -646,7 +643,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       // Una renovación de token puede levantar Chromium y tardar ~20s. El timeout anterior
       // de 6s abortaba justo el camino de autorrecuperación y hacía parecer intermitente al GPS.
       const timer = setTimeout(() => ctrl.abort(), 30000);
-      fetch(BRIDGE_GEO_URL, { headers: { 'x-bridge-key': BRIDGE_KEY }, signal: ctrl.signal })
+      bridgeFetch('geo', null, { signal: ctrl.signal })
         .then(r => { if (!r.ok) throw new Error('geo ' + r.status); return r.json(); })
         .then(json => {
           if (!vivo) return;
@@ -1946,7 +1943,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       if (idChofer == null) { setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: false, ok: false, total: 0, localidades: {} } })); return; }
       setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: true } }));
       try {
-        const j = await fetch(`${BRIDGE_DETALLE_URL}?fecha=${encodeURIComponent(fechaLDdet)}&idChofer=${encodeURIComponent(idChofer)}`, { headers: { 'x-bridge-key': BRIDGE_KEY } }).then(r => r.json());
+        const j = await bridgeFetch('colecta-detalle', { fecha: fechaLDdet, idChofer: String(idChofer) }).then(r => r.json());
         setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: false, ok: true, total: j.total || 0, localidades: j.localidades || {} } }));
       } catch (e) { setDetalleLD(d => ({ ...d, [key]: { fecha: fechaLDdet, loading: false, ok: false, total: 0, localidades: {} } })); }
     };
