@@ -273,11 +273,13 @@ export default function DobleBulto() {
 // Escáner continuo: lee → muestra cliente y bultos → Confirmar → sigue con el próximo.
 // Cámara compartida entre aperturas del escáner (15/11): el iPhone vuelve a pedir permiso en cada
 // getUserMedia, así que al cerrar el escáner la cámara queda abierta 2 minutos y si se vuelve a
-// escanear se reusa sin preguntar. Si la app pasa a segundo plano se apaga al toque.
-let camara = { stream: null, timer: null };
-const camaraViva = () => camara.stream && camara.stream.getVideoTracks().some((t) => t.readyState === "live");
+// escanear se reusa sin preguntar. Si la app pasa a segundo plano y el escáner está cerrado se apaga;
+// si el escáner está abierto, al volver se reconecta (el iPhone corta la cámara en segundo plano).
+let camara = { stream: null, timer: null, enUso: false };
+const camaraViva = () => camara.stream && camara.stream.getVideoTracks().some((t) => t.readyState === "live" && !t.muted);
 async function obtenerCamara() {
   clearTimeout(camara.timer);
+  camara.enUso = true;
   if (camaraViva()) return camara.stream;
   // La pidió index.html apenas se abrió el atajo: se usa esa (ya viene calentando)
   if (window.__camPromesa) {
@@ -293,10 +295,11 @@ function apagarCamara() {
   camara.stream = null;
 }
 function soltarCamara() {
+  camara.enUso = false;
   clearTimeout(camara.timer);
   camara.timer = setTimeout(apagarCamara, 120000);
 }
-if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.hidden) apagarCamara(); });
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.hidden && !camara.enUso) apagarCamara(); });
 
 function Escaner({ onCerrar, onGuardado }) {
   const video = useRef();
@@ -404,6 +407,26 @@ function Escaner({ onCerrar, onGuardado }) {
     let stream, timer, vivo = true;
     const cv = document.createElement("canvas");
     const det = "BarcodeDetector" in window ? new window.BarcodeDetector({ formats: ["qr_code"] }) : null;
+    // Conecta (o reconecta) la cámara al <video>. Se llama al abrir y cada vez que se vuelve a la app
+    // o el video queda sin imagen: el iPhone corta la cámara en segundo plano y quedaba todo negro (15/11).
+    let conectando = false, listo = false;
+    const conectar = async (forzar) => {
+      if (conectando || !vivo) return;
+      conectando = true;
+      try {
+        if (forzar) apagarCamara();
+        stream = await obtenerCamara();
+        if (!vivo) return;
+        const v = video.current;
+        if (v.srcObject !== stream) { v.style.opacity = "0"; v.srcObject = stream; }
+        await v.play().catch(() => {});
+        setTimeout(() => { if (vivo && v.videoWidth) v.style.opacity = "1"; }, 350);
+      } catch { /* el intento siguiente lo vuelve a probar */ } finally { conectando = false; }
+    };
+    const alVolver = () => { if (!document.hidden) conectar(!camaraViva()); };
+    document.addEventListener("visibilitychange", alVolver);
+    // Si a los 2,5 s sigue sin imagen (negro), se pide la cámara de nuevo
+    const vigia = setInterval(() => { const v = video.current; if (vivo && listo && !document.hidden && v && (!v.videoWidth || !camaraViva())) conectar(true); }, 2500);
     (async () => {
       try {
         stream = await obtenerCamara();
@@ -420,6 +443,7 @@ function Escaner({ onCerrar, onGuardado }) {
         // Se respeta la espera de 350 ms que tapa ese reacomodo del iPhone.
         setTimeout(() => { remedir(); requestAnimationFrame(() => requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; })); }, 350);
         setTimeout(remedir, 1000);
+        listo = true;
       } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
       timer = setInterval(async () => {
@@ -439,7 +463,7 @@ function Escaner({ onCerrar, onGuardado }) {
         } finally { ocupado = false; }
       }, 250);
     })();
-    return () => { vivo = false; clearInterval(timer); if (video.current) video.current.srcObject = null; if (stream) soltarCamara(); };
+    return () => { vivo = false; clearInterval(timer); clearInterval(vigia); document.removeEventListener("visibilitychange", alVolver); if (video.current) video.current.srcObject = null; soltarCamara(); };
   }, [procesar]);
 
   // Pantalla fija mientras se escanea: sin pellizcar para hacer zoom (iOS ignora user-scalable=no)
