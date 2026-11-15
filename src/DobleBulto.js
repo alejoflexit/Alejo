@@ -416,11 +416,9 @@ function Escaner({ onCerrar, onGuardado }) {
         v.srcObject = stream; await v.play();
         // Queda invisible (negro) mientras el iPhone se acomoda y recién ahí aparece, ya a pantalla completa
         remedir();
-        // Se muestra apenas llega el primer cuadro real (antes: espera fija de 350 ms)
-        const mostrar = () => { remedir(); requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; }); };
-        if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => setTimeout(mostrar, 60));
-        else setTimeout(mostrar, 150);
-        setTimeout(() => { if (vivo) v.style.opacity = "1"; }, 600); // por las dudas
+        // 15/11: mostrarlo antes (con el primer cuadro) volvió a dejar ver el video chico que se agranda.
+        // Se respeta la espera de 350 ms que tapa ese reacomodo del iPhone.
+        setTimeout(() => { remedir(); requestAnimationFrame(() => requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; })); }, 350);
         setTimeout(remedir, 1000);
       } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
@@ -483,7 +481,7 @@ function Escaner({ onCerrar, onGuardado }) {
       <style>{CSS}</style>
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.55)", fontSize: 15 }}>Abriendo cámara…</div>
       <video ref={video} playsInline muted autoPlay disablePictureInPicture className="db-esc-video"
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "transparent", opacity: 0, transition: "opacity .12s" }} />
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", opacity: 0, transition: "opacity .18s" }} />
       <div className={"db-esc-marco" + (card ? " ok" : "")}><i /><i /><i /><i /></div>
       <div className="db-esc-arriba">
         <div className="db-esc-total">
