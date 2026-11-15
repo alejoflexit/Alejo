@@ -103,6 +103,9 @@ export default function DobleBulto() {
   const [copiado, setCopiado] = useState(false);
   const [aviso, setAviso] = useState(null);
   const [armado, setArmado] = useState(null); // id de la fila con "¿Borrar?" armado
+  const [porBorrar, setPorBorrar] = useState(null); // { f, t }: borrado pendiente, se puede deshacer
+  const porBorrarRef = useRef(null);
+  porBorrarRef.current = porBorrar;
 
   // Primero muestra la tabla y después, en segundo plano, completa direcciones que falten (09/11: antes
   // esperaba el cruce con LightData antes de mostrar nada).
@@ -155,12 +158,26 @@ export default function DobleBulto() {
     setFilas((xs) => xs.map((x) => (x.id === f.id ? { ...x, bultos: n } : x)));
     try { await actualizarFila(f.id, { bultos: n }); } catch { setAviso("No se pudo guardar el cambio"); cargar(false); }
   }
-  async function borrar(f) {
+  // Borrar: dos toques (× → "¿Borrar?") y después 6 s para DESHACER antes de que se borre de verdad (15/11)
+  const borrarYa = useCallback(async (id) => {
+    try { await sbFetch(`doble_bultos?id=eq.${id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } }); }
+    catch { setAviso("No se pudo borrar"); cargar(false); }
+  }, [cargar]);
+  // Al salir de la sección, el borrado pendiente se hace en el momento
+  useEffect(() => () => { const p = porBorrarRef.current; if (p) { clearTimeout(p.t); borrarYa(p.f.id); } }, [borrarYa]);
+  function borrar(f) {
     if (armado !== f.id) { setArmado(f.id); return; }
     setArmado(null);
+    if (porBorrar) { clearTimeout(porBorrar.t); borrarYa(porBorrar.f.id); } // el anterior ya no se puede deshacer
     setFilas((xs) => xs.filter((x) => x.id !== f.id));
-    try { await sbFetch(`doble_bultos?id=eq.${f.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } }); setAviso("Borrado"); }
-    catch { setAviso("No se pudo borrar"); cargar(false); }
+    const t = setTimeout(() => { borrarYa(f.id); setPorBorrar(null); }, 6000);
+    setPorBorrar({ f, t });
+  }
+  function deshacer() {
+    if (!porBorrar) return;
+    clearTimeout(porBorrar.t);
+    setPorBorrar(null);
+    cargar(false); // vuelve a aparecer en su lugar
   }
 
   return (
@@ -263,7 +280,12 @@ export default function DobleBulto() {
         </button>
       </div>
 
-      {aviso && <div className="db-toast">{aviso}</div>}
+      {porBorrar ? (
+        <div className="db-toast" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          Borrado · {porBorrar.f.cliente || porBorrar.f.codigo || ""}
+          <button onClick={deshacer} style={{ background: "none", border: "none", color: "#2ee6b6", font: "inherit", fontWeight: 700, padding: "6px 4px", cursor: "pointer" }}>Deshacer</button>
+        </div>
+      ) : aviso && <div className="db-toast">{aviso}</div>}
       {escaner && <Escaner onGuardado={() => cargar(false)} onCerrar={(n) => { setEscaner(false); if (n) setAviso(`${n} paquete${n === 1 ? "" : "s"} cargado${n === 1 ? "" : "s"}`); cargar(); }} />}
     </div>
   );
