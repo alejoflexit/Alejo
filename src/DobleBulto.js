@@ -279,6 +279,11 @@ const camaraViva = () => camara.stream && camara.stream.getVideoTracks().some((t
 async function obtenerCamara() {
   clearTimeout(camara.timer);
   if (camaraViva()) return camara.stream;
+  // La pidió index.html apenas se abrió el atajo: se usa esa (ya viene calentando)
+  if (window.__camPromesa) {
+    const p = window.__camPromesa; window.__camPromesa = null;
+    try { camara.stream = await p; if (camaraViva()) return camara.stream; } catch { /* sigue abajo */ }
+  }
   camara.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
   return camara.stream;
 }
@@ -411,7 +416,11 @@ function Escaner({ onCerrar, onGuardado }) {
         v.srcObject = stream; await v.play();
         // Queda invisible (negro) mientras el iPhone se acomoda y recién ahí aparece, ya a pantalla completa
         remedir();
-        setTimeout(() => { remedir(); requestAnimationFrame(() => requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; })); }, 350);
+        // Se muestra apenas llega el primer cuadro real (antes: espera fija de 350 ms)
+        const mostrar = () => { remedir(); requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; }); };
+        if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => setTimeout(mostrar, 60));
+        else setTimeout(mostrar, 150);
+        setTimeout(() => { if (vivo) v.style.opacity = "1"; }, 600); // por las dudas
         setTimeout(remedir, 1000);
       } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
@@ -472,8 +481,9 @@ function Escaner({ onCerrar, onGuardado }) {
   return createPortal(
     <div className="db-esc" onPointerDown={prepararAudio}>
       <style>{CSS}</style>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.55)", fontSize: 15 }}>Abriendo cámara…</div>
       <video ref={video} playsInline muted autoPlay disablePictureInPicture className="db-esc-video"
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", opacity: 0, transition: "opacity .18s" }} />
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "transparent", opacity: 0, transition: "opacity .12s" }} />
       <div className={"db-esc-marco" + (card ? " ok" : "")}><i /><i /><i /><i /></div>
       <div className="db-esc-arriba">
         <div className="db-esc-total">

@@ -18,6 +18,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Flexit" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/flexit-icon-v2.png" />
+    <script>
+      // Doble bulto desde el atajo del celu (?escanear=1): la cámara se pide YA, en paralelo con la
+      // descarga de la app, y el escáner la toma de window.__camPromesa (15/11). Antes había 1-3 s en negro.
+      if (/[?&]escanear=1/.test(location.search) && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        window.__camPromesa = navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+        window.__camPromesa.catch(function () {});
+      }
+    </script>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #0D0D2B; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
