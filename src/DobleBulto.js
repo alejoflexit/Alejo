@@ -271,6 +271,28 @@ export default function DobleBulto() {
 
 // =====================================================================================
 // Escáner continuo: lee → muestra cliente y bultos → Confirmar → sigue con el próximo.
+// Cámara compartida entre aperturas del escáner (15/11): el iPhone vuelve a pedir permiso en cada
+// getUserMedia, así que al cerrar el escáner la cámara queda abierta 2 minutos y si se vuelve a
+// escanear se reusa sin preguntar. Si la app pasa a segundo plano se apaga al toque.
+let camara = { stream: null, timer: null };
+const camaraViva = () => camara.stream && camara.stream.getVideoTracks().some((t) => t.readyState === "live");
+async function obtenerCamara() {
+  clearTimeout(camara.timer);
+  if (camaraViva()) return camara.stream;
+  camara.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+  return camara.stream;
+}
+function apagarCamara() {
+  clearTimeout(camara.timer);
+  if (camara.stream) camara.stream.getTracks().forEach((t) => t.stop());
+  camara.stream = null;
+}
+function soltarCamara() {
+  clearTimeout(camara.timer);
+  camara.timer = setTimeout(apagarCamara, 120000);
+}
+if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.hidden) apagarCamara(); });
+
 function Escaner({ onCerrar, onGuardado }) {
   const video = useRef();
   const pausa = useRef(false);
@@ -379,8 +401,8 @@ function Escaner({ onCerrar, onGuardado }) {
     const det = "BarcodeDetector" in window ? new window.BarcodeDetector({ formats: ["qr_code"] }) : null;
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-        if (!vivo) { stream.getTracks().forEach((t) => t.stop()); return; }
+        stream = await obtenerCamara();
+        if (!vivo) { soltarCamara(); return; }
         // iPhone a veces dibuja el video chico (con bordes negros) hasta que algo lo obliga a re-medirse:
         // cuando llega la imagen o cambia su tamaño, se fuerza un re-dibujo a pantalla completa (09/11)
         const v = video.current;
@@ -410,7 +432,7 @@ function Escaner({ onCerrar, onGuardado }) {
         } finally { ocupado = false; }
       }, 250);
     })();
-    return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
+    return () => { vivo = false; clearInterval(timer); if (video.current) video.current.srcObject = null; if (stream) soltarCamara(); };
   }, [procesar]);
 
   // Pantalla fija mientras se escanea: sin pellizcar para hacer zoom (iOS ignora user-scalable=no)
