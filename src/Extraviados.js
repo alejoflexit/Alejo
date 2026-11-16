@@ -38,8 +38,10 @@ async function sb(path, options = {}) {
 const FORM0 = (semana) => ({ tipo: 'extraviado', codigo: '', fecha: hoyAR(), cliente: '', cadete: '', cadete_ld: '', info: '', valor_manual: '', semana_inicio: semana, cuotas: 1, envio: null, buscando: false, clienteManual: false, cadeteManual: false });
 
 export default function Extraviados() {
-  // primera cuota por defecto: la semana en curso (se liquida y paga el lunes que viene)
-  const semanaBase = mondayOf(hoyAR());
+  // Primera cuota por defecto: la semana que se está liquidando. Lunes y martes todavía se paga la
+  // semana anterior; de miércoles en adelante, la semana en curso (16/11: con "semana en curso" fijo,
+  // un descuento cargado el lunes caía en la semana siguiente y no se veía en Liquidaciones).
+  const semanaBase = (() => { const hoy = hoyAR(); const dow = new Date(hoy + 'T12:00:00Z').getUTCDay(); return dow === 1 || dow === 2 ? addDays(mondayOf(hoy), -7) : mondayOf(hoy); })();
   const [rows, setRows] = useState([]);
   const [ajustes, setAjustes] = useState([]);
   const [tarifas, setTarifas] = useState([]);
