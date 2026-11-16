@@ -4,6 +4,11 @@ name: Extraviados (valor declarado de LightData)
 # Si no hay filas pendientes, termina en segundos sin abrir LightData.
 
 on:
+  # Corre cada vez que termina la sync de envíos (cada ~30 min, confiable). El schedule de GitHub
+  # solo se disparaba 3-4 veces por día (16/11).
+  workflow_run:
+    workflows: ['Sync Envios Agente WhatsApp']
+    types: [completed]
   schedule:
     - cron: '10,40 11-23 * * *'   # 08:10 a 20:40 ART, cada media hora
   workflow_dispatch:

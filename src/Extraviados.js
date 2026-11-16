@@ -326,16 +326,8 @@ export default function Extraviados() {
                     {r.codigo || '—'}
                     {r.id_interno && r.id_interno !== r.codigo && <div style={{ fontSize: 11, color: C.muted }}>LD {r.id_interno}</div>}
                   </td>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    <div style={{ fontWeight: 700 }}>{r.monto ? money(r.monto) : <span style={{ color: C.muted }}>{r.valor_error ? 'S/N' : 'buscando…'}</span>}</div>
-                    {r.valor_manual != null && r.valor_declarado != null && <div style={{ fontSize: 11, color: C.muted }}>declarado {money(Number(r.valor_declarado))}</div>}
-                    {r.valor_manual == null && r.valor_declarado != null && <div style={{ fontSize: 11, color: C.muted }}>declarado LightData</div>}
-                    {!r.monto && r.valor_error && <div style={{ fontSize: 11, color: C.amber, maxWidth: 170, whiteSpace: 'normal' }}>{r.valor_error}</div>}
-                    {!r.descontar && (
-                      <input className="no-spin" type="number" defaultValue={r.valor_manual ?? ''} placeholder="a mano" title="si lo cargás, manda sobre el declarado"
-                        onBlur={(e) => { const v = parseValor(e.target.value); if (v !== (r.valor_manual == null ? null : Number(r.valor_manual))) editar(r, { valor_manual: v }); }}
-                        style={{ ...inp, padding: '5px 8px', width: 100, marginTop: 5, fontSize: 12 }} />
-                    )}
+                  <td style={{ ...td, whiteSpace: 'nowrap', minWidth: 150 }}>
+                    <ValorCelda r={r} bloqueado={r.descontar} onGuardar={(v) => editar(r, { valor_manual: v })} />
                   </td>
                   <td style={{ ...td, minWidth: 160 }}>
                     {r.info && <div style={{ marginBottom: 4 }}>{r.info}</div>}
@@ -381,6 +373,47 @@ export default function Extraviados() {
       <div style={{ fontSize: 12, color: C.muted, marginTop: 10, lineHeight: 1.5 }}>
         El valor declarado se trae de LightData cada 30 min. Al tildar <b>Descontar</b>, cada cuota aparece como descuento del transportista en la Semana correspondiente de Liquidaciones.
       </div>
+    </div>
+  );
+}
+
+// Celda de valor (16/11): muestra el monto grande; "cargar a mano" / "corregir" abre un campo
+// recién al tocarlo (Enter o salir del campo guarda, Esc cancela). "Usar el de LightData" borra el manual.
+function ValorCelda({ r, bloqueado, onGuardar }) {
+  const [editando, setEditando] = useState(false);
+  const [txt, setTxt] = useState('');
+  const manual = r.valor_manual != null;
+  const declarado = r.valor_declarado != null ? Number(r.valor_declarado) : null;
+  const link = { background: 'none', border: 'none', padding: '2px 0', color: C.blue, fontSize: 11.5, cursor: 'pointer', font: 'inherit' };
+  const abrir = () => { setTxt(manual ? String(Math.round(Number(r.valor_manual))) : ''); setEditando(true); };
+  const guardar = () => { setEditando(false); const v = parseValor(txt); if (v !== (manual ? Number(r.valor_manual) : null)) onGuardar(v); };
+  if (editando) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ color: C.muted }}>$</span>
+        <input autoFocus inputMode="numeric" value={txt} onChange={(e) => setTxt(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditando(false); }}
+          onBlur={guardar} placeholder="0"
+          style={{ width: 110, padding: '6px 8px', borderRadius: 8, border: `1px solid ${C.blue}`, background: 'rgba(0,0,0,0.25)', color: C.white, fontSize: 14, fontWeight: 700, outline: 'none' }} />
+      </div>
+    );
+  }
+  const monto = montoDe(r);
+  return (
+    <div>
+      <div style={{ fontWeight: 700, fontSize: 14 }}>
+        {monto ? money(monto) : r.valor_error ? <span style={{ color: C.amber }}>Sin valor</span> : <span style={{ color: C.muted, fontWeight: 500 }}>Buscando en LightData…</span>}
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+        {manual ? (declarado ? `a mano · LightData ${money(declarado)}` : 'cargado a mano') : declarado ? 'valor declarado' : r.valor_error ? '' : 'tarda hasta 30 min'}
+      </div>
+      {!monto && r.valor_error && <div style={{ fontSize: 11, color: C.amber, maxWidth: 190, whiteSpace: 'normal', marginTop: 2 }}>{r.valor_error}</div>}
+      {!bloqueado && (
+        <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
+          <button type="button" onClick={abrir} style={link}>{manual ? 'corregir' : monto ? 'cambiar' : 'cargar a mano'}</button>
+          {manual && declarado != null && <button type="button" onClick={() => onGuardar(null)} style={{ ...link, color: C.muted }}>usar el de LightData</button>}
+        </div>
+      )}
     </div>
   );
 }
