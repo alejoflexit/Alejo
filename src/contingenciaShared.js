@@ -11,12 +11,14 @@
 import QRCode from "qrcode";
 import { leerEtiqueta } from "./dobleBultoShared";
 
+// Herramienta del depósito (Alejo, 16/11): solo ingreso a planta y salida con cadete. La tabla todavía
+// acepta 'colecta' (primera versión); si apareciera una fila así, se ignora al agrupar.
 export const MODOS = {
-  colecta: { id: "colecta", label: "Colecta", persona: "chofer", pide: "Elegí el chofer" },
   ingreso: { id: "ingreso", label: "Ingreso a planta", persona: null, pide: null },
   salida: { id: "salida", label: "Salida", persona: "cadete", pide: "Elegí el cadete" },
 };
-export const LISTA_MODOS = [MODOS.colecta, MODOS.ingreso, MODOS.salida];
+export const LISTA_MODOS = [MODOS.ingreso, MODOS.salida];
+export const modoValido = (modo) => Object.prototype.hasOwnProperty.call(MODOS, modo);
 export const modoPidePersona = (modo) => !!(MODOS[modo] && MODOS[modo].persona);
 
 // ---------- lectura ----------
@@ -38,7 +40,8 @@ export function clienteLD(qr) {
   } catch { return null; }
 }
 
-// Cliente para mostrar/agrupar. Si el vendedor de ML no se conoce, cada sender_id queda en su propio grupo.
+// Cliente para mostrar (sirve para ubicar un paquete; no define grupos). Si el vendedor de ML no se conoce,
+// se muestra su sender_id.
 export function clienteVisible(reg, vendedores) {
   if (reg.cliente) return reg.cliente;
   if (reg.sender_id) {
@@ -190,19 +193,19 @@ export function diaAR(iso) {
   return Number.isFinite(t) ? new Date(t - 3 * 3600e3).toISOString().slice(0, 10) : "";
 }
 
-// Grupos para el re-escaneo: modo + día + (chofer + cliente) en colecta, (cadete) en salida, solo día en ingreso.
-// Dentro de cada grupo un código aparece una sola vez (el escaneo más viejo), ordenados por hora.
-export function agruparTandas(registros, vendedores) {
+// Grupos para el re-escaneo: modo + día, y en salida además el cadete. Filas de modos que ya no existen
+// (ej. 'colecta' de la primera versión) se ignoran. Dentro de cada grupo un código aparece una sola vez
+// (el escaneo más viejo), ordenados por hora.
+export function agruparTandas(registros) {
   const grupos = new Map();
-  const orden = (registros || []).filter((r) => !r.borrado_at).slice()
+  const orden = (registros || []).filter((r) => !r.borrado_at && modoValido(r.modo)).slice()
     .sort((a, b) => (a.escaneado_at < b.escaneado_at ? -1 : a.escaneado_at > b.escaneado_at ? 1 : a.id < b.id ? -1 : 1));
   for (const r of orden) {
     const dia = diaAR(r.escaneado_at);
     const persona = modoPidePersona(r.modo) ? r.persona || "Sin asignar" : null;
-    const cliente = r.modo === "colecta" ? clienteVisible(r, vendedores) : null;
-    const key = [r.modo, dia, persona || "", cliente || ""].join("|");
+    const key = [r.modo, dia, persona || ""].join("|");
     let g = grupos.get(key);
-    if (!g) { g = { key, modo: r.modo, dia, persona, cliente, items: [], vistos: new Set() }; grupos.set(key, g); }
+    if (!g) { g = { key, modo: r.modo, dia, persona, items: [], vistos: new Set() }; grupos.set(key, g); }
     if (g.vistos.has(r.codigo)) {
       // mismo envío escaneado dos veces (otra tanda u otro dispositivo): si alguno ya se mostró, cuenta
       if (r.reesc_at) { const i = g.items.findIndex((x) => x.codigo === r.codigo); if (i >= 0 && !g.items[i].reesc_at) g.items[i] = { ...g.items[i], reesc_at: r.reesc_at }; }
@@ -211,13 +214,13 @@ export function agruparTandas(registros, vendedores) {
     g.vistos.add(r.codigo);
     g.items.push(r);
   }
-  const ordenModo = { colecta: 0, ingreso: 1, salida: 2 };
+  const ordenModo = { ingreso: 0, salida: 1 };
   return [...grupos.values()].map(({ vistos, ...g }) => {
     const mostrados = g.items.filter((x) => x.reesc_at).length;
     return { ...g, total: g.items.length, mostrados, completo: mostrados === g.items.length };
   }).sort((a, b) => (a.dia !== b.dia ? (a.dia < b.dia ? 1 : -1)
     : a.modo !== b.modo ? ordenModo[a.modo] - ordenModo[b.modo]
-    : (a.persona || "").localeCompare(b.persona || "", "es") || (a.cliente || "").localeCompare(b.cliente || "", "es")));
+    : (a.persona || "").localeCompare(b.persona || "", "es")));
 }
 
 // Índice por el que retomar un grupo: el primero que todavía no se mostró (o 0 si están todos)

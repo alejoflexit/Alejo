@@ -15,7 +15,7 @@ const QR_LD = '{"local":1,"did":"1088519","cliente":"77","empresa":125}';
 const T0 = Date.parse("2026-11-16T13:00:00Z"); // 10:00 AR
 
 const lec = (qr) => leerContingencia(qr);
-const esc = (qr, extra = {}) => nuevoEscaneo({ lectura: lec(qr), modo: "colecta", persona: "Juan", tanda: "t1", por: "Alejo", ahora: T0, ...extra });
+const esc = (qr, extra = {}) => nuevoEscaneo({ lectura: lec(qr), modo: "salida", persona: "Juan", tanda: "t1", por: "Alejo", ahora: T0, ...extra });
 
 describe("lectura", () => {
   test("QR de Mercado Libre: código, vendedor y texto crudo tal cual", () => {
@@ -74,7 +74,7 @@ describe("ráfaga y duplicados", () => {
   });
   test("el escaneo guarda todo lo pedido", () => {
     const r = esc(QR_ML, { cliente: "Tienda Uno" });
-    expect(r).toMatchObject({ qr: QR_ML, codigo: "45123456789", sender_id: "123456789", tipo: "ml", modo: "colecta", persona: "Juan", cliente: "Tienda Uno", escaneado_por: "Alejo", tanda: "t1", escaneado_at: "2026-11-16T13:00:00.000Z", s_alta: 0 });
+    expect(r).toMatchObject({ qr: QR_ML, codigo: "45123456789", sender_id: "123456789", tipo: "ml", modo: "salida", persona: "Juan", cliente: "Tienda Uno", escaneado_por: "Alejo", tanda: "t1", escaneado_at: "2026-11-16T13:00:00.000Z", s_alta: 0 });
     expect(r.id).toMatch(/^[0-9a-f-]{36}$/);
     // ingreso no lleva persona aunque se pase
     expect(nuevoEscaneo({ lectura: lec(QR_ML), modo: "ingreso", persona: "X", tanda: "t" }).persona).toBeNull();
@@ -137,37 +137,41 @@ describe("fusión remoto + local", () => {
 });
 
 describe("tandas a pasar", () => {
-  const vend = mapaVendedores([{ sender_id: "1", cliente: "Tienda Uno" }]);
   const r = (codigo, extra) => ({ ...esc(`{"id":"${codigo}","sender_id":1}`), ...extra });
-  test("colecta por chofer y cliente; salida por cadete; ingreso uno solo", () => {
+  test("salida por cadete, ingreso uno solo; el cliente no separa grupos", () => {
     const regs = [
-      r("A1", { escaneado_at: "2026-11-16T13:00:01Z" }),
+      r("A1", { escaneado_at: "2026-11-16T13:00:01Z", cliente: "Tienda Uno" }),
       r("A2", { escaneado_at: "2026-11-16T13:00:00Z" }),
-      r("A3", { sender_id: "2" }),
-      r("B1", { modo: "salida", persona: "Pepe", cliente: null }),
+      r("A3", { sender_id: "2", escaneado_at: "2026-11-16T13:00:02Z" }),
+      r("B1", { persona: "Pepe" }),
       r("C1", { modo: "ingreso", persona: null }),
       r("C2", { modo: "ingreso", persona: null }),
     ];
-    const g = agruparTandas(regs, vend);
-    expect(g.map((x) => [x.modo, x.persona, x.cliente, x.total])).toEqual([
-      ["colecta", "Juan", "Sin identificar · vendedor 2", 1],
-      ["colecta", "Juan", "Tienda Uno", 2],
-      ["ingreso", null, null, 2],
-      ["salida", "Pepe", null, 1],
+    const g = agruparTandas(regs);
+    expect(g.map((x) => [x.modo, x.persona, x.total])).toEqual([
+      ["ingreso", null, 2],
+      ["salida", "Juan", 3],
+      ["salida", "Pepe", 1],
     ]);
     // ordenados por hora dentro del grupo
-    expect(g[1].items.map((x) => x.codigo)).toEqual(["A2", "A1"]);
+    expect(g[1].items.map((x) => x.codigo)).toEqual(["A2", "A1", "A3"]);
+  });
+  test("una fila vieja de colecta (primera versión) se ignora sin romper", () => {
+    const g = agruparTandas([r("V1", { modo: "colecta" }), r("S1")]);
+    expect(g.map((x) => [x.modo, x.total])).toEqual([["salida", 1]]);
+    expect(agruparTandas([r("V1", { modo: "colecta" })])).toEqual([]);
   });
   test("un código repetido aparece una sola vez; cuenta mostrados y completo; borrados afuera", () => {
-    const regs = [r("A1"), r("A1", { tanda: "t9", reesc_at: "2026-11-16T14:00:00Z" }), r("A2"), marcarBorrado(r("A3"))];
-    const [g] = agruparTandas(regs, vend);
+    const hora = (s) => ({ escaneado_at: `2026-11-16T13:00:0${s}Z` });
+    const regs = [r("A1", hora(1)), r("A1", { ...hora(2), tanda: "t9", reesc_at: "2026-11-16T14:00:00Z" }), r("A2", hora(3)), marcarBorrado(r("A3", hora(4)))];
+    const [g] = agruparTandas(regs);
     expect(g.total).toBe(2);
     expect(g.mostrados).toBe(1);
     expect(g.completo).toBe(false);
     expect(primerPendiente(g.items)).toBe(1);
   });
   test("separa por día (AR)", () => {
-    const g = agruparTandas([r("A1", { escaneado_at: "2026-11-16T02:00:00Z" }), r("A2", { escaneado_at: "2026-11-16T04:00:00Z" })], vend);
+    const g = agruparTandas([r("A1", { escaneado_at: "2026-11-16T02:00:00Z" }), r("A2", { escaneado_at: "2026-11-16T04:00:00Z" })]);
     expect(g.map((x) => x.dia)).toEqual(["2026-11-16", "2026-11-15"]);
     expect(diaAR("2026-11-16T02:00:00Z")).toBe("2026-11-15");
     expect(etiquetaDia("2026-11-16", T0)).toBe("Hoy · lun 16/11");

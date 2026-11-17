@@ -12,12 +12,12 @@ import {
 import {
   LISTA_MODOS, MODOS, modoPidePersona, leerContingencia, evaluarLectura, nuevoEscaneo, codigosDeTanda,
   mapaVendedores, clienteVisible, marcarBorrado, marcarMostrado, desdeRemoto, fusionar, agruparTandas,
-  primerPendiente, matrizQR, OPCIONES_QR, plural, etiquetaDia, horaAR, diaAR, uuid, clasificarError,
+  primerPendiente, matrizQR, OPCIONES_QR, plural, etiquetaDia, horaAR, diaAR, uuid, clasificarError, modoValido,
 } from "./contingenciaShared";
 
 // Modo contingencia — cuando LightData se cae en plena operación (pedido de Alejo, 16/11/2026: se cayó en
 // plena colecta con ~4.000 envíos y se perdió la trazabilidad).
-//   A. Escanear: colecta (chofer), ingreso a planta, salida (cadete). Todo queda primero en el dispositivo
+//   A. Escanear (depósito): ingreso a planta o salida con cadete. Todo queda primero en el dispositivo
 //      (IndexedDB) y se sube a Supabase en segundo plano, con reintentos. Funciona sin red.
 //   B. Pasar a LightData: muestra los QR guardados, uno por vez y en grande, para escanearlos con la app
 //      oficial de LightData desde la pantalla. La app NO escribe en LightData.
@@ -68,9 +68,9 @@ export default function Contingencia() {
   const [cadetes, setCadetes] = useState([]);
   const [listasAt, setListasAt] = useState(null);
   const [almacen, setAlmacen] = useState(null);
-  const [modo, setModo] = useState(() => (leerTanda() || {}).modo || null);
+  const [modo, setModo] = useState(() => { const m = (leerTanda() || {}).modo; return modoValido(m) ? m : null; });
   const [persona, setPersona] = useState(() => (leerTanda() || {}).persona || "");
-  const [tanda, setTanda] = useState(() => leerTanda());
+  const [tanda, setTanda] = useState(() => { const t = leerTanda(); return t && modoValido(t.modo) ? t : null; });
   const [escaner, setEscaner] = useState(false);
   const [aviso, setAviso] = useState(null);
   const sync = useSync();
@@ -160,7 +160,7 @@ export default function Contingencia() {
             {LISTA_MODOS.map((m) => (
               <button key={m.id} className={"ct-modo" + (modo === m.id ? " on" : "")} onClick={() => setModo(m.id)}>
                 <b>{m.label}</b>
-                <small>{m.id === "colecta" ? "Retiro en el cliente" : m.id === "ingreso" ? "Llega al depósito" : "Sale con el cadete"}</small>
+                <small>{m.id === "ingreso" ? "Llega al depósito" : "Sale con el cadete"}</small>
               </button>
             ))}
           </div>
@@ -185,10 +185,10 @@ export default function Contingencia() {
           )}
 
           <ResumenLocal regs={regs} />
-          {listasAt && <div className="ct-nota">Listas de choferes y clientes guardadas en este dispositivo · {etiquetaDia(diaAR(new Date(listasAt).toISOString()))} {horaAR(new Date(listasAt).toISOString())}</div>}
+          {listasAt && <div className="ct-nota">Listas de cadetes y clientes guardadas en este dispositivo · {etiquetaDia(diaAR(new Date(listasAt).toISOString()))} {horaAR(new Date(listasAt).toISOString())}</div>}
         </div>
       ) : (
-        <Pasar regs={regs} vend={vend} recargar={recargar} enLinea={enLinea} />
+        <Pasar regs={regs} recargar={recargar} enLinea={enLinea} />
       )}
 
       {aviso && <div className="ct-toast">{aviso}</div>}
@@ -200,7 +200,7 @@ export default function Contingencia() {
   );
 }
 
-// Buscador de chofer / cadete con la lista guardada. Si no está, se puede usar el nombre tipeado.
+// Buscador de cadete con la lista guardada. Si no está, se puede usar el nombre tipeado.
 function SelectorPersona({ lista, valor, onElegir, sinLista }) {
   const [q, setQ] = useState("");
   if (valor) {
@@ -232,7 +232,7 @@ function ResumenLocal({ regs }) {
   const tandas = useMemo(() => {
     const m = new Map();
     for (const r of regs || []) {
-      if (r.borrado_at) continue;
+      if (r.borrado_at || !modoValido(r.modo)) continue;
       let t = m.get(r.tanda);
       if (!t) { t = { id: r.tanda, modo: r.modo, persona: r.persona, dia: diaAR(r.escaneado_at), n: 0, sinSubir: 0, ultimo: r.escaneado_at }; m.set(r.tanda, t); }
       t.n++; if (!r.s_alta) t.sinSubir++;
@@ -289,7 +289,7 @@ function Escaner({ tanda, vend, regsIniciales, sync, enLinea, onCerrar }) {
       beep(true);
       setLista((xs) => [r, ...xs]);
       setNuevos((n) => n + 1);
-      setFlash({ tipo: "ok", txt: tanda.modo === "colecta" ? clienteVisible(r, vendRef.current) : `✓ ${l.codigo}`, at: ahora });
+      setFlash({ tipo: "ok", txt: `✓ ${l.codigo}`, at: ahora });
       programar();
     }).catch(() => {
       codigos.current.delete(l.codigo);
@@ -418,7 +418,7 @@ function Escaner({ tanda, vend, regsIniciales, sync, enLinea, onCerrar }) {
                 <span className={"ct-esc-ico" + (r.s_alta ? "" : " pend")}>✓</span>
                 <span className="ct-esc-fila-txt">
                   <span className="ct-mono">{r.codigo}</span>
-                  {tanda.modo === "colecta" && <small>{clienteVisible(r, vend)}</small>}
+                  <small>{clienteVisible(r, vend)}</small>
                 </span>
                 <button className={"ct-quitar" + (armado === r.id ? " on" : "")} onClick={() => quitar(r)}>{armado === r.id ? "¿Quitar?" : "Quitar"}</button>
               </div>
@@ -431,7 +431,7 @@ function Escaner({ tanda, vend, regsIniciales, sync, enLinea, onCerrar }) {
 
 // =====================================================================================
 // B. Pasar a LightData: tandas agrupadas → visor de QR uno por vez.
-function Pasar({ regs, vend, recargar, enLinea }) {
+function Pasar({ regs, recargar, enLinea }) {
   const [remotos, setRemotos] = useState(null);
   const [remAt, setRemAt] = useState(null);
   const [err, setErr] = useState(null);
@@ -453,7 +453,7 @@ function Pasar({ regs, vend, recargar, enLinea }) {
   useEffect(() => { traer(); }, [traer]);
 
   const todos = useMemo(() => fusionar(remotos || [], regs || []), [remotos, regs]);
-  const grupos = useMemo(() => agruparTandas(todos, vend), [todos, vend]);
+  const grupos = useMemo(() => agruparTandas(todos), [todos]);
   const visibles = completos ? grupos : grupos.filter((g) => !g.completo);
   const grupo = abierto ? grupos.find((g) => g.key === abierto) : null;
 
@@ -485,7 +485,6 @@ function Pasar({ regs, vend, recargar, enLinea }) {
                     <span className="ct-badge">{MODOS[g.modo] ? MODOS[g.modo].label : g.modo}</span>
                     <span className="ct-grupo-txt">
                       <b>{g.modo === "ingreso" ? "Ingreso a planta" : g.persona}</b>
-                      {g.cliente && <small>{g.cliente}</small>}
                     </span>
                     <span className="ct-grupo-num">
                       <b>{g.mostrados}<small>/{g.total}</small></b>
@@ -588,7 +587,7 @@ function Visor({ grupo, onCerrar, onMarcado }) {
   const elegirIntervalo = (v) => { setIntervalo(v); try { localStorage.setItem("fx_cont_intervalo", String(v)); } catch {} setPausa(!v); };
   const item = items[i];
   const nMostrados = items.filter((x) => mostrados.has(x.id)).length;
-  const titulo = [MODOS[grupo.modo] ? MODOS[grupo.modo].label : grupo.modo, grupo.persona, grupo.cliente].filter(Boolean).join(" · ");
+  const titulo = [MODOS[grupo.modo] ? MODOS[grupo.modo].label : grupo.modo, grupo.persona].filter(Boolean).join(" · ");
 
   return createPortal(
     <div className="ct-visor">
@@ -666,7 +665,7 @@ const CSS = `
 .ct-seg button{background:none;border:0;color:${C.ink2};font:inherit;font-size:15px;font-weight:600;padding:12px 8px;border-radius:${FX.radius.md}px;cursor:pointer;min-height:48px;touch-action:manipulation}
 .ct-seg button.on{background:rgba(255,255,255,.09);color:${C.ink}}
 .ct-paso{font-size:${FX.size.sm}px;color:${C.ink3};text-transform:uppercase;letter-spacing:.06em;margin:4px 2px 10px;font-weight:600}
-.ct-modos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.ct-modos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:18px}
 .ct-modo{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;min-height:76px;padding:14px;border-radius:${FX.radius.xl}px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:${C.ink};font:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .ct-modo b{font-family:${FX_FONT.display};font-size:17px;font-weight:600}
 .ct-modo small{font-size:${FX.size.md}px;color:${C.ink2}}
