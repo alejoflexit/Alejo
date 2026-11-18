@@ -414,17 +414,18 @@ export default function Devoluciones({ abrirEnvio = null }) {
         </div>
       ) : (
       <div className="dv-etapas">
-        <EtapaCard id="calle" titulo="En la calle" ayuda={AYUDA.calle} valor={r.calle} sub={`${plata(r.calleValor)} declarado`}
+        <EtapaCard id="calle" titulo="En la calle" ayuda={AYUDA.calle} valor={r.calle} plataDecl={r.calleValor}
           activo={tab === "seguimiento" && etapa === "calle"} venc={soloVencidos}
           vencidos={r.calleVencidos} limite={LIMITE_CALLE} ayudaVenc={AYUDA.calleVenc}
           onElegir={(v) => irA("calle", v)} />
-        <EtapaCard id="deposito" titulo="En depósito" ayuda={AYUDA.deposito} valor={r.deposito} sub={`${plata(r.depositoValor)} declarado · falta devolver al cliente`}
+        <EtapaCard id="deposito" titulo="En depósito" ayuda={AYUDA.deposito} valor={r.deposito} plataDecl={r.depositoValor}
+          extra={{ valor: ingresosHoy, label: "entraron hoy", title: "Ver qué entró hoy y dónde quedó cada paquete", onClick: () => setVerIngresos(true) }}
           activo={tab === "seguimiento" && etapa === "deposito"} venc={soloVencidos}
           vencidos={r.depositoVencidos} limite={LIMITE_DEPOSITO} ayudaVenc={AYUDA.depositoVenc}
           onElegir={(v) => irA("deposito", v)}
           acciones={<div className="dv-grupo" role="group" aria-label="Herramientas del depósito">
             <button className="dv-btn dv-btn-ico" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo"><IcoScan size={15} />Escanear ingreso</button>
-            <button className="dv-btn dv-btn-ico" onClick={() => setVerIngresos(true)} title="Qué entró hoy al depósito y dónde quedó guardado cada paquete"><IcoReloj size={15} />Ingresos de hoy <b style={{ marginLeft: 2 }}>{num(ingresosHoy)}</b></button>
+            <button className="dv-btn dv-btn-ico" onClick={() => setVerIngresos(true)} title="Qué entró hoy al depósito y dónde quedó guardado cada paquete"><IcoReloj size={15} />Ingresos de hoy</button>
             <button className="dv-btn dv-btn-ico" onClick={() => setVerUbic(true)} title="Qué estante o caja tiene cada seller en el cuartito"><IcoEstante size={15} />Ubicaciones</button>
           </div>} />
         <div className="dv-otros" style={card}>
@@ -595,24 +596,32 @@ function Info({ texto, abajo = false }) {
   );
 }
 
-function EtapaCard({ id, titulo, ayuda, valor, sub, activo, venc, vencidos, limite, ayudaVenc, onElegir, acciones = null }) {
+// Tarjeta de etapa (variante B, 18/11/2026): números grandes lado a lado — total, atrasados y un tercero opcional.
+// Cada número es un botón: el total muestra todos, el amarillo filtra los atrasados. La plata va abreviada arriba.
+const plataCorta = (n) => (!n ? "" : n >= 1e6 ? `$${(n / 1e6).toLocaleString("es-AR", { maximumFractionDigits: 1 })} M` : n >= 1e3 ? `$${Math.round(n / 1e3)} mil` : `$${num(n)}`);
+function EtapaCard({ id, titulo, ayuda, valor, plataDecl, activo, venc, vencidos, limite, ayudaVenc, onElegir, extra = null, acciones = null }) {
   return (
     <div className={"dv-etapa" + (activo ? " on" : "")} style={card} role="button" tabIndex={0}
       onClick={() => onElegir(false)} onKeyDown={(e) => { if (e.key === "Enter") onElegir(false); }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        {ICONO_ETAPA[id] && <span className={"dv-etapa-ico chico " + id} aria-hidden="true">{ICONO_ETAPA[id]}</span>}
-        <span style={{ fontSize: 13, color: activo ? C.ink : C.ink2, fontWeight: 600 }}>{titulo}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {ICONO_ETAPA[id] && <span className={"dv-etapa-ico " + id} aria-hidden="true">{ICONO_ETAPA[id]}</span>}
+        <span style={{ fontSize: 15, color: C.ink, fontWeight: 600 }}>{titulo}</span>
         <Info texto={ayuda} />
         <span style={{ flex: 1 }} />
+        {plataDecl ? <span style={{ fontSize: 13, color: C.ink3 }} title={`${plata(plataDecl)} declarado`}>{plataCorta(plataDecl)} declarado</span> : null}
       </div>
-      <div style={{ fontFamily: C.grotesk, fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 6, lineHeight: 1 }}>{num(valor)}</div>
-      <div style={{ fontSize: 12, color: C.ink3, marginTop: 6 }}>{sub}</div>
-      <div className="dv-etapa-sub" onClick={(e) => e.stopPropagation()}>
-        <button className={activo && !venc ? "on" : ""} onClick={() => onElegir(false)}>Todos <b>{num(valor)}</b></button>
-        <button className={"v" + (activo && venc ? " on" : "")} onClick={() => onElegir(true)}>
-          {vencidos > 0 && <span className="dv-dot" style={{ background: C.ambar, margin: 0 }} />}Más de {limite} días <b>{num(vencidos)}</b>
+      <div className="dv-nums" onClick={(e) => e.stopPropagation()}>
+        <button className={"dv-num" + (activo && !venc ? " on" : "")} onClick={() => onElegir(false)}>
+          <b>{num(valor)}</b><span>paquetes</span>
         </button>
-        <Info texto={ayudaVenc} />
+        <button className={"dv-num v" + (activo && venc ? " on" : "")} onClick={() => onElegir(true)} title={ayudaVenc}>
+          <b style={{ color: vencidos > 0 ? C.ambar : undefined }}>{num(vencidos)}</b><span>hace más de {limite} días</span>
+        </button>
+        {extra && (
+          <button className="dv-num" onClick={extra.onClick} title={extra.title}>
+            <b>{num(extra.valor)}</b><span>{extra.label}</span>
+          </button>
+        )}
       </div>
       {acciones && <div className="dv-etapa-acc" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{acciones}</div>}
     </div>
@@ -2663,6 +2672,14 @@ const CSS = `
 .dv-grupo{display:inline-flex;border:1px solid rgba(255,255,255,.08);border-radius:11px;background:rgba(255,255,255,.03);padding:2px;gap:2px}
 .dv-grupo .dv-btn{border-color:transparent;background:transparent;border-radius:9px}.dv-grupo .dv-btn:hover{background:rgba(255,255,255,.06)}
 .dv-etapa-ico{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.05);color:#a7adc2;border:1px solid rgba(255,255,255,.08)}
+.dv-nums{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.dv-num{background:transparent;border:1px solid transparent;border-radius:12px;color:#f4f5fa;font:inherit;cursor:pointer;text-align:left;padding:8px 18px 8px 10px;display:flex;flex-direction:column;gap:6px;position:relative}
+.dv-num+.dv-num::before{content:"";position:absolute;left:-4px;top:12px;bottom:12px;width:1px;background:rgba(255,255,255,.08)}
+.dv-num b{font-family:${C.grotesk};font-size:42px;font-weight:700;letter-spacing:-0.02em;line-height:1}
+.dv-num span{font-size:13px;color:#a7adc2}
+.dv-num:hover{background:rgba(255,255,255,.04)}
+.dv-num.on{background:rgba(46,230,182,.08);border-color:rgba(46,230,182,.3)}
+.dv-num.v.on{background:rgba(245,192,68,.08);border-color:rgba(245,192,68,.3)}
 .dv-etapa-acc{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);display:flex}
 .dv-etapa-ico.chico{width:24px;height:24px;border-radius:8px}.dv-etapa-ico.chico svg{width:14px;height:14px}
 .dv-etapa-ico.deposito{background:rgba(46,230,182,.10);color:#2ee6b6;border-color:rgba(46,230,182,.28)}
