@@ -1279,7 +1279,6 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
   const [dia, setDia] = useState(hoy);
   const [fLugar, setFLugar] = useState(null);
   const [busca, setBusca] = useState("");
-  const [soloCambios, setSoloCambios] = useState(true);
   const todos = useMemo(() => ingresosDelDia(casos, dia, ubic), [casos, dia, ubic]);
   const lugares = useMemo(() => porLugar(todos), [todos]);
   const q = busca.trim().toLowerCase();
@@ -1342,14 +1341,11 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
           <button className="dv-btn" onClick={onVerUbic} title="Qué estante o caja tiene cada seller">Lugar por seller…</button>
           <span style={{ flex: 1 }} />
           {(() => {
-            const aImprimir = vis.filter((i) => !soloCambios || i.tipo === "CAMBIO");
+            const aImprimir = vis.filter((i) => i.tipo === "CAMBIO"); // los cancelados/no entregados ya traen la etiqueta de ML o LightData
             return (<>
-              <label style={{ fontSize: 12, color: C.ink2, display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
-                <input type="checkbox" checked={soloCambios} onChange={(e) => setSoloCambios(e.target.checked)} style={{ accentColor: C.teal }} />Solo cambios
-              </label>
               <button className="dv-btn" disabled={!aImprimir.length} onClick={() => imprimirEtiquetas(aImprimir, dia, window.open("", "_blank"))}
-                title="Planilla A4 con 10 etiquetas por hoja para cortar y pegar. Imprime lo que se ve en la lista (respeta el filtro de lugar y la búsqueda)">
-                Imprimir etiquetas ({aImprimir.length})
+                title="Etiquetas para los cambios que llegan sin etiqueta: planilla A4 de 10 para cortar y pegar. Imprime los cambios que se ven en la lista (respeta el filtro de lugar y la búsqueda)">
+                Imprimir etiquetas de cambios ({aImprimir.length})
               </button>
             </>);
           })()}
