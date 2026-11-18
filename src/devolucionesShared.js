@@ -386,3 +386,12 @@ export function porLugar(ingresos) {
   (ingresos || []).forEach((i) => m.set(i.lugar, (m.get(i.lugar) || 0) + 1));
   return [...m.entries()].map(([lugar, cant]) => ({ lugar, cant })).sort((a, b) => b.cant - a.cant || a.lugar.localeCompare(b.lugar));
 }
+
+// Envío que sigue en el circuito de entrega (en planta / en camino) con un cadete real: si su etiqueta aparece en
+// el depósito puede ser un paquete DUPLICADO, no una devolución. Los que el cadete no pudo entregar (nadie en
+// domicilio, no entregado, reprogramado, rechazado) no frenan: esos sí vuelven al depósito.
+export function enReparto(e) {
+  const est = String((e && e.estado) || "").toLowerCase();
+  if (!/en camino|en planta/.test(est)) return false;
+  return !!(e.cadete && !CHOFER_FICTICIO.test(e.cadete));
+}

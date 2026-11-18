@@ -9,7 +9,7 @@ import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
   progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
-  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar,
+  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -252,12 +252,12 @@ export default function Devoluciones({ abrirEnvio = null }) {
   // Escaneo de un envío que no es cancelado ni cambio (ej. "nadie en domicilio" varias veces): se busca en el
   // buscador de envíos y se ingresa igual; la sincronización lo agrega como "No entregado" y lo pasa a
   // "devuelto deposito" en LightData.
-  async function ingresoOtro(texto) {
+  async function ingresoOtro(texto, { forzar = false } = {}) {
     try {
       const cods = codigosDeEtiqueta(texto).filter((x) => /^[\w-]{4,}$/.test(x)).slice(0, 6);
       if (!cods.length) return null;
       const lista = cods.map((x) => encodeURIComponent(x)).join(",");
-      const rows = await sbFetch(`envios_busqueda?or=(tracking.in.(${lista}),id_venta_ml.in.(${lista}),id_interno.in.(${lista}))&select=id_interno,razon_social,direccion,estado,id_venta_ml&limit=1`);
+      const rows = await sbFetch(`envios_busqueda?or=(tracking.in.(${lista}),id_venta_ml.in.(${lista}),id_interno.in.(${lista}))&select=id_interno,razon_social,direccion,estado,cadete,id_venta_ml&limit=1`);
       const e = rows && rows[0];
       if (!e) return null;
       const did = Number(e.id_interno);
@@ -268,11 +268,24 @@ export default function Devoluciones({ abrirEnvio = null }) {
       }
       const g = (datos.gest || []).find((x) => Number(x.did) === did);
       if (g && g.ingreso_deposito_at) return { ya: true, did, cliente: e.razon_social, direccion: e.direccion };
+      // Freno (18/11/2026): si el envío sigue en reparto con un cadete, puede ser un DUPLICADO (el seller despachó
+      // dos paquetes con la misma etiqueta). Ingresarlo lo pasaría a "devuelto deposito" en LightData y le sacaría
+      // al cadete el envío que todavía tiene que entregar. Se pregunta antes.
+      if (!forzar && enReparto(e)) return { enReparto: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado, cadete: e.cadete };
       await guardarGestion([{ did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
       setDatos((d) => ({ ...d, gest: [...d.gest.filter((x) => Number(x.did) !== did), { ...(g || {}), did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }] }));
       registrar("ingreso", 1, null, { dids: [did], via: "escaner", no_entregado: true });
       return { ok: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado };
     } catch { return null; }
+  }
+  // Paquete duplicado: va a "A gestionar" (caja B) sin tocar LightData; el envío sigue con su cadete.
+  async function cargarDuplicado(o) {
+    try {
+      const nota = `DUPLICADO del envío #${o.did} (${o.cliente || "seller"}${o.direccion ? ` · ${String(o.direccion).split(/\s\/\s|Referencia/)[0]}` : ""}). El original sigue en reparto${o.cadete ? ` con ${o.cadete}` : ""}. Devolver al seller.`;
+      await sbFetch("paquetes_gestionar", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ creado_por: yo(), cadete: o.cadete || null, nota, fotos: [] }) });
+      registrar("duplicado", 1, o.cadete || null, { did: o.did });
+      return true;
+    } catch { return false; }
   }
   async function ingresoEscaneado(c, como = "") {
     try {
@@ -495,7 +508,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
       {verIngresos && <IngresosDiaModal casos={casos} ubic={ubic} codigosLugar={codigosLugar} onLugar={cambiarLugar} onFijarSeller={async (cliente, codigo, did) => { await guardarUbicacion(cliente, codigo); await cambiarLugar(did, ""); toast(`${cliente}: de ahora en más va a ${codigo}`); }} onVerUbic={() => setVerUbic(true)} onCerrar={() => setVerIngresos(false)} />}
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
-      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} onDuplicado={cargarDuplicado} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
@@ -1321,7 +1334,7 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
 // ---------------- Ingreso a depósito escaneando la etiqueta del paquete ----------------
 // Continuo (acá no hace falta foto de prueba): lee el QR/código de barras de la etiqueta de ML o de LightData,
 // busca la devolución y la pasa a depósito al toque. Se puede tipear la venta/tracking si la etiqueta está rota.
-function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar, onGestionar, codigosLugar = [], onLugar }) {
+function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplicado, onCerrar, onGestionar, codigosLugar = [], onLugar }) {
   const video = useRef();
   const casosRef = useRef(casos); casosRef.current = casos;
   const ultimo = useRef({ t: "", at: 0 });
@@ -1343,6 +1356,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
     if (!c && otro && otro.entregado && otro.candidatos.length === 1) return procesarCaso(otro.candidatos[0], ahora, `por la etiqueta del envío original #${otro.did}`);
     if (!c && otro && otro.entregado && otro.candidatos.length > 1) l = { tipo: "elegir", titulo: `${otro.cliente || "Envío"} · ¿cuál de estos cambios es?`, sub: `La etiqueta es del envío original #${otro.did} (entregado)`, candidatos: otro.candidatos };
     else if (!c && otro && otro.entregado) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `Es la etiqueta del envío original #${otro.did} y no encontré un cambio abierto de esa venta ni de esa dirección. Cargalo en “A gestionar”.` };
+    else if (!c && otro && otro.enReparto) l = { tipo: "reparto", envio: otro, titulo: `${otro.cliente || "Envío"} · está en reparto${otro.cadete ? ` con ${otro.cadete}` : ""}`, sub: `#${otro.did} · ${otro.estado || ""}. No lo ingresé: ¿es un duplicado?` };
     else if (!c && otro && otro.ok) l = { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, otro.estado, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo };
     else if (!c && otro && otro.ya) l = { tipo: "ya", titulo: `${otro.cliente || "Envío"} · ya estaba ingresado`, sub: otro.direccion || "" };
     else if (!c) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: "No lo encontré en el sistema", sub: `Leí ${leido}. Si se cargó hoy puede que todavía no esté; cargalo en “A gestionar”.` };
@@ -1361,6 +1375,17 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
       if (!ok) hechos.current.delete(c.did);
     }
     avisar(l, ahora);
+  }
+  async function resolverReparto(l, accion) {
+    setLecturas((x) => x.filter((y) => y.id !== l.id));
+    if (accion === "nada") return;
+    const ahora = Date.now();
+    if (accion === "duplicado") {
+      const ok = await onDuplicado(l.envio);
+      return avisar(ok ? { tipo: "ok", titulo: `${l.envio.cliente || "Envío"} · duplicado`, sub: `Quedó en “A gestionar”. LightData no se tocó: #${l.envio.did} sigue con su cadete.`, donde: "B" } : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" }, ahora);
+    }
+    const otro = await onIngresarOtro(String(l.envio.did), { forzar: true });
+    avisar(otro && otro.ok ? { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo } : { tipo: "no", titulo: "No se pudo ingresar", sub: "Probá de nuevo" }, ahora);
   }
   function avisar(l, ahora) {
     try { navigator.vibrate && navigator.vibrate(l.tipo === "ok" ? 60 : [40, 60, 40]); } catch {}
@@ -1422,7 +1447,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
           <div className="dv-ing-lista">
             {lecturas.slice(0, 6).map((l) => (
               <div key={l.id} className="dv-ing-fila">
-                <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "!" : l.tipo === "elegir" ? "?" : "·"}</span>
+                <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "!" : l.tipo === "elegir" || l.tipo === "reparto" ? "?" : "·"}</span>
                 <span style={{ minWidth: 0, flex: 1 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b>
                   <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 12, opacity: .75, overflow: "hidden", lineHeight: 1.35 }}>{l.sub}</span>
                   {l.candidatos && l.candidatos.map((k) => (
@@ -1437,6 +1462,13 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onCerrar
                     <option value="">{l.dondeSeller || l.donde}</option>
                     {codigosLugar.filter((x) => x !== (l.dondeSeller || l.donde)).map((x) => <option key={x} value={x}>{x}</option>)}
                   </select>
+                )}
+                {l.tipo === "reparto" && (
+                  <span style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    <button className="dv-btn pri" style={{ fontSize: 12 }} onClick={() => resolverReparto(l, "duplicado")} title="Va a A gestionar (caja B). No toca LightData: el envío sigue con el cadete">Es duplicado</button>
+                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "ingresar")} title="El cadete no lo va a entregar: pasa a depósito y LightData lo saca del cadete">No se entrega, ingresar</button>
+                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "nada")}>Dejar</button>
+                  </span>
                 )}
                 {l.tipo === "no" && onGestionar && <button className="dv-btn" style={{ flexShrink: 0, background: "rgba(0,0,0,.5)" }} onClick={() => onGestionar(l.leido)}>A gestionar</button>}
               </div>

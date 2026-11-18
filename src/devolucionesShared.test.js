@@ -198,3 +198,12 @@ test("ingresosDelDia junta lo de la app y lo de LightData, con el lugar de cada 
   expect(r[0]).toMatchObject({ lugar: "M", via: "lightdata", lugar_cambiado: true });
   expect(porLugar(r)).toEqual([{ lugar: "A-2", cant: 1 }, { lugar: "M", cant: 1 }]);
 });
+
+test("enReparto frena solo envíos en camino/en planta con cadete real", () => {
+  const { enReparto } = require("./devolucionesShared");
+  expect(enReparto({ estado: "En camino al destinatario", cadete: "Kevin Ferrer" })).toBe(true);
+  expect(enReparto({ estado: "En planta de procesamiento", cadete: "Kevin Ferrer" })).toBe(true);
+  expect(enReparto({ estado: "Nadie", cadete: "Kevin Ferrer" })).toBe(false);
+  expect(enReparto({ estado: "En camino al destinatario", cadete: "devuelto deposito" })).toBe(false);
+  expect(enReparto({ estado: "En camino al destinatario", cadete: null })).toBe(false);
+});
