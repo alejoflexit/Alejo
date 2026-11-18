@@ -413,11 +413,11 @@ export default function Devoluciones({ abrirEnvio = null }) {
         </div>
       ) : (
       <div className="dv-etapas">
-        <EtapaCard titulo="En la calle" ayuda={AYUDA.calle} valor={r.calle} sub={`${plata(r.calleValor)} declarado`}
+        <EtapaCard id="calle" titulo="En la calle" ayuda={AYUDA.calle} valor={r.calle} sub={`${plata(r.calleValor)} declarado`}
           activo={tab === "seguimiento" && etapa === "calle"} venc={soloVencidos}
           vencidos={r.calleVencidos} limite={LIMITE_CALLE} ayudaVenc={AYUDA.calleVenc}
           onElegir={(v) => irA("calle", v)} />
-        <EtapaCard titulo="En depósito" ayuda={AYUDA.deposito} valor={r.deposito} sub={`${plata(r.depositoValor)} declarado · falta devolver al cliente`}
+        <EtapaCard id="deposito" titulo="En depósito" ayuda={AYUDA.deposito} valor={r.deposito} sub={`${plata(r.depositoValor)} declarado · falta devolver al cliente`}
           activo={tab === "seguimiento" && etapa === "deposito"} venc={soloVencidos}
           vencidos={r.depositoVencidos} limite={LIMITE_DEPOSITO} ayudaVenc={AYUDA.depositoVenc}
           onElegir={(v) => irA("deposito", v)} />
@@ -435,7 +435,8 @@ export default function Devoluciones({ abrirEnvio = null }) {
       ) : tab === "seguimiento" ? (
         <>
           <div className="dv-barra-filtros">
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
+              {ICONO_ETAPA[etapa] && <span className={"dv-etapa-ico " + etapa} aria-hidden="true">{ICONO_ETAPA[etapa]}</span>}
               <div style={{ fontSize: 15, fontWeight: 600 }}>
                 {NOMBRE_ETAPA[etapa]}{soloVencidos && (etapa === "calle" || etapa === "deposito") ? ` · más de ${etapa === "calle" ? LIMITE_CALLE : LIMITE_DEPOSITO} días` : ""}
                 {tipo !== "todos" ? ` · ${tipo === "CAMBIO" ? "solo cambios" : "solo cancelados"}` : ""}
@@ -449,10 +450,14 @@ export default function Devoluciones({ abrirEnvio = null }) {
             {fCadete && <button className="dv-chip-f" onClick={() => setFCadete(null)} title="Sacar el filtro de cadete">{fCadete} <span aria-hidden="true">✕</span></button>}
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
             {!esCelu && <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />}
-            {!esCelu && (etapa === "calle" || etapa === "retiro" || etapa === "deposito") && <button className="dv-btn" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo">Escanear ingreso</button>}
-            {!esCelu && etapa === "deposito" && <button className="dv-btn" onClick={() => setVerIngresos(true)} title="Qué entró hoy al depósito y dónde quedó guardado cada paquete">Ingresos de hoy</button>}
-            {!esCelu && etapa === "deposito" && <button className="dv-btn" onClick={() => setVerUbic(true)} title="Qué estante o caja tiene cada seller en el cuartito">Ubicaciones</button>}
-            {etapa === "deposito" && <button className="dv-btn pri" onClick={() => setVerListos(true)} title="La app arma los remitos de lo que está en depósito, por seller">Listos para devolver</button>}
+            {!esCelu && (etapa === "calle" || etapa === "retiro" || etapa === "deposito") && (
+              <div className="dv-grupo" role="group" aria-label="Herramientas del depósito">
+                <button className="dv-btn dv-btn-ico" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo"><IcoScan size={15} />Escanear ingreso</button>
+                {etapa === "deposito" && <button className="dv-btn dv-btn-ico" onClick={() => setVerIngresos(true)} title="Qué entró hoy al depósito y dónde quedó guardado cada paquete"><IcoReloj size={15} />Ingresos de hoy</button>}
+                {etapa === "deposito" && <button className="dv-btn dv-btn-ico" onClick={() => setVerUbic(true)} title="Qué estante o caja tiene cada seller en el cuartito"><IcoEstante size={15} />Ubicaciones</button>}
+              </div>
+            )}
+            {etapa === "deposito" && <button className="dv-btn pri dv-btn-ico" onClick={() => setVerListos(true)} title="La app arma los remitos de lo que está en depósito, por seller"><IcoDevolver size={15} />Listos para devolver</button>}
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
 
@@ -591,11 +596,12 @@ function Info({ texto, abajo = false }) {
   );
 }
 
-function EtapaCard({ titulo, ayuda, valor, sub, activo, venc, vencidos, limite, ayudaVenc, onElegir }) {
+function EtapaCard({ id, titulo, ayuda, valor, sub, activo, venc, vencidos, limite, ayudaVenc, onElegir }) {
   return (
     <div className={"dv-etapa" + (activo ? " on" : "")} style={card} role="button" tabIndex={0}
       onClick={() => onElegir(false)} onKeyDown={(e) => { if (e.key === "Enter") onElegir(false); }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        {ICONO_ETAPA[id] && <span className={"dv-etapa-ico chico " + id} aria-hidden="true">{ICONO_ETAPA[id]}</span>}
         <span style={{ fontSize: 13, color: activo ? C.ink : C.ink2, fontWeight: 600 }}>{titulo}</span>
         <Info texto={ayuda} />
         <span style={{ flex: 1 }} />
@@ -1537,6 +1543,19 @@ const IcoCamara = ({ size = 22 }) => (
 const IcoScan = ({ size = 22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7V6a2 2 0 0 1 2-2h2M4 17v1a2 2 0 0 0 2 2h2M16 4h2a2 2 0 0 1 2 2v1M16 20h2a2 2 0 0 0 2-2v-1M5 12h14" /></svg>
 );
+
+// Íconos propios de Devoluciones (18/11/2026): trazo fino, mismo estilo que IcoScan
+const svgP = (size, d) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
+const IcoReloj = ({ size = 18 }) => svgP(size, <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>);
+const IcoEstante = ({ size = 18 }) => svgP(size, <><path d="M4 3v18M20 3v18M4 9h16M4 15h16" /><path d="M7 9V6h4v3M13 15v-3h4v3" /></>);
+const IcoDevolver = ({ size = 18 }) => svgP(size, <><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" /><circle cx="7" cy="18" r="1.6" /><circle cx="17" cy="18" r="1.6" /></>);
+const IcoCaja = ({ size = 18 }) => svgP(size, <><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" /></>);
+const IcoMoto = ({ size = 18 }) => svgP(size, <><circle cx="5.5" cy="16.5" r="3" /><circle cx="18.5" cy="16.5" r="3" /><path d="M8.5 16.5h5l3-6h-4M16.5 10.5 15 6h-2.5M5.5 16.5 9 10h4" /></>);
+const IcoCheck = ({ size = 18 }) => svgP(size, <><circle cx="12" cy="12" r="8.5" /><path d="m8.5 12 2.5 2.5 4.5-5" /></>);
+const IcoVuelta = ({ size = 18 }) => svgP(size, <><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></>);
+const IcoEtiqueta = ({ size = 18 }) => svgP(size, <><path d="M3 12V4h8l9 9-8 8z" /><circle cx="7.5" cy="8.5" r="1.3" /></>);
+const IcoPregunta = ({ size = 18 }) => svgP(size, <><circle cx="12" cy="12" r="8.5" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5M12 16.5v.01" /></>);
+const ICONO_ETAPA = { calle: <IcoMoto />, deposito: <IcoCaja />, devuelto: <IcoCheck />, retiro: <IcoVuelta />, marcados: <IcoEtiqueta />, extraviados: <IcoPregunta /> };
 
 // ---------------- Armar remito: confirmación + chofer que lo lleva ----------------
 function ArmarRemitoModal({ previa, yaEnRemito, choferes, onConfirmar, onCerrar }) {
@@ -2640,6 +2659,14 @@ const CSS = `
 .dv-seg.sm button{padding:5px 11px;font-size:12px}
 .dv-seg button.on{background:rgba(255,255,255,.08);color:#f4f5fa}
 .dv-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f5fa;font:inherit;font-size:13px;padding:7px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.dv-btn-ico{display:inline-flex;align-items:center;gap:6px}.dv-btn-ico svg{opacity:.85;flex-shrink:0}
+.dv-grupo{display:inline-flex;border:1px solid rgba(255,255,255,.08);border-radius:11px;background:rgba(255,255,255,.03);padding:2px;gap:2px}
+.dv-grupo .dv-btn{border-color:transparent;background:transparent;border-radius:9px}.dv-grupo .dv-btn:hover{background:rgba(255,255,255,.06)}
+.dv-etapa-ico{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.05);color:#a7adc2;border:1px solid rgba(255,255,255,.08)}
+.dv-etapa-ico.chico{width:24px;height:24px;border-radius:8px}.dv-etapa-ico.chico svg{width:14px;height:14px}
+.dv-etapa-ico.deposito{background:rgba(46,230,182,.10);color:#2ee6b6;border-color:rgba(46,230,182,.28)}
+.dv-etapa-ico.calle{background:rgba(245,192,68,.10);color:#F5C044;border-color:rgba(245,192,68,.28)}
+.dv-etapa-ico.devuelto{background:rgba(46,230,182,.06);color:#7fe9cc}
 .dv-btn.pri{background:rgba(46,230,182,.12);border-color:rgba(46,230,182,.3);color:#2ee6b6}
 .dv-btn.on{border-color:rgba(255,255,255,.25)}
 .dv-btn:disabled{opacity:.5;cursor:default}
