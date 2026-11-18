@@ -9,7 +9,7 @@ import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
   progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
-  etiquetaLegible, cambiosDeEnvio,
+  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -95,6 +95,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [escIngreso, setEscIngreso] = useState(false);
   const [verListos, setVerListos] = useState(false);
   const [verUbic, setVerUbic] = useState(false);
+  const [verIngresos, setVerIngresos] = useState(false);
   const [cargarG, setCargarG] = useState(null); // { inicial } = abierto el alta de "A gestionar"
   const esCelu = useEsCelu();
   const [pedidoEscaner, setPedidoEscaner] = useState(0); // celu: abrir el escáner de remitos desde arriba
@@ -436,6 +437,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
             {!esCelu && <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />}
             {!esCelu && (etapa === "calle" || etapa === "retiro" || etapa === "deposito") && <button className="dv-btn" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo">Escanear ingreso</button>}
+            {!esCelu && etapa === "deposito" && <button className="dv-btn" onClick={() => setVerIngresos(true)} title="Qué entró hoy al depósito y dónde quedó guardado cada paquete">Ingresos de hoy</button>}
             {!esCelu && etapa === "deposito" && <button className="dv-btn" onClick={() => setVerUbic(true)} title="Qué estante o caja tiene cada seller en el cuartito">Ubicaciones</button>}
             {etapa === "deposito" && <button className="dv-btn pri" onClick={() => setVerListos(true)} title="La app arma los remitos de lo que está en depósito, por seller">Listos para devolver</button>}
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
@@ -491,6 +493,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       )}
 
       {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
+      {verIngresos && <IngresosDiaModal casos={casos} ubic={ubic} codigosLugar={codigosLugar} onLugar={cambiarLugar} onFijarSeller={async (cliente, codigo, did) => { await guardarUbicacion(cliente, codigo); await cambiarLugar(did, ""); toast(`${cliente}: de ahora en más va a ${codigo}`); }} onVerUbic={() => setVerUbic(true)} onCerrar={() => setVerIngresos(false)} />}
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
       {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
@@ -1232,6 +1235,83 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
         </div>
         <div className="dv-modal-pie" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 12, color: C.ink3 }}>{Object.keys(mapa).length} sellers con lugar propio · se guarda solo</span>
+          <button className="dv-btn pri" onClick={onCerrar}>Listo</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
+// ---------------- Ingresos del día: qué entró al depósito y dónde quedó (18/11/2026) ----------------
+// Historial por día de lo que entró (escaneado/marcado en la app o por LightData), con el lugar de cada paquete.
+// Se puede corregir el lugar de un paquete o, si el seller siempre va ahí, fijarlo como lugar del seller.
+const horaAR = (iso) => (iso ? new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)) : "—");
+const moverDia = (dia, n) => new Date(Date.parse(dia + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFijarSeller, onVerUbic, onCerrar }) {
+  const hoy = hoyAR();
+  const [dia, setDia] = useState(hoy);
+  const [fLugar, setFLugar] = useState(null);
+  const [busca, setBusca] = useState("");
+  const todos = useMemo(() => ingresosDelDia(casos, dia, ubic), [casos, dia, ubic]);
+  const lugares = useMemo(() => porLugar(todos), [todos]);
+  const q = busca.trim().toLowerCase();
+  const vis = todos.filter((i) => (!fLugar || i.lugar === fLugar) && (!q || coincideBusqueda(i, q)));
+  const porTipo = todos.reduce((m, i) => ({ ...m, [i.tipo]: (m[i.tipo] || 0) + 1 }), {});
+  const etiquetaDia = dia === hoy ? "Hoy" : dia === moverDia(hoy, -1) ? "Ayer" : `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
+  return createPortal(
+    <div className="dv-modal-fondo" onClick={onCerrar}>
+      <div className="dv-modal" style={{ width: "min(860px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ingresos del día">
+        <div className="dv-modal-cab">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Ingresos al depósito</div>
+            <div style={{ flex: 1 }} />
+            <button className="dv-btn" onClick={() => { setDia(moverDia(dia, -1)); setFLugar(null); }} aria-label="Día anterior">‹</button>
+            <span style={{ minWidth: 56, textAlign: "center", fontWeight: 700, fontFamily: C.grotesk }}>{etiquetaDia}</span>
+            <button className="dv-btn" disabled={dia >= hoy} onClick={() => { setDia(moverDia(dia, 1)); setFLugar(null); }} aria-label="Día siguiente">›</button>
+            {dia !== hoy && <button className="dv-btn" onClick={() => { setDia(hoy); setFLugar(null); }}>Hoy</button>}
+          </div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 6 }}>
+            <b style={{ color: C.ink, fontFamily: C.grotesk, fontSize: 15 }}>{num(todos.length)}</b> paquete{todos.length !== 1 ? "s" : ""} entraron
+            {todos.length > 0 && <span style={{ color: C.ink3 }}> · {Object.entries(porTipo).map(([t, n]) => `${n} ${tipoTxt(t).toLowerCase()}${n > 1 && t !== "NO_ENTREGADO" ? "s" : ""}`).join(" · ")}</span>}
+          </div>
+          {lugares.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+              <button className={"dv-btn" + (!fLugar ? " on" : "")} onClick={() => setFLugar(null)}>Todos {todos.length}</button>
+              {lugares.map((l) => <button key={l.lugar} className={"dv-btn" + (fLugar === l.lugar ? " on" : "")} onClick={() => setFLugar(fLugar === l.lugar ? null : l.lugar)} title={`Ver lo que fue a ${l.lugar}`}>📍 {l.lugar} <b style={{ marginLeft: 4 }}>{l.cant}</b></button>)}
+            </div>
+          )}
+          <input className="dv-input" style={{ width: "100%", marginTop: 10 }} placeholder="Buscar seller, venta, cadete…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </div>
+        <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
+          {!vis.length && <div style={{ padding: 24, textAlign: "center", color: C.ink3 }}>{todos.length ? "Nada con ese filtro." : `No entró nada ${dia === hoy ? "hoy" : "ese día"}.`}</div>}
+          {vis.map((i) => {
+            const ch = choferDe(i);
+            const editable = i.etapa === "deposito" && !i.cerrado;
+            return (
+              <div key={i.did} className="dv-listo" style={{ cursor: "default", alignItems: "center" }}>
+                <span style={{ width: 44, fontFamily: C.grotesk, fontWeight: 700, color: C.ink2, flexShrink: 0 }}>{horaAR(i.ingreso_at)}</span>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <b>{i.cliente || "(sin cliente)"}</b> <span className="dv-tag">{tipoTxt(i.tipo)}</span>
+                  {i.etapa !== "deposito" && <span className="dv-tag" style={{ marginLeft: 4 }}>{i.etapa === "devuelto" ? "ya devuelto" : "volvió a salir"}</span>}
+                  <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>
+                    #{i.did}{ch ? ` · lo trajo ${ch.nombre}` : ""} · {i.via === "app" ? `ingresó ${i.ingreso_por || "equipo"}` : "por LightData"}
+                  </span>
+                </span>
+                {editable ? (
+                  <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                    {i.lugar_cambiado && <button className="dv-btn" style={{ height: 30, fontSize: 12 }} onClick={() => onFijarSeller(i.cliente, i.lugar, i.did)} title={`Guardar ${i.lugar} como lugar fijo de ${i.cliente}: los próximos ingresos ya te van a decir ${i.lugar}`}>Fijar para {String(i.cliente || "").split(" ")[0]}</button>}
+                    <select className="dv-input" style={{ height: 30, padding: "0 8px", fontFamily: C.grotesk, fontWeight: 700 }} value={i.ubicacion_manual || ""} onChange={(e) => onLugar(i.did, e.target.value)} aria-label={`Lugar de #${i.did}`}>
+                      <option value="">{i.lugar_seller} (del seller)</option>
+                      {codigosLugar.filter((x) => x !== i.lugar_seller).map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                  </span>
+                ) : <span className="dv-tag ub" style={{ flexShrink: 0 }}>📍 {i.lugar}</span>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="dv-modal-pie" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <button className="dv-btn" onClick={onVerUbic} title="Qué estante o caja tiene cada seller">Lugar por seller…</button>
+          <span style={{ fontSize: 12, color: C.ink3, flex: 1, textAlign: "center" }}>Los cambios de lugar se guardan solos</span>
           <button className="dv-btn pri" onClick={onCerrar}>Listo</button>
         </div>
       </div>

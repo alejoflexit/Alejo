@@ -365,3 +365,24 @@ export function ubicacionDe(cliente, mapa = {}) {
   const k = String(cliente || "");
   return mapa[k] ? { codigo: mapa[k], propia: true } : { codigo: cajaPorLetra(k), propia: false };
 }
+
+// Historial de ingresos de un día (18/11/2026): todo lo que entró al depósito ese día (hora AR), con dónde
+// quedó guardado. Cuenta lo escaneado/marcado en la app (ingreso_deposito_at) y lo que entró por LightData
+// (chofer "devuelto deposito", fecha_deposito). El más nuevo arriba.
+export function momentoIngreso(c) { return c.ingreso_deposito_at || (c.en_deposito_ld || c.fecha_deposito ? c.fecha_deposito : null) || null; }
+export function ingresosDelDia(casos, dia, mapa = {}) {
+  return (casos || [])
+    .map((c) => ({ c, at: momentoIngreso(c) }))
+    .filter((x) => x.at && diaAR(x.at) === dia)
+    .map(({ c, at }) => {
+      const seller = ubicacionDe(c.cliente, mapa);
+      return { ...c, ingreso_at: at, via: c.ingreso_deposito_at ? "app" : "lightdata", lugar: c.ubicacion_manual || seller.codigo, lugar_seller: seller.codigo, lugar_cambiado: !!c.ubicacion_manual && c.ubicacion_manual !== seller.codigo };
+    })
+    .sort((a, b) => Date.parse(b.ingreso_at) - Date.parse(a.ingreso_at));
+}
+// Cuántos fueron a cada lugar, el más cargado primero
+export function porLugar(ingresos) {
+  const m = new Map();
+  (ingresos || []).forEach((i) => m.set(i.lugar, (m.get(i.lugar) || 0) + 1));
+  return [...m.entries()].map(([lugar, cant]) => ({ lugar, cant })).sort((a, b) => b.cant - a.cant || a.lugar.localeCompare(b.lugar));
+}

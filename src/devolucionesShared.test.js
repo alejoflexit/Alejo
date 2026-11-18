@@ -183,3 +183,18 @@ test("volvió a salir: estuvo en depósito y después se asignó a un cadete →
   expect(normal.volvio_a_salir).toBe(false);
   expect(reclamosPorCadete([normal])[0].casos.length).toBe(1);
 });
+
+test("ingresosDelDia junta lo de la app y lo de LightData, con el lugar de cada uno", () => {
+  const { ingresosDelDia, porLugar } = require("./devolucionesShared");
+  const cs = [
+    { did: 1, cliente: "Ohpic", ingreso_deposito_at: "2026-11-18T10:00:00-03:00", ubicacion_manual: null },
+    { did: 2, cliente: "Boxo", en_deposito_ld: true, fecha_deposito: "2026-11-18T15:00:00-03:00", ubicacion_manual: "M" },
+    { did: 3, cliente: "Ohpic", ingreso_deposito_at: "2026-11-17T23:30:00-03:00" },
+    { did: 4, cliente: "Ohpic" },
+  ];
+  const r = ingresosDelDia(cs, "2026-11-18", { Ohpic: "A-2" });
+  expect(r.map((x) => x.did)).toEqual([2, 1]);
+  expect(r[1]).toMatchObject({ lugar: "A-2", via: "app", lugar_cambiado: false });
+  expect(r[0]).toMatchObject({ lugar: "M", via: "lightdata", lugar_cambiado: true });
+  expect(porLugar(r)).toEqual([{ lugar: "A-2", cant: 1 }, { lugar: "M", cant: 1 }]);
+});
