@@ -1279,6 +1279,7 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
   const [dia, setDia] = useState(hoy);
   const [fLugar, setFLugar] = useState(null);
   const [busca, setBusca] = useState("");
+  const [soloCambios, setSoloCambios] = useState(true);
   const todos = useMemo(() => ingresosDelDia(casos, dia, ubic), [casos, dia, ubic]);
   const lugares = useMemo(() => porLugar(todos), [todos]);
   const q = busca.trim().toLowerCase();
@@ -1339,7 +1340,19 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
         </div>
         <div className="dv-modal-pie" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <button className="dv-btn" onClick={onVerUbic} title="Qué estante o caja tiene cada seller">Lugar por seller…</button>
-          <span style={{ fontSize: 12, color: C.ink3, flex: 1, textAlign: "center" }}>Los cambios de lugar se guardan solos</span>
+          <span style={{ flex: 1 }} />
+          {(() => {
+            const aImprimir = vis.filter((i) => !soloCambios || i.tipo === "CAMBIO");
+            return (<>
+              <label style={{ fontSize: 12, color: C.ink2, display: "inline-flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+                <input type="checkbox" checked={soloCambios} onChange={(e) => setSoloCambios(e.target.checked)} style={{ accentColor: C.teal }} />Solo cambios
+              </label>
+              <button className="dv-btn" disabled={!aImprimir.length} onClick={() => imprimirEtiquetas(aImprimir, dia, window.open("", "_blank"))}
+                title="Planilla A4 con 10 etiquetas por hoja para cortar y pegar. Imprime lo que se ve en la lista (respeta el filtro de lugar y la búsqueda)">
+                Imprimir etiquetas ({aImprimir.length})
+              </button>
+            </>);
+          })()}
           <button className="dv-btn pri" onClick={onCerrar}>Listo</button>
         </div>
       </div>
@@ -2473,6 +2486,46 @@ function medirCalidad(cv) {
 // Logo oficial de Flexit (SVG que mandó Alejo 24/10): nítido en cualquier impresora
 const LOGO_REMITO = `<svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 114" fill="none" aria-label="Flexit"><path fill="#0F0241" d="M234.446 34.42c16.655-.737 29.075 4.518 36.717 19.99 2.888 5.848 4.935 18.996 2.754 25.076-10.862.686-22.81-.272-33.791.096-6.01.2-12.867.105-18.85-.164 4.19 12.894 19.216 15.822 30.614 9.578 1.262-.692 3.067-2.711 4.373-3.746 2.329.525 4.71 2.223 6.881 3.427 1.575 1.051 6.442 3.915 8.021 4.688-.819 2.05-1.873 3.31-3.285 4.968-11.122 13.058-38.972 13.94-51.944 3.377-25.258-20.565-16.172-62.852 18.51-67.29m-13.681 30.555h18.218c2.366.008 16.02.336 16.991-.442 0-1.192-1.054-3.334-1.588-4.429-2.83-5.791-9.269-8.972-15.556-8.938q-.28 0-.561.028c-9.503.493-14.654 4.832-17.504 13.781"/><path fill="#0F0241" d="M307.535 55.652a519 519 0 0 1 13.408-18.514c.778-1.029 7.077-.729 8.686-.725l12.776.045c-.172.494-.464 1.28-.758 1.707-6.622 9.602-13.778 18.826-20.321 28.483-1.037 1.53-1.72 2.586-3.066 3.855 1.139 2.079 24.136 34.862 25.445 35.779.08.057.097.221.124.318-.559.253-1.942.283-2.619.328-6.069.012-12.438.113-18.483-.032-2.96-2.493-9.106-12.486-11.907-15.98-1.148-1.436-2.061-3.21-3.568-4.56a472 472 0 0 0-8.982 12.524c-1.656 2.341-3.329 5.016-5.314 7.072-1.2 1.215-3.664 1.03-5.291 1.01-5.676-.069-11.513.118-17.172-.137 1.745-1.861 7.675-10.372 9.395-12.84 5.347-7.664 11.389-15.522 16.604-23.215-1-1.112-2.631-3.503-3.55-4.77l-7.856-11.044-7.421-10.223c-1.643-2.25-4.378-5.876-5.591-8.321 6.191.404 15.782-.51 21.565.168l8.711 12.17c1.252 1.756 3.759 5.429 5.185 6.902M164.95 6.296l4.863-.046c-.31 4.63-.059 12.46-.044 17.313l-.161-.004c-8.819-.142-14.543 3.52-14.622 12.853l11.656.05c-.28 2.956-.289 14.744.043 17.452-2.732-.19-8.636.032-11.675.04l.018 52.994c-3.772-.06-7.688-.009-11.472-.013l-7.213.017c.138-3.745.011-8.357.009-12.167L136.344 69c-.001-4.88-.1-10.171.066-15.023a363 363 0 0 0-9.952-.012q-.105-8.761.002-17.522l9.975-.031c-.76-18.574 10.283-29.216 28.515-30.116m237.238 10.513.356.176c-.236 5.35-.126 14.055.029 19.395 5.239.13 10.797.061 16.059.072-.163 2.63-.248 15.2.137 17.457-5.099-.136-11.143.036-16.289.079.157 1.812.039 5.485.035 7.425l-.019 14.44c-.004 15.166 1.427 14.537 16.122 14.312-.323 4.349-.073 12.086-.029 16.642-4.656 1.135-8.692.803-13.462.761-21.762-1.86-21.089-15.45-21.091-33.223l.004-20.402-12.004.019-.002-17.494c3.968-.082 8.121-.035 12.106-.05-.083-4.633-.247-9.654.095-14.265a9 9 0 0 1 1.749-.661c5.396-1.447 10.727-3.585 16.204-4.683M175.157 6.256h18.763c-.361 2.834-.115 10.94-.11 14.28l-.001 28.951.006 37.422c-.006 5.4-.321 15.14.152 20.082-1.457-.173-4.914-.075-6.487-.073l-12.328.05z"/><path fill="#60C9C6" d="M49.498 37.584c1.636 1.727 12.73 17.842 13.24 19.681-.082.671-.728 1.819-1.118 2.397-2.778 4.125-5.655 8.252-8.518 12.32-.625.888-2.733 4.164-3.261 4.66-2.643 2.683-13.48 20.021-15.44 20.562-1.384.383-24.757.307-25.435-.098-.219-.13-.427-.543-.481-.783-.172-.764.142-1.907.505-2.588 1.476-2.774 4.67-6.77 6.617-9.458L27.08 68.369c2.38-3.267 6.034-8.053 8.02-11.375l.207-.005c4.88-6.141 9.451-13.053 14.19-19.405Z"/><path fill="#2EE6B6" d="M49.497 37.584c1.636 1.727 12.73 17.842 13.241 19.681-.082.671-.729 1.819-1.118 2.397-2.779 4.125-5.655 8.252-8.518 12.32-.626.888-2.734 4.164-3.262 4.66-3.542-3.069-7.557-9.953-10.427-13.848-1.273-1.727-3.29-3.982-4.106-5.805 4.879-6.141 9.45-13.053 14.19-19.405"/><path fill="#60C9C6" d="M46.681 17.155c4.385-.28 9.753-.07 14.234-.134 2.568-.036 8.233-.137 10.526.189 2.125 2.454 5.74 7.848 7.744 10.71 2.392 3.417 5.266 6.966 7.533 10.25 1.122 1.167 2.506 3.415 3.462 4.82l4.529 6.535c1.466 2.137 4.528 5.727 5.222 8.02C98.47 59.64 87.1 76.378 86.356 76.83c-5.189-6.032-9.337-13.197-14.32-19.397l-.295.067c-.714-1.442-1.604-2.764-2.584-4.039-5.633-7.392-10.837-15.125-16.198-22.716-2.24-3.173-6.995-8.765-7.913-12.361.38-.34 1.192-.904 1.635-1.229"/><path fill="#2EE6B6" d="M86.718 38.17c1.122 1.167 2.506 3.415 3.462 4.82l4.529 6.535c1.466 2.137 4.528 5.727 5.222 8.02C98.47 59.64 87.1 76.378 86.356 76.83c-5.189-6.032-9.337-13.197-14.32-19.397.15-1.07 4.07-5.874 4.865-6.86 2.075-2.569 7.03-11.199 9.817-12.403"/><path fill="#0F0241" d="m347.989 36.46 18.392-.02c.269 6.284-.031 14.904-.031 21.397l.051 49.078-18.421.041z"/><path fill="#97E4C7" d="M72.036 57.433c4.983 6.2 9.131 13.365 14.32 19.397-.935.93-3.124 4.307-4.035 5.61-2.98 4.262-5.931 8.604-9.03 12.782-.815.914-1.383 2.072-2.727 2.112-7.608.231-15.258-.089-22.869.133-.876.121-2.823-.907-2.533-1.91.418-1.441 1.817-3.655 2.679-4.847a2440 2440 0 0 0 18.953-26.59c1.436-2.042 3.284-4.777 4.947-6.618zM35.1 56.995c-6.09-8.049-11.677-16.14-17.543-24.344l-5.79-8.039c-.93-1.266-2.01-2.497-2.841-3.826-.314-.502-.56-1.048-.562-1.65-.003-.538.3-1.054.676-1.422 1.13-1.108 22.242-.668 25.404-.675 1.65 1.515 6.062 8.043 7.684 10.394 2.338 3.39 5.033 6.84 7.37 10.151-4.74 6.353-9.311 13.264-14.19 19.405z"/><path fill="#0F0241" d="M354.79 5.727a11.46 11.46 0 0 1 10.948 3.784 11.45 11.45 0 0 1 2.054 11.395 11.46 11.46 0 0 1-8.941 7.362c-6.166.99-11.989-3.137-13.095-9.28-1.107-6.142 2.911-12.039 9.034-13.26Z"/></svg>`;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+// Planilla de etiquetas para cortar y pegar (18/11/2026): para los cambios que llegan "pelados" (ej. un
+// microondas sin etiqueta). 10 por hoja A4 (2×5), con seller, venta, envío, motivo del cambio, lugar y un QR
+// {"did":…} que el escáner de ingreso/remitos reconoce. El producto no viene de LightData: se deja una línea.
+async function imprimirEtiquetas(items, dia, ventana) {
+  const w = ventana || window.open("", "_blank");
+  if (!w) { window.alert("El navegador bloqueó la ventana. Permití ventanas emergentes para este sitio."); return; }
+  w.document.open();
+  const fd = (iso) => (iso ? new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso)) : "");
+  const etqs = [];
+  for (const i of items) {
+    const qr = await QRCode.toDataURL(JSON.stringify({ did: Number(i.did) }), { margin: 0, width: 220, errorCorrectionLevel: "M" });
+    const ch = choferDe(i);
+    etqs.push(`<div class="e"><div class="txt">
+      <div class="top"><span class="tipo">${esc(tipoTxt(i.tipo).toUpperCase())}</span><span class="lug">${esc(i.lugar || "")}</span></div>
+      <div class="sel">${esc(i.cliente || "Sin seller")}</div>
+      <div class="l"><span>Venta</span><b>${esc(i.ml_venta_id || i.tracking || "—")}</b></div>
+      <div class="l"><span>Envío</span><b>#${esc(i.did)}</b></div>
+      ${i.li_texto ? `<div class="l mot"><span>Motivo</span>${esc(String(i.li_texto).slice(0, 90))}</div>` : ""}
+      <div class="l prod"><span>Producto</span><i></i></div>
+      <div class="pie">${esc(fd(i.ingreso_at))}${ch ? ` · ${esc(ch.nombre)}` : ""}</div>
+    </div><img src="${qr}" alt=""></div>`);
+  }
+  const hojas = [];
+  for (let k = 0; k < etqs.length; k += 10) hojas.push(`<section class="hoja">${etqs.slice(k, k + 10).join("")}</section>`);
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas ${esc(dia)}</title><style>
+    @page{size:A4;margin:8mm}*{box-sizing:border-box}body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0}
+    .hoja{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:56mm;page-break-after:always}.hoja:last-child{page-break-after:auto}
+    .e{border:1px dashed #999;padding:4mm;display:flex;gap:3mm;overflow:hidden}
+    .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1.2mm}
+    .top{display:flex;justify-content:space-between;align-items:center}.tipo{font-size:9px;letter-spacing:.12em;font-weight:700;border:1px solid #111;padding:1px 5px;border-radius:3px}
+    .lug{font-size:18px;font-weight:800}
+    .sel{font-size:17px;font-weight:800;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .l{font-size:11px;display:flex;gap:2mm;align-items:baseline}.l span{font-size:8px;color:#666;text-transform:uppercase;letter-spacing:.08em;min-width:13mm}
+    .mot{font-size:10px;line-height:1.2}.prod i{flex:1;border-bottom:1px solid #111;height:10px}
+    .pie{margin-top:auto;font-size:9px;color:#555}
+    img{width:24mm;height:24mm;align-self:center}
+  </style></head><body>${hojas.join("")}<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
+  w.document.close();
+}
+
 async function imprimirRemitos(remitos, ventana) {
   const w = ventana || window.open("", "_blank");
   if (!w) { window.alert("El navegador bloqueó la ventana del remito. El remito quedó guardado: imprimilo desde la pestaña Remitos o permití ventanas emergentes para este sitio."); return; }
