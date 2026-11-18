@@ -1277,7 +1277,7 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
 // ---------------- Ingresos del día: qué entró al depósito y dónde quedó (18/11/2026) ----------------
 // Historial por día de lo que entró (escaneado/marcado en la app o por LightData), con el lugar de cada paquete.
 // Se puede corregir el lugar de un paquete o, si el seller siempre va ahí, fijarlo como lugar del seller.
-const horaAR = (iso) => (iso ? new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit" }).format(new Date(iso)) : "—");
+const horaAR = (iso) => (iso ? new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso)) : "—");
 const moverDia = (dia, n) => new Date(Date.parse(dia + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
 function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFijarSeller, onVerUbic, onCerrar }) {
   const hoy = hoyAR();
@@ -1332,8 +1332,10 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
                 {editable ? (
                   <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                     {i.lugar_cambiado && <button className="dv-btn" style={{ height: 30, fontSize: 12 }} onClick={() => onFijarSeller(i.cliente, i.lugar, i.did)} title={`Guardar ${i.lugar} como lugar fijo de ${i.cliente}: los próximos ingresos ya te van a decir ${i.lugar}`}>Fijar para {String(i.cliente || "").split(" ")[0]}</button>}
-                    <select className="dv-input" style={{ height: 30, padding: "0 8px", fontFamily: C.grotesk, fontWeight: 700 }} value={i.ubicacion_manual || ""} onChange={(e) => onLugar(i.did, e.target.value)} aria-label={`Lugar de #${i.did}`}>
-                      <option value="">{i.lugar_seller} (del seller)</option>
+                    <select className="dv-input" style={{ height: 30, padding: "0 8px", minWidth: 72, fontFamily: C.grotesk, fontWeight: 700, ...(i.ubicacion_manual ? { borderColor: "rgba(46,230,182,.45)", color: C.teal } : {}) }}
+                      value={i.ubicacion_manual || ""} onChange={(e) => onLugar(i.did, e.target.value)} aria-label={`Lugar de #${i.did}`}
+                      title={i.ubicacion_manual ? `Cambiado a mano (el de ${i.cliente} es ${i.lugar_seller})` : `El lugar de ${i.cliente}`}>
+                      <option value="">{i.lugar_seller}</option>
                       {codigosLugar.filter((x) => x !== i.lugar_seller).map((x) => <option key={x} value={x}>{x}</option>)}
                     </select>
                   </span>
