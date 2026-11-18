@@ -240,6 +240,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
     } catch (e) { toast("No se pudo guardar la nota: " + String(e.message || e).slice(0, 60)); return false; }
   }
   // Lugar de un paquete: el que se le puso a mano (ej. P2 por grande) o el de su seller
+  const ingresosHoy = useMemo(() => ingresosDelDia(casos, hoyAR(), ubic).length, [casos, ubic]);
   const lugarDe = (c) => c.ubicacion_manual || ubicacionDe(c.cliente, ubic).codigo;
   // Plano del cuartito (29/10): estanterías A, C y E de 4 pisos; B y D una caja cada uno (B = problemas); M voluminosos
   const codigosLugar = useMemo(() => [...new Set([...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M", ...Object.values(ubic)])].sort(), [ubic]);
@@ -420,7 +421,12 @@ export default function Devoluciones({ abrirEnvio = null }) {
         <EtapaCard id="deposito" titulo="En depósito" ayuda={AYUDA.deposito} valor={r.deposito} sub={`${plata(r.depositoValor)} declarado · falta devolver al cliente`}
           activo={tab === "seguimiento" && etapa === "deposito"} venc={soloVencidos}
           vencidos={r.depositoVencidos} limite={LIMITE_DEPOSITO} ayudaVenc={AYUDA.depositoVenc}
-          onElegir={(v) => irA("deposito", v)} />
+          onElegir={(v) => irA("deposito", v)}
+          acciones={<div className="dv-grupo" role="group" aria-label="Herramientas del depósito">
+            <button className="dv-btn dv-btn-ico" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo"><IcoScan size={15} />Escanear ingreso</button>
+            <button className="dv-btn dv-btn-ico" onClick={() => setVerIngresos(true)} title="Qué entró hoy al depósito y dónde quedó guardado cada paquete"><IcoReloj size={15} />Ingresos de hoy <b style={{ marginLeft: 2 }}>{num(ingresosHoy)}</b></button>
+            <button className="dv-btn dv-btn-ico" onClick={() => setVerUbic(true)} title="Qué estante o caja tiene cada seller en el cuartito"><IcoEstante size={15} />Ubicaciones</button>
+          </div>} />
         <div className="dv-otros" style={card}>
           {[["gestionar", (datos.gestionar || []).filter((x) => x.estado === "pendiente").length], ["retiro", r.retiro], ["devuelto", r.devueltos], ["extraviados", casos.filter((c) => c.marca === "extraviado").length], ["marcados", r.marcados]].map(([id, n]) => (
             <button key={id} className={"dv-otro" + (tab === "seguimiento" && etapa === id ? " on" : "")} onClick={() => irA(id)}>
@@ -450,13 +456,6 @@ export default function Devoluciones({ abrirEnvio = null }) {
             {fCadete && <button className="dv-chip-f" onClick={() => setFCadete(null)} title="Sacar el filtro de cadete">{fCadete} <span aria-hidden="true">✕</span></button>}
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
             {!esCelu && <FiltroFecha desde={fDesde} hasta={fHasta} onCambiar={(d, h) => { setFDesde(d); setFHasta(h); }} ayuda={COL_FECHA[etapa]} />}
-            {!esCelu && (etapa === "calle" || etapa === "retiro" || etapa === "deposito") && (
-              <div className="dv-grupo" role="group" aria-label="Herramientas del depósito">
-                <button className="dv-btn dv-btn-ico" onClick={() => setEscIngreso(true)} title="Escaneá la etiqueta de cada paquete que entra: pasa a depósito solo"><IcoScan size={15} />Escanear ingreso</button>
-                {etapa === "deposito" && <button className="dv-btn dv-btn-ico" onClick={() => setVerIngresos(true)} title="Qué entró hoy al depósito y dónde quedó guardado cada paquete"><IcoReloj size={15} />Ingresos de hoy</button>}
-                {etapa === "deposito" && <button className="dv-btn dv-btn-ico" onClick={() => setVerUbic(true)} title="Qué estante o caja tiene cada seller en el cuartito"><IcoEstante size={15} />Ubicaciones</button>}
-              </div>
-            )}
             {etapa === "deposito" && <button className="dv-btn pri dv-btn-ico" onClick={() => setVerListos(true)} title="La app arma los remitos de lo que está en depósito, por seller"><IcoDevolver size={15} />Listos para devolver</button>}
             {etapa === "calle" && <button className="dv-btn pri" onClick={() => setVerReclamos(true)}>Reclamar a cadetes</button>}
           </div>
@@ -596,7 +595,7 @@ function Info({ texto, abajo = false }) {
   );
 }
 
-function EtapaCard({ id, titulo, ayuda, valor, sub, activo, venc, vencidos, limite, ayudaVenc, onElegir }) {
+function EtapaCard({ id, titulo, ayuda, valor, sub, activo, venc, vencidos, limite, ayudaVenc, onElegir, acciones = null }) {
   return (
     <div className={"dv-etapa" + (activo ? " on" : "")} style={card} role="button" tabIndex={0}
       onClick={() => onElegir(false)} onKeyDown={(e) => { if (e.key === "Enter") onElegir(false); }}>
@@ -615,6 +614,7 @@ function EtapaCard({ id, titulo, ayuda, valor, sub, activo, venc, vencidos, limi
         </button>
         <Info texto={ayudaVenc} />
       </div>
+      {acciones && <div className="dv-etapa-acc" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{acciones}</div>}
     </div>
   );
 }
@@ -2663,6 +2663,7 @@ const CSS = `
 .dv-grupo{display:inline-flex;border:1px solid rgba(255,255,255,.08);border-radius:11px;background:rgba(255,255,255,.03);padding:2px;gap:2px}
 .dv-grupo .dv-btn{border-color:transparent;background:transparent;border-radius:9px}.dv-grupo .dv-btn:hover{background:rgba(255,255,255,.06)}
 .dv-etapa-ico{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.05);color:#a7adc2;border:1px solid rgba(255,255,255,.08)}
+.dv-etapa-acc{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);display:flex}
 .dv-etapa-ico.chico{width:24px;height:24px;border-radius:8px}.dv-etapa-ico.chico svg{width:14px;height:14px}
 .dv-etapa-ico.deposito{background:rgba(46,230,182,.10);color:#2ee6b6;border-color:rgba(46,230,182,.28)}
 .dv-etapa-ico.calle{background:rgba(245,192,68,.10);color:#F5C044;border-color:rgba(245,192,68,.28)}
