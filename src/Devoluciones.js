@@ -243,7 +243,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const ingresosHoy = useMemo(() => ingresosDelDia(casos, hoyAR(), ubic).length, [casos, ubic]);
   const lugarDe = (c) => c.ubicacion_manual || ubicacionDe(c.cliente, ubic).codigo;
   // Plano del cuartito (29/10): estanterías A, C y E de 4 pisos; B y D una caja cada uno (B = problemas); M voluminosos
-  const codigosLugar = useMemo(() => [...new Set([...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M", ...Object.values(ubic)])].sort(), [ubic]);
+  const codigosLugar = useMemo(() => [...new Set([...LUGARES, ...Object.values(ubic)])].sort(), [ubic]);
   async function cambiarLugar(did, codigo) {
     try {
       await guardarGestion([{ did, ubicacion: codigo || null }]);
@@ -1226,7 +1226,6 @@ function VincularEnvio({ item, casos, onElegir, onCerrar }) {
 // ---------------- Ubicaciones del cuartito: qué lugar tiene cada seller ----------------
 function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
   const [busca, setBusca] = useState("");
-  const [borr, setBorr] = useState({});
   const filas = useMemo(() => {
     const n = new Map();
     casos.forEach((c) => { if (c.etapa === "deposito" && !c.cerrado) n.set(c.cliente || "(sin cliente)", (n.get(c.cliente || "(sin cliente)") || 0) + 1); });
@@ -1235,13 +1234,12 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
   }, [casos, mapa]);
   const q = busca.trim().toLowerCase();
   const vis = filas.filter((f) => !q || f.cliente.toLowerCase().includes(q) || String(mapa[f.cliente] || "").toLowerCase().includes(q));
-  const guardar = (cliente) => { const v = (borr[cliente] ?? mapa[cliente] ?? "").trim().toUpperCase(); if (v !== (mapa[cliente] || "")) onGuardar(cliente, v); };
   return createPortal(
     <div className="dv-modal-fondo" onClick={onCerrar}>
       <div className="dv-modal" style={{ width: "min(560px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ubicaciones del cuartito">
         <div className="dv-modal-cab">
           <div style={{ fontWeight: 700, fontSize: 16 }}>Ubicaciones en el cuartito</div>
-          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Poné el código del estante o caja de cada seller (ej. B3). Los que quedan vacíos van al piso de su letra (A–F → A-4, G–M → C-4, N–S → E-4, T–Z → D). Al escanear un ingreso, la app dice dónde guardarlo.</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Elegí el estante o caja de cada seller. Los que quedan en “Automático” van al piso de su letra (A–F → A-4, G–M → C-4, N–S → E-4, T–Z → D). Al escanear un ingreso, la app dice dónde guardarlo.</div>
           <input className="dv-input" style={{ width: "100%", marginTop: 10 }} placeholder="Buscar seller o código" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
@@ -1253,10 +1251,17 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
                   <b>{f.cliente}</b>
                   <span style={{ display: "block", fontSize: 12, color: sugerir ? C.ambar : C.ink3 }}>{f.cant} en depósito{sugerir ? " · conviene darle lugar propio" : ""}</span>
                 </span>
-                <input className="dv-input" style={{ width: 110, textAlign: "center", fontFamily: C.grotesk, fontWeight: 700, textTransform: "uppercase" }} maxLength={12}
-                  placeholder={cajaPorLetra(f.cliente)} value={borr[f.cliente] ?? mapa[f.cliente] ?? ""}
-                  onChange={(e) => setBorr((b) => ({ ...b, [f.cliente]: e.target.value }))} onBlur={() => guardar(f.cliente)}
-                  onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} aria-label={`Ubicación de ${f.cliente}`} />
+{(() => {
+                  const actual = mapa[f.cliente] || "";
+                  return (
+                    <select className="dv-input" style={{ width: 170, fontFamily: C.grotesk, fontWeight: 700, color: actual ? C.ink : C.ink3 }}
+                      value={actual} onChange={(e) => onGuardar(f.cliente, e.target.value)} aria-label={`Ubicación de ${f.cliente}`}>
+                      <option value="">Automático ({cajaPorLetra(f.cliente)})</option>
+                      {actual && !LUGARES.includes(actual) && <option value={actual}>{actual} (viejo)</option>}
+                      {LUGARES.map((x) => <option key={x} value={x}>{NOTA_LUGAR[x] || x}</option>)}
+                    </select>
+                  );
+                })()}
               </div>
             );
           })}
@@ -1561,6 +1566,10 @@ const IcoCamara = ({ size = 22 }) => (
 const IcoScan = ({ size = 22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7V6a2 2 0 0 1 2-2h2M4 17v1a2 2 0 0 0 2 2h2M16 4h2a2 2 0 0 1 2 2v1M16 20h2a2 2 0 0 0 2-2v-1M5 12h14" /></svg>
 );
+
+// Lugares del cuartito (plano 29/10): estanterías A, C y E de 4 pisos; B (problemas) y D una caja; M voluminosos
+const LUGARES = [...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M"];
+const NOTA_LUGAR = { B: "B · problemas", D: "D · caja", M: "M · voluminosos" };
 
 // Íconos propios de Devoluciones (18/11/2026): trazo fino, mismo estilo que IcoScan
 const svgP = (size, d) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
