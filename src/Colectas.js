@@ -880,7 +880,9 @@ function ColectasInner({ soloArribos = false, irA }) {
       const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
       if (!chs.includes(chofer)) return;
       const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
-      if (estEf === 'rojo' || estEf === 'verde') return; // sin envíos o ya confirmado
+      // Solo las que el cliente confirmó (amarillo). Blanco = no respondió el link / nadie lo marcó:
+      // NO se confirma; si después dice que sí pasa a amarillo y el botón vuelve a aparecer para ese.
+      if (estEf !== 'amarillo') return;
       const confirmadoPor = reg?.confirmado_por || [];
       const isDividida = chs.length > 1 && !chs.every(x => x === 'A coordinar');
       if (isDividida) {
@@ -1052,10 +1054,12 @@ function ColectasInner({ soloArribos = false, irA }) {
                   const chs = reg?.choferes?.length ? reg.choferes : ['A coordinar'];
                   if (!chs.includes(chofer)) return false;
                   const estEf = (c.fija && (!reg?.estado || reg.estado === 'blanco')) ? 'amarillo' : (reg?.estado || 'blanco');
-                  if (estEf === 'rojo' || estEf === 'verde') return false;
+                  if (estEf !== 'amarillo') return false; // blanco (sin responder), rojo y verde no cuentan
                   const isDiv = chs.length > 1 && !chs.every(x => x === 'A coordinar');
                   return !(isDiv && (reg?.confirmado_por || []).includes(chofer));
                 }).length;
+                // Blancas del grupo = clientes que todavía no confirmaron (ni por link ni a mano).
+                const blancasGrupo = isWarn ? 0 : rows.filter(c => estEf(c) === 'blanco').length;
                 const isActive = hoverChofer === chofer || copiedChofer === chofer;
                 return (
                   <React.Fragment key={chofer}>
@@ -1076,9 +1080,9 @@ function ColectasInner({ soloArribos = false, irA }) {
                           {!isWarn && (
                             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                               {amarillosConf > 0 && (
-                                <button onClick={() => confirmarTodos(chofer)} title={`Confirmar las ${amarillosConf} colectas de ${chofer} (pasan a verde; no toca las 'sin envíos')`}
+                                <button onClick={() => confirmarTodos(chofer)} title={`Confirmar las ${amarillosConf} colectas con envíos de ${chofer} (pasan a verde)${blancasGrupo ? `; las ${blancasGrupo} sin confirmar quedan en blanco` : ''}`}
                                   style={{ display:'flex', alignItems:'center', gap:4, height:28, padding:'0 10px', borderRadius:10, border:'1px solid rgba(46,230,182,0.5)', color:'#2EE6B6', background:'rgba(46,230,182,0.1)', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
-                                  ✓ Todos
+                                  {blancasGrupo > 0 ? `✓ Confirmar ${amarillosConf}` : '✓ Todos'}
                                 </button>
                               )}
                             <div style={{ position:'relative', display:'inline-block' }}>
