@@ -1320,26 +1320,28 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
             const ch = choferDe(i);
             const editable = i.etapa === "deposito" && !i.cerrado;
             return (
-              <div key={i.did} className="dv-listo" style={{ cursor: "default", alignItems: "center" }}>
-                <span style={{ width: 44, fontFamily: C.grotesk, fontWeight: 700, color: C.ink2, flexShrink: 0 }}>{horaAR(i.ingreso_at)}</span>
-                <span style={{ minWidth: 0, flex: 1 }}>
-                  <b>{i.cliente || "(sin cliente)"}</b> <span className="dv-tag">{tipoTxt(i.tipo)}</span>
-                  {i.etapa !== "deposito" && <span className="dv-tag" style={{ marginLeft: 4 }}>{i.etapa === "devuelto" ? "ya devuelto" : "volvió a salir"}</span>}
-                  <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>
-                    #{i.did}{ch ? ` · lo trajo ${ch.nombre}` : ""} · {i.via === "app" ? `ingresó ${i.ingreso_por || "equipo"}` : "por LightData"}
-                  </span>
-                </span>
-                {editable ? (
-                  <span style={{ display: "inline-flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                    {i.lugar_cambiado && <button className="dv-btn" style={{ height: 30, fontSize: 12 }} onClick={() => onFijarSeller(i.cliente, i.lugar, i.did)} title={`Guardar ${i.lugar} como lugar fijo de ${i.cliente}: los próximos ingresos ya te van a decir ${i.lugar}`}>Fijar para {String(i.cliente || "").split(" ")[0]}</button>}
-                    <select className="dv-input" style={{ height: 30, padding: "0 8px", minWidth: 72, fontFamily: C.grotesk, fontWeight: 700, ...(i.ubicacion_manual ? { borderColor: "rgba(46,230,182,.45)", color: C.teal } : {}) }}
-                      value={i.ubicacion_manual || ""} onChange={(e) => onLugar(i.did, e.target.value)} aria-label={`Lugar de #${i.did}`}
-                      title={i.ubicacion_manual ? `Cambiado a mano (el de ${i.cliente} es ${i.lugar_seller})` : `El lugar de ${i.cliente}`}>
-                      <option value="">{i.lugar_seller}</option>
+              <div key={i.did} className="dv-listo" style={{ cursor: "default", alignItems: "center", gap: 12 }}>
+                {/* El lugar es la etiqueta grande de la izquierda; tocándola se cambia (select invisible encima) */}
+                <label className={"dv-loc" + (i.ubicacion_manual ? " manual" : "") + (editable ? " edit" : "")}
+                  title={editable ? (i.ubicacion_manual ? `Movido a mano (el de ${i.cliente} es ${i.lugar_seller}). Tocá para cambiar` : "Tocá para cambiar el lugar") : "Ya no está en el cuartito"}>
+                  {i.lugar}
+                  {editable && (
+                    <select value={i.ubicacion_manual || ""} onChange={(e) => onLugar(i.did, e.target.value)} aria-label={`Lugar de #${i.did}`}>
+                      <option value="">{i.lugar_seller} (el del seller)</option>
                       {codigosLugar.filter((x) => x !== i.lugar_seller).map((x) => <option key={x} value={x}>{x}</option>)}
                     </select>
+                  )}
+                </label>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <b>{i.cliente || "(sin cliente)"}</b> <span className={"dv-tag" + (i.tipo === "CAMBIO" ? " cb" : "")}>{tipoTxt(i.tipo)}</span>
+                  {i.etapa !== "deposito" && <span className="dv-tag" style={{ marginLeft: 4 }}>{i.etapa === "devuelto" ? "ya devuelto" : "volvió a salir"}</span>}
+                  <span style={{ display: "block", fontSize: 12, color: C.ink3, marginTop: 2 }}>
+                    #{i.did}{ch ? ` · ${ch.nombre}` : ""} · {i.via === "app" ? `ingresó ${i.ingreso_por || "equipo"}` : "por LightData"}
+                    {i.lugar_cambiado && <span style={{ color: C.ink2 }}> · movido a mano (era {i.lugar_seller})</span>}
                   </span>
-                ) : <span className="dv-tag ub" style={{ flexShrink: 0 }}>📍 {i.lugar}</span>}
+                </span>
+                {editable && i.lugar_cambiado && <button className="dv-btn" style={{ height: 30, fontSize: 12, flexShrink: 0 }} onClick={() => onFijarSeller(i.cliente, i.lugar, i.did)} title={`Guardar ${i.lugar} como lugar fijo de ${i.cliente}: los próximos ingresos ya te van a decir ${i.lugar}`}>Fijar para {String(i.cliente || "").split(" ")[0]}</button>}
+                <span style={{ fontSize: 13, color: C.ink3, fontFamily: C.grotesk, flexShrink: 0, minWidth: 40, textAlign: "right" }}>{horaAR(i.ingreso_at)}</span>
               </div>
             );
           })}
@@ -2740,6 +2742,11 @@ const CSS = `
 .dv-num:hover{background:rgba(255,255,255,.04)}
 .dv-num.on{background:rgba(46,230,182,.08);border-color:rgba(46,230,182,.3)}
 .dv-num.v.on{background:rgba(245,192,68,.08);border-color:rgba(245,192,68,.3)}
+.dv-loc{position:relative;width:56px;height:42px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);font-family:${C.grotesk};font-weight:700;font-size:15px;color:#f4f5fa}
+.dv-loc.edit{cursor:pointer}.dv-loc.edit:hover{border-color:rgba(255,255,255,.25)}
+.dv-loc.manual{border-style:dashed;border-color:rgba(255,255,255,.35)}
+.dv-loc select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
+.dv-tag.cb{background:rgba(96,165,250,.14);border-color:rgba(96,165,250,.35);color:#93c5fd}
 .dv-etapa-acc{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);display:flex}
 .dv-etapa-ico.chico{width:24px;height:24px;border-radius:8px}.dv-etapa-ico.chico svg{width:14px;height:14px}
 .dv-etapa-ico.deposito{background:rgba(46,230,182,.10);color:#2ee6b6;border-color:rgba(46,230,182,.28)}
