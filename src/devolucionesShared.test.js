@@ -227,3 +227,12 @@ test("datosAResolver lee la nota y la última consulta", () => {
   const d = datosAResolver({ id: 3, estado: "pendiente", nota: "A RESOLVER envío #1109728 (IKORSO S R L · Calle Membrillar 167). Nadie en domicilio.", notas: [{ texto: "Consultado al seller por WhatsApp", at: "2026-11-19T12:00:00-03:00" }] });
   expect(d).toMatchObject({ did: 1109728, cliente: "IKORSO S R L", motivo: "Nadie en domicilio.", consultado_at: "2026-11-19T12:00:00-03:00" });
 });
+
+test("cambiosDeEnvio encuentra el retiro con venta en otro formato o seller con otro nombre", () => {
+  const { cambiosDeEnvio } = require("./devolucionesShared");
+  const casos = [{ did: 9, tipo: "CAMBIO", etapa: "calle", cliente: "INDEPENDENT AGENT SA", direccion: "Avenida Cabildo 3734 / 12 A", ml_venta_id: "2000015935827600" }];
+  expect(cambiosDeEnvio(casos, { id_interno: 1, id_venta_ml: "ML2000015935827600" }).map((x) => x.did)).toEqual([9]);
+  expect(cambiosDeEnvio(casos, { id_interno: 1, id_venta_ml: "2000016115132693", direccion: "Av. Cabildo 3734", razon_social: "Independent Agent S.A." }).map((x) => x.did)).toEqual([9]);
+  const f = cambiosDeEnvio(casos, { id_interno: 1, direccion: "Av Cabildo 3734", razon_social: "Zeta" });
+  expect(f.flojo).toBe(true);
+});

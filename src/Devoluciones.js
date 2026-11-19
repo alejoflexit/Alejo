@@ -353,7 +353,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       // Etiqueta de un envío que ya se entregó: es el paquete de un cambio → buscar el cambio abierto de esa venta / comprador
       if (/entregad/i.test(e.estado || "")) {
         const cand = cambiosDeEnvio(casos, e);
-        return { entregado: true, did, cliente: e.razon_social, direccion: e.direccion, candidatos: cand.slice(0, 3) };
+        return { entregado: true, did, cliente: e.razon_social, direccion: e.direccion, candidatos: cand.slice(0, 3), flojo: !!cand.flojo };
       }
       const g = (datos.gest || []).find((x) => Number(x.did) === did);
       if (g && g.ingreso_deposito_at) return { ya: true, did, cliente: e.razon_social, direccion: e.direccion };
@@ -1560,8 +1560,8 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
     let otro = null;
     if (!c && onIngresarOtro) otro = await onIngresarOtro(texto); // cualquier envío que vuelve (ej. nadie en domicilio varias veces)
     const leido = etiquetaLegible(texto);
-    if (!c && otro && otro.entregado && otro.candidatos.length === 1) return procesarCaso(otro.candidatos[0], ahora, `por la etiqueta del envío original #${otro.did}`);
-    if (!c && otro && otro.entregado && otro.candidatos.length > 1) l = { tipo: "elegir", titulo: `${otro.cliente || "Envío"} · ¿cuál de estos cambios es?`, sub: `La etiqueta es del envío original #${otro.did} (entregado)`, candidatos: otro.candidatos };
+    if (!c && otro && otro.entregado && otro.candidatos.length === 1 && !otro.flojo) return procesarCaso(otro.candidatos[0], ahora, `por la etiqueta del envío original #${otro.did}`);
+    if (!c && otro && otro.entregado && (otro.candidatos.length > 1 || (otro.flojo && otro.candidatos.length))) l = { tipo: "elegir", titulo: `${otro.cliente || "Envío"} · ${otro.flojo && otro.candidatos.length === 1 ? "¿es este retiro?" : "¿cuál de estos retiros o cambios es?"}`, sub: `La etiqueta es del envío original #${otro.did} (entregado)${otro.flojo ? ". Coincide la dirección, revisá el seller" : ""}`, candidatos: otro.candidatos };
     else if (!c && otro && otro.entregado) l = { tipo: "no", dup: true, envio: { ...otro, entregado: true }, leido: String(texto).slice(0, 80), donde: "B", titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `#${otro.did} figura entregado y no hay un cambio abierto de esa venta. Si es un paquete duplicado, tocá “Es duplicado”.` };
     else if (!c && otro && otro.abierto) l = { tipo: "reparto", abierto: true, envio: otro, titulo: `${otro.cliente || "Envío"} · volvió sin entregar`, sub: `#${otro.did} · ${otro.estado || ""}${otro.cadete ? ` · ${otro.cadete}` : ""}. ¿Se consulta con el seller o se devuelve?` };
     else if (!c && otro && otro.enReparto) l = { tipo: "reparto", envio: otro, titulo: `${otro.cliente || "Envío"} · está en reparto${otro.cadete ? ` con ${otro.cadete}` : ""}`, sub: `#${otro.did} · ${otro.estado || ""}. No lo ingresé: ¿es un duplicado?` };

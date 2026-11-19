@@ -325,16 +325,28 @@ export function calleAltura(dir) {
   return /\d/.test(n) ? n : "";
 }
 const sinTilde = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-// Paquete con la etiqueta del envío ORIGINAL (ya entregado) → el cambio abierto de esa venta o de ese comprador.
-// 1º misma venta de ML; 2º mismo seller + misma calle y altura. Devuelve la lista de candidatos (0, 1 o varios).
+// Paquete con la etiqueta del envío ORIGINAL (ya entregado) → el cambio/RETIRO abierto de esa venta o comprador.
+// (19/11/2026, caso retiro Melina Rothschild) La etiqueta Flex trae el Pack ID y el retiro la venta; el seller
+// figura distinto en uno y otro ("Independent Age…" / "INDEPENDENT AGENT SA"). Orden de búsqueda:
+// 1º misma venta (solo dígitos); 2º misma calle y altura + mismo seller (nombre normalizado);
+// 3º misma calle y altura, cualquier seller → candidatos "flojos": se muestran para confirmar, no se asumen.
+const soloDigitos = (x) => String(x || "").replace(/\D/g, "");
 export function cambiosDeEnvio(casos, envio) {
   const abiertos = casos.filter((c) => c.tipo === "CAMBIO" && c.etapa !== "devuelto" && !c.cerrado && Number(c.did) !== Number(envio.id_interno));
-  const venta = String(envio.id_venta_ml || "").trim();
-  if (venta) { const x = abiertos.filter((c) => String(c.ml_venta_id || "") === venta); if (x.length) return x; }
+  const venta = soloDigitos(envio.id_venta_ml);
+  if (venta.length >= 8) { const x = abiertos.filter((c) => [c.ml_venta_id, c.tracking].some((v) => soloDigitos(v) === venta)); if (x.length) return x; }
   const dir = calleAltura(envio.direccion);
   if (!dir) return [];
-  const cli = sinTilde(envio.razon_social);
-  return abiertos.filter((c) => calleAltura(c.direccion) === dir && (!cli || sinTilde(c.cliente) === cli));
+  const misma = abiertos.filter((c) => calleAltura(c.direccion) === dir);
+  const cli = nombreClave(envio.razon_social);
+  const conSeller = misma.filter((c) => {
+    const k = nombreClave(c.cliente);
+    return !cli || k === cli || (k && cli && (k.startsWith(cli.split(" ")[0]) || cli.startsWith(k.split(" ")[0])));
+  });
+  if (conSeller.length) return conSeller;
+  const flojos = misma.slice();
+  flojos.flojo = true;
+  return flojos;
 }
 
 // ---- "Listos para devolver": lo que está en depósito, sin remito, por seller, el más viejo primero ----
