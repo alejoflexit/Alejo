@@ -20,6 +20,7 @@ import {
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
 const REFRESH_MS = 2 * 60 * 1000;
+const BRIDGE_URL = "https://srv1801226.hstgr.cloud/bridge"; // bridge de LightData del servidor (solo /reasignar-deposito se llama directo, con sesión)
 
 const C = {
   ink: "#f4f5fa", ink2: "#a7adc2", ink3: "#71768e",
@@ -245,14 +246,15 @@ export default function Devoluciones({ abrirEnvio = null }) {
       dids.forEach((d) => colaReasig.current.delete(d));
       if (colaReasig.current.size) reasignarYa([...colaReasig.current][0]); // si quedaron más de 20
       let r = null;
-      try { r = await authedFetch(`${SUPABASE_URL}/functions/v1/bridge/reasignar-deposito?dids=${dids.join(",")}`).then((x) => x.json()); } catch { r = null; }
-      const ok = new Set(((r && r.reasignados) || []).map(Number));
+      // Directo al bridge con la sesión del usuario: el bridge valida el token con Supabase y que el envío esté ingresado
+      try { r = await authedFetch(`${BRIDGE_URL}/reasignar-deposito?dids=${dids.join(",")}`, { headers: { "Content-Type": "text/plain" } }).then((x) => (x.ok ? x.json() : null)); } catch { r = null; }
+      const ok = new Set(((r && r.ok) || []).map(Number));
       if (ok.size) {
         const at = new Date().toISOString();
         setDatos((d) => d && ({ ...d, gest: d.gest.map((g) => (ok.has(Number(g.did)) ? { ...g, ld_reasignado_at: at, ld_reasignado_error: null } : g)) }));
         setTimeout(() => cargar(), 1500);
       }
-      if (!r || !r.ok || dids.some((d) => !ok.has(d) && !(r && r.nada))) pedirSyncPronto(); // respaldo
+      if (!r || (!r.nada && dids.some((d) => !ok.has(d)))) pedirSyncPronto(); // respaldo: el workflow de GitHub
     }, 1500);
   }, [pedirSyncPronto, cargar]);
   useEffect(() => () => clearTimeout(reasigTimer.current), []);
