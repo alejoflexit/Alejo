@@ -214,3 +214,10 @@ test("ubicacionDe tolera nombres distintos del mismo seller (IKORSO / Ikorso SRL
   expect(ubicacionDe("Búho Color", { "Buho Color": "A-4" }).codigo).toBe("A-4");
   expect(ubicacionDe("Sanitarios", { IKORSO: "M" }).propia).toBe(false);
 });
+
+test("datosDuplicado lee la nota de un duplicado", () => {
+  const { datosDuplicado } = require("./devolucionesShared");
+  const d = datosDuplicado({ id: 7, estado: "pendiente", cadete: "Kevin", creado_at: "2026-11-19T11:00:00-03:00", nota: "DUPLICADO del envío #1109123 (IKORSO S R L · Calle Membrillar 167). El original figura entregado. Devolver al seller." });
+  expect(d).toMatchObject({ did: 1109123, cliente: "IKORSO S R L", direccion: "Calle Membrillar 167", detalle: "El original figura entregado." });
+  expect(datosDuplicado({ nota: "Paquete sin etiqueta" })).toBe(null);
+});

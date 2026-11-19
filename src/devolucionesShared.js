@@ -414,3 +414,14 @@ export function estadoLD(c) {
   if (c.ld_reasignado_at || c.en_deposito_ld) return "ok";
   return c.ld_reasignado_error ? "error" : "pendiente";
 }
+
+// Duplicados (18-19/11/2026): se guardan en paquetes_gestionar con la nota "DUPLICADO del envío #N (Seller · dirección)".
+// Físicamente están en el cuartito (caja B) hasta devolverlos al seller, así que se muestran en En depósito.
+export function datosDuplicado(it) {
+  const m = String((it && it.nota) || "").match(/^DUPLICADO del envío #(\d+) \(([^·)]+?)(?: · ([^)]*))?\)\.\s*(.*)$/);
+  if (!m) return null;
+  return { id: it.id, did: Number(m[1]), cliente: m[2].trim(), direccion: (m[3] || "").trim(), detalle: m[4].replace(/Devolver al seller\.?/, "").trim(), cadete: it.cadete || "", desde: it.creado_at, por: it.creado_por || "", estado: it.estado };
+}
+export function duplicadosEnDeposito(items) {
+  return (items || []).filter((x) => x.estado === "pendiente").map(datosDuplicado).filter(Boolean);
+}

@@ -9,7 +9,7 @@ import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
   progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
-  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto, estadoLD,
+  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto, estadoLD, duplicadosEnDeposito,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -172,6 +172,19 @@ export default function Devoluciones({ abrirEnvio = null }) {
     });
   }, [casos, etapa, tipo, soloVencidos, busca, fCadete, fDesde, fHasta, orden, soloSel, sel]);
 
+  // Duplicados: están físicamente en el cuartito (caja B) hasta devolverlos al seller → se ven en En depósito
+  const dupsDeposito = useMemo(() => {
+    if (etapa !== "deposito" || !datos || (tipo !== "todos" && tipo !== "DUPLICADO") || soloSel || soloVencidos) return [];
+    const q = busca.trim().toLowerCase();
+    return duplicadosEnDeposito(datos.gestionar).filter((d) => !q || [d.cliente, d.direccion, d.did, d.cadete].some((x) => String(x || "").toLowerCase().includes(q)));
+  }, [datos, etapa, tipo, busca, soloSel, soloVencidos]);
+  async function dupDevuelto(d) {
+    try {
+      await sbFetch(`paquetes_gestionar?id=eq.${d.id}`, { method: "PATCH", body: JSON.stringify({ estado: "resuelto", resolucion: "Duplicado devuelto al seller", resuelto_por: yo(), resuelto_at: new Date().toISOString() }) });
+      toast(`${d.cliente}: duplicado devuelto`); cargar();
+    } catch (e) { toast("No se pudo guardar: " + String(e.message || e).slice(0, 60)); }
+  }
+
   // La búsqueda es por etapa: si lo que se busca está en otra, avisarlo (ej. un cambio que pasó de "por retirar" a "en la calle")
   const enOtras = useMemo(() => {
     const q = busca.trim();
@@ -323,7 +336,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   async function cargarDuplicado(o) {
     try {
       const nota = `DUPLICADO del envío #${o.did} (${o.cliente || "seller"}${o.direccion ? ` · ${String(o.direccion).split(/\s\/\s|Referencia/)[0]}` : ""}). ${o.entregado ? "El original figura entregado" : `El original sigue en reparto${o.cadete ? ` con ${o.cadete}` : ""}`}. Devolver al seller.`;
-      await sbFetch("paquetes_gestionar", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ creado_por: yo(), cadete: o.cadete || null, nota, fotos: [] }) });
+      await sbFetch("paquetes_gestionar", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ creado_por: yo(), cadete: o.cadete || null, nota, fotos: [], did: o.did }) });
       registrar("duplicado", 1, o.cadete || null, { did: o.did });
       return true;
     } catch { return false; }
@@ -488,12 +501,13 @@ export default function Devoluciones({ abrirEnvio = null }) {
               <div style={{ fontSize: 15, fontWeight: 600 }}>
                 {NOMBRE_ETAPA[etapa]}{soloVencidos && (etapa === "calle" || etapa === "deposito") ? ` · más de ${etapa === "calle" ? LIMITE_CALLE : LIMITE_DEPOSITO} días` : ""}
                 {tipo !== "todos" ? ` · ${tipo === "CAMBIO" ? "solo cambios" : "solo cancelados"}` : ""}
-                <span style={{ color: C.ink3, fontWeight: 400 }}> — {num(lista.length)} envío{lista.length !== 1 ? "s" : ""}</span>
+                <span style={{ color: C.ink3, fontWeight: 400 }}> — {num(lista.length)} envío{lista.length !== 1 ? "s" : ""}{dupsDeposito.length ? ` · ${dupsDeposito.length} duplicado${dupsDeposito.length > 1 ? "s" : ""}` : ""}</span>
               </div>
             </div>
             <div style={{ flex: 1 }} />
             <div className="dv-seg sm" title="Tipo de devolución">
               {TIPOS.map(([id, lbl]) => <button key={id} className={tipo === id ? "on" : ""} onClick={() => setTipo(id)}>{lbl}</button>)}
+              {etapa === "deposito" && duplicadosEnDeposito(datos.gestionar).length > 0 && <button className={tipo === "DUPLICADO" ? "on" : ""} onClick={() => setTipo("DUPLICADO")}>Duplicados</button>}
             </div>
             {fCadete && <button className="dv-chip-f" onClick={() => setFCadete(null)} title="Sacar el filtro de cadete">{fCadete} <span aria-hidden="true">✕</span></button>}
             <input className="dv-input" style={{ flex: "0 1 300px" }} placeholder={fCadete ? `Buscar entre los de ${fCadete.split(" ")[0]}: calle, cliente, venta…` : "Buscar dirección, cliente, venta o cadete"} value={busca} onChange={(e) => setBusca(e.target.value)} />
@@ -517,7 +531,18 @@ export default function Devoluciones({ abrirEnvio = null }) {
                 {enOtras.map(([e, n]) => <button key={e} className="dv-btn" onClick={() => { setTipo("todos"); setFCadete(null); irA(e); }}>{NOMBRE_ETAPA[e] || e} ({n}) →</button>)}
               </div>
             )}
-            {lista.length === 0 && !enOtras.length && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
+            {dupsDeposito.map((d) => (
+              <div key={"dup" + d.id} className="dv-fila" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
+                <span className="dv-loc" title="Los duplicados van a la caja B">B</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <b>{d.cliente}</b> <span className="dv-tag" style={{ borderColor: "rgba(245,192,68,.4)", color: C.ambar }}>Duplicado</span>
+                  <span style={{ display: "block", fontSize: 12.5, color: C.ink2, marginTop: 2 }}>{d.direccion || "—"}</span>
+                  <span style={{ display: "block", fontSize: 12, color: C.ink3, marginTop: 2 }}>#{d.did} · {d.detalle}{d.cadete ? ` · lo trajo ${d.cadete}` : ""} · {fecha(d.desde)}</span>
+                </span>
+                <button className="dv-btn" style={{ flexShrink: 0 }} onClick={() => dupDevuelto(d)} title="Marcarlo como devuelto al seller (no toca LightData: el envío original ya está bien)">Devuelto al seller</button>
+              </div>
+            ))}
+            {lista.length === 0 && !dupsDeposito.length && !enOtras.length && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
             {lista.slice(0, 400).map((c) => (
               <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} ubicacion={lugarDe(c).replace("Caja ", "")} codigosLugar={codigosLugar} onLugar={(cod) => cambiarLugar(c.did, cod)} lugarSeller={ubicacionDe(c.cliente, ubic).codigo} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
