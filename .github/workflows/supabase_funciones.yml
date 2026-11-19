@@ -14,10 +14,10 @@ on:
         required: true
         default: 'bridge'
         type: choice
-        options: [bridge, refrescar-envios, devoluciones-accion, admin-usuarios]
+        options: [bridge, refrescar-envios, devoluciones-accion, admin-usuarios, xubio]
   push:
     branches: [main]
-    paths: ['supabase/functions/bridge/**']
+    paths: ['supabase/functions/bridge/**', 'supabase/functions/xubio/**']
 
 concurrency:
   group: supabase-funciones
@@ -29,18 +29,33 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       PROJECT_REF: svlagoosmxxcsbevkrhy
-      FUNCION: ${{ inputs.funcion || 'bridge' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      # Manual: la elegida. Push: las carpetas de supabase/functions/ que cambiaron en el commit
+      # (antes el push siempre desplegaba 'bridge').
+      - name: Qué funciones desplegar
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            F="${{ inputs.funcion }}"
+          else
+            F=$(git diff --name-only HEAD~1 HEAD -- supabase/functions | cut -d/ -f3 | sort -u | grep -E '^(bridge|xubio)$' | tr '\n' ' ')
+          fi
+          echo "FUNCIONES=$F" >> "$GITHUB_ENV"
+          echo "Funciones: $F"
       - uses: supabase/setup-cli@v1
         with:
           version: latest
       - name: Secreto de la función bridge
-        if: env.FUNCION == 'bridge'
+        if: contains(env.FUNCIONES, 'bridge')
         env:
           BRIDGE_KEY: ${{ secrets.BRIDGE_KEY }}
         run: |
           test -n "$BRIDGE_KEY" || { echo "Falta el secreto BRIDGE_KEY en GitHub"; exit 1; }
           supabase secrets set --project-ref "$PROJECT_REF" BRIDGE_KEY="$BRIDGE_KEY"
       - name: Deploy
-        run: supabase functions deploy "$FUNCION" --project-ref "$PROJECT_REF" --use-api
+        run: |
+          for F in $FUNCIONES; do
+            supabase functions deploy "$F" --project-ref "$PROJECT_REF" --use-api
+          done
