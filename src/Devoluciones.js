@@ -322,7 +322,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   // Paquete duplicado: va a "A gestionar" (caja B) sin tocar LightData; el envío sigue con su cadete.
   async function cargarDuplicado(o) {
     try {
-      const nota = `DUPLICADO del envío #${o.did} (${o.cliente || "seller"}${o.direccion ? ` · ${String(o.direccion).split(/\s\/\s|Referencia/)[0]}` : ""}). El original sigue en reparto${o.cadete ? ` con ${o.cadete}` : ""}. Devolver al seller.`;
+      const nota = `DUPLICADO del envío #${o.did} (${o.cliente || "seller"}${o.direccion ? ` · ${String(o.direccion).split(/\s\/\s|Referencia/)[0]}` : ""}). ${o.entregado ? "El original figura entregado" : `El original sigue en reparto${o.cadete ? ` con ${o.cadete}` : ""}`}. Devolver al seller.`;
       await sbFetch("paquetes_gestionar", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ creado_por: yo(), cadete: o.cadete || null, nota, fotos: [] }) });
       registrar("duplicado", 1, o.cadete || null, { did: o.did });
       return true;
@@ -1435,7 +1435,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
     const leido = etiquetaLegible(texto);
     if (!c && otro && otro.entregado && otro.candidatos.length === 1) return procesarCaso(otro.candidatos[0], ahora, `por la etiqueta del envío original #${otro.did}`);
     if (!c && otro && otro.entregado && otro.candidatos.length > 1) l = { tipo: "elegir", titulo: `${otro.cliente || "Envío"} · ¿cuál de estos cambios es?`, sub: `La etiqueta es del envío original #${otro.did} (entregado)`, candidatos: otro.candidatos };
-    else if (!c && otro && otro.entregado) l = { tipo: "no", leido: String(texto).slice(0, 80), donde: "B", titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `#${otro.did} figura entregado y no encontré un cambio abierto de esa venta. Separalo en B y cargalo en “A gestionar”.` };
+    else if (!c && otro && otro.entregado) l = { tipo: "no", dup: true, envio: { ...otro, entregado: true }, leido: String(texto).slice(0, 80), donde: "B", titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `#${otro.did} figura entregado y no hay un cambio abierto de esa venta. Si es un paquete duplicado, tocá “Es duplicado”.` };
     else if (!c && otro && otro.enReparto) l = { tipo: "reparto", envio: otro, titulo: `${otro.cliente || "Envío"} · está en reparto${otro.cadete ? ` con ${otro.cadete}` : ""}`, sub: `#${otro.did} · ${otro.estado || ""}. No lo ingresé: ¿es un duplicado?` };
     else if (!c && otro && otro.ok) l = { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, otro.estado, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo };
     else if (!c && otro && otro.ya) l = { tipo: "ya", donde: ubicacionDe(otro.cliente, ubic).codigo, titulo: `${otro.cliente || "Envío"} · ya estaba ingresado`, sub: "Ya está en depósito, no hace falta hacer nada más" };
@@ -1462,7 +1462,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
     const ahora = Date.now();
     if (accion === "duplicado") {
       const ok = await onDuplicado(l.envio);
-      return avisar(ok ? { tipo: "ok", titulo: `${l.envio.cliente || "Envío"} · duplicado`, sub: `Quedó en “A gestionar”. LightData no se tocó: #${l.envio.did} sigue con su cadete.`, donde: "B" } : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" }, ahora);
+      return avisar(ok ? { tipo: "ok", titulo: `${l.envio.cliente || "Envío"} · duplicado`, sub: l.envio.entregado ? `Quedó en “A gestionar” para devolver al seller. LightData no se tocó.` : `Quedó en “A gestionar”. LightData no se tocó: #${l.envio.did} sigue con su cadete.`, donde: "B" } : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" }, ahora);
     }
     const otro = await onIngresarOtro(String(l.envio.did), { forzar: true });
     avisar(otro && otro.ok ? { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo } : { tipo: "no", titulo: "No se pudo ingresar", sub: "Probá de nuevo" }, ahora);
@@ -1549,6 +1549,9 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
                     <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "ingresar")} title="El cadete no lo va a entregar: pasa a depósito y LightData lo saca del cadete">No se entrega, ingresar</button>
                     <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "nada")}>Dejar</button>
                   </span>
+                )}
+                {l.dup && (
+                  <button className="dv-btn pri" style={{ fontSize: 12, flexShrink: 0 }} onClick={() => resolverReparto(l, "duplicado")} title="Va a A gestionar (caja B) para devolverlo al seller. No toca LightData">Es duplicado</button>
                 )}
                 {l.tipo === "no" && onGestionar && <button className="dv-btn" style={{ flexShrink: 0, background: "rgba(0,0,0,.5)" }} onClick={() => onGestionar(l.leido)}>A gestionar</button>}
               </div>
