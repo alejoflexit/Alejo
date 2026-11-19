@@ -425,3 +425,14 @@ export function datosDuplicado(it) {
 export function duplicadosEnDeposito(items) {
   return (items || []).filter((x) => x.estado === "pendiente").map(datosDuplicado).filter(Boolean);
 }
+// "A resolver" (19/11/2026): envío abierto (ni cancelado ni cambio) que volvió sin entregar y hay que consultar
+// con el seller si vuelve a salir o se le devuelve. Nota: "A RESOLVER envío #N (Seller · dirección). <estado>."
+export function datosAResolver(it) {
+  const m = String((it && it.nota) || "").match(/^A RESOLVER envío #(\d+) \(([^·)]+?)(?: · ([^)]*))?\)\.\s*(.*)$/);
+  if (!m) return null;
+  const consultas = (it.notas || []).filter((n) => /consultad/i.test(n.texto || ""));
+  return { id: it.id, did: Number(m[1]), cliente: m[2].trim(), direccion: (m[3] || "").trim(), motivo: m[4].trim(), cadete: it.cadete || "", desde: it.creado_at, por: it.creado_por || "", estado: it.estado, consultado_at: consultas.length ? consultas[consultas.length - 1].at : null, notas: it.notas || [] };
+}
+export function aResolverEnDeposito(items) {
+  return (items || []).filter((x) => x.estado === "pendiente").map(datosAResolver).filter(Boolean);
+}

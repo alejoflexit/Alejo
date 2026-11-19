@@ -221,3 +221,9 @@ test("datosDuplicado lee la nota de un duplicado", () => {
   expect(d).toMatchObject({ did: 1109123, cliente: "IKORSO S R L", direccion: "Calle Membrillar 167", detalle: "El original figura entregado." });
   expect(datosDuplicado({ nota: "Paquete sin etiqueta" })).toBe(null);
 });
+
+test("datosAResolver lee la nota y la última consulta", () => {
+  const { datosAResolver } = require("./devolucionesShared");
+  const d = datosAResolver({ id: 3, estado: "pendiente", nota: "A RESOLVER envío #1109728 (IKORSO S R L · Calle Membrillar 167). Nadie en domicilio.", notas: [{ texto: "Consultado al seller por WhatsApp", at: "2026-11-19T12:00:00-03:00" }] });
+  expect(d).toMatchObject({ did: 1109728, cliente: "IKORSO S R L", motivo: "Nadie en domicilio.", consultado_at: "2026-11-19T12:00:00-03:00" });
+});

@@ -9,7 +9,7 @@ import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
   progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
-  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto, estadoLD, duplicadosEnDeposito,
+  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto, estadoLD, duplicadosEnDeposito, aResolverEnDeposito,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -177,6 +177,11 @@ export default function Devoluciones({ abrirEnvio = null }) {
     if (etapa !== "deposito" || !datos || (tipo !== "todos" && tipo !== "DUPLICADO") || soloSel || soloVencidos) return [];
     const q = busca.trim().toLowerCase();
     return duplicadosEnDeposito(datos.gestionar).filter((d) => !q || [d.cliente, d.direccion, d.did, d.cadete].some((x) => String(x || "").toLowerCase().includes(q)));
+  }, [datos, etapa, tipo, busca, soloSel, soloVencidos]);
+  const resolverDeposito = useMemo(() => {
+    if (etapa !== "deposito" || !datos || (tipo !== "todos" && tipo !== "RESOLVER") || soloSel || soloVencidos) return [];
+    const q = busca.trim().toLowerCase();
+    return aResolverEnDeposito(datos.gestionar).filter((d) => !q || [d.cliente, d.direccion, d.did, d.cadete].some((x) => String(x || "").toLowerCase().includes(q)));
   }, [datos, etapa, tipo, busca, soloSel, soloVencidos]);
   async function dupDevuelto(d) {
     try {
@@ -356,6 +361,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
       // dos paquetes con la misma etiqueta). Ingresarlo lo pasaría a "devuelto deposito" en LightData y le sacaría
       // al cadete el envío que todavía tiene que entregar. Se pregunta antes.
       if (!forzar && enReparto(e)) return { enReparto: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado, cadete: e.cadete };
+      // Envío abierto (ni cancelado ni cambio) que volvió sin entregar (19/11/2026): no es una devolución todavía,
+      // se pregunta si va "A resolver" (consultar al seller) o se devuelve directo.
+      if (!forzar) return { abierto: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado, cadete: e.cadete };
       await guardarGestion([{ did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
       setDatos((d) => ({ ...d, gest: [...d.gest.filter((x) => Number(x.did) !== did), { ...(g || {}), did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }] }));
       registrar("ingreso", 1, null, { dids: [did], via: "escaner", no_entregado: true });
@@ -363,6 +371,39 @@ export default function Devoluciones({ abrirEnvio = null }) {
       if (esPropio(e.razon_social)) cerrarPropio(did, e.razon_social);
       return { ok: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado };
     } catch { return null; }
+  }
+  // A resolver: queda en el depósito esperando la respuesta del seller. En LightData pasa al chofer de
+  // reprogramar "Quedo en el Deposito" (se lo saca al cadete) vía el bridge.
+  async function cargarAResolver(o) {
+    try {
+      const dir = o.direccion ? ` · ${String(o.direccion).split(/\s\/\s|Referencia/)[0].trim()}` : "";
+      const nota = `A RESOLVER envío #${o.did} (${o.cliente || "seller"}${dir}). ${o.estado || "No entregado"}.`;
+      await sbFetch("paquetes_gestionar", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ creado_por: yo(), cadete: o.cadete || null, nota, fotos: [], did: o.did }) });
+      registrar("a_resolver", 1, o.cadete || null, { did: o.did });
+      let r = null;
+      try { r = await authedFetch(`${BRIDGE_URL}/reasignar-deposito?dids=${o.did}&a=quedo`, { headers: { "Content-Type": "text/plain" } }).then((x) => (x.ok ? x.json() : null)); } catch { r = null; }
+      const okLD = !!(r && (r.ok || []).map(Number).includes(Number(o.did)));
+      setTimeout(() => cargar(), 1500);
+      return { ok: true, okLD };
+    } catch { return { ok: false }; }
+  }
+  async function aResolverDecidir(d, accion) {
+    try {
+      if (accion === "consultar") {
+        const msg = `Hola! Te escribimos de Flexit por el envío #${d.did}${d.direccion ? ` a ${d.direccion}` : ""}: no se pudo entregar (${d.motivo.replace(/\.$/, "")}). ¿Lo volvemos a mandar o te lo devolvemos?`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+        await sbFetch(`paquetes_gestionar?id=eq.${d.id}`, { method: "PATCH", body: JSON.stringify({ notas: [...(d.notas || []), { texto: "Consultado al seller por WhatsApp", por: yo(), at: new Date().toISOString() }] }) });
+      } else if (accion === "sale") {
+        await sbFetch(`paquetes_gestionar?id=eq.${d.id}`, { method: "PATCH", body: JSON.stringify({ estado: "resuelto", resolucion: "Vuelve a salir (queda en 'Quedo en el Deposito' para asignar)", resuelto_por: yo(), resuelto_at: new Date().toISOString() }) });
+        toast(`#${d.did}: vuelve a salir. En LightData está en “Quedo en el Deposito” para asignarlo.`);
+      } else if (accion === "devolver") {
+        const r = await ingresoOtro(String(d.did), { forzar: true });
+        if (!r || !(r.ok || r.ya)) { toast("No se pudo pasar a devolución. Probá de nuevo."); return; }
+        await sbFetch(`paquetes_gestionar?id=eq.${d.id}`, { method: "PATCH", body: JSON.stringify({ estado: "resuelto", resolucion: "Se devuelve al seller", resuelto_por: yo(), resuelto_at: new Date().toISOString() }) });
+        toast(`#${d.did}: pasa a devolución (${ubicacionDe(d.cliente, ubic).codigo}).`);
+      }
+      cargar();
+    } catch (e) { toast("No se pudo guardar: " + String(e.message || e).slice(0, 60)); }
   }
   // Paquete duplicado: va a "A gestionar" (caja B) sin tocar LightData; el envío sigue con su cadete.
   async function cargarDuplicado(o) {
@@ -534,12 +575,13 @@ export default function Devoluciones({ abrirEnvio = null }) {
               <div style={{ fontSize: 15, fontWeight: 600 }}>
                 {NOMBRE_ETAPA[etapa]}{soloVencidos && (etapa === "calle" || etapa === "deposito") ? ` · más de ${etapa === "calle" ? LIMITE_CALLE : LIMITE_DEPOSITO} días` : ""}
                 {tipo !== "todos" ? ` · ${tipo === "CAMBIO" ? "solo cambios" : "solo cancelados"}` : ""}
-                <span style={{ color: C.ink3, fontWeight: 400 }}> — {num(lista.length)} envío{lista.length !== 1 ? "s" : ""}{dupsDeposito.length ? ` · ${dupsDeposito.length} duplicado${dupsDeposito.length > 1 ? "s" : ""}` : ""}</span>
+                <span style={{ color: C.ink3, fontWeight: 400 }}> — {num(lista.length)} envío{lista.length !== 1 ? "s" : ""}{resolverDeposito.length ? ` · ${resolverDeposito.length} a resolver` : ""}{dupsDeposito.length ? ` · ${dupsDeposito.length} duplicado${dupsDeposito.length > 1 ? "s" : ""}` : ""}</span>
               </div>
             </div>
             <div style={{ flex: 1 }} />
             <div className="dv-seg sm" title="Tipo de devolución">
               {TIPOS.map(([id, lbl]) => <button key={id} className={tipo === id ? "on" : ""} onClick={() => setTipo(id)}>{lbl}</button>)}
+              {etapa === "deposito" && aResolverEnDeposito(datos.gestionar).length > 0 && <button className={tipo === "RESOLVER" ? "on" : ""} onClick={() => setTipo("RESOLVER")}>A resolver</button>}
               {etapa === "deposito" && duplicadosEnDeposito(datos.gestionar).length > 0 && <button className={tipo === "DUPLICADO" ? "on" : ""} onClick={() => setTipo("DUPLICADO")}>Duplicados</button>}
             </div>
             {fCadete && <button className="dv-chip-f" onClick={() => setFCadete(null)} title="Sacar el filtro de cadete">{fCadete} <span aria-hidden="true">✕</span></button>}
@@ -564,6 +606,28 @@ export default function Devoluciones({ abrirEnvio = null }) {
                 {enOtras.map(([e, n]) => <button key={e} className="dv-btn" onClick={() => { setTipo("todos"); setFCadete(null); irA(e); }}>{NOMBRE_ETAPA[e] || e} ({n}) →</button>)}
               </div>
             )}
+            {resolverDeposito.map((d) => {
+              const dd = Math.floor((Date.now() - Date.parse(d.desde)) / 864e5);
+              const espera = d.consultado_at ? Math.floor((Date.now() - Date.parse(d.consultado_at)) / 36e5) : null;
+              return (
+                <div key={"ar" + d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,.05)", flexWrap: "wrap" }}>
+                  <span className="dv-loc" title="Estante de los envíos a resolver">AR</span>
+                  <span style={{ flex: "1 1 260px", minWidth: 0 }}>
+                    <b>{d.cliente}</b> <span className="dv-tag" style={{ borderColor: "rgba(46,230,182,.4)", color: C.teal }}>A resolver</span>
+                    <span style={{ display: "block", fontSize: 12.5, color: C.ink2, marginTop: 2 }}>{d.direccion || "—"}</span>
+                    <span style={{ display: "block", fontSize: 12, color: C.ink3, marginTop: 2 }}>#{d.did} · {d.motivo}{d.cadete ? ` · ${d.cadete}` : ""} · {fecha(d.desde)}</span>
+                    <span style={{ display: "block", fontSize: 12, marginTop: 2, color: !d.consultado_at ? (dd >= 1 ? C.ambar : C.ink3) : espera >= 48 ? C.ambar : C.ink3 }}>
+                      {!d.consultado_at ? (dd >= 1 ? `Hace ${dd} día${dd > 1 ? "s" : ""} sin consultar al seller` : "Falta consultar al seller") : espera >= 48 ? `Consultado hace ${Math.floor(espera / 24)} días sin respuesta: si no contesta, devolvelo` : `Consultado ${fecha(d.consultado_at)} · esperando respuesta`}
+                    </span>
+                  </span>
+                  <span style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <button className="dv-btn" onClick={() => aResolverDecidir(d, "consultar")} title="Abre WhatsApp con el mensaje armado para el seller y lo marca como consultado">Consultar</button>
+                    <button className="dv-btn" onClick={() => aResolverDecidir(d, "sale")} title="El seller dijo que vuelva a salir: queda en “Quedo en el Deposito” para asignarlo">Vuelve a salir</button>
+                    <button className="dv-btn" onClick={() => aResolverDecidir(d, "devolver")} title="El seller lo quiere de vuelta: pasa a devolución con su estante">Devolver al seller</button>
+                  </span>
+                </div>
+              );
+            })}
             {dupsDeposito.map((d) => (
               <div key={"dup" + d.id} className="dv-fila" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
                 <span className="dv-loc" title="Los duplicados van a la caja B">B</span>
@@ -575,7 +639,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
                 <button className="dv-btn" style={{ flexShrink: 0 }} onClick={() => dupDevuelto(d)} title="Marcarlo como devuelto al seller (no toca LightData: el envío original ya está bien)">Devuelto al seller</button>
               </div>
             ))}
-            {lista.length === 0 && !dupsDeposito.length && !enOtras.length && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
+            {lista.length === 0 && !dupsDeposito.length && !resolverDeposito.length && !enOtras.length && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
             {lista.slice(0, 400).map((c) => (
               <Fila key={c.did} c={c} remito={remitoDe.get(c.did)} ubicacion={lugarDe(c).replace("Caja ", "")} codigosLugar={codigosLugar} onLugar={(cod) => cambiarLugar(c.did, cod)} lugarSeller={ubicacionDe(c.cliente, ubic).codigo} abierto={abierto === c.did} marcado={sel.has(c.did)}
                 onToggle={() => setAbierto(abierto === c.did ? null : c.did)}
@@ -612,7 +676,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
       {verIngresos && <IngresosDiaModal casos={casos} ubic={ubic} codigosLugar={codigosLugar} onLugar={cambiarLugar} onFijarSeller={async (cliente, codigo, did) => { await guardarUbicacion(cliente, codigo); await cambiarLugar(did, ""); toast(`${cliente}: de ahora en más va a ${codigo}`); }} onVerUbic={() => setVerUbic(true)} onCerrar={() => setVerIngresos(false)} />}
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
-      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} onDuplicado={cargarDuplicado} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirSyncPronto(1000); }} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} onDuplicado={cargarDuplicado} onAResolver={cargarAResolver} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirSyncPronto(1000); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
@@ -1472,7 +1536,7 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
 // ---------------- Ingreso a depósito escaneando la etiqueta del paquete ----------------
 // Continuo (acá no hace falta foto de prueba): lee el QR/código de barras de la etiqueta de ML o de LightData,
 // busca la devolución y la pasa a depósito al toque. Se puede tipear la venta/tracking si la etiqueta está rota.
-function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplicado, onCerrar, onGestionar, codigosLugar = [], onLugar }) {
+function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplicado, onAResolver, onCerrar, onGestionar, codigosLugar = [], onLugar }) {
   const video = useRef();
   const casosRef = useRef(casos); casosRef.current = casos;
   const ultimo = useRef({ t: "", at: 0 });
@@ -1494,6 +1558,7 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
     if (!c && otro && otro.entregado && otro.candidatos.length === 1) return procesarCaso(otro.candidatos[0], ahora, `por la etiqueta del envío original #${otro.did}`);
     if (!c && otro && otro.entregado && otro.candidatos.length > 1) l = { tipo: "elegir", titulo: `${otro.cliente || "Envío"} · ¿cuál de estos cambios es?`, sub: `La etiqueta es del envío original #${otro.did} (entregado)`, candidatos: otro.candidatos };
     else if (!c && otro && otro.entregado) l = { tipo: "no", dup: true, envio: { ...otro, entregado: true }, leido: String(texto).slice(0, 80), donde: "B", titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `#${otro.did} figura entregado y no hay un cambio abierto de esa venta. Si es un paquete duplicado, tocá “Es duplicado”.` };
+    else if (!c && otro && otro.abierto) l = { tipo: "reparto", abierto: true, envio: otro, titulo: `${otro.cliente || "Envío"} · volvió sin entregar`, sub: `#${otro.did} · ${otro.estado || ""}${otro.cadete ? ` · ${otro.cadete}` : ""}. ¿Se consulta con el seller o se devuelve?` };
     else if (!c && otro && otro.enReparto) l = { tipo: "reparto", envio: otro, titulo: `${otro.cliente || "Envío"} · está en reparto${otro.cadete ? ` con ${otro.cadete}` : ""}`, sub: `#${otro.did} · ${otro.estado || ""}. No lo ingresé: ¿es un duplicado?` };
     else if (!c && otro && otro.ok) l = { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, otro.estado, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo };
     else if (!c && otro && otro.ya) l = { tipo: "ya", donde: ubicacionDe(otro.cliente, ubic).codigo, titulo: `${otro.cliente || "Envío"} · ya estaba ingresado`, sub: "Ya está en depósito, no hace falta hacer nada más" };
@@ -1518,6 +1583,10 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
     setLecturas((x) => x.filter((y) => y.id !== l.id));
     if (accion === "nada") return;
     const ahora = Date.now();
+    if (accion === "resolver") {
+      const r = await onAResolver(l.envio);
+      return avisar(r && r.ok ? { tipo: "ok", titulo: `${l.envio.cliente || "Envío"} · a resolver`, sub: r.okLD ? "Ya no lo tiene el cadete (quedó en “Quedo en el Deposito”). Consultalo con el seller." : "Quedó a resolver. ⚠ LightData no se actualizó: pasalo a mano a “Quedo en el Deposito”.", donde: "AR" } : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" }, ahora);
+    }
     if (accion === "duplicado") {
       const ok = await onDuplicado(l.envio);
       return avisar(ok ? { tipo: "ok", titulo: `${l.envio.cliente || "Envío"} · duplicado`, sub: l.envio.entregado ? `Quedó en “A gestionar” para devolver al seller. LightData no se tocó.` : `Quedó en “A gestionar”. LightData no se tocó: #${l.envio.did} sigue con su cadete.`, donde: "B" } : { tipo: "no", titulo: "No se pudo guardar", sub: "Probá de nuevo" }, ahora);
@@ -1601,7 +1670,14 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
                     {codigosLugar.filter((x) => x !== (l.dondeSeller || l.donde)).map((x) => <option key={x} value={x}>{x}</option>)}
                   </select>
                 )}
-                {l.tipo === "reparto" && (
+                {l.tipo === "reparto" && l.abierto && (
+                  <span style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    <button className="dv-btn pri" style={{ fontSize: 12 }} onClick={() => resolverReparto(l, "resolver")} title="Queda en el depósito para consultar con el seller si vuelve a salir. En LightData pasa a “Quedo en el Deposito”">A resolver</button>
+                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "ingresar")} title="Se devuelve al seller: pasa a devolución (no entregado)">Devolver al seller</button>
+                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "nada")}>Dejar</button>
+                  </span>
+                )}
+                {l.tipo === "reparto" && !l.abierto && (
                   <span style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
                     <button className="dv-btn pri" style={{ fontSize: 12 }} onClick={() => resolverReparto(l, "duplicado")} title="Va a A gestionar (caja B). No toca LightData: el envío sigue con el cadete">Es duplicado</button>
                     <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "ingresar")} title="El cadete no lo va a entregar: pasa a depósito y LightData lo saca del cadete">No se entrega, ingresar</button>
@@ -1684,6 +1760,7 @@ const IcoScan = ({ size = 22 }) => (
 // Florian…). Un seller con lugar DEP queda marcado así: lo que se le devuelve se cierra solo al ingresar
 // (remito interno → "Devuelto al cliente" en LightData), sin remito con chofer ni alarma de +15 días.
 const LUGAR_PROPIO = "DEP";
+// AR = estante de los "A resolver" (envíos que pueden volver a salir; no mezclarlos con devoluciones)
 const LUGARES = [...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M", LUGAR_PROPIO];
 const NOTA_LUGAR = { B: "B · problemas", D: "D · caja", M: "M · voluminosos", [LUGAR_PROPIO]: "DEP · stock propio (se cierra solo)" };
 
