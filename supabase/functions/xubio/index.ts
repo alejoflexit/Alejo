@@ -1,5 +1,5 @@
 // xubio
-// (deploy: 2026-11-19, con --yes)
+// (deploy: 2026-11-19)
 // Puente entre la app y la API de Xubio (etapa 2 de facturas por link — ver ESTADO-FACTURAS-LINK.md).
 // Las credenciales viven SOLO acá como secretos de la función: XUBIO_CLIENT_ID / XUBIO_SECRET_ID
 // (Supabase › Edge Functions › Secrets). Nunca van al front: el repo es público.
@@ -101,6 +101,9 @@ Deno.serve(async (req) => {
 
   const compras = await getXubio(tk.token!, "/comprobanteCompraBean");
   const lista = Array.isArray(compras.cuerpo) ? compras.cuerpo : [];
+  // Detalle completo del último comprobante (ítems, cuenta, tipo): el molde para cargar los nuevos.
+  const ultimo = lista.length ? [...lista].sort((a: any, b: any) => String(b.fecha).localeCompare(String(a.fecha)))[0] : null;
+  const detalle = ultimo?.transaccionid ? await getXubio(tk.token!, `/comprobanteCompraBean/${ultimo.transaccionid}`) : null;
   const proveedores = await getXubio(tk.token!, "/ProveedorBean");
   const listaProv = Array.isArray(proveedores.cuerpo) ? proveedores.cuerpo : [];
 
@@ -108,7 +111,8 @@ Deno.serve(async (req) => {
     ok: true,
     migracion_facturas,
     mapa,
-    compras: { status: compras.status, headers: compras.headers, cantidad_pagina: lista.length, ejemplo: lista[0] ?? compras.cuerpo },
-    proveedores: { status: proveedores.status, cantidad_pagina: listaProv.length, ejemplo: listaProv[0] ?? proveedores.cuerpo },
+    compras: { status: compras.status, headers: compras.headers, cantidad_pagina: lista.length, ejemplo: lista[0] ?? compras.cuerpo, detalle_ultimo: detalle?.cuerpo },
+    proveedores: { status: proveedores.status, cantidad_pagina: listaProv.length, ejemplo: listaProv[0] ?? proveedores.cuerpo,
+      proveedor_del_ultimo: ultimo?.proveedor?.ID ? (await getXubio(tk.token!, `/ProveedorBean/${ultimo.proveedor.ID}`)).cuerpo : null },
   });
 });
