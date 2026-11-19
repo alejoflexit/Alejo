@@ -620,10 +620,15 @@ export default function Devoluciones({ abrirEnvio = null }) {
                       {!d.consultado_at ? (dd >= 1 ? `Hace ${dd} día${dd > 1 ? "s" : ""} sin consultar al seller` : "Falta consultar al seller") : espera >= 48 ? `Consultado hace ${Math.floor(espera / 24)} días sin respuesta: si no contesta, devolvelo` : `Consultado ${fecha(d.consultado_at)} · esperando respuesta`}
                     </span>
                   </span>
-                  <span style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                    <button className="dv-btn" onClick={() => aResolverDecidir(d, "consultar")} title="Abre WhatsApp con el mensaje armado para el seller y lo marca como consultado">Consultar</button>
-                    <button className="dv-btn" onClick={() => aResolverDecidir(d, "sale")} title="El seller dijo que vuelva a salir: queda en “Quedo en el Deposito” para asignarlo">Vuelve a salir</button>
-                    <button className="dv-btn" onClick={() => aResolverDecidir(d, "devolver")} title="El seller lo quiere de vuelta: pasa a devolución con su estante">Devolver al seller</button>
+                  {/* Un paso por vez: primero se consulta; con la respuesta del seller aparecen las dos salidas */}
+                  <span style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                    {!d.consultado_at ? (
+                      <button className="dv-btn pri" onClick={() => aResolverDecidir(d, "consultar")} title="Abre WhatsApp con el mensaje armado para el seller y lo marca como consultado">Consultar al seller</button>
+                    ) : (<>
+                      <button className="dv-btn" onClick={() => aResolverDecidir(d, "sale")} title="El seller dijo que vuelva a salir: queda en “Quedo en el Deposito” para asignarlo">Vuelve a salir</button>
+                      <button className="dv-btn" onClick={() => aResolverDecidir(d, "devolver")} title="El seller lo quiere de vuelta: pasa a devolución con su estante">Devolver</button>
+                      <button className="dv-btn" style={{ padding: "0 8px" }} onClick={() => aResolverDecidir(d, "consultar")} title="Volver a escribirle al seller" aria-label="Volver a consultar">↻</button>
+                    </>)}
                   </span>
                 </div>
               );
