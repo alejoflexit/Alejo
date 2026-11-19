@@ -213,7 +213,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
     setOcupado(true);
     try {
       await guardarGestion(cs.map((c) => ({ did: c.did, ingreso_deposito_at: deshacer ? null : new Date().toISOString(), ingreso_por: deshacer ? null : yo() })));
-      if (!deshacer) { registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) }); pedirSyncPronto(2000); } // LightData: se reasigna a "devuelto deposito"
+      if (!deshacer) { registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) }); cs.forEach((c) => reasignarYa(c.did)); } // LightData: se reasigna a "devuelto deposito"
       toast(deshacer ? "Volvió a “en la calle”" : `${cs.length} envío${cs.length > 1 ? "s" : ""} pasado${cs.length > 1 ? "s" : ""} a depósito`);
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
@@ -233,6 +233,29 @@ export default function Devoluciones({ abrirEnvio = null }) {
     }, espera);
   }, [cargar]);
   useEffect(() => () => clearTimeout(syncTimer.current), []);
+  // Camino rápido (18/11/2026): el bridge del servidor ya está logueado en LightData y reasigna en 1-2 s.
+  // Se juntan los escaneos de 1,5 s. Lo que el bridge no pueda pasar cae al workflow de GitHub (pedirSyncPronto).
+  const colaReasig = useRef(new Set());
+  const reasigTimer = useRef(null);
+  const reasignarYa = useCallback((did) => {
+    colaReasig.current.add(Number(did));
+    clearTimeout(reasigTimer.current);
+    reasigTimer.current = setTimeout(async () => {
+      const dids = [...colaReasig.current].slice(0, 20);
+      dids.forEach((d) => colaReasig.current.delete(d));
+      if (colaReasig.current.size) reasignarYa([...colaReasig.current][0]); // si quedaron más de 20
+      let r = null;
+      try { r = await authedFetch(`${SUPABASE_URL}/functions/v1/bridge/reasignar-deposito?dids=${dids.join(",")}`).then((x) => x.json()); } catch { r = null; }
+      const ok = new Set(((r && r.reasignados) || []).map(Number));
+      if (ok.size) {
+        const at = new Date().toISOString();
+        setDatos((d) => d && ({ ...d, gest: d.gest.map((g) => (ok.has(Number(g.did)) ? { ...g, ld_reasignado_at: at, ld_reasignado_error: null } : g)) }));
+        setTimeout(() => cargar(), 1500);
+      }
+      if (!r || !r.ok || dids.some((d) => !ok.has(d) && !(r && r.nada))) pedirSyncPronto(); // respaldo
+    }, 1500);
+  }, [pedirSyncPronto, cargar]);
+  useEffect(() => () => clearTimeout(reasigTimer.current), []);
   const ubic = (datos && datos.ubic) || {};
   async function guardarUbicacion(cliente, codigo) {
     try {
@@ -290,7 +313,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       await guardarGestion([{ did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
       setDatos((d) => ({ ...d, gest: [...d.gest.filter((x) => Number(x.did) !== did), { ...(g || {}), did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }] }));
       registrar("ingreso", 1, null, { dids: [did], via: "escaner", no_entregado: true });
-      pedirSyncPronto();
+      reasignarYa(did);
       return { ok: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado };
     } catch { return null; }
   }
@@ -308,7 +331,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       const at = new Date().toISOString();
       await guardarGestion([{ did: c.did, ingreso_deposito_at: at, ingreso_por: yo(), ...(como ? { notas: [...(c.notas || []), { texto: `Ingresó escaneando ${como}`, por: yo(), at }] } : {}) }]);
       registrar("ingreso", 1, null, { dids: [c.did], via: "escaner", ...(como ? { localizado: como } : {}) });
-      pedirSyncPronto();
+      reasignarYa(c.did);
       return true;
     } catch { return false; }
   }
@@ -1358,7 +1381,7 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
                   {(() => {
                     const e = estadoLD(i);
                     if (!e || i.via !== "app") return null;
-                    const t = { ok: ["✓ Ya no lo tiene el cadete en LightData", C.ink3], pendiente: ["⏳ LightData: se lo saca al cadete en 1–3 min", C.ambar], error: [`⚠ LightData no lo pudo pasar: ${String(i.ld_reasignado_error || "").slice(0, 60)}`, "#f87171"] }[e];
+                    const t = { ok: ["✓ Ya no lo tiene el cadete en LightData", C.ink3], pendiente: ["⏳ LightData: sacándoselo al cadete…", C.ambar], error: [`⚠ LightData no lo pudo pasar: ${String(i.ld_reasignado_error || "").slice(0, 60)}`, "#f87171"] }[e];
                     return <span style={{ display: "block", fontSize: 11.5, color: t[1], marginTop: 2 }}>{t[0]}</span>;
                   })()}
                 </span>

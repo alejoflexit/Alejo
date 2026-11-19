@@ -14,6 +14,7 @@ const BRIDGE_KEY = Deno.env.get("BRIDGE_KEY") ?? "";
 const BRIDGE_BASE = (Deno.env.get("BRIDGE_BASE") ?? "https://srv1801226.hstgr.cloud/bridge").replace(/\/$/, "");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 // Rutas que usa la app hoy. Cualquier otra se rechaza.
 const RUTAS = new Set(["reparto", "colecta", "colecta-detalle", "zonas", "geo", "envio-qr"]);
@@ -53,6 +54,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   // /functions/v1/bridge/<ruta>  →  el path que ve la función es /bridge/<ruta>
   const ruta = url.pathname.replace(/^.*\/bridge\/?/, "").replace(/\/+$/, "");
+  if (ruta === "reasignar-deposito") return await reasignarDeposito(url);
   if (!RUTAS.has(ruta)) return responder(404, { ok: false, motivo: "ruta_no_permitida" });
 
   try {
@@ -69,3 +71,35 @@ Deno.serve(async (req) => {
     return responder(502, { ok: false, motivo: "bridge_sin_respuesta", detalle: String((e as Error)?.message ?? e).slice(0, 120) });
   }
 });
+
+// ---- reasignar-deposito (18/11/2026): la única ruta que ESCRIBE en LightData ----
+// Le saca al cadete el envío que se acaba de ingresar en Devoluciones (lo pasa a "devuelto deposito").
+// Solo acepta envíos que en devoluciones_gestion tienen ingreso_deposito_at de los últimos 3 días y todavía
+// no están reasignados: así nadie puede usar la ruta para mover envíos cualquiera. Marca el resultado igual
+// que el workflow devoluciones.yml (que queda de respaldo para lo que falle acá).
+async function reasignarDeposito(url: URL): Promise<Response> {
+  if (!SERVICE) return responder(500, { ok: false, motivo: "falta_service_key" });
+  const pedidos = [...new Set((url.searchParams.get("dids") ?? "").split(",").map((x) => x.trim()).filter((x) => /^\d{3,10}$/.test(x)))].slice(0, 20);
+  if (!pedidos.length) return responder(400, { ok: false, motivo: "dids" });
+  const sh = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, "Content-Type": "application/json", Prefer: "return=minimal" };
+  const hace3 = new Date(Date.now() - 3 * 864e5).toISOString();
+  const g = await fetch(`${SUPABASE_URL}/rest/v1/devoluciones_gestion?select=did&did=in.(${pedidos.join(",")})&ingreso_deposito_at=gte.${encodeURIComponent(hace3)}&ld_reasignado_at=is.null`, { headers: sh });
+  const dids = ((await g.json().catch(() => [])) as { did: number }[]).map((x) => Number(x.did));
+  if (!dids.length) return responder(200, { ok: true, reasignados: [], nada: true });
+  let data: { ok?: number[]; mal?: unknown[]; mensaje?: string; error?: string } = {};
+  try {
+    const r = await fetch(`${BRIDGE_BASE}/reasignar-deposito?dids=${dids.join(",")}`, { headers: { "x-bridge-key": BRIDGE_KEY }, signal: AbortSignal.timeout(50_000) });
+    data = await r.json().catch(() => ({}));
+    if (!r.ok) return responder(200, { ok: false, motivo: "bridge", status: r.status, detalle: String(data.error ?? "").slice(0, 160) });
+  } catch (e) {
+    return responder(200, { ok: false, motivo: "bridge_sin_respuesta", detalle: String((e as Error)?.message ?? e).slice(0, 120) });
+  }
+  const ok = (data.ok ?? []).map(Number).filter((d) => dids.includes(d));
+  if (ok.length) {
+    const ahora = new Date().toISOString();
+    await fetch(`${SUPABASE_URL}/rest/v1/devoluciones_gestion?did=in.(${ok.join(",")})`, { method: "PATCH", headers: sh, body: JSON.stringify({ ld_reasignado_at: ahora, ld_reasignado_error: null }) });
+    // detalle_at null = que el próximo sync relea la ficha (chofer, quién lo trajo)
+    await fetch(`${SUPABASE_URL}/rest/v1/devoluciones?did=in.(${ok.join(",")})`, { method: "PATCH", headers: sh, body: JSON.stringify({ en_deposito_ld: true, detalle_at: null }) });
+  }
+  return responder(200, { ok: true, reasignados: ok, mal: data.mal ?? [], mensaje: data.mensaje ?? "" });
+}
