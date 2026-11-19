@@ -64,6 +64,7 @@ export function armarCaso(d, g = {}, ahora = Date.now()) {
     ...d, tipo, etapa, desde, dias, marca, marca_nota: g.marca_nota || "", marca_por: g.marca_por || "", marca_at: g.marca_at || null,
     reclamo_at: g.reclamo_at || null, notas: Array.isArray(g.notas) ? g.notas : [], ubicacion_manual: g.ubicacion || null,
     ingreso_deposito_at: g.ingreso_deposito_at || null, ingreso_por: g.ingreso_por || "",
+    ld_reasignado_at: g.ld_reasignado_at || null, ld_reasignado_error: g.ld_reasignado_error || null,
     vencido: limite !== null && dias !== null && dias > limite,
     volvio_a_salir: volvioASalir,
     cerrado: MARCAS_CIERRAN.includes(marca),
@@ -361,9 +362,19 @@ export function cajaPorLetra(cliente) {
   const r = LETRAS_LUGAR.find(([de, a]) => l >= de && l <= a);
   return r ? r[2] : "D"; // números y símbolos → D
 }
+// El nombre del seller no siempre llega igual (buscador de envíos vs devoluciones: "IKORSO" / "Ikorso SRL").
+// Se compara normalizado: sin tildes, mayúsculas, puntuación ni sufijos societarios (18/11/2026, caso IKORSO).
+export const nombreClave = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/[^a-z0-9]+/g, " ").replace(/\b(s ?r ?l|s ?a ?s|s ?a|sa|srl|sas|sociedad anonima)\b/g, " ").replace(/\s+/g, " ").trim();
 export function ubicacionDe(cliente, mapa = {}) {
   const k = String(cliente || "");
-  return mapa[k] ? { codigo: mapa[k], propia: true } : { codigo: cajaPorLetra(k), propia: false };
+  if (mapa[k]) return { codigo: mapa[k], propia: true };
+  const n = nombreClave(k);
+  if (n) {
+    const hit = Object.keys(mapa).find((m) => nombreClave(m) === n);
+    if (hit) return { codigo: mapa[hit], propia: true };
+  }
+  return { codigo: cajaPorLetra(k), propia: false };
 }
 
 // Historial de ingresos de un día (18/11/2026): todo lo que entró al depósito ese día (hora AR), con dónde
@@ -394,4 +405,12 @@ export function enReparto(e) {
   const est = String((e && e.estado) || "").toLowerCase();
   if (!/en camino|en planta/.test(est)) return false;
   return !!(e.cadete && !CHOFER_FICTICIO.test(e.cadete));
+}
+
+// Estado en LightData de un ingreso hecho en la app: el workflow lo reasigna a "devuelto deposito" (le saca el
+// envío al cadete). "ok" = ya lo tiene devuelto deposito; "pendiente" = todavía no corrió; "error" = falló.
+export function estadoLD(c) {
+  if (!c.ingreso_deposito_at) return c.en_deposito_ld ? "ok" : null;
+  if (c.ld_reasignado_at || c.en_deposito_ld) return "ok";
+  return c.ld_reasignado_error ? "error" : "pendiente";
 }

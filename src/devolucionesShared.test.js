@@ -207,3 +207,10 @@ test("enReparto frena solo envíos en camino/en planta con cadete real", () => {
   expect(enReparto({ estado: "En camino al destinatario", cadete: "devuelto deposito" })).toBe(false);
   expect(enReparto({ estado: "En camino al destinatario", cadete: null })).toBe(false);
 });
+
+test("ubicacionDe tolera nombres distintos del mismo seller (IKORSO / Ikorso SRL)", () => {
+  const { ubicacionDe } = require("./devolucionesShared");
+  expect(ubicacionDe("Ikorso SRL", { IKORSO: "M" }).codigo).toBe("M");
+  expect(ubicacionDe("Búho Color", { "Buho Color": "A-4" }).codigo).toBe("A-4");
+  expect(ubicacionDe("Sanitarios", { IKORSO: "M" }).propia).toBe(false);
+});

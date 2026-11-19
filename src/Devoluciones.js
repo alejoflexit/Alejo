@@ -9,7 +9,7 @@ import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
   progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
-  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto,
+  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto, estadoLD,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -213,12 +213,26 @@ export default function Devoluciones({ abrirEnvio = null }) {
     setOcupado(true);
     try {
       await guardarGestion(cs.map((c) => ({ did: c.did, ingreso_deposito_at: deshacer ? null : new Date().toISOString(), ingreso_por: deshacer ? null : yo() })));
-      if (!deshacer) { registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) }); pedirAccion("sync").catch(() => {}); } // LightData: se reasigna a "devuelto deposito"
+      if (!deshacer) { registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) }); pedirSyncPronto(2000); } // LightData: se reasigna a "devuelto deposito"
       toast(deshacer ? "Volvió a “en la calle”" : `${cs.length} envío${cs.length > 1 ? "s" : ""} pasado${cs.length > 1 ? "s" : ""} a depósito`);
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
     setOcupado(false);
   }
+  // Pedir a LightData que le saque el envío al cadete apenas se ingresa (18/11/2026, audios de Sol: el cadete
+  // seguía viéndolo asignado porque el sync recién salía al cerrar el escáner o en la corrida de cada hora).
+  // Se agrupan los escaneos seguidos: sale 20 s después del último. La función limita a 1 cada 3 min; si
+  // contesta "reciente", se reintenta cuando se habilita. Después se recarga para mostrar el ✓ de LightData.
+  const syncTimer = useRef(null);
+  const pedirSyncPronto = useCallback((espera = 20000) => {
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      const r = await pedirAccion("sync");
+      if (r && r.motivo === "reciente") { pedirSyncPronto(Math.max(20, (3 - (r.minutos || 0)) * 60 + 15) * 1000); return; }
+      [100000, 170000, 260000].forEach((ms) => setTimeout(() => cargar(), ms));
+    }, espera);
+  }, [cargar]);
+  useEffect(() => () => clearTimeout(syncTimer.current), []);
   const ubic = (datos && datos.ubic) || {};
   async function guardarUbicacion(cliente, codigo) {
     try {
@@ -276,6 +290,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       await guardarGestion([{ did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }]);
       setDatos((d) => ({ ...d, gest: [...d.gest.filter((x) => Number(x.did) !== did), { ...(g || {}), did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }] }));
       registrar("ingreso", 1, null, { dids: [did], via: "escaner", no_entregado: true });
+      pedirSyncPronto();
       return { ok: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado };
     } catch { return null; }
   }
@@ -293,6 +308,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       const at = new Date().toISOString();
       await guardarGestion([{ did: c.did, ingreso_deposito_at: at, ingreso_por: yo(), ...(como ? { notas: [...(c.notas || []), { texto: `Ingresó escaneando ${como}`, por: yo(), at }] } : {}) }]);
       registrar("ingreso", 1, null, { dids: [c.did], via: "escaner", ...(como ? { localizado: como } : {}) });
+      pedirSyncPronto();
       return true;
     } catch { return false; }
   }
@@ -513,7 +529,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       {cargarG && <CargarGestionar choferes={choferes} inicial={cargarG.inicial} toast={toast} onCerrar={() => setCargarG(null)} onGuardado={() => { setCargarG(null); cargar(); }} />}
       {verIngresos && <IngresosDiaModal casos={casos} ubic={ubic} codigosLugar={codigosLugar} onLugar={cambiarLugar} onFijarSeller={async (cliente, codigo, did) => { await guardarUbicacion(cliente, codigo); await cambiarLugar(did, ""); toast(`${cliente}: de ahora en más va a ${codigo}`); }} onVerUbic={() => setVerUbic(true)} onCerrar={() => setVerIngresos(false)} />}
       {verUbic && <UbicacionesModal casos={casos} mapa={ubic} onGuardar={guardarUbicacion} onCerrar={() => setVerUbic(false)} />}
-      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} onDuplicado={cargarDuplicado} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirAccion("sync").catch(() => {}); }} />}
+      {escIngreso && <IngresoEscaner casos={casos} ubic={ubic} onIngresarOtro={ingresoOtro} onDuplicado={cargarDuplicado} codigosLugar={codigosLugar} onLugar={cambiarLugar} onGestionar={(leido) => { setEscIngreso(false); setCargarG({ inicial: leido ? `Etiqueta leída: ${leido}` : "" }); }} onIngresar={ingresoEscaneado} onCerrar={() => { setEscIngreso(false); cargar(); pedirSyncPronto(1000); }} />}
       {verListos && <ListosModal ubic={ubic} grupos={listosParaDevolver(casos, new Set(remitoDe.keys()))} onCerrar={() => setVerListos(false)} onArmar={(cs) => { setVerListos(false); armarRemitos(cs); }} />}
       {armando && <ArmarRemitoModal previa={armando.previa} yaEnRemito={armando.yaEnRemito} choferes={choferes} onConfirmar={confirmarArmado} onCerrar={() => setArmando(null)} />}
       {verReclamos && <ReclamosModal grupos={reclamosPorCadete(casos)} trajo={trajoPorCadete(casos)} onEnviar={reclamar} onCerrar={() => setVerReclamos(false)} />}
@@ -1339,6 +1355,12 @@ function IngresosDiaModal({ casos, ubic = {}, codigosLugar = [], onLugar, onFija
                     #{i.did}{ch ? ` · ${ch.nombre}` : ""} · {i.via === "app" ? `ingresó ${i.ingreso_por || "equipo"}` : "por LightData"}
                     {i.lugar_cambiado && <span style={{ color: C.ink2 }}> · movido a mano (era {i.lugar_seller})</span>}
                   </span>
+                  {(() => {
+                    const e = estadoLD(i);
+                    if (!e || i.via !== "app") return null;
+                    const t = { ok: ["✓ Ya no lo tiene el cadete en LightData", C.ink3], pendiente: ["⏳ LightData: se lo saca al cadete en 1–3 min", C.ambar], error: [`⚠ LightData no lo pudo pasar: ${String(i.ld_reasignado_error || "").slice(0, 60)}`, "#f87171"] }[e];
+                    return <span style={{ display: "block", fontSize: 11.5, color: t[1], marginTop: 2 }}>{t[0]}</span>;
+                  })()}
                 </span>
                 {editable && i.lugar_cambiado && <button className="dv-btn" style={{ height: 30, fontSize: 12, flexShrink: 0 }} onClick={() => onFijarSeller(i.cliente, i.lugar, i.did)} title={`Guardar ${i.lugar} como lugar fijo de ${i.cliente}: los próximos ingresos ya te van a decir ${i.lugar}`}>Fijar para {String(i.cliente || "").split(" ")[0]}</button>}
                 <span style={{ fontSize: 13, color: C.ink3, fontFamily: C.grotesk, flexShrink: 0, minWidth: 40, textAlign: "right" }}>{horaAR(i.ingreso_at)}</span>
@@ -1388,18 +1410,18 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
     const leido = etiquetaLegible(texto);
     if (!c && otro && otro.entregado && otro.candidatos.length === 1) return procesarCaso(otro.candidatos[0], ahora, `por la etiqueta del envío original #${otro.did}`);
     if (!c && otro && otro.entregado && otro.candidatos.length > 1) l = { tipo: "elegir", titulo: `${otro.cliente || "Envío"} · ¿cuál de estos cambios es?`, sub: `La etiqueta es del envío original #${otro.did} (entregado)`, candidatos: otro.candidatos };
-    else if (!c && otro && otro.entregado) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `Es la etiqueta del envío original #${otro.did} y no encontré un cambio abierto de esa venta ni de esa dirección. Cargalo en “A gestionar”.` };
+    else if (!c && otro && otro.entregado) l = { tipo: "no", leido: String(texto).slice(0, 80), donde: "B", titulo: `${otro.cliente || "Envío"} · figura entregado`, sub: `#${otro.did} figura entregado y no encontré un cambio abierto de esa venta. Separalo en B y cargalo en “A gestionar”.` };
     else if (!c && otro && otro.enReparto) l = { tipo: "reparto", envio: otro, titulo: `${otro.cliente || "Envío"} · está en reparto${otro.cadete ? ` con ${otro.cadete}` : ""}`, sub: `#${otro.did} · ${otro.estado || ""}. No lo ingresé: ¿es un duplicado?` };
     else if (!c && otro && otro.ok) l = { tipo: "ok", did: otro.did, titulo: `${otro.cliente || "Envío"} · no entregado`, sub: [otro.direccion, otro.estado, "pasa a depósito"].filter(Boolean).join(" · "), donde: ubicacionDe(otro.cliente, ubic).codigo };
-    else if (!c && otro && otro.ya) l = { tipo: "ya", titulo: `${otro.cliente || "Envío"} · ya estaba ingresado`, sub: otro.direccion || "" };
+    else if (!c && otro && otro.ya) l = { tipo: "ya", donde: ubicacionDe(otro.cliente, ubic).codigo, titulo: `${otro.cliente || "Envío"} · ya estaba ingresado`, sub: "Ya está en depósito, no hace falta hacer nada más" };
     else if (!c) l = { tipo: "no", leido: String(texto).slice(0, 80), titulo: "No lo encontré en el sistema", sub: `Leí ${leido}. Si se cargó hoy puede que todavía no esté; cargalo en “A gestionar”.` };
     else return procesarCaso(c, ahora);
     avisar(l, ahora);
   }
   async function procesarCaso(c, ahora = Date.now(), como = "") {
     let l;
-    if (hechos.current.has(c.did) || c.etapa === "deposito") l = { tipo: "ya", titulo: `${c.cliente} · ya estaba en depósito`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
-    else if (c.etapa === "devuelto" || c.cerrado) l = { tipo: "ya", titulo: `${c.cliente} · ${c.etapa === "devuelto" ? "ya fue devuelto al seller" : "está cerrado"}`, sub: [c.direccion, c.ml_venta_id || c.tracking].filter(Boolean).join(" · ") };
+    if (hechos.current.has(c.did) || c.etapa === "deposito") l = { tipo: "ya", donde: c.ubicacion_manual || ubicacionDe(c.cliente, ubic).codigo, titulo: `${c.cliente} · ya estaba en depósito`, sub: "Ya está ingresado, no hace falta hacer nada más" };
+    else if (c.etapa === "devuelto" || c.cerrado) l = { tipo: "no", donde: "B", titulo: `${c.cliente} · ${c.etapa === "devuelto" ? "figura devuelto al seller" : "está cerrado"}`, sub: `#${c.did}: el sistema dice que ya no debería estar acá. Separalo en B y avisá para revisarlo.` };
     else {
       hechos.current.add(c.did);
       const ok = await onIngresar(c, como);
