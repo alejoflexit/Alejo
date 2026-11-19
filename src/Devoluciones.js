@@ -778,7 +778,7 @@ function EtapaCard({ id, titulo, ayuda, valor, plataDecl, activo, venc, vencidos
         <span style={{ flex: 1 }} />
         {plataDecl ? <span style={{ fontSize: 13, color: C.ink3 }} title={`${plata(plataDecl)} declarado`}>{plataCorta(plataDecl)} declarado</span> : null}
       </div>
-      <div className="dv-nums" onClick={(e) => e.stopPropagation()}>
+      <div className="dv-nums" onClick={(e) => { if (e.target.closest("button")) e.stopPropagation(); }}>
         <button className={"dv-num" + (activo && !venc ? " on" : "")} onClick={() => onElegir(false)}>
           <b>{num(valor)}</b><span>paquetes</span>
         </button>
@@ -791,7 +791,7 @@ function EtapaCard({ id, titulo, ayuda, valor, plataDecl, activo, venc, vencidos
           </button>
         )}
       </div>
-      {acciones && <div className="dv-etapa-acc" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{acciones}</div>}
+      {acciones && <div className="dv-etapa-acc" onClick={(e) => { if (e.target.closest("button")) e.stopPropagation(); }} onKeyDown={(e) => e.stopPropagation()}>{acciones}</div>}
     </div>
   );
 }
@@ -2790,6 +2790,7 @@ const CSS = `
 @container dv (max-width:820px){.dv-etapas{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dv-otros{grid-column:1/-1;flex-direction:row!important;flex-wrap:wrap}.dv-otro{flex:1 1 180px}}
 @container dv (max-width:520px){.dv-etapas{grid-template-columns:minmax(0,1fr)}}
 .dv-etapa{padding:16px 18px 14px;cursor:pointer;transition:border-color .12s,background-color .12s;outline:none}
+.dv-etapa:not(.on):hover{border-color:rgba(255,255,255,.22)!important;background-color:rgba(255,255,255,.025)}
 .dv-etapa.on{border-color:rgba(46,230,182,.45)!important;background:linear-gradient(180deg,rgba(46,230,182,.07),rgba(27,28,46,.72) 70%)!important;box-shadow:0 0 0 1px rgba(46,230,182,.12),0 0 35px rgba(0,255,180,.06)}
 .dv-etapa:focus-visible{border-color:rgba(46,230,182,.45)!important}
 .dv-etapa-sub{display:flex;gap:6px;align-items:center;margin-top:12px;flex-wrap:wrap}
