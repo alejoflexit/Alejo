@@ -57,6 +57,16 @@ begin
       borrado_at timestamptz
     )$f$, tp);
 end $$;
+-- Datos fiscales completos (para cargarlo en Xubio igual que lo carga Adrián: C-00002-00000274)
+alter table public.facturas_comprobantes add column if not exists letra text;          -- A / B / C
+alter table public.facturas_comprobantes add column if not exists punto_venta text;    -- 5 dígitos
+alter table public.facturas_comprobantes add column if not exists numero text;         -- 8 dígitos
+alter table public.facturas_comprobantes add column if not exists fecha_emision date;
+-- Carga en Xubio (botón "Cargar en Xubio" de Pagar, función xubio)
+alter table public.facturas_comprobantes add column if not exists xubio_id bigint;     -- transaccionid en Xubio
+alter table public.facturas_comprobantes add column if not exists xubio_at timestamptz;
+alter table public.facturas_comprobantes add column if not exists xubio_por text;
+
 create index if not exists facturas_comprobantes_cierre on public.facturas_comprobantes (cierre_id) where borrado_at is null;
 alter table public.facturas_comprobantes enable row level security;
 drop policy if exists facturas_comprobantes_leer on public.facturas_comprobantes;
@@ -201,7 +211,7 @@ begin
       case when e.estado = 'confirmado' then factura_monto_esperado(e.total, e.metodo, to_jsonb(e.pagos)) end as monto,
       case when e.estado = 'confirmado' then factura_neto(e.id) end as neto,
       (select coalesce(json_agg(json_build_object('id', fc.id, 'tipo', fc.tipo, 'nro', fc.nro, 'monto', fc.monto,
-                'origen', fc.monto_origen, 'obs', fc.observacion, 'at', fc.created_at) order by fc.created_at), '[]'::json)
+                'origen', fc.monto_origen, 'obs', fc.observacion, 'at', fc.created_at, 'xubio', fc.xubio_id is not null) order by fc.created_at), '[]'::json)
          from facturas_comprobantes fc where fc.cierre_id = e.id and fc.borrado_at is null) as comprobantes,
       coalesce(e.factura_ok, false) and not e.factura_link as marcada_a_mano
     from elegidas e
@@ -220,9 +230,11 @@ revoke all on function public.factura_link_info(text) from public;
 grant execute on function public.factura_link_info(text) to anon, authenticated;
 
 -- Registrar un comprobante ya subido a link/<token>/<semana>/...
+drop function if exists public.factura_link_registrar(text, text, text, text, text, numeric, text, text);
 create or replace function public.factura_link_registrar(
   p_token text, p_semana text, p_archivo text, p_tipo text,
-  p_nro text default null, p_monto numeric default null, p_monto_origen text default 'pdf', p_cuit text default null)
+  p_nro text default null, p_monto numeric default null, p_monto_origen text default 'pdf', p_cuit text default null,
+  p_letra text default null, p_punto_venta text default null, p_numero text default null, p_fecha date default null)
 returns json language plpgsql volatile security definer set search_path = public as $$
 declare
   t cadetes_tarifas; c pagos_cierres; obs text; cuit_cadete text; n int;
@@ -259,14 +271,21 @@ begin
     obs := 'CUIT del comprobante (' || p_cuit || ') distinto al del cadete';
   end if;
 
-  insert into facturas_comprobantes (cierre_id, semana_label, cadete, tipo, nro, monto, monto_origen, cuit, archivo, observacion)
-  values (c.id, p_semana, c.cadete, p_tipo, nullif(right(regexp_replace(coalesce(p_nro, ''), '\D', '', 'g'), 4), ''),
-          p_monto, p_monto_origen, p_cuit, p_archivo, obs);
+  p_punto_venta := nullif(regexp_replace(coalesce(p_punto_venta, ''), '\D', '', 'g'), '');
+  p_numero := nullif(regexp_replace(coalesce(p_numero, ''), '\D', '', 'g'), '');
+  if upper(coalesce(p_letra, '')) not in ('A', 'B', 'C') then p_letra := null; end if;
+  if p_fecha is not null and (p_fecha < current_date - 120 or p_fecha > current_date + 5) then p_fecha := null; end if;
+  insert into facturas_comprobantes (cierre_id, semana_label, cadete, tipo, nro, monto, monto_origen, cuit, archivo, observacion,
+                                     letra, punto_venta, numero, fecha_emision)
+  values (c.id, p_semana, c.cadete, p_tipo,
+          nullif(right(coalesce(p_numero, regexp_replace(coalesce(p_nro, ''), '\D', '', 'g')), 4), ''),
+          p_monto, p_monto_origen, p_cuit, p_archivo, obs,
+          upper(p_letra), lpad(right(p_punto_venta, 5), 5, '0'), lpad(right(p_numero, 8), 8, '0'), p_fecha);
   perform factura_link_recalcular(c.id);
   return json_build_object('ok', true, 'info', factura_link_info(p_token));
 end $$;
-revoke all on function public.factura_link_registrar(text, text, text, text, text, numeric, text, text) from public;
-grant execute on function public.factura_link_registrar(text, text, text, text, text, numeric, text, text) to anon, authenticated;
+revoke all on function public.factura_link_registrar(text, text, text, text, text, numeric, text, text, text, text, text, date) from public;
+grant execute on function public.factura_link_registrar(text, text, text, text, text, numeric, text, text, text, text, text, date) to anon, authenticated;
 
 -- El cadete saca un comprobante que subió mal (solo mientras no esté pagado).
 create or replace function public.factura_link_borrar(p_token text, p_id bigint) returns json
@@ -280,6 +299,7 @@ begin
   if not found then return json_build_object('ok', false, 'motivo', 'no_existe'); end if;
   select * into c from pagos_cierres where id = fc.cierre_id;
   if coalesce(c.pagado, false) then return json_build_object('ok', false, 'motivo', 'pagada'); end if;
+  if fc.xubio_id is not null then return json_build_object('ok', false, 'motivo', 'en_xubio'); end if;
   update facturas_comprobantes set borrado_at = now() where id = p_id;
   perform factura_link_recalcular(fc.cierre_id);
   return json_build_object('ok', true, 'info', factura_link_info(p_token));

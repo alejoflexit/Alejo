@@ -201,7 +201,11 @@ export default function PagosPagador({ tarifas }) {
   const [quienPaga, setQuienPaga] = useState(() => { try { return localStorage.getItem('fx_quien_paga') || 'Adrián'; } catch { return 'Adrián'; } });
   const [otroNombre, setOtroNombre] = useState(false); // el input de "Otro…" está abierto
   const [dragKey, setDragKey] = useState(null);   // fila resaltada porque hay una factura por soltar encima
-  const [nroDraft, setNroDraft] = useState({});   // borrador del input "últimos 4" por fila (cuando el PDF no se pudo leer)
+  const [nroDraft, setNroDraft] = useState({});
+  // Comprobantes subidos por el link (cierre_id -> lista) — para el botón "Cargar en Xubio".
+  // Si la migración de facturas por link no está corrida, la tabla no existe: queda vacío y no se muestra nada.
+  const [comprobantes, setComprobantes] = useState({});
+  const [xubioBusy, setXubioBusy] = useState(null);   // borrador del input "últimos 4" por fila (cuando el PDF no se pudo leer)
 
   function elegirQuienPaga(v) {
     const limpio = String(v || '').trim();
@@ -227,6 +231,13 @@ export default function PagosPagador({ tarifas }) {
       .then(rows => setCierres(rows || []))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+    sb(`facturas_comprobantes?select=id,cierre_id,tipo,xubio_id&borrado_at=is.null&semana_label=eq.${semana}`)
+      .then(rows => {
+        const m = {};
+        (rows || []).forEach(r => { (m[r.cierre_id] = m[r.cierre_id] || []).push(r); });
+        setComprobantes(m);
+      })
+      .catch(() => setComprobantes({}));
   }, []);
 
   useEffect(() => { cargarCierres(semanaSel); }, [semanaSel, cargarCierres]);
@@ -448,6 +459,26 @@ export default function PagosPagador({ tarifas }) {
   }
 
   // marcar / desmarcar "mandó factura" acá en Pagar: habilita el pago de esa transferencia
+  // Carga en Xubio lo que el cadete subió por su link (función xubio, acción "cargar").
+  async function cargarEnXubio(f) {
+    if (!window.confirm(`¿Cargar en Xubio la factura de ${f.nombre} por ${money(f.facturaMonto ?? f.total)}?\n\nSe carga como compra a su nombre (producto "Costo envios").`)) return;
+    setXubioBusy(f.key); setError('');
+    try {
+      const res = await authedFetch(`${SUPABASE_URL}/functions/v1/xubio`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'cargar', cierre_id: f.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      const errores = (j.resultados || []).filter(r => r.error).map(r => r.error);
+      if (j.error || errores.length) setError(`Xubio · ${f.nombre}: ${[j.error, ...errores].filter(Boolean).join(' · ')}`);
+    } catch (e) {
+      setError(`Xubio · ${f.nombre}: ${e.message}`);
+    } finally {
+      setXubioBusy(null);
+      cargarCierres(semanaSel);
+    }
+  }
+
   async function marcarFactura(f, valor) {
     setBusyId(f.key);
     setCierres(prev => prev.map(c => c.id === f.id ? { ...c, factura_ok: valor, factura_ok_at: valor ? new Date().toISOString() : null } : c));
@@ -721,6 +752,17 @@ export default function PagosPagador({ tarifas }) {
                           </button>
                         : <span title="arrastrá el PDF o la foto de la factura sobre esta fila" style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(245,192,68,0.14)', border: '1px solid rgba(245,192,68,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
                     )}
+                    {/* Xubio: solo lo que vino por el link (tiene los datos fiscales completos) */}
+                    {f.factura && f.facturaOk && (comprobantes[f.id] || []).some(c => c.tipo === 'factura') && (() => {
+                      const facts = comprobantes[f.id].filter(c => c.tipo === 'factura');
+                      const cargadas = facts.every(c => c.xubio_id);
+                      return cargadas
+                        ? <span title="La factura ya está cargada en Xubio" style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}><span style={{ color: BRAND.teal }}>✓</span> En Xubio</span>
+                        : <button onClick={() => cargarEnXubio(f)} disabled={xubioBusy === f.key} title="Carga la factura en Xubio como compra a nombre del cadete"
+                            style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', color: BRAND.white, background: BRAND.faint, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
+                            {xubioBusy === f.key ? 'Cargando…' : 'Cargar en Xubio'}
+                          </button>;
+                    })()}
                     {/* Archivo adjunto pero sin número (foto o PDF escaneado): los 4 últimos se cargan a mano */}
                     {f.factura && f.facturaFile && !f.facturaNro && !f.pagado && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>

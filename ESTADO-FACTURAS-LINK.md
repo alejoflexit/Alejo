@@ -1,6 +1,6 @@
 # Estado — Facturas de cadetes por link
 
-*Última actualización: 2026-11-19*
+*Última actualización: 2026-11-19 (noche)*
 
 ## Objetivo
 Que cada cadete suba su factura desde un link propio, en vez de que Alejo junte ~60-70 facturas en un grupo y Adrián las cargue a mano. Piloto: **5 cadetes el lunes 23/11**. Etapa 2 (aparte): cargar las facturas solas en Xubio.
@@ -43,6 +43,11 @@ Que cada cadete suba su factura desde un link propio, en vez de que Alejo junte 
 2. Alejo: en Config, crear el link de los 5 cadetes del piloto (y revisar que tengan el CUIL cargado: si no, el chequeo de CUIT no corre).
 3. Lunes: mandar el mensaje de liquidación como siempre (ya trae el link) y confirmar de a uno.
 
-## Etapa 2 — Xubio
-- API: OAuth2 client credentials (`https://xubio.com/API/1.1/TokenEndpoint`), requiere plan PLUS. Credenciales en Configuración → Integraciones → API de Xubio.
-- Bloqueo: el proyecto de Supabase de la app no está en el conector de Claude; los secretos `XUBIO_CLIENT_ID / XUBIO_SECRET_ID` los carga Alejo en Supabase › Edge Functions › Secrets. Las credenciales que se pegaron en el chat del 19/11 hay que regenerarlas.
+## Etapa 2 — Xubio (botón para Adrián, decisión de Alejo 19/11)
+- Función `supabase/functions/xubio` (solo admin). Secretos en Supabase › Edge Functions › Secrets: `XUBIO_CLIENT_ID`, `XUBIO_SECRET_ID` (cargados 19/11). Token: OAuth2 client credentials en `https://xubio.com/API/1.1/TokenEndpoint` (plan PLUS).
+- Se despliega sola al pushear cambios en `supabase/functions/xubio/**` (workflow `supabase_funciones.yml`, usa el secreto de GitHub `SUPABASE_ACCESS_TOKEN`, cargado 19/11; ojo que vence).
+- `accion: "probar"`: token + mapa de la API + último comprobante de compra. Verificado 19/11: conecta, 516 proveedores, POST en `/comprobanteCompraBean`, `/ProveedorBean`, `/pagoBean`. No hay endpoint para adjuntar el PDF (queda en la app).
+- Molde de Adrián (comprobante real 18/11): tipo 1, `numeroDocumento` "C-00002-00000274", descripción "Envios", 1 ítem producto **"Costo envios" (ID 1853000)**, sin IVA, depósito -2, circuito -2, moneda -2, condición de pago 1. Proveedor = el cadete, monotributista, buscado por CUIT.
+- `accion: "cargar"` (botón **Cargar en Xubio** en Pagar, solo filas con factura OK que vino por el link): carga cada factura con ese molde y guarda `facturas_comprobantes.xubio_id/_at/_por`. Si ese número ya está en Xubio para ese proveedor, no duplica: lo marca. **No** crea proveedores (si falta, avisa) ni carga ND/NC (a mano). El cadete ya no puede sacar un comprobante que está en Xubio.
+- La página lee del PDF letra, punto de venta, número completo y fecha de emisión (código AFIP 011/012/013 → C).
+- **No probado contra Xubio todavía la carga real** (solo lectura). La primera vez: probar con una factura del piloto y mirar en Xubio que quede igual a las de Adrián.
