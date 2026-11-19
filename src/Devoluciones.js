@@ -523,6 +523,13 @@ export default function Devoluciones({ abrirEnvio = null }) {
             <button className="dv-celu-btn" onClick={() => setCargarG({ inicial: "" })}>
               <IcoCamara size={26} /><span><b>Cargar a gestionar</b><small>Paquete que no se sabe de quién es</small></span>
             </button>
+            {/* 19/11/2026: también en la vista angosta (celu, o pantalla dividida Devoluciones | Arribos de Tiago) */}
+            <button className="dv-celu-btn" onClick={() => setVerIngresos(true)}>
+              <IcoReloj size={26} /><span><b>Ingresos de hoy · {num(ingresosHoy)}</b><small>Qué entró y dónde quedó cada paquete</small></span>
+            </button>
+            <button className="dv-celu-btn" onClick={() => setVerUbic(true)}>
+              <IcoEstante size={26} /><span><b>Ubicaciones</b><small>Qué estante tiene cada seller</small></span>
+            </button>
             {pc > 0 && <button className="dv-celu-pc" onClick={() => setTab("remitos")}>{pc} remito{pc > 1 ? "s" : ""} por confirmar →</button>}
           </div>
         );
