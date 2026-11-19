@@ -312,8 +312,16 @@ export default function Devoluciones({ abrirEnvio = null }) {
     try {
       if (codigo) await sbFetch("devoluciones_ubicaciones?on_conflict=cliente", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ cliente, codigo, actualizado_por: yo(), actualizado_at: new Date().toISOString() }) });
       else await sbFetch(`devoluciones_ubicaciones?cliente=eq.${encodeURIComponent(cliente)}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      // Verificación (19/11/2026, "a Tiago no se le guarda"): releer lo que quedó en la base
+      const [fila] = await sbFetch(`devoluciones_ubicaciones?cliente=eq.${encodeURIComponent(cliente)}&select=codigo`);
+      if ((fila ? fila.codigo : "") !== (codigo || "")) throw new Error(`la base quedó con "${fila ? fila.codigo : "Automático"}"`);
       setDatos((d) => { const u = { ...(d.ubic || {}) }; if (codigo) u[cliente] = codigo; else delete u[cliente]; return { ...d, ubic: u }; });
-    } catch (e) { toast("No se pudo guardar la ubicación: " + String(e.message || e).slice(0, 60)); }
+      return { ok: true };
+    } catch (e) {
+      const msg = String(e.message || e).replace(/\s+/g, " ").slice(0, 140);
+      toast("No se pudo guardar la ubicación: " + msg.slice(0, 60));
+      return { ok: false, error: msg };
+    }
   }
   async function agregarNota(c, texto) {
     const t = String(texto || "").trim();
@@ -1401,6 +1409,12 @@ function VincularEnvio({ item, casos, onElegir, onCerrar }) {
 // ---------------- Ubicaciones del cuartito: qué lugar tiene cada seller ----------------
 function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
   const [busca, setBusca] = useState("");
+  const [estado, setEstado] = useState({}); // cliente → "guardando" | "ok" | mensaje de error
+  async function guardar(cliente, codigo) {
+    setEstado((x) => ({ ...x, [cliente]: "guardando" }));
+    const r = await onGuardar(cliente, codigo);
+    setEstado((x) => ({ ...x, [cliente]: r && r.ok ? "ok" : (r && r.error) || "error" }));
+  }
   const filas = useMemo(() => {
     const n = new Map();
     casos.forEach((c) => { if (c.etapa === "deposito" && !c.cerrado) n.set(c.cliente || "(sin cliente)", (n.get(c.cliente || "(sin cliente)") || 0) + 1); });
@@ -1425,12 +1439,15 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
                 <span style={{ minWidth: 0, flex: 1 }}>
                   <b>{f.cliente}</b>
                   <span style={{ display: "block", fontSize: 12, color: sugerir ? C.ambar : C.ink3 }}>{f.cant} en depósito{sugerir ? " · conviene darle lugar propio" : ""}</span>
+                  {estado[f.cliente] === "guardando" && <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>Guardando…</span>}
+                  {estado[f.cliente] === "ok" && <span style={{ display: "block", fontSize: 12, color: C.teal }}>✓ Guardado</span>}
+                  {estado[f.cliente] && !["ok", "guardando"].includes(estado[f.cliente]) && <span style={{ display: "block", fontSize: 12, color: "#f87171" }}>No se guardó: {estado[f.cliente]}</span>}
                 </span>
 {(() => {
                   const actual = mapa[f.cliente] || "";
                   return (
                     <select className="dv-input" style={{ width: 170, fontFamily: C.grotesk, fontWeight: 700, color: actual ? C.ink : C.ink3 }}
-                      value={actual} onChange={(e) => onGuardar(f.cliente, e.target.value)} aria-label={`Ubicación de ${f.cliente}`}>
+                      value={actual} onChange={(e) => guardar(f.cliente, e.target.value)} aria-label={`Ubicación de ${f.cliente}`}>
                       <option value="">Automático ({cajaPorLetra(f.cliente)})</option>
                       {actual && !LUGARES.includes(actual) && <option value={actual}>{actual} (viejo)</option>}
                       {LUGARES.map((x) => <option key={x} value={x}>{NOTA_LUGAR[x] || x}</option>)}
