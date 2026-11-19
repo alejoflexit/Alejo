@@ -846,6 +846,14 @@ async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotale
 
 // ───────────────────────── sub-vista: Config de cadetes (solo admin) ─────────────────────────
 
+// Link de factura del cadete (ver ESTADO-FACTURAS-LINK.md). El token es al azar: no se deduce del nombre.
+function nuevoTokenFactura() {
+  const b = new Uint8Array(18);
+  window.crypto.getRandomValues(b);
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function linkFactura(token) { return token ? `${window.location.origin}/factura.html?t=${token}` : ''; }
+
 function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, onRefresh }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -862,6 +870,21 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
 
   const inp = { padding: '5px 8px', fontSize: 13, border: `1px solid ${BRAND.border}`, borderRadius: 6, background: BRAND.faint, color: BRAND.white, outline: 'none' };
   const btn = { padding: '5px 12px', fontSize: 12, fontWeight: 700, borderRadius: 10, cursor: 'pointer', border: '1px solid rgba(46,230,182,0.35)', background: 'rgba(46,230,182,0.12)', color: BRAND.teal };
+
+  const [linkCopiado, setLinkCopiado] = useState(null);
+  // Primer toque: crea el link y lo copia. Después: lo copia. ↻ lo cambia (el viejo deja de andar).
+  async function copiarLinkFactura(t, regenerar) {
+    if (regenerar && !window.confirm(`¿Cambiar el link de factura de ${t.nombre_lightdata}?\n\nEl link viejo deja de funcionar. Hay que mandarle el nuevo.`)) return;
+    let token = t.factura_token;
+    if (!token || regenerar) {
+      token = nuevoTokenFactura();
+      await doAction(() => sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify({ factura_token: token }) }));
+    }
+    navigator.clipboard.writeText(linkFactura(token)).then(() => {
+      setLinkCopiado(t.id);
+      setTimeout(() => setLinkCopiado(c => (c === t.id ? null : c)), 1500);
+    }).catch(() => setErr('No se pudo copiar el link'));
+  }
 
   const doAction = useCallback(async (fn) => {
     setBusy(true); setErr('');
@@ -1062,6 +1085,18 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                           </button>
                         );
                       })()}
+                      {t.factura && (
+                        <>
+                          <button title={t.factura_token ? 'Copiar el link para que suba su factura' : 'Crear el link para que suba su factura'} disabled={busy} onClick={() => copiarLinkFactura(t, false)}
+                            style={{ height: 28, padding: '0 9px', display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', border: `1px solid ${t.factura_token ? BRAND.teal : BRAND.border}`, color: t.factura_token ? BRAND.teal : BRAND.muted, background: t.factura_token ? 'rgba(46,230,182,0.10)' : BRAND.faint }}>
+                            {linkCopiado === t.id ? '✓ Copiado' : t.factura_token ? '🔗 Link factura' : '+ Link factura'}
+                          </button>
+                          {t.factura_token && (
+                            <button title="Cambiar el link (el viejo deja de andar)" disabled={busy} onClick={() => copiarLinkFactura(t, true)}
+                              style={{ width: 26, height: 28, padding: 0, borderRadius: 10, cursor: 'pointer', border: `1px solid ${BRAND.border}`, color: BRAND.muted, background: BRAND.faint }}>↻</button>
+                          )}
+                        </>
+                      )}
                       <button title="borrar cadete" style={{ ...btn, padding: '3px 9px', marginLeft: 4, borderColor: BRAND.red, color: BRAND.red, background: 'rgba(232,97,95,0.1)' }} disabled={busy} onClick={() => borrarCadete(t)}>🗑</button>
                     </div>
                   </td>
@@ -1415,11 +1450,14 @@ function PagosInner({ session }) {
   // Lo usan el 💬 (copiar) y "Enviar por WhatsApp" (LiqWhatsapp): un solo texto para los dos.
   const armarMensaje = useCallback((f) => {
     const nombrePila = (f.nombre || '').trim().split(/\s+/)[0];
+    // Si factura y tiene link, se lo sumamos: ahí ve el monto cuando lo confirmamos y sube la factura.
+    const t = f.factura && f.tarifaId ? tarifas.find(x => x.id === f.tarifaId) : null;
+    const link = t && t.factura_token ? `\n\nCuando te confirme el monto, subí tu factura acá: ${linkFactura(t.factura_token)}` : '';
     if (f.esFletero) {
-      return `Buen día ${nombrePila}, tengo ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.`;
+      return `Buen día ${nombrePila}, tengo ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.` + link;
     }
-    return `Buen día ${nombrePila}, tengo ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.`;
-  }, []);
+    return `Buen día ${nombrePila}, tengo ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.` + link;
+  }, [tarifas]);
   function copiarMensaje(f) {
     const msg = armarMensaje(f);
     navigator.clipboard.writeText(msg).then(() => {

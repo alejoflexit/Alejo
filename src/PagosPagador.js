@@ -254,6 +254,7 @@ export default function PagosPagador({ tarifas }) {
         facturaOk: !!c.factura_ok, // Tarea 3: la transferencia se traba hasta que Alejo marque "mandó factura"
         facturaNro: c.factura_nro || null,   // últimos 4 del comprobante (referencia de Adrián)
         facturaFile: c.factura_file || null, // path del archivo en el bucket 'facturas'
+        facturaMonto: c.factura_monto ?? null, // neto de lo que subió el cadete por su link (si lo usó)
         alias, cuil: t.cuil || '', cbu,
       };
       const partes = (Array.isArray(c.pagos) ? c.pagos : []).filter(p => (+p.monto || 0) > 0);
@@ -711,7 +712,14 @@ export default function PagosPagador({ tarifas }) {
                             <span style={{ color: BRAND.teal }}>✓</span> 📄 Factura{f.facturaNro ? <b style={{ color: BRAND.white }}> …{f.facturaNro}</b> : ''}
                           </button>
                         : <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'transparent', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}><span style={{ color: BRAND.teal }}>✓</span> Factura recibida</span>)
-                      : <span title="arrastrá el PDF o la foto de la factura sobre esta fila" style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(245,192,68,0.14)', border: '1px solid rgba(245,192,68,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
+                      : f.facturaFile
+                        // La subió el cadete por su link pero no cerró sola (foto, CUIT distinto o importe
+                        // que no coincide): se abre para mirarla y Alejo la marca a mano.
+                        ? <button onClick={() => verFactura(f)} title="El cadete subió un comprobante que no coincide solo: abrilo y, si está bien, marcá que mandó factura"
+                            style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', color: BRAND.amber, background: 'rgba(245,192,68,0.14)', border: '1px solid rgba(245,192,68,0.4)', whiteSpace: 'nowrap' }}>
+                            📄 Revisar factura{f.facturaMonto != null ? ` · ${money(f.facturaMonto)}` : ''}
+                          </button>
+                        : <span title="arrastrá el PDF o la foto de la factura sobre esta fila" style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, color: BRAND.amber, background: 'rgba(245,192,68,0.14)', border: '1px solid rgba(245,192,68,0.4)', whiteSpace: 'nowrap' }}>🟡 Factura pendiente</span>
                     )}
                     {/* Archivo adjunto pero sin número (foto o PDF escaneado): los 4 últimos se cargan a mano */}
                     {f.factura && f.facturaFile && !f.facturaNro && !f.pagado && (
