@@ -1,5 +1,5 @@
 // xubio
-// (deploy: 2026-11-19 con SUPABASE_ACCESS_TOKEN cargado en GitHub)
+// (deploy: 2026-11-19, con --yes)
 // Puente entre la app y la API de Xubio (etapa 2 de facturas por link — ver ESTADO-FACTURAS-LINK.md).
 // Las credenciales viven SOLO acá como secretos de la función: XUBIO_CLIENT_ID / XUBIO_SECRET_ID
 // (Supabase › Edge Functions › Secrets). Nunca van al front: el repo es público.

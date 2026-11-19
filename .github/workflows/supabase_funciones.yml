@@ -57,5 +57,5 @@ jobs:
       - name: Deploy
         run: |
           for F in $FUNCIONES; do
-            supabase functions deploy "$F" --project-ref "$PROJECT_REF" --use-api
+            supabase functions deploy "$F" --project-ref "$PROJECT_REF" --use-api --yes
           done
