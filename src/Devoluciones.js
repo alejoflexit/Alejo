@@ -227,7 +227,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
     setOcupado(true);
     try {
       await guardarGestion(cs.map((c) => ({ did: c.did, ingreso_deposito_at: deshacer ? null : new Date().toISOString(), ingreso_por: deshacer ? null : yo() })));
-      if (!deshacer) { registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) }); cs.forEach((c) => reasignarYa(c.did)); } // LightData: se reasigna a "devuelto deposito"
+      if (!deshacer) { registrar("ingreso", cs.length, null, { dids: cs.map((c) => c.did) }); cs.forEach((c) => { reasignarYa(c.did); if (esPropio(c.cliente)) cerrarPropio(c.did, c.cliente); }); } // LightData: se reasigna a "devuelto deposito"
       toast(deshacer ? "Volvió a “en la calle”" : `${cs.length} envío${cs.length > 1 ? "s" : ""} pasado${cs.length > 1 ? "s" : ""} a depósito`);
       setSel(new Set()); await cargar();
     } catch (e) { toast("No se pudo guardar: " + String(e.message).slice(0, 80)); }
@@ -271,6 +271,37 @@ export default function Devoluciones({ abrirEnvio = null }) {
     }, 1500);
   }, [pedirSyncPronto, cargar]);
   useEffect(() => () => clearTimeout(reasigTimer.current), []);
+  // Sellers que operan desde el depósito (lugar DEP): al ingresar, remito interno ya confirmado → el workflow
+  // lo pasa a "Devuelto al cliente" en LightData. Se juntan 4 s por seller para no hacer un remito por paquete.
+  const esPropio = (cliente) => { const u = ubicacionDe(cliente, (datos && datos.ubic) || {}); return u.propia && u.codigo === LUGAR_PROPIO; };
+  const colaPropios = useRef(new Map());
+  const propiosTimer = useRef(null);
+  const cerrarPropio = useCallback((did, cliente) => {
+    const m = colaPropios.current;
+    if (!m.has(cliente)) m.set(cliente, new Set());
+    m.get(cliente).add(Number(did));
+    clearTimeout(propiosTimer.current);
+    propiosTimer.current = setTimeout(async () => {
+      const grupos = [...colaPropios.current.entries()];
+      colaPropios.current = new Map();
+      const ahora = new Date().toISOString();
+      for (const [cli, set] of grupos) {
+        const dids = [...set];
+        const base = { cliente: cli, dids, creado_por: yo(), chofer: "Stock propio (depósito)" };
+        try {
+          try { await sbFetch("remitos_devolucion", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ ...base, estado: "procesando", confirmado_por: yo(), confirmado_at: ahora }) }); }
+          catch {
+            const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify(base) });
+            await sbFetch(`remitos_devolucion?id=eq.${row.id}`, { method: "PATCH", body: JSON.stringify({ estado: "procesando", confirmado_por: yo(), confirmado_at: ahora }) });
+          }
+          registrar("cierre_propio", dids.length, null, { cliente: cli, dids });
+        } catch (e) { toast(`${cli}: no se pudo cerrar solo (${String(e.message || e).slice(0, 50)}). Armá el remito a mano.`); }
+      }
+      pedirAccion("procesar").catch(() => {});
+      setTimeout(() => cargar(), 2000);
+    }, 4000);
+  }, [cargar]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => clearTimeout(propiosTimer.current), []);
   const ubic = (datos && datos.ubic) || {};
   async function guardarUbicacion(cliente, codigo) {
     try {
@@ -329,6 +360,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       setDatos((d) => ({ ...d, gest: [...d.gest.filter((x) => Number(x.did) !== did), { ...(g || {}), did, ingreso_deposito_at: new Date().toISOString(), ingreso_por: yo() }] }));
       registrar("ingreso", 1, null, { dids: [did], via: "escaner", no_entregado: true });
       reasignarYa(did);
+      if (esPropio(e.razon_social)) cerrarPropio(did, e.razon_social);
       return { ok: true, did, cliente: e.razon_social, direccion: e.direccion, estado: e.estado };
     } catch { return null; }
   }
@@ -347,6 +379,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
       await guardarGestion([{ did: c.did, ingreso_deposito_at: at, ingreso_por: yo(), ...(como ? { notas: [...(c.notas || []), { texto: `Ingresó escaneando ${como}`, por: yo(), at }] } : {}) }]);
       registrar("ingreso", 1, null, { dids: [c.did], via: "escaner", ...(como ? { localizado: como } : {}) });
       reasignarYa(c.did);
+      if (esPropio(c.cliente)) cerrarPropio(c.did, c.cliente);
       return true;
     } catch { return false; }
   }
@@ -1305,7 +1338,7 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
       <div className="dv-modal" style={{ width: "min(560px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ubicaciones del cuartito">
         <div className="dv-modal-cab">
           <div style={{ fontWeight: 700, fontSize: 16 }}>Ubicaciones en el cuartito</div>
-          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Elegí el estante o caja de cada seller. Los que quedan en “Automático” van al piso de su letra (A–F → A-4, G–M → C-4, N–S → E-4, T–Z → D). Al escanear un ingreso, la app dice dónde guardarlo.</div>
+          <div style={{ fontSize: 13, color: C.ink2, marginTop: 4 }}>Elegí el estante o caja de cada seller. Los que quedan en “Automático” van al piso de su letra (A–F → A-4, G–M → C-4, N–S → E-4, T–Z → D). Al escanear un ingreso, la app dice dónde guardarlo.<br /><b style={{ color: C.ink }}>DEP · stock propio</b>: para los sellers que operan desde nuestro depósito. Lo que se les devuelve se cierra solo al ingresar (pasa a “Devuelto al cliente” en LightData), sin remito con chofer.</div>
           <input className="dv-input" style={{ width: "100%", marginTop: 10 }} placeholder="Buscar seller o código" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
@@ -1647,8 +1680,12 @@ const IcoScan = ({ size = 22 }) => (
 );
 
 // Lugares del cuartito (plano 29/10): estanterías A, C y E de 4 pisos; B (problemas) y D una caja; M voluminosos
-const LUGARES = [...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M"];
-const NOTA_LUGAR = { B: "B · problemas", D: "D · caja", M: "M · voluminosos" };
+// DEP (19/11/2026): lugar de los sellers que operan desde nuestro depósito (stock propio: Bomba Project,
+// Florian…). Un seller con lugar DEP queda marcado así: lo que se le devuelve se cierra solo al ingresar
+// (remito interno → "Devuelto al cliente" en LightData), sin remito con chofer ni alarma de +15 días.
+const LUGAR_PROPIO = "DEP";
+const LUGARES = [...["A", "C", "E"].flatMap((e) => [1, 2, 3, 4].map((n) => `${e}-${n}`)), "B", "D", "M", LUGAR_PROPIO];
+const NOTA_LUGAR = { B: "B · problemas", D: "D · caja", M: "M · voluminosos", [LUGAR_PROPIO]: "DEP · stock propio (se cierra solo)" };
 
 // Íconos propios de Devoluciones (18/11/2026): trazo fino, mismo estilo que IcoScan
 const svgP = (size, d) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
