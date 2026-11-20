@@ -4,12 +4,14 @@ import jsQR from "jsqr";
 import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara } from "./camaraQR";
-import { leerEtiqueta, envioCoincide, filtroEnvios } from "./dobleBultoShared";
+import { leerEtiqueta, envioCoincide, filtroEnvios, diaAR } from "./dobleBultoShared";
 import { zonaPalermo, CARRITOS, FILTRO_RECUADRO } from "./palermoShared";
 
 // Palermo A/B — pedido de Alejo (20/11/2026). Se escanea el QR del paquete y la pantalla dice en qué
 // carrito va (A o B) según la latitud/longitud del envío en LightData (columna nueva de envios_busqueda,
-// migración 20261120220000). El corte vive en palermoShared.js. No escribe nada: solo lee y muestra.
+// migración 20261120220000). El corte vive en palermoShared.js.
+// Cada escaneo se guarda en palermo_escaneos (una fila por envío y día, migración 20261120233000):
+// el contador es del DÍA y es el mismo en todos los celulares. Si la tabla no existe, cuenta solo en el celu.
 //
 // Para que sea instantáneo, al abrir se precargan los envíos de la caché que caen en el recuadro de
 // Palermo; si un código no está en la precarga, se busca puntual en envios_busqueda.
@@ -17,7 +19,10 @@ import { zonaPalermo, CARRITOS, FILTRO_RECUADRO } from "./palermoShared";
 const COLS = "id_interno,tracking,id_venta_ml,razon_social,direccion,localidad,cp,cadete,latitud,longitud";
 const COLS_SIN_COORD = "id_interno,tracking,id_venta_ml,razon_social,direccion,localidad,cp,cadete";
 const faltaColumna = (e) => /latitud|longitud|42703|PGRST204/i.test(String(e && e.message));
-const AUTO_SIGUE_MS = 1400; // A/B: la cámara sigue sola; los avisos esperan un toque
+const AUTO_SIGUE_MS = 1400;
+const REFRESCO_MS = 15000; // el contador compartido se actualiza solo cada 15 s
+const sinTabla = (e) => /palermo_escaneos|relation|schema cache|PGRST205|42P01/i.test(String(e && e.message));
+const hoyAR = () => diaAR(new Date().toISOString()); // A/B: la cámara sigue sola; los avisos esperan un toque
 
 // ---------- datos ----------
 const claves = (e) => [e.tracking, e.id_interno, e.id_venta_ml].map((v) => String(v || "").trim().toLowerCase()).filter(Boolean);
@@ -58,8 +63,12 @@ export default function PalermoAB() {
   const [escaner, setEscaner] = useState(() => /[?&]escanear=1/.test(window.location.search));
   const [pre, setPre] = useState({ estado: "cargando", n: 0, at: null });
   const mapaRef = useRef(new Map());
-  const [sesion, setSesion] = useState({ A: 0, B: 0, otros: 0, lista: [] });
-  const vistos = useRef(new Set());
+  // Escaneos de HOY (servidor + los recién hechos en este celu que todavía no subieron)
+  const [hoy, setHoy] = useState({ dia: hoyAR(), filas: [] });
+  const [tabla, setTabla] = useState("ok"); // ok | falta | red
+  const [pendientes, setPendientes] = useState(0);
+  const locales = useRef(new Map()); // codigo → fila local hasta que el servidor la devuelva
+  const hoyRef = useRef(hoy); hoyRef.current = hoy;
 
   const cargar = useCallback(async () => {
     try {
@@ -76,16 +85,61 @@ export default function PalermoAB() {
     window.history.replaceState(null, "", window.location.pathname + window.location.hash);
   }, []);
 
-  const anotar = useCallback((codigo, tipo, env, manual) => {
-    if (vistos.current.has(codigo)) return false;
-    vistos.current.add(codigo);
-    setSesion((s) => ({
-      A: s.A + (tipo === "A" ? 1 : 0), B: s.B + (tipo === "B" ? 1 : 0), otros: s.otros + (tipo !== "A" && tipo !== "B" ? 1 : 0),
-      lista: [{ codigo, tipo, dir: dirDe(env), manual: !!manual }, ...s.lista].slice(0, 200),
-    }));
-    return true;
+  // Junta lo del servidor con lo local (lo local manda: es lo último que se escaneó en este celu)
+  const fusionar = useCallback((dia, delServidor) => {
+    const m = new Map((delServidor || []).map((f) => [f.codigo, f]));
+    for (const [c, f] of locales.current) { if (f.dia !== dia) locales.current.delete(c); else m.set(c, f); }
+    return [...m.values()].sort((a, b) => String(b.escaneado_at).localeCompare(String(a.escaneado_at)));
   }, []);
-  const reiniciar = () => { vistos.current = new Set(); setSesion({ A: 0, B: 0, otros: 0, lista: [] }); };
+
+  const traerHoy = useCallback(async () => {
+    const dia = hoyAR();
+    try {
+      const rows = await sbFetch(`palermo_escaneos?dia=eq.${dia}&select=codigo,carrito,tipo,manual,direccion,escaneado_por,escaneado_at&order=escaneado_at.desc&limit=3000`);
+      setTabla("ok");
+      setHoy({ dia, filas: fusionar(dia, rows) });
+    } catch (e) {
+      setTabla(sinTabla(e) ? "falta" : "red");
+      setHoy((h) => ({ dia, filas: fusionar(dia, h.dia === dia ? h.filas.filter((f) => !locales.current.has(f.codigo)) : []) }));
+    }
+  }, [fusionar]);
+  useEffect(() => { traerHoy(); const t = setInterval(traerHoy, REFRESCO_MS); return () => clearInterval(t); }, [traerHoy]);
+
+  async function subir(fila, intento = 0) {
+    try {
+      await sbFetch("palermo_escaneos?on_conflict=dia,codigo", {
+        method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify([fila]),
+      });
+      locales.current.delete(fila.codigo);
+      return true;
+    } catch (e) {
+      if (sinTabla(e)) { setTabla("falta"); return false; } // queda contado solo en este celu
+      if (intento < 3) { await new Promise((ok) => setTimeout(ok, 1500 * (intento + 1))); return subir(fila, intento + 1); }
+      setTabla("red");
+      return false;
+    }
+  }
+
+  // Registra el paquete en el carrito (o sin carrito). Devuelve false si ya estaba hoy con el mismo carrito.
+  const anotar = useCallback((codigo, tipo, env, manual) => {
+    const dia = hoyAR();
+    const carrito = tipo === "A" || tipo === "B" ? tipo : null;
+    const previo = hoyRef.current.filas.find((f) => f.codigo === codigo);
+    if (previo && previo.carrito === carrito && !manual) return false;
+    const yo = (() => { const s = getSession(); return (s && (s.nombre || s.email)) || "equipo"; })();
+    const fila = { dia, codigo, carrito, tipo, manual: !!manual, direccion: dirDe(env) || null, cliente: (env && env.razon_social) || null, escaneado_por: yo, escaneado_at: new Date().toISOString() };
+    locales.current.set(codigo, fila);
+    setHoy((h) => ({ dia, filas: fusionar(dia, h.dia === dia ? h.filas : []) }));
+    setPendientes((n) => n + 1);
+    subir(fila).finally(() => setPendientes((n) => n - 1));
+    return !previo;
+  }, [fusionar]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sesion = {
+    A: hoy.filas.filter((f) => f.carrito === "A").length,
+    B: hoy.filas.filter((f) => f.carrito === "B").length,
+    otros: hoy.filas.filter((f) => !f.carrito).length,
+  };
 
   const total = sesion.A + sesion.B;
   return (
@@ -100,6 +154,8 @@ export default function PalermoAB() {
 
       {pre.estado === "migracion" && <div className="pab-card pab-alerta">Falta agregar latitud y longitud a <code>envios_busqueda</code> (migración <code>20261120220000</code>). Hasta entonces la pantalla no puede decir el carrito.</div>}
       {pre.estado === "sesion" && <div className="pab-card pab-alerta">Entrá con tu usuario desde Inicio para poder consultar los envíos.</div>}
+      {tabla === "falta" && <div className="pab-card pab-alerta">Falta crear la tabla <code>palermo_escaneos</code> (migración <code>20261120233000</code>): por ahora el contador es solo de este celular.</div>}
+      {tabla === "red" && <div className="pab-card pab-alerta">Hay escaneos que no se pudieron guardar (sin señal). Siguen contados en este celular y se reintenta solo.</div>}
       {pre.estado === "red" && <div className="pab-card pab-alerta">No se pudieron traer los envíos. Igual podés escanear: cada paquete se busca en el momento. <button className="pab-link" onClick={cargar}>Reintentar</button></div>}
 
       <div className="pab-carros">
@@ -107,7 +163,7 @@ export default function PalermoAB() {
           <div key={z} className="pab-carro" style={{ "--c": CARRITOS[z].color }}>
             <div className="pab-letra">{z}</div>
             <div style={{ minWidth: 0 }}>
-              <div className="pab-n">{sesion[z]}<small>{total ? ` · ${Math.round((sesion[z] / total) * 100)}%` : ""}</small></div>
+              <div className="pab-n">{sesion[z]}<small> hoy{total ? ` · ${Math.round((sesion[z] / total) * 100)}%` : ""}</small></div>
               <div className="pab-barrios">{CARRITOS[z].barrios}</div>
             </div>
           </div>
@@ -123,13 +179,14 @@ export default function PalermoAB() {
         </div>
       </div>
 
-      {sesion.lista.length > 0 && (
+      {hoy.filas.length > 0 && (
         <div className="pab-card">
-          <div className="pab-lhead"><b>Escaneados ahora</b><span>{sesion.lista.length}{sesion.otros ? ` · ${sesion.otros} sin carrito` : ""}</span><button className="pab-link" onClick={reiniciar}>Empezar de cero</button></div>
-          {sesion.lista.slice(0, 40).map((x) => (
+          <div className="pab-lhead"><b>Escaneados hoy</b><span>{hoy.filas.length}{sesion.otros ? ` · ${sesion.otros} sin carrito` : ""}{pendientes > 0 ? " · guardando…" : ""}</span></div>
+          {hoy.filas.slice(0, 60).map((x) => (
             <div key={x.codigo} className="pab-fila">
-              <span className={"pab-chip t-" + x.tipo}>{x.tipo === "A" || x.tipo === "B" ? x.tipo : "?"}</span>
-              <span className="pab-fdir">{x.dir || `Envío ${x.codigo}`}{x.manual ? " · elegido a mano" : ""}</span>
+              <span className={"pab-chip t-" + (x.carrito || "x")}>{x.carrito || "–"}</span>
+              <span className="pab-fdir">{x.direccion || `Envío ${x.codigo}`}{x.manual ? " · elegido a mano" : ""}</span>
+              <span className="pab-quien">{x.escaneado_por || ""}</span>
             </div>
           ))}
         </div>
@@ -183,6 +240,7 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
   }, [mapaRef, mostrar]);
 
   function elegir(z) { if (res) anotar(res.codigo, z, res.env, true); seguir(); }
+  function ninguno() { if (res) anotar(res.codigo, res.tipo, res.env, false); seguir(); }
 
   // Cámara + lectura cada ~250 ms (BarcodeDetector si existe; si no, jsQR — iPhone). Igual que Doble bulto.
   useEffect(() => {
@@ -296,7 +354,7 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
               <button style={{ background: CARRITOS.B.color }} onClick={() => elegir("B")}>Lo puse en B</button>
             </div>
           )}
-          <button className="pab-hoja-sig" onClick={seguir}>{res.tipo === "fuera" ? "Siguiente" : "Ninguno · siguiente"}</button>
+          <button className="pab-hoja-sig" onClick={ninguno}>{res.tipo === "fuera" ? "Siguiente" : "Ninguno · siguiente"}</button>
         </div>
       )}
     </div>,
@@ -326,7 +384,8 @@ const CSS = `
 .pab-fila{display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,.05);font-size:14px}
 .pab-chip{width:26px;height:26px;flex:none;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;background:rgba(255,255,255,.1);color:#f4f5fa}
 .pab-chip.t-A{background:#0a9b5b;color:#fff}.pab-chip.t-B{background:#e8650a;color:#fff}
-.pab-fdir{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c9cbe0}
+.pab-fdir{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c9cbe0}
+.pab-quien{font-size:12px;color:#71768e;white-space:nowrap}
 @media (max-width:600px){.pab-carros{gap:8px}.pab-carro{padding:10px;gap:10px}.pab-letra{width:44px;height:44px;font-size:26px}.pab-n{font-size:24px}}
 .pab-esc{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:90;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,'Segoe UI',sans-serif}
 .pab-esc-abriendo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.55);font-size:15px}

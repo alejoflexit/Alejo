@@ -8,7 +8,7 @@
 - Corte aprobado: **por Malabia**. A = al sureste de Malabia (Córdoba → Santa Fe) y, del otro lado de Santa Fe, al este de Av. Sarmiento (Plaza Italia → río). B = resto de Palermo. Con los 467 envíos de Palermo del 1 al 20/11 da 259 A / 208 B.
 - La zona sale de **Latitud/Longitud de LightData** (vienen en el export). Coordenada 0 o vacía = sin ubicación.
 - Afuera del recuadro de Palermo → "No es de Palermo".
-- La pantalla **no escribe nada** en Supabase ni en LightData: solo lee `envios_busqueda`. Los contadores son de la sesión del celu.
+- **Contador del día compartido (Alejo, 20/11):** cada escaneo se guarda en `palermo_escaneos` (una fila por envío y día de Argentina; re-escanear el mismo día actualiza, no duplica). Todos los celulares ven el mismo total; se refresca cada 15 s y vuelve a cero solo al cambiar el día. Si la tabla no existe, cuenta solo en el celu y lo avisa. No escribe en LightData.
 - Sin ubicación / no está en LightData: se muestra la dirección y se elige a mano ("Lo puse en A/B") — solo suma al contador del celu.
 - B suena doble y A simple: se distingue sin mirar la pantalla.
 - Permiso: igual que Doble bulto (lo ve quien ve Devoluciones).
@@ -19,6 +19,7 @@
 - `src/PalermoAB.js` — pantalla y escáner.
 - `src/App.js`, `src/Home.js`, `src/permisos.js` — registro de la sección `#palermo`.
 - `supabase/migrations/20261120220000_envios_busqueda_coordenadas.sql` — columnas `latitud`, `longitud` + índice.
+- `supabase/migrations/20261120233000_palermo_escaneos.sql` — tabla del registro/contador del día (RLS authenticated: leer, cargar, corregir).
 - `automation/sync_envios_agente.js` — guarda Latitud/Longitud; si falta la migración, reintenta sin coordenadas (no frena la caché).
 
 ## Orden de despliegue
