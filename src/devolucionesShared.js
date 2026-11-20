@@ -29,7 +29,7 @@ export function diasDesde(iso, ahora = Date.now()) {
 }
 
 // Nombre corto del tipo para mostrar
-export const tipoTxt = (t) => (t === "CAMBIO" ? "Cambio" : t === "NO_ENTREGADO" ? "No entregado" : t ? "Cancelado" : "—");
+export const tipoTxt = (t) => (t === "CAMBIO" ? "Cambio" : t === "NO_ENTREGADO" ? "No entregado" : t === "DUPLICADO" ? "Duplicado" : t ? "Cancelado" : "—");
 export function armarCaso(d, g = {}, ahora = Date.now()) {
   const tipo = g.tipo_override || d.tipo;
   if (tipo === "NO_ES") return null;
@@ -432,7 +432,9 @@ export function estadoLD(c) {
 export function datosDuplicado(it) {
   const m = String((it && it.nota) || "").match(/^DUPLICADO del envío #(\d+) \(([^·)]+?)(?: · ([^)]*))?\)\.\s*(.*)$/);
   if (!m) return null;
-  return { id: it.id, did: Number(m[1]), cliente: m[2].trim(), direccion: (m[3] || "").trim(), detalle: m[4].replace(/Devolver al seller\.?/, "").trim(), cadete: it.cadete || "", desde: it.creado_at, por: it.creado_por || "", estado: it.estado };
+  // remito al que se sumó (20/11/2026): el último registro de notas con "remito"
+  const enRem = (it.notas || []).filter((n) => n && n.remito).pop();
+  return { id: it.id, did: Number(m[1]), cliente: m[2].trim(), direccion: (m[3] || "").trim(), detalle: m[4].replace(/Devolver al seller\.?/, "").trim(), cadete: it.cadete || "", desde: it.creado_at, por: it.creado_por || "", estado: it.estado, remito: enRem ? enRem.remito : null, notas: it.notas || [] };
 }
 export function duplicadosEnDeposito(items) {
   return (items || []).filter((x) => x.estado === "pendiente").map(datosDuplicado).filter(Boolean);

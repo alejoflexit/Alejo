@@ -9,7 +9,7 @@ import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
   progresoDelDia, metaCumplida, metaDevolver, racha, inicioSemana, trajoPorCadete, diaAR, calidadDeImagen, textoCalidad, coincideBusqueda, choferDe, tipoTxt, CAJAS_LETRA, casoDeEtiqueta, codigosDeEtiqueta, listosParaDevolver, MAX_POR_REMITO, ubicacionDe, cajaPorLetra,
-  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto, estadoLD, duplicadosEnDeposito, aResolverEnDeposito,
+  etiquetaLegible, cambiosDeEnvio, ingresosDelDia, porLugar, enReparto, estadoLD, duplicadosEnDeposito, aResolverEnDeposito, datosDuplicado, nombreClave,
 } from "./devolucionesShared";
 
 // Devoluciones — seguimiento de cancelados y cambios (logística inversa) + remitos con QR.
@@ -90,6 +90,7 @@ export default function Devoluciones({ abrirEnvio = null }) {
   const [soloSel, setSoloSel] = useState(false);
   const [abierto, setAbierto] = useState(null);
   const [sel, setSel] = useState(() => new Set());
+  const [selDup, setSelDup] = useState(() => new Set()); // duplicados elegidos para el remito (id de paquetes_gestionar)
   const [aviso, setAviso] = useState(null);
   const [ocupado, setOcupado] = useState(false);
   const [armando, setArmando] = useState(null); // { libres, previa, yaEnRemito }
@@ -463,10 +464,18 @@ export default function Devoluciones({ abrirEnvio = null }) {
     } catch { /* el mensaje ya se copió; el registro se reintenta la próxima vez */ }
     toast(via === "wa" ? `Reclamo a ${cadete.split(" ")[0]} registrado` : `Mensaje copiado. Pegalo en el WhatsApp de ${cadete.split(" ")[0]}.`);
   }
-  function armarRemitos(cs) {
+  // Duplicados en el remito (20/11/2026): van como filas "Duplicado" del remito de su seller, pero NO entran en
+  // dids (al firmarse, el workflow pasaría el envío ORIGINAL —ya entregado— a "Devuelto al cliente").
+  // Quedan atados al remito en sus notas y se cierran solos cuando el remito vuelve firmado.
+  const dupsElegidos = () => duplicadosEnDeposito(datos ? datos.gestionar : []).filter((d) => selDup.has(d.id) && !remitoAbiertoDe(d.remito));
+  function remitoAbiertoDe(codigo) { if (!codigo) return null; const r = (datos ? datos.rem : []).find((x) => x.codigo === codigo); return r && r.estado !== "anulado" ? r : null; }
+  function armarRemitos(cs, dups = dupsElegidos()) {
     const libres = cs.filter((c) => !remitoDe.has(c.did));
-    if (!libres.length) { toast("Esos envíos ya están en un remito abierto"); return; }
-    setArmando({ libres, previa: agruparParaRemitos(libres), yaEnRemito: cs.length - libres.length });
+    const nombres = new Map(libres.map((c) => [nombreClave(c.cliente), c.cliente]));
+    const virtuales = dups.map((d) => ({ did: d.did, cliente: nombres.get(nombreClave(d.cliente)) || d.cliente, tipo: "DUPLICADO", direccion: d.direccion, ml_venta_id: null, tracking: `#${d.did} (duplicado)`, dup: d }));
+    if (!libres.length && !virtuales.length) { toast("Esos envíos ya están en un remito abierto"); return; }
+    const todos = [...libres, ...virtuales];
+    setArmando({ libres: todos, previa: agruparParaRemitos(todos), yaEnRemito: cs.length - libres.length });
   }
   async function confirmarArmado(chofer) {
     const { libres } = armando;
@@ -479,18 +488,35 @@ export default function Devoluciones({ abrirEnvio = null }) {
       const grupos = agruparParaRemitos(libres);
       const creados = [];
       for (const g of grupos) {
-        const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify({ cliente: g.cliente, dids: g.casos.map((c) => c.did), creado_por: yo(), chofer: chofer || null }) });
+        const reales = g.casos.filter((c) => !c.dup);
+        const [row] = await sbFetch("remitos_devolucion", { method: "POST", body: JSON.stringify({ cliente: g.cliente, dids: reales.map((c) => c.did), creado_por: yo(), chofer: chofer || null }) });
+        for (const c of g.casos.filter((x) => x.dup)) {
+          await sbFetch(`paquetes_gestionar?id=eq.${c.dup.id}`, { method: "PATCH", body: JSON.stringify({ notas: [...(c.dup.notas || []), { texto: `En remito ${row.codigo}`, remito: row.codigo, por: yo(), at: new Date().toISOString() }] }) });
+        }
         creados.push({ ...row, casos: g.casos, ubicacion: ubicacionDe(g.cliente, ubic).codigo });
       }
       registrar("remito_armado", creados.length, null, { codigos: creados.map((x) => x.codigo), envios: libres.length, chofer: chofer || null });
       await imprimirRemitos(creados, w);
       toast(`${creados.length} remito${creados.length > 1 ? "s" : ""} generado${creados.length > 1 ? "s" : ""} (uno por cliente). También quedan en la pestaña Remitos.`);
-      setSel(new Set()); await cargar();
+      setSel(new Set()); setSelDup(new Set()); await cargar();
     } catch (e) { if (w) w.close(); toast("No se pudo armar el remito: " + String(e.message).slice(0, 100)); }
     setOcupado(false);
   }
   const choferes = useMemo(() => [...new Set(casos.map((c) => c.cadete).filter((n) => n && !CHOFER_FICTICIO.test(n)))].sort((a, b) => a.localeCompare(b)), [casos]);
-  const casosDeRemito = (rem) => { const m = new Map(casos.map((c) => [Number(c.did), c])); return (rem.dids || []).map((d) => m.get(Number(d)) || { did: d }); };
+  const casosDeRemito = (rem) => {
+    const m = new Map(casos.map((c) => [Number(c.did), c]));
+    const dups = (datos ? datos.gestionar : []).map(datosDuplicado).filter((d) => d && d.remito === rem.codigo)
+      .map((d) => ({ did: d.did, cliente: d.cliente, tipo: "DUPLICADO", direccion: d.direccion, tracking: `#${d.did} (duplicado)`, dup: d }));
+    return [...(rem.dids || []).map((d) => m.get(Number(d)) || { did: d }), ...dups];
+  };
+  // Cuando el remito vuelve firmado (devuelto), sus duplicados se cierran solos
+  useEffect(() => {
+    if (!datos) return;
+    const listos = duplicadosEnDeposito(datos.gestionar).filter((d) => d.remito && (datos.rem || []).some((r) => r.codigo === d.remito && r.estado === "devuelto"));
+    if (!listos.length) return;
+    Promise.all(listos.map((d) => sbFetch(`paquetes_gestionar?id=eq.${d.id}`, { method: "PATCH", body: JSON.stringify({ estado: "resuelto", resolucion: `Duplicado devuelto al seller (remito ${d.remito})`, resuelto_por: "remito firmado", resuelto_at: new Date().toISOString() }) }).catch(() => null)))
+      .then(() => cargar());
+  }, [datos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function actualizar() {
     const j = await pedirAccion("sync");
@@ -650,13 +676,18 @@ export default function Devoluciones({ abrirEnvio = null }) {
             })}
             {dupsDeposito.map((d) => (
               <div key={"dup" + d.id} className="dv-fila" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
+                {!remitoAbiertoDe(d.remito)
+                  ? <input type="checkbox" checked={selDup.has(d.id)} onChange={() => setSelDup((x) => { const n = new Set(x); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n; })} aria-label={`Elegir duplicado ${d.cliente} para el remito`} style={{ width: 16, height: 16, accentColor: C.teal, flexShrink: 0 }} />
+                  : <span style={{ width: 16, flexShrink: 0 }} />}
                 <span className="dv-loc" title="Los duplicados van a la caja B">B</span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <b>{d.cliente}</b> <span className="dv-tag" style={{ borderColor: "rgba(245,192,68,.4)", color: C.ambar }}>Duplicado</span>
                   <span style={{ display: "block", fontSize: 12.5, color: C.ink2, marginTop: 2 }}>{d.direccion || "—"}</span>
                   <span style={{ display: "block", fontSize: 12, color: C.ink3, marginTop: 2 }}>#{d.did} · {d.detalle}{d.cadete ? ` · lo trajo ${d.cadete}` : ""} · {fecha(d.desde)}</span>
                 </span>
-                <button className="dv-btn" style={{ flexShrink: 0 }} onClick={() => dupDevuelto(d)} title="Marcarlo como devuelto al seller (no toca LightData: el envío original ya está bien)">Devuelto al seller</button>
+                {remitoAbiertoDe(d.remito)
+                  ? <span className="dv-tag" style={{ flexShrink: 0 }} title="Se cierra solo cuando el remito vuelva firmado">En remito {d.remito}</span>
+                  : <button className="dv-btn" style={{ flexShrink: 0 }} onClick={() => dupDevuelto(d)} title="Marcarlo como devuelto al seller sin remito (no toca LightData: el envío original ya está bien)">Devuelto al seller</button>}
               </div>
             ))}
             {lista.length === 0 && !dupsDeposito.length && !resolverDeposito.length && !enOtras.length && <div style={{ padding: 28, textAlign: "center", color: C.ink3, fontSize: 14 }}>Nada en esta vista.</div>}
@@ -670,9 +701,9 @@ export default function Devoluciones({ abrirEnvio = null }) {
             {lista.length > 400 && <div style={{ padding: 12, textAlign: "center", color: C.ink3, fontSize: 12 }}>Mostrando 400 de {num(lista.length)}. Usá el buscador para acotar.</div>}
           </div>
 
-          {seleccionados.length > 0 && (
+          {(seleccionados.length > 0 || selDup.size > 0) && (
             <div className="dv-barra">
-              <span><b>{seleccionados.length}</b> seleccionado{seleccionados.length > 1 ? "s" : ""}{(() => {
+              <span><b>{seleccionados.length + selDup.size}</b> seleccionado{seleccionados.length + selDup.size > 1 ? "s" : ""}{selDup.size ? <span style={{ color: C.ink3, fontWeight: 400 }}> ({selDup.size} duplicado{selDup.size > 1 ? "s" : ""})</span> : null}{(() => {
                 const porEtapa = {};
                 seleccionados.forEach((c) => { porEtapa[c.etapa] = (porEtapa[c.etapa] || 0) + 1; });
                 const partes = Object.entries(porEtapa);
@@ -680,12 +711,12 @@ export default function Devoluciones({ abrirEnvio = null }) {
               })()}</span>
               <button className={"dv-btn" + (soloSel ? " on" : "")} onClick={() => setSoloSel(!soloSel)} title="Mostrar solo lo seleccionado">{soloSel ? "Ver todos" : "Ver seleccionados"}</button>
               <div style={{ flex: 1 }} />
-              {seleccionados.some((c) => c.etapa === "deposito") && <button className="dv-btn pri" disabled={ocupado} onClick={() => armarRemitos(seleccionados.filter((c) => c.etapa === "deposito"))}>Armar remito</button>}
+              {(seleccionados.some((c) => c.etapa === "deposito") || selDup.size > 0) && <button className="dv-btn pri" disabled={ocupado} onClick={() => armarRemitos(seleccionados.filter((c) => c.etapa === "deposito"))}>Armar remito</button>}
               {seleccionados.some((c) => (c.etapa === "calle" || c.etapa === "retiro") && !c.ingreso_deposito_at) && (
                 <button className="dv-btn pri" disabled={ocupado} onClick={() => marcarIngreso(seleccionados.filter((c) => (c.etapa === "calle" || c.etapa === "retiro") && !c.ingreso_deposito_at))}>Pasar a depósito</button>
               )}
               <EtiquetaMenu onElegir={(m) => etiquetar(seleccionados, m)} disabled={ocupado} />
-              <button className="dv-btn" onClick={() => { setSel(new Set()); setSoloSel(false); }}>Cancelar</button>
+              <button className="dv-btn" onClick={() => { setSel(new Set()); setSelDup(new Set()); setSoloSel(false); }}>Cancelar</button>
             </div>
           )}
         </>
