@@ -33,7 +33,7 @@ export const EscPastilla = ({ children, onClick }) => (onClick
   ? <button className="esc-pill" onClick={onClick}>{children}</button>
   : <span className="esc-pill">{children}</span>);
 
-// Esquinas del visor
+// Esquinas del visor: casi invisibles (pedido de Alejo 20/11); se marcan solo al leer una etiqueta
 export const EscMarco = ({ estado }) => <div className={"esc-marco" + (estado ? " " + estado : "")}><i /><i /><i /><i /></div>;
 
 // Mensaje flotante sobre la cámara (vidrio)
@@ -95,11 +95,11 @@ export const ESC_CSS = `
 .esc-pill{height:32px;padding:0 12px;border-radius:16px;color:#fff;font:inherit;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:default}
 button.esc-pill{cursor:pointer}
 .esc-marco{position:absolute;left:50%;top:44%;width:min(60vw,240px);aspect-ratio:1/1;transform:translate(-50%,-50%);pointer-events:none}
-.esc-marco i{position:absolute;width:34px;height:34px;border:0 solid rgba(255,255,255,.95);transition:border-color .15s}
-.esc-marco i:nth-child(1){left:0;top:0;border-left-width:3px;border-top-width:3px;border-top-left-radius:22px}
-.esc-marco i:nth-child(2){right:0;top:0;border-right-width:3px;border-top-width:3px;border-top-right-radius:22px}
-.esc-marco i:nth-child(3){left:0;bottom:0;border-left-width:3px;border-bottom-width:3px;border-bottom-left-radius:22px}
-.esc-marco i:nth-child(4){right:0;bottom:0;border-right-width:3px;border-bottom-width:3px;border-bottom-right-radius:22px}
+.esc-marco i{position:absolute;width:28px;height:28px;border:0 solid rgba(255,255,255,.18);transition:border-color .2s}
+.esc-marco i:nth-child(1){left:0;top:0;border-left-width:2px;border-top-width:2px;border-top-left-radius:22px}
+.esc-marco i:nth-child(2){right:0;top:0;border-right-width:2px;border-top-width:2px;border-top-right-radius:22px}
+.esc-marco i:nth-child(3){left:0;bottom:0;border-left-width:2px;border-bottom-width:2px;border-bottom-left-radius:22px}
+.esc-marco i:nth-child(4){right:0;bottom:0;border-right-width:2px;border-bottom-width:2px;border-bottom-right-radius:22px}
 .esc-marco.ok i{border-color:#2EE6B6}.esc-marco.aviso i{border-color:#ffcc4d}
 .esc-ayuda-wrap{position:absolute;left:16px;right:16px;top:calc(44% + min(30vw,120px) + 22px);display:flex;justify-content:center;z-index:3;pointer-events:none}
 .esc-ayuda{padding:8px 14px;border-radius:18px;font-size:14px;font-weight:500;color:rgba(255,255,255,.92);text-align:center;max-width:100%}
