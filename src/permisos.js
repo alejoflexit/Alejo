@@ -54,6 +54,7 @@ export function puedeVer(id) {
   if (id === "envio") return puedeVer("tiquetera");
   if (id === "doblebulto") return puedeVer("devoluciones"); // mismo equipo de depósito (sin tocar la edge function admin-usuarios) // Buscar envío usa los mismos datos que la Tiquetera
   if (id === "extraviados") return puedeVer("devoluciones"); // mismo equipo de depósito (no requiere tocar la edge function)
+  if (id === "palermo") return puedeVer("devoluciones"); // depósito, mismo criterio que doblebulto/contingencia
   if (id === "contingencia") return puedeVer("devoluciones"); // mismo criterio que doblebulto (sin tocar la edge function admin-usuarios)
   if (id === "usuarios") return esAdmin();
   const p = permisosActuales();

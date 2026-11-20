@@ -30,6 +30,7 @@ const ICONS = {
   doblebulto: (<><rect x="2" y="12" width="9" height="9" rx="1.5" /><rect x="13" y="12" width="9" height="9" rx="1.5" /><rect x="7.5" y="3" width="9" height="9" rx="1.5" /></>),
   extraviados: (<><path d="M21 8 12 3 3 8v8l9 5 9-5Z" /><path d="M3 8l9 5 9-5M12 13v8" /><path d="m15.5 15.5 3 3m0-3-3 3" /></>),
   contingencia: (<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /><path d="m5.6 5.6 3.6 3.6M14.8 14.8l3.6 3.6M14.8 9.2l3.6-3.6M5.6 18.4l3.6-3.6" /></>),
+  palermo: (<><path d="M12 21v-6" /><path d="M12 15 6 9" /><path d="m12 15 6-6" /><path d="M6 4v5h5" /><path d="M18 4v5h-5" /></>),
   zonas: (<><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z" /><circle cx="12" cy="10" r="2.5" /></>),
   bell: (<><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></>),
   arrow: (<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>),
@@ -475,7 +476,7 @@ export default function Home({ onNav, isMobile, logo, session, onLogin, onLogout
   // Mismos grupos que el menú de App.js (NAV_GRUPOS, 13/11/2026)
   const gruposModulos = [
     { titulo: "En vivo", items: [{ id: "metricas", label: "Métricas" }, { id: "monitoreo", label: "Monitoreo" }, { id: "zonas", label: "Zonas" }, { id: "arribos", label: "Arribos" }, { id: "colectas", label: "Colectas" }] },
-    { titulo: "Depósito", items: [{ id: "devoluciones", label: "Devoluciones" }, { id: "doblebulto", label: "Doble bulto" }, { id: "extraviados", label: "Extraviados" }, { id: "pendientes", label: "Históricos" }, { id: "contingencia", label: "Contingencia" }] },
+    { titulo: "Depósito", items: [{ id: "devoluciones", label: "Devoluciones" }, { id: "doblebulto", label: "Doble bulto" }, { id: "extraviados", label: "Extraviados" }, { id: "pendientes", label: "Históricos" }, { id: "contingencia", label: "Contingencia" }, { id: "palermo", label: "Palermo A/B" }] },
     { titulo: "Atención", items: [{ id: "tiquetera", label: "Tiquetera" }, { id: "pizarra", label: "Pizarra" }] },
     { titulo: "Administración", items: [{ id: "pagos", label: "Liquidaciones", soloAdmin: true }, { id: "usuarios", label: "Usuarios", soloAdmin: true }] },
   ].map((g) => ({ ...g, items: g.items.filter((d) => (d.soloAdmin ? !!(session && esAdmin()) : true) && puedeVer(d.id)) }))

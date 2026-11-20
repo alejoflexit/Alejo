@@ -29,12 +29,14 @@ const Pizarra = lazy(() => import("./Pizarra"));
 const Devoluciones = lazy(() => import("./Devoluciones"));
 const DobleBulto = lazy(() => import("./DobleBulto"));
 const Contingencia = lazy(() => import("./Contingencia"));
+const PalermoAB = lazy(() => import("./PalermoAB"));
 const Extraviados = lazy(() => import("./Extraviados"));
-const SECCIONES_SIN_HISTORIAL = new Set(["colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "devoluciones", "doblebulto", "extraviados", "contingencia", "pagos", "usuarios"]);
+const SECCIONES_SIN_HISTORIAL = new Set(["colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "devoluciones", "doblebulto", "extraviados", "contingencia", "palermo", "pagos", "usuarios"]);
 // Abierto desde el ícono del celu: mientras baja la pantalla se ve negro (como la cámara), no la app
 const ABRE_ESCANER = typeof window !== "undefined" && /[?&]escanear=1/.test(window.location.search);
 // Acceso directo del celu (#doblebulto): pedir la pantalla ya, en paralelo con el arranque de la app
 if (typeof window !== "undefined" && window.location.hash === "#doblebulto") import("./DobleBulto");
+if (typeof window !== "undefined" && window.location.hash === "#palermo") import("./PalermoAB");
 const Usuarios = lazy(() => import("./Usuarios"));
 
 const SUPABASE_URL = "https://svlagoosmxxcsbevkrhy.supabase.co";
@@ -167,6 +169,7 @@ const NAV_GRUPOS = [
     { id: "extraviados", icon: "ti ti-package-off", label: "Extraviados" },
     { id: "pendientes", icon: "ti ti-history", label: "Pendientes históricos" },
     { id: "contingencia", icon: "ti ti-lifebuoy", label: "Contingencia" },
+    { id: "palermo", icon: "ti ti-arrows-split-2", label: "Palermo A/B" },
   ] },
   { titulo: "Atención", items: [
     { id: "tiquetera", icon: "ti ti-ticket", label: "Tiquetera" },
@@ -869,7 +872,7 @@ export default function App() {
     // Deep-link por hash (#colectas, #metricas…): lo usan los atajos del widget de Paco
     if (envioQ) return "envio";
     const h = (window.location.hash || "").replace("#", "");
-    return ["metricas", "colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "devoluciones", "doblebulto", "extraviados", "contingencia", "pagos", "usuarios", "home"].includes(h) ? h : "home";
+    return ["metricas", "colectas", "arribos", "zonas", "monitoreo", "pizarra", "tiquetera", "envio", "pendientes", "devoluciones", "doblebulto", "extraviados", "contingencia", "palermo", "pagos", "usuarios", "home"].includes(h) ? h : "home";
   });
   const [session, setSession] = useState(() => getSession());
   useEffect(() => {
@@ -917,7 +920,7 @@ export default function App() {
 
   // Título de la pestaña del navegador acorde a la sección activa
   useEffect(() => {
-    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", monitoreo: "Monitoreo", pizarra: "Pizarra", tiquetera: "Tiquetera", envio: "Buscar envío", pendientes: "Pendientes históricos", devoluciones: "Devoluciones", doblebulto: "Doble bulto", extraviados: "Extraviados", contingencia: "Contingencia", pagos: "Liquidaciones", usuarios: "Usuarios" };
+    const titulos = { metricas: "Métricas", colectas: "Colectas", arribos: "Arribos", zonas: "Zonas", monitoreo: "Monitoreo", pizarra: "Pizarra", tiquetera: "Tiquetera", envio: "Buscar envío", pendientes: "Pendientes históricos", devoluciones: "Devoluciones", doblebulto: "Doble bulto", extraviados: "Extraviados", contingencia: "Contingencia", palermo: "Palermo A/B", pagos: "Liquidaciones", usuarios: "Usuarios" };
     const base = titulos[seccion] ? `${titulos[seccion]} · Flexit` : "Flexit — Panel de operaciones";
     document.title = (comNuevos > 0 && seccion !== "pizarra") ? `(${comNuevos}) ${base}` : base;
     // al volver al home, re-sincronizar la sesión (por si se cerró dentro de Pagos)
@@ -1187,8 +1190,8 @@ export default function App() {
           <img src={FLEXIT_LOGO} alt="Flexit" style={{ width:44, height:44, objectFit:"cover" }} />
         </div>
         <div>
-          <div style={{ fontFamily:FX_FONT.display, fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{enDividida ? "Devoluciones · Arribos" : seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "doblebulto" ? "Doble bulto" : seccion === "extraviados" ? "Extraviados y rotos" : seccion === "contingencia" ? "Modo contingencia" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
-          <div style={{ fontSize:13, color:BRAND.muted }}>{enDividida ? "Las dos pantallas a la vez · cada lado se mueve por separado" : seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "devoluciones" ? "Cancelados y cambios · calle, depósito y cliente" : seccion === "doblebulto" ? "Paquetes de más de un bulto para cobrar al cliente" : seccion === "extraviados" ? "Se descuentan al cliente y, si corresponde, al transportista" : seccion === "contingencia" ? "Escanear cuando LightData no anda y pasarlo después" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
+          <div style={{ fontFamily:FX_FONT.display, fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>{enDividida ? "Devoluciones · Arribos" : seccion === "colectas" ? "Colectas Flexit" : seccion === "arribos" ? "Arribos" : seccion === "zonas" ? "Zonas" : seccion === "monitoreo" ? "Monitoreo del reparto" : seccion === "pizarra" ? "Pizarra operativa" : seccion === "tiquetera" ? "Tiquetera Flexit" : seccion === "envio" ? "Buscar envío" : seccion === "pendientes" ? "Pendientes históricos" : seccion === "devoluciones" ? "Devoluciones" : seccion === "doblebulto" ? "Doble bulto" : seccion === "extraviados" ? "Extraviados y rotos" : seccion === "contingencia" ? "Modo contingencia" : seccion === "palermo" ? "Palermo A/B" : seccion === "pagos" ? "Liquidaciones" : seccion === "usuarios" ? "Usuarios y permisos" : "Métricas Flexit"}</div>
+          <div style={{ fontSize:13, color:BRAND.muted }}>{enDividida ? "Las dos pantallas a la vez · cada lado se mueve por separado" : seccion === "colectas" ? "Gestión de colectas" : seccion === "arribos" ? "Cadetes que llegan al depósito" : seccion === "zonas" ? "Saturación por zona · en vivo" : seccion === "monitoreo" ? "Avance por cadete y salud del dato · en vivo" : seccion === "pizarra" ? "Notas del equipo · en vivo" : seccion === "tiquetera" ? "Consultas de WhatsApp · Agente" : seccion === "envio" ? "Estado e historial en vivo" : seccion === "pendientes" ? "Seguimiento de envíos sin resolver" : seccion === "devoluciones" ? "Cancelados y cambios · calle, depósito y cliente" : seccion === "doblebulto" ? "Paquetes de más de un bulto para cobrar al cliente" : seccion === "extraviados" ? "Se descuentan al cliente y, si corresponde, al transportista" : seccion === "contingencia" ? "Escanear cuando LightData no anda y pasarlo después" : seccion === "palermo" ? "En qué carrito va cada paquete" : seccion === "pagos" ? "Liquidación semanal de cadetes" : seccion === "usuarios" ? "Quién entra y qué ve cada uno" : "Control de SLA · Mercado Libre"}</div>
         </div>
         </div>
         {/* Upload compacto - solo en métricas */}
@@ -1249,6 +1252,7 @@ export default function App() {
 
       {vista === "extraviados" && <Suspense fallback={<VistaSkeleton />}><Extraviados /></Suspense>}
       {vista === "contingencia" && <Suspense fallback={<VistaSkeleton />}><Contingencia /></Suspense>}
+      {vista === "palermo" && <Suspense fallback={ABRE_ESCANER ? <div style={{ position:"fixed", inset:0, zIndex:90, background:"#000" }} /> : <VistaSkeleton />}><PalermoAB /></Suspense>}
       {vista === "doblebulto" && <Suspense fallback={ABRE_ESCANER ? <div style={{ position:"fixed", inset:0, zIndex:90, background:"#000" }} /> : <VistaSkeleton />}><DobleBulto /></Suspense>}
 
       {vista === "pagos" && <Suspense fallback={<VistaSkeleton />}><Pagos /></Suspense>}

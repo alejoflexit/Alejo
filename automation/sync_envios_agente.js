@@ -164,6 +164,7 @@ async function main() {
 
   // Mapear solo los campos que el agente necesita para buscar y responder
   const S = (v) => String(v ?? "").trim();
+  const coordenada = (v) => { const n = Number(S(v).replace(",", ".")); return Number.isFinite(n) && n !== 0 && S(v) !== "" ? n : null; };
   const envios = rows
     .map(r => ({
       id_interno: S(r["ID (Interno)"]),
@@ -186,6 +187,9 @@ async function main() {
       // real. "Fecha Flexit" en particulares es la carga de la venta en la tienda del
       // cliente y puede ser de varios dias antes.
       fecha_a_planta: S(r["Fecha a planta"]),
+      // Palermo A/B (20/11): la app elige el carrito con la ubicación. LightData a veces manda 0.
+      latitud: coordenada(r["Latitud"]),
+      longitud: coordenada(r["Longitud"]),
     }))
     .filter(e => e.id_interno); // descartar filas sin ID
 
@@ -317,13 +321,22 @@ async function main() {
 
   // Primero hace upsert de toda la tanda. Solo después elimina IDs viejos.
   // Si una inserción falla, la caché anterior sigue disponible y completa.
-  await upsertRows({
+  // Si la migración de latitud/longitud (20261120220000) todavía no se aplicó, Supabase rechaza
+  // las columnas nuevas: se reintenta sin ellas para no frenar la caché del agente de WhatsApp.
+  const guardarEnvios = (lista) => upsertRows({
     baseUrl: SUPABASE_URL,
     key: SUPABASE_KEY,
     table: "envios_busqueda",
-    rows: envios.map(envio => ({ ...envio, actualizado_at: sincronizadoAt })),
+    rows: lista.map(envio => ({ ...envio, actualizado_at: sincronizadoAt })),
     onProgress: (done, total) => console.log(`  guardados ${done}/${total}`),
   });
+  try {
+    await guardarEnvios(envios);
+  } catch (e) {
+    if (!/latitud|longitud/i.test(String(e && e.message))) throw e;
+    console.warn("⚠️ envios_busqueda no tiene latitud/longitud (falta la migración): se guarda sin coordenadas");
+    await guardarEnvios(envios.map(({ latitud, longitud, ...resto }) => resto));
+  }
 
   if (receiptRows.length > 0) {
     await upsertRows({
