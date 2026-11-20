@@ -35,3 +35,10 @@
 ## Pendiente
 - Confirmar que el Excel que baja el sync trae las columnas Latitud/Longitud (el export manual sí las trae).
 - Probar en el depósito con paquetes reales.
+
+## Diseño nuevo de los escáneres (20/11, aprobado por Alejo)
+- Referencia: lienzo "Escáneres estilo Flex" (cámara a pantalla completa estilo Flex + vidrio iOS con el degradé índigo→petróleo de la app, acento verde agua).
+- Piezas compartidas en `src/escanerUI.js` (barra de arriba, visor, hoja, barra flotante con dos contadores y botón central). Solo presentación.
+- Aplicado a: Palermo A/B (escáner + pantalla de inicio, nuevo "tipear código"), Doble bulto (botón central = lista de lo cargado; sin tipear, por pedido del 09/11) e ingreso de Devoluciones (último resultado en hoja; lista y "A revisar" desde la barra; tipear desde el botón central). Lógica de los tres sin cambios.
+- Contingencia y el escáner de remitos quedan con el diseño anterior.
+- Probado: build + E2E con cámara simulada en los tres. No probado en iPhone real.

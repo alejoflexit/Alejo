@@ -4,6 +4,7 @@ import jsQR from "jsqr";
 import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara } from "./camaraQR";
+import { ESC_CSS, EscArriba, EscPastilla, EscMarco, EscAyuda, EscBarra, EscHoja, EscEtiqueta, EscGrupo, EscFila, IcoAviso, IcoCaja, IcoLista } from "./escanerUI";
 import {
   leerEtiqueta, envioCoincide, filtroEnvios, datosDeEnvio, fechaCorta, horaCorta,
   desdeRango, hastaRango, diaAR, diasDelRango, etiquetaDia, estadoFila, textoParaExcel, resumen,
@@ -297,6 +298,7 @@ function Escaner({ onCerrar, onGuardado }) {
   const vendCache = useRef(new Map()); // sender_id → cliente, para mostrarlo al toque en esta tanda
   const pendientes = useRef(new Set());
   const [cerrando, setCerrando] = useState(false);
+  const [verLista, setVerLista] = useState(false);
 
   const procesar = useCallback((texto) => {
     if (pausa.current) return;
@@ -481,88 +483,89 @@ function Escaner({ onCerrar, onGuardado }) {
   const conError = cargados.filter((x) => x.estado === "error");
   const actual = card && card.ex ? card.ex.bultos : null;
 
+  // 20/11: mismo diseño que los otros escáneres (escanerUI). La lógica de arriba no cambió.
+  // El botón del medio abre la lista de lo cargado (acá NO va "tipear": Alejo prefiere la foto para etiquetas rotas, 09/11).
   return createPortal(
-    <div className="db-esc" onPointerDown={prepararAudio}>
-      <style>{CSS}</style>
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.55)", fontSize: 15 }}>Abriendo cámara…</div>
-      <video ref={video} playsInline muted autoPlay disablePictureInPicture className="db-esc-video"
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", opacity: 0, transition: "opacity .18s" }} />
-      <div className={"db-esc-marco" + (card ? " ok" : "")}><i /><i /><i /><i /></div>
-      <div className="db-esc-arriba">
-        <div className="db-esc-total">
-          {cargados.length
-            ? <><b>{totalBultos}</b><span>bultos · {cargados.length} paquete{cargados.length === 1 ? "" : "s"}</span></>
-            : <span className="db-esc-tit">Apuntá al QR de la etiqueta</span>}
-        </div>
-        <button className="db-esc-term" disabled={cerrando} onClick={terminar}>{cerrando ? "Guardando…" : "Cerrar"}</button>
-      </div>
+    <div className="esc" onPointerDown={prepararAudio}>
+      <style>{ESC_CSS}</style>
+      <div className="esc-abriendo">Abriendo cámara…</div>
+      <video ref={video} playsInline muted autoPlay disablePictureInPicture className="esc-video" style={{ opacity: 0 }} />
+      <div className="esc-vineta" />
+      <EscMarco estado={card ? "ok" : null} />
+      <EscArriba titulo="Doble bulto" onVolver={terminar} volverLabel={cerrando ? "Guardando" : "Cerrar"} derecha={cerrando ? <EscPastilla>Guardando…</EscPastilla> : conError.length ? <EscPastilla onClick={() => conError.forEach((x) => guardarFondo(x.l, x.info, x.bultos))}>⚠ {conError.length} reintentar</EscPastilla> : null} />
 
-      {flash && !card && <div className={"db-esc-flash" + (flash.tipo === "ok" ? "" : " aviso")}>{flash.txt}</div>}
-      {error && !card && !flash && <div className="db-esc-flash aviso">{error}</div>}
+      {!card && !verLista && (flash || error) && <EscAyuda tono={flash && flash.tipo === "ok" && !error ? "ok" : "aviso"}>{error || flash.txt}</EscAyuda>}
+      {!card && !verLista && !flash && !error && <EscAyuda>Apuntá al QR de la etiqueta</EscAyuda>}
 
-      <div className={"db-esc-abajo" + (card ? " hoja" : "")}>
-        {card ? (
-          <>
-            <div className="db-esc-cab">
-              <div style={{ minWidth: 0 }}>
-                <div className="db-esc-cli">{card.cliente || (card.buscando ? <span className="db-esc-busc">Buscando cliente…</span> : "Cliente: se completa solo")}</div>
-                <div className="db-esc-det">
-                  {card.l.codigo}
-                  {card.env && card.env.localidad ? ` · ${card.env.localidad}` : !card.buscando && !card.env ? " · todavía no está en LightData" : ""}
-                </div>
+      {card && (
+        <EscHoja titulo={card.cliente || (card.buscando ? "Buscando cliente…" : "Cliente: se completa solo")} onCerrar={soltar}>
+          <EscGrupo>
+            <EscFila k="Envío" v={card.l.codigo} />
+            <EscFila k="Destino" v={card.env && card.env.localidad ? card.env.localidad : card.buscando ? "Buscando…" : "Todavía no está en LightData"} />
+          </EscGrupo>
+          {card.ex && <EscEtiqueta icono={<IcoAviso />} tono="aviso">Ya estaba cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos} bultos. Tocá otro número para corregirlo.</EscEtiqueta>}
+          {card.mas ? (
+            <>
+              <div className="db-pasos">
+                <button className="db-paso2" onClick={() => setMas(card.mas - 1)} disabled={card.mas <= 2} aria-label="Menos">−</button>
+                <div className="db-n2"><b>{card.mas}</b><small>bultos</small></div>
+                <button className="db-paso2" onClick={() => setMas(card.mas + 1)} disabled={card.mas >= 50} aria-label="Más">+</button>
               </div>
-              <button className="db-esc-desc" onClick={soltar}>Descartar</button>
-            </div>
-            {card.ex && <div className="db-esc-ya">Ya estaba cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos} bultos. Tocá otro número para corregirlo; no se duplica.</div>}
-            {card.mas ? (
-              <>
-                <div className="db-esc-bultos">
-                  <button className="db-paso" onClick={() => setMas(card.mas - 1)} disabled={card.mas <= 2} aria-label="Menos">−</button>
-                  <div className="db-esc-n"><b>{card.mas}</b><small>bultos</small></div>
-                  <button className="db-paso" onClick={() => setMas(card.mas + 1)} disabled={card.mas >= 50} aria-label="Más">+</button>
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button className="db-num chico" onClick={() => setMas(0)}>Volver</button>
-                  <button className="db-num on" style={{ flex: 1 }} disabled={bloqueado} onClick={() => guardar(card.mas)}>{`Guardar · ${card.mas} bultos`}</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="db-esc-preg">¿Cuántos bultos? Tocá el número y se guarda.</div>
-                <div className="db-nums">
-                  {[2, 3, 4, 5, 6].map((n) => (
-                    <button key={n} className={"db-num" + ((actual ? actual === n : n === 2) ? " on" : "")} disabled={bloqueado} onClick={() => guardar(n)}>{n}</button>
-                  ))}
-                  <button className="db-num chico" disabled={bloqueado} onClick={() => setMas(Math.max(7, actual || 7))}>Más…</button>
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            {/* 09/11: sacamos el "tipeá el número" — Alejo prefiere la foto de siempre para etiquetas rotas */}
-            {conError.length > 0 && (
-              <button className="db-esc-reint" onClick={() => conError.forEach((x) => guardarFondo(x.l, x.info, x.bultos))}>
-                ⚠ {conError.length} sin guardar (sin señal). Tocá para reintentar
-              </button>
-            )}
-            {cargados.length > 0 && (
-              <div className="db-esc-lista">
-                {cargados.slice(0, 5).map((x) => (
-                  <div key={x.codigo} className="db-esc-fila">
-                    <span className={"db-esc-ico" + (x.estado === "error" ? " err" : x.estado === "guardando" ? " pend" : "")}>{x.estado === "error" ? "!" : "✓"}</span>
-                    <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.cliente || `Envío ${x.codigo}`}</span><b>{x.bultos}</b>
-                  </div>
+              <div className="esc-botones">
+                <button className="esc-btn suave" style={{ flex: "0 0 auto" }} onClick={() => setMas(0)}>Volver</button>
+                <button className="esc-btn glow-teal" disabled={bloqueado} onClick={() => guardar(card.mas)}>{`Guardar · ${card.mas} bultos`}</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <EscEtiqueta icono={<IcoCaja />}>¿Cuántos bultos? Tocá el número y se guarda.</EscEtiqueta>
+              <div className="db-nums2">
+                {[2, 3, 4, 5, 6].map((n) => (
+                  <button key={n} className={"db-num2" + ((actual ? actual === n : n === 2) ? " on" : "")} disabled={bloqueado} onClick={() => guardar(n)}>{n}</button>
                 ))}
+                <button className="db-num2 mas" disabled={bloqueado} onClick={() => setMas(Math.max(7, actual || 7))}>Más</button>
               </div>
-            )}
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </EscHoja>
+      )}
+
+      {verLista && !card && (
+        <EscHoja titulo="Cargados ahora" onCerrar={() => setVerLista(false)} cerrarLabel="Volver a la cámara">
+          {cargados.length ? (
+            <EscGrupo>
+              {cargados.slice(0, 30).map((x) => (
+                <EscFila key={x.codigo} k={<>{x.estado === "error" ? "⚠ " : ""}{x.cliente || `Envío ${x.codigo}`}</>} v={x.estado === "guardando" ? `${x.bultos} · guardando…` : `${x.bultos} bultos`} />
+              ))}
+            </EscGrupo>
+          ) : <div className="esc-nota">Todavía no cargaste ningún paquete.</div>}
+          {conError.length > 0 && <div className="esc-botones"><button className="esc-btn glow-amb" onClick={() => conError.forEach((x) => guardarFondo(x.l, x.info, x.bultos))}>Reintentar {conError.length} sin guardar</button></div>}
+        </EscHoja>
+      )}
+
+      <EscBarra
+        izq={{ n: cargados.length, label: cargados.length === 1 ? "Paquete" : "Paquetes" }}
+        der={{ n: totalBultos, label: "Bultos" }}
+        centro={<IcoLista />} centroLabel="Ver lo cargado"
+        onCentro={() => { if (!card) setVerLista((v) => !v); }}
+      />
     </div>, document.body);
 }
 
+
 const CSS = `
+.db-nums2{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding:12px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.05)}
+.db-num2{aspect-ratio:1/1;min-height:48px;border-radius:999px;border:0;background:rgba(255,255,255,.08);color:#fff;font:inherit;font-size:20px;font-weight:600;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.db-num2.on{background:#fff;color:#000}
+.db-num2.mas{font-size:14px}
+.db-num2:disabled{opacity:.45}
+.db-num2:active:not(:disabled){transform:scale(.95)}
+.db-pasos{display:flex;align-items:center;justify-content:center;gap:24px}
+.db-paso2{width:60px;height:60px;border-radius:30px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font-size:28px;line-height:1;cursor:pointer}
+.db-paso2:disabled{opacity:.3}
+.db-n2{display:flex;flex-direction:column;align-items:center;min-width:80px}
+.db-n2 b{font-size:52px;line-height:1;font-weight:700;letter-spacing:-1px}
+.db-n2 small{font-size:13px;color:rgba(255,255,255,.6)}
 .db{display:flex;flex-direction:column;gap:14px;color:#f4f5fa}
 .db-card{background:rgba(27,28,46,.72);border:1px solid rgba(255,255,255,.06);border-radius:14px;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:16px}
 .db-top{display:flex;align-items:center;justify-content:space-between;gap:16px}

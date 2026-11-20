@@ -5,6 +5,7 @@ import jsQR from "jsqr";
 import { authedFetch, getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import { FX_FONT } from "./theme";
+import { ESC_CSS, EscArriba, EscPastilla, EscMarco, EscAyuda, EscBarra, EscHoja, EscEtiqueta, EscGrupo, IcoAviso, IcoOk, IcoEstante as IcoEstanteEsc } from "./escanerUI";
 import {
   armarCasos, resumen, ordenar, MARCAS, LIMITE_CALLE, LIMITE_DEPOSITO,
   QR_PREFIJO, codigoDeQR, agruparParaRemitos, reclamosPorCadete, mensajeReclamo, CHOFER_FICTICIO,
@@ -1605,6 +1606,8 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
   const [error, setError] = useState(null);
   const [manual, setManual] = useState("");
   const [flash, setFlash] = useState(null);
+  const [actualId, setActualId] = useState(null); // la lectura que se muestra en la hoja de abajo
+  const [panel, setPanel] = useState(null); // null | "tipear" | "todos" | "revisar"
 
   async function procesar(texto) {
     const ahora = Date.now();
@@ -1657,7 +1660,11 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
   function avisar(l, ahora) {
     try { navigator.vibrate && navigator.vibrate(l.tipo === "ok" ? 60 : [40, 60, 40]); } catch {}
     setFlash(l); setTimeout(() => setFlash((f) => (f === l ? null : f)), 2200);
-    setLecturas((x) => [{ ...l, id: ahora, dondeSeller: l.donde }, ...x].slice(0, 60));
+    // La misma etiqueta que sigue en cuadro vuelve a leerse a los 4 s: un aviso repetido reemplaza al anterior (no suma)
+    setLecturas((x) => [{ ...l, id: ahora, dondeSeller: l.donde }, ...x.filter((y) => l.tipo === "ok" || !(y.titulo === l.titulo && y.sub === l.sub))].slice(0, 60));
+    setActualId(ahora);
+    // Lo que no pide decisión (entró / ya estaba) se va solo; lo que pide decisión queda hasta que se toque
+    if (l.tipo === "ok" || l.tipo === "ya") setTimeout(() => setActualId((a) => (a === ahora ? null : a)), 4000);
   }
 
   useEffect(() => {
@@ -1691,68 +1698,107 @@ function IngresoEscaner({ casos, ubic = {}, onIngresar, onIngresarOtro, onDuplic
     return () => { vivo = false; clearInterval(timer); if (stream) stream.getTracks().forEach((t) => t.stop()); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 20/11: diseño nuevo (escanerUI), misma lógica. El último resultado se muestra en una hoja abajo;
+  // la lista completa se abre desde la barra (Ingresados / A revisar) y "tipear" desde el botón del medio.
   const nOk = lecturas.filter((l) => l.tipo === "ok").length;
-  return createPortal(
-    <div className="dv-escaner">
-      <video ref={video} playsInline muted className="dv-escaner-video" />
-      <div className={"dv-escaner-marco" + (flash && flash.tipo === "ok" ? " ok" : flash ? " aviso" : "")} />
-      <div className="dv-escaner-arriba">
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700 }}>Ingreso a depósito</div>
-          <div style={{ fontSize: 13, opacity: .8, marginTop: 2 }}>Apuntá a la etiqueta del paquete (QR o código de barras). Entra solo.</div>
-        </div>
-        <button className="dv-btn" onClick={onCerrar} style={{ background: "rgba(0,0,0,.5)" }}>Terminar ({nOk})</button>
-      </div>
-      {flash && <div className={"dv-escaner-flash " + (flash.tipo === "ok" ? "" : flash.tipo === "ya" ? "info" : "aviso")}><b>{flash.tipo === "ok" ? "✓ " : ""}{flash.titulo}</b>{flash.donde && <div className="dv-donde">Guardalo en <b>{flash.donde}</b></div>}{flash.sub && <div style={{ fontSize: 13, opacity: .85, marginTop: 2 }}>{flash.sub}</div>}</div>}
-      {error && !flash && <div className="dv-escaner-flash aviso">{error}</div>}
-      <div className="dv-ing-abajo">
-        <form onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { ultimo.current = { t: "", at: 0 }; procesar(manual.trim()); setManual(""); } }} style={{ display: "flex", gap: 8 }}>
-          <input className="dv-input" style={{ flex: 1, background: "rgba(0,0,0,.55)" }} inputMode="text" placeholder="Etiqueta rota: tipeá venta, tracking o #envío" value={manual} onChange={(e) => setManual(e.target.value)} />
-          <button className="dv-btn pri" type="submit">Ingresar</button>
-        </form>
-        {lecturas.length > 0 && (
-          <div className="dv-ing-lista">
-            {lecturas.slice(0, 6).map((l) => (
-              <div key={l.id} className="dv-ing-fila">
-                <span className={"dv-tanda-ico " + (l.tipo === "ok" ? "ok" : l.tipo === "no" ? "mal" : "")}>{l.tipo === "ok" ? "✓" : l.tipo === "no" ? "!" : l.tipo === "elegir" || l.tipo === "reparto" ? "?" : "·"}</span>
-                <span style={{ minWidth: 0, flex: 1 }}><b style={{ fontSize: 13 }}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</b>
-                  <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontSize: 12, opacity: .75, overflow: "hidden", lineHeight: 1.35 }}>{l.sub}</span>
-                  {l.candidatos && l.candidatos.map((k) => (
-                    <button key={k.did} className="dv-btn" style={{ display: "block", width: "100%", textAlign: "left", marginTop: 6, background: "rgba(0,0,0,.5)", fontSize: 12 }}
-                      onClick={() => { setLecturas((x) => x.filter((y) => y.id !== l.id)); procesarCaso(k, Date.now(), `por la etiqueta del envío original`); }}>
-                      Es este: #{k.did} · {String(k.direccion || "").split(/\s\/\s|Referencia/)[0]}
-                    </button>))}
-                </span>
-                {l.tipo === "ok" && l.did && onLugar && (
-                  <select className="dv-input" aria-label="Cambiar el lugar" style={{ flexShrink: 0, height: 32, maxWidth: 110, background: "rgba(0,0,0,.55)", color: "#fff" }} value={l.manual || ""}
-                    onChange={(e) => { const v = e.target.value; onLugar(l.did, v); setLecturas((x) => x.map((y) => (y.id === l.id ? { ...y, manual: v, donde: v || y.dondeSeller || y.donde } : y))); }}>
-                    <option value="">{l.dondeSeller || l.donde}</option>
-                    {codigosLugar.filter((x) => x !== (l.dondeSeller || l.donde)).map((x) => <option key={x} value={x}>{x}</option>)}
-                  </select>
-                )}
-                {l.tipo === "reparto" && l.abierto && (
-                  <span style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
-                    <button className="dv-btn pri" style={{ fontSize: 12 }} onClick={() => resolverReparto(l, "resolver")} title="Queda en el depósito para consultar con el seller si vuelve a salir. En LightData pasa a “Quedo en el Deposito”">A resolver</button>
-                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "ingresar")} title="Se devuelve al seller: pasa a devolución (no entregado)">Devolver al seller</button>
-                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "nada")}>Dejar</button>
-                  </span>
-                )}
-                {l.tipo === "reparto" && !l.abierto && (
-                  <span style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
-                    <button className="dv-btn pri" style={{ fontSize: 12 }} onClick={() => resolverReparto(l, "duplicado")} title="Va a A gestionar (caja B). No toca LightData: el envío sigue con el cadete">Es duplicado</button>
-                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "ingresar")} title="El cadete no lo va a entregar: pasa a depósito y LightData lo saca del cadete">No se entrega, ingresar</button>
-                    <button className="dv-btn" style={{ fontSize: 12, background: "rgba(0,0,0,.5)" }} onClick={() => resolverReparto(l, "nada")}>Dejar</button>
-                  </span>
-                )}
-                {l.dup && (
-                  <button className="dv-btn pri" style={{ fontSize: 12, flexShrink: 0 }} onClick={() => resolverReparto(l, "duplicado")} title="Va a A gestionar (caja B) para devolverlo al seller. No toca LightData">Es duplicado</button>
-                )}
-                {l.tipo === "no" && onGestionar && <button className="dv-btn" style={{ flexShrink: 0, background: "rgba(0,0,0,.5)" }} onClick={() => onGestionar(l.leido)}>A gestionar</button>}
-              </div>
-            ))}
+  const pendientes = lecturas.filter((l) => l.tipo !== "ok" && l.tipo !== "ya");
+  const actual = actualId != null ? lecturas.find((l) => l.id === actualId) : null;
+  const TITULO = { ok: "Entró a depósito", ya: "Ya estaba en depósito", no: "Revisar", reparto: "A revisar", elegir: "¿Cuál es?" };
+  const quitarDeLista = (l) => setLecturas((x) => x.filter((y) => y.id !== l.id));
+  function cambiarLugarLectura(l, v) {
+    onLugar(l.did, v);
+    setLecturas((x) => x.map((y) => (y.id === l.id ? { ...y, manual: v, donde: v || y.dondeSeller || y.donde } : y)));
+  }
+  function acciones(l) {
+    return (
+      <>
+        {l.candidatos && l.candidatos.map((k) => (
+          <button key={k.did} className="esc-btn suave" style={{ textAlign: "left", fontSize: 14 }}
+            onClick={() => { quitarDeLista(l); setActualId(null); procesarCaso(k, Date.now(), "por la etiqueta del envío original"); }}>
+            Es este: #{k.did} · {String(k.direccion || "").split(/\s\/\s|Referencia/)[0]}
+          </button>))}
+        {l.tipo === "reparto" && l.abierto && <>
+          <div className="esc-botones"><button className="esc-btn glow-amb" onClick={() => { setActualId(null); resolverReparto(l, "resolver"); }}>A resolver con el seller</button></div>
+          <div className="esc-botones">
+            <button className="esc-btn suave" onClick={() => { setActualId(null); resolverReparto(l, "ingresar"); }}>Devolver al seller</button>
+            <button className="esc-btn suave" onClick={() => { setActualId(null); resolverReparto(l, "nada"); }}>Dejar</button>
           </div>
+        </>}
+        {l.tipo === "reparto" && !l.abierto && <>
+          <div className="esc-botones"><button className="esc-btn glow-amb" onClick={() => { setActualId(null); resolverReparto(l, "duplicado"); }}>Es duplicado</button></div>
+          <div className="esc-botones">
+            <button className="esc-btn suave" onClick={() => { setActualId(null); resolverReparto(l, "ingresar"); }}>No se entrega, ingresar</button>
+            <button className="esc-btn suave" onClick={() => { setActualId(null); resolverReparto(l, "nada"); }}>Dejar</button>
+          </div>
+        </>}
+        {l.dup && <div className="esc-botones"><button className="esc-btn glow-amb" onClick={() => { setActualId(null); resolverReparto(l, "duplicado"); }}>Es duplicado</button></div>}
+        {l.tipo === "no" && onGestionar && <div className="esc-botones"><button className="esc-btn suave" onClick={() => onGestionar(l.leido)}>Cargar en “A gestionar”</button></div>}
+      </>
+    );
+  }
+  function lugar(l) {
+    if (!l.donde) return null;
+    return (
+      <>
+        <div className="esc-lugar"><span className="esc-etq" style={{ padding: 0 }}><IcoEstanteEsc />Guardalo en</span><b>{l.donde}</b></div>
+        {l.tipo === "ok" && l.did && onLugar && (
+          <label className="esc-grupo esc-fila" style={{ cursor: "pointer" }}>
+            <span className="k">Cambiar lugar</span>
+            <select className="dv-lugar-sel" aria-label="Cambiar el lugar" value={l.manual || ""} onChange={(e) => cambiarLugarLectura(l, e.target.value)}>
+              <option value="">{l.dondeSeller || l.donde}</option>
+              {codigosLugar.filter((x) => x !== (l.dondeSeller || l.donde)).map((x) => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
         )}
-      </div>
+      </>
+    );
+  }
+  return createPortal(
+    <div className="esc">
+      <style>{ESC_CSS}{`.dv-lugar-sel{background:transparent;border:0;color:rgba(255,255,255,.75);font:inherit;font-size:15px;text-align:right;max-width:55%;-webkit-appearance:none;appearance:none;cursor:pointer}.dv-lugar-sel option{background:#151626;color:#fff}`}</style>
+      <video ref={video} playsInline muted className="esc-video" />
+      <div className="esc-vineta" />
+      <EscMarco estado={actual ? (actual.tipo === "ok" ? "ok" : actual.tipo === "ya" ? null : "aviso") : null} />
+      <EscArriba titulo="Ingreso a depósito" onVolver={onCerrar} volverLabel="Terminar" derecha={<EscPastilla>{nOk} {nOk === 1 ? "ingresado" : "ingresados"}</EscPastilla>} />
+      {!actual && !panel && <EscAyuda tono={error ? "aviso" : null}>{error || "QR o código de barras · entra solo"}</EscAyuda>}
+
+      {actual && !panel && (
+        <EscHoja titulo={TITULO[actual.tipo] || "Resultado"} onCerrar={() => setActualId(null)} cerrarLabel="Cerrar">
+          <EscEtiqueta icono={actual.tipo === "ok" ? <IcoOk /> : <IcoAviso />} tono={actual.tipo === "ok" ? "ok" : actual.tipo === "ya" ? null : "aviso"}>{actual.titulo}</EscEtiqueta>
+          {actual.sub ? <div className="esc-sub">{actual.sub}</div> : null}
+          {lugar(actual)}
+          {acciones(actual)}
+        </EscHoja>
+      )}
+
+      {panel === "tipear" && (
+        <EscHoja titulo="Tipear código" onCerrar={() => setPanel(null)} cerrarLabel="Cancelar">
+          <form onSubmit={(e) => { e.preventDefault(); if (manual.trim()) { ultimo.current = { t: "", at: 0 }; procesar(manual.trim()); setManual(""); setPanel(null); } }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <input className="esc-input" autoFocus inputMode="text" placeholder="Etiqueta rota: venta, tracking o #envío" value={manual} onChange={(e) => setManual(e.target.value)} />
+            <div className="esc-botones"><button className="esc-btn glow-teal" type="submit" disabled={!manual.trim()}>Ingresar</button></div>
+          </form>
+        </EscHoja>
+      )}
+
+      {(panel === "todos" || panel === "revisar") && (
+        <EscHoja titulo={panel === "revisar" ? "A revisar" : "Escaneados ahora"} onCerrar={() => setPanel(null)} cerrarLabel="Volver a la cámara">
+          {(panel === "revisar" ? pendientes : lecturas).length === 0 && <div className="esc-nota">{panel === "revisar" ? "No hay nada para revisar." : "Todavía no escaneaste nada."}</div>}
+          {(panel === "revisar" ? pendientes : lecturas).slice(0, 40).map((l) => (
+            <div key={l.id} className="esc-grupo" style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <EscEtiqueta icono={l.tipo === "ok" ? <IcoOk /> : <IcoAviso />} tono={l.tipo === "ok" ? "ok" : l.tipo === "ya" ? null : "aviso"}>{l.titulo}{l.donde ? ` → ${l.donde}` : ""}</EscEtiqueta>
+              {l.sub ? <div className="esc-sub" style={{ fontSize: 13 }}>{l.sub}</div> : null}
+              {l.tipo === "ok" && l.did && onLugar ? lugar({ ...l, donde: null }) : null}
+              {acciones(l)}
+            </div>
+          ))}
+        </EscHoja>
+      )}
+
+      <EscBarra
+        izq={{ n: nOk, label: "Ingresados", onClick: () => setPanel((x) => (x === "todos" ? null : "todos")) }}
+        der={{ n: pendientes.length, label: "A revisar", punto: pendientes.length ? "#ffcc4d" : null, onClick: () => setPanel((x) => (x === "revisar" ? null : "revisar")) }}
+        onCentro={() => setPanel((x) => (x === "tipear" ? null : "tipear"))}
+      />
     </div>, document.body);
 }
 

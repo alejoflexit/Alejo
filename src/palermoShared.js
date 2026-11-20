@@ -60,8 +60,8 @@ export function zonaPalermo(latitud, longitud) {
 }
 
 export const CARRITOS = {
-  A: { id: "A", color: "#0a9b5b", nombre: "Carrito A", barrios: "Alto Palermo · Botánico · Palermo Chico · Soho sur" },
-  B: { id: "B", color: "#e8650a", nombre: "Carrito B", barrios: "Soho norte · Hollywood · Las Cañitas · Palermo Nuevo" },
+  A: { id: "A", color: "#1fa651", nombre: "Carrito A", barrios: "Alto Palermo · Botánico · Palermo Chico · Soho sur" },
+  B: { id: "B", color: "#f08a12", nombre: "Carrito B", barrios: "Soho norte · Hollywood · Las Cañitas · Palermo Nuevo" },
 };
 
 // Filtro PostgREST para precargar los envíos con coordenadas dentro del recuadro
