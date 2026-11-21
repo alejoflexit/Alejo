@@ -66,25 +66,42 @@ async function buscarEnVivo(codigo) {
 }
 // Sin coordenadas en LightData (21/11, caso Fitz Roy 2469): se ubica la dirección con el geocodificador de la
 // Ciudad (USIG). Va por JSONP (script) porque USIG no habilita CORS; solo se acepta un resultado de CABA.
-function geocodificarUSIG(direccion) {
-  const limpia = String(direccion || "").split(/\s\/\s|Referencia|,|\(/i)[0].replace(/\b(calle|avenida|av\.?)\s+/gi, "").trim();
-  if (!limpia || !/\d/.test(limpia)) return Promise.resolve(null);
+// Variantes de una dirección para USIG (21/11, caso "Avenida Presidente J Figueroa Alcorta 3265": USIG no
+// reconoce "Presidente J", sí "Figueroa Alcorta"). Se prueba la dirección limpia y, si no aparece, sin
+// títulos (Presidente, General, Dr…) ni iniciales sueltas, y después con las últimas palabras del nombre.
+const TITULOS = /\b(presidente|pres|general|gral|doctor|dr|teniente|tte|coronel|cnel|ingeniero|ing|intendente|capit[aá]n|cap|almirante|alte|comodoro|mariscal|obispo|monse[nñ]or|profesor|prof)\b\.?/gi;
+export function variantesDireccion(direccion) {
+  const limpia = String(direccion || "").replace(/\s*,\s*(?=\d)/g, " ").split(/\s\/\s|Referencia|,|\(|\bpiso\b|\bdepto\b|\bdpto\b/i)[0].replace(/\b(calle|avenida|av\.?|pasaje|pje\.?)\s+/gi, "").replace(/\s+/g, " ").trim();
+  const m = limpia.match(/^(.*?[^\d\s].*?)\s+(\d{1,5})\b/);
+  if (!m) return /\d/.test(limpia) ? [limpia] : [];
+  const nombre = m[1].trim(), num = m[2];
+  const sin = nombre.replace(TITULOS, " ").replace(/(^|\s)[a-záéíóúñ]\.?(?=\s|$)/gi, " ").replace(/\s+/g, " ").trim();
+  const pal = sin.split(" ").filter((w) => w && !/^(de|del|la|las|los|el|y)$/i.test(w));
+  const vs = [nombre, sin, pal.length > 2 ? pal.slice(-2).join(" ") : ""]; // no se baja a una sola palabra: "Alcorta" sola cae en Amancio Alcorta
+  return [...new Set(vs.filter(Boolean).map((v) => `${v} ${num}`))];
+}
+function consultaUSIG(texto) {
   return new Promise((ok) => {
-    const cb = "__usig" + Date.now() + Math.floor(Math.random() * 1000);
+    const cb = "__usig" + Date.now() + Math.floor(Math.random() * 100000);
     const sc = document.createElement("script");
     const fin = (v) => { clearTimeout(t); delete window[cb]; sc.remove(); ok(v); };
-    const t = setTimeout(() => fin(null), 6000);
+    const t = setTimeout(() => fin(null), 5000);
     window[cb] = (j) => {
       const d = ((j && j.direccionesNormalizadas) || []).find((x) => x.cod_partido === "caba" && x.coordenadas);
       fin(d ? { latitud: Number(d.coordenadas.y), longitud: Number(d.coordenadas.x), geocodificado: true } : null);
     };
     sc.onerror = () => fin(null);
-    sc.src = `https://servicios.usig.buenosaires.gob.ar/normalizar/?direccion=${encodeURIComponent(limpia)}&geocodificar=true&srid=4326&maxOptions=5&callback=${cb}`;
+    sc.src = `https://servicios.usig.buenosaires.gob.ar/normalizar/?direccion=${encodeURIComponent(texto)}&geocodificar=true&srid=4326&maxOptions=5&callback=${cb}`;
     document.head.appendChild(sc);
   });
 }
-// Foto del día (21/11): el bridge baja cada 60 s lo movido hoy en LightData y le pasa a la app los del
-// recuadro de Palermo. Se suma a la precarga, así un paquete que ingresó hace un rato se clasifica sin red.
+async function geocodificarUSIG(direccion) {
+  for (const v of variantesDireccion(direccion)) {
+    const g = await consultaUSIG(v);
+    if (g) return g;
+  }
+  return null;
+}
 async function traerFotoDia() {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 15000);
