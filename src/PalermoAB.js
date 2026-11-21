@@ -99,8 +99,11 @@ async function buscarCompleto(codigo, local) {
   if (local && zonaPalermo(local.latitud, local.longitud)) return local;
   // Caché y LightData en paralelo: antes se esperaba una y después la otra.
   const vivoP = buscarEnVivo(codigo);
+  // Etiqueta de LightData ya cargada pero sin coordenadas: se ubica la dirección al mismo tiempo.
+  const geoP = local && local.direccion ? geocodificarUSIG(local.direccion) : null;
   let env = local || (await buscarEnvio(codigo).catch(() => null));
   if (env && zonaPalermo(env.latitud, env.longitud)) return env;
+  if (geoP) { const g = await geoP; if (g && zonaPalermo(g.latitud, g.longitud)) return { ...env, ...g }; }
   const vivo = await vivoP;
   if (vivo) env = { ...(env || {}), ...vivo };
   if (env && !zonaPalermo(env.latitud, env.longitud) && env.direccion) {
@@ -124,6 +127,7 @@ export default function PalermoAB() {
   const [escaner, setEscaner] = useState(() => /[?&]escanear=1/.test(window.location.search));
   const [pre, setPre] = useState({ estado: "cargando", n: 0, at: null });
   const mapaRef = useRef(new Map());
+  const fotoRef = useRef([]);
   // Escaneos de HOY (servidor + los recién hechos en este celu que todavía no subieron)
   const [hoy, setHoy] = useState({ dia: hoyAR(), filas: [] });
   const [tabla, setTabla] = useState("ok"); // ok | falta | red
@@ -134,6 +138,7 @@ export default function PalermoAB() {
   const cargar = useCallback(async () => {
     try {
       const { mapa, n } = await precargar();
+      for (const e of fotoRef.current) for (const k of claves(e)) mapa.set(k, e); // la foto del bridge manda
       mapaRef.current = mapa;
       setPre({ estado: "ok", n, at: new Date() });
     } catch (e) {
@@ -147,6 +152,7 @@ export default function PalermoAB() {
     const sumar = async () => {
       const envios = await traerFotoDia();
       if (!vivo || !envios) return;
+      fotoRef.current = envios;
       const mapa = new Map(mapaRef.current);
       for (const e of envios) for (const k of claves(e)) mapa.set(k, e);
       mapaRef.current = mapa;
