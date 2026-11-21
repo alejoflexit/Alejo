@@ -53,7 +53,7 @@ jobs:
           BRIDGE_KEY: ${{ secrets.BRIDGE_KEY }}
         run: |
           test -n "$BRIDGE_KEY" || { echo "Falta el secreto BRIDGE_KEY en GitHub"; exit 1; }
-          supabase secrets set --project-ref "$PROJECT_REF" BRIDGE_KEY="$BRIDGE_KEY"
+          supabase secrets set --project-ref "$PROJECT_REF" BRIDGE_KEY="$BRIDGE_KEY" --yes
       - name: Deploy
         run: |
           for F in $FUNCIONES; do
