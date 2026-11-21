@@ -9,7 +9,10 @@ on:
     # Horarios en UTC; Buenos Aires es UTC-3. De 01 a 07 de la manana no corre:
     # nadie mira la pantalla y no hay movimiento que sincronizar.
     - cron: '0,30 10-14 * * *'      # 07:00 a 11:30 ART, cada media hora
-    - cron: '0 15-23,0-3 * * *'     # 12:00 a 00:00 ART, cada hora
+    - cron: '0 15,19-23,0-3 * * *'  # 12:00 y de 16:00 a 00:00 ART, cada hora
+    # Ingreso a planta (~14:00-14:30): los paquetes recién ingresados tienen que estar enseguida
+    # en la caché para que Palermo A/B diga el carrito. De 13:00 a 15:55 ART, cada 5 minutos.
+    - cron: '*/5 16-18 * * *'
   workflow_dispatch:
     inputs:
       backfill_receipts:
@@ -42,6 +45,11 @@ on:
         required: false
         default: false
         type: boolean
+
+# Si una corrida todavía no terminó, la siguiente espera (no se pisan las escrituras)
+concurrency:
+  group: envios-agente
+  cancel-in-progress: false
 
 jobs:
   sync:
