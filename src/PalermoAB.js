@@ -4,7 +4,7 @@ import jsQR from "jsqr";
 import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import { bridgeFetch } from "./bridge";
-import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara } from "./camaraQR";
+import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo } from "./camaraQR";
 import { leerEtiqueta, envioCoincide, filtroEnvios, diaAR } from "./dobleBultoShared";
 import { zonaPalermo, CARRITOS, FILTRO_RECUADRO } from "./palermoShared";
 import { ESC_CSS, EscArriba, EscPastilla, EscMarco, EscAyuda, EscBarra, EscHoja, EscEtiqueta, EscGrupo, EscFila, IcoAviso, IcoPin, IcoEscanear, IcoLista } from "./escanerUI";
@@ -346,18 +346,21 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
     };
     const alVolver = () => { if (!document.hidden) conectar(!camaraViva()); };
     document.addEventListener("visibilitychange", alVolver);
+    let limpiarCubrir = () => {};
     const vigia = setInterval(() => { const v = video.current; if (vivo && listo && !document.hidden && v && (!v.videoWidth || !camaraViva())) conectar(true); }, 2500);
     (async () => {
       try {
         stream = await obtenerCamara();
         if (!vivo) { soltarCamara(); return; }
         const v = video.current;
-        const remedir = () => { v.style.width = "99.9%"; requestAnimationFrame(() => { v.style.width = "100%"; }); };
+        const remedir = () => cubrirVideo(v);
         ["loadedmetadata", "playing", "resize"].forEach((ev) => v.addEventListener(ev, remedir));
         v.srcObject = stream; await v.play();
         remedir();
         setTimeout(() => { remedir(); requestAnimationFrame(() => requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; })); }, 350);
         setTimeout(remedir, 1000);
+        const sana = setInterval(remedir, 1000); window.addEventListener("resize", remedir);
+        limpiarCubrir = () => { clearInterval(sana); window.removeEventListener("resize", remedir); };
         listo = true;
       } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
@@ -378,7 +381,7 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
         } finally { ocupado = false; }
       }, 250);
     })();
-    return () => { vivo = false; clearInterval(timer); clearInterval(vigia); clearTimeout(auto.current); document.removeEventListener("visibilitychange", alVolver); if (el) el.srcObject = null; soltarCamara(); };
+    return () => { vivo = false; limpiarCubrir(); clearInterval(timer); clearInterval(vigia); clearTimeout(auto.current); document.removeEventListener("visibilitychange", alVolver); if (el) el.srcObject = null; soltarCamara(); };
   }, [procesar]);
 
   // Pantalla fija mientras se escanea (sin pellizcar)

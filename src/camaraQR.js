@@ -47,4 +47,18 @@ function soltarCamara() {
 }
 if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => { if (document.hidden && !camara.enUso) apagarCamara(); });
 
-export { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara };
+// iPhone (21/11): a veces Safari deja de respetar object-fit:cover (al volver a la app, al grabar pantalla o
+// cuando la cámara cambia de resolución) y la imagen queda chiquita en el medio. En vez de depender de
+// object-fit, se calcula a mano el tamaño que cubre la pantalla y se le pone en px al <video>.
+function cubrirVideo(v) {
+  if (!v || !v.videoWidth || !v.videoHeight || !v.parentElement) return;
+  const W = v.parentElement.clientWidth, H = v.parentElement.clientHeight;
+  if (!W || !H) return;
+  const k = Math.max(W / v.videoWidth, H / v.videoHeight);
+  const w = Math.ceil(v.videoWidth * k), h = Math.ceil(v.videoHeight * k);
+  const st = v.style;
+  const nuevo = { inset: "auto", left: `${Math.round((W - w) / 2)}px`, top: `${Math.round((H - h) / 2)}px`, width: `${w}px`, height: `${h}px`, objectFit: "fill", maxWidth: "none", maxHeight: "none" };
+  for (const [k2, val] of Object.entries(nuevo)) if (st[k2] !== val) st[k2] = val;
+}
+
+export { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo };

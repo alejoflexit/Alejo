@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import jsQR from "jsqr";
 import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
-import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara } from "./camaraQR";
+import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo } from "./camaraQR";
 import { ESC_CSS, EscArriba, EscPastilla, EscMarco, EscAyuda, EscBarra, EscHoja, EscEtiqueta, EscGrupo, EscFila, IcoAviso, IcoCaja, IcoLista } from "./escanerUI";
 import {
   leerEtiqueta, envioCoincide, filtroEnvios, datosDeEnvio, fechaCorta, horaCorta,
@@ -409,6 +409,7 @@ function Escaner({ onCerrar, onGuardado }) {
     const alVolver = () => { if (!document.hidden) conectar(!camaraViva()); };
     document.addEventListener("visibilitychange", alVolver);
     // Si a los 2,5 s sigue sin imagen (negro), se pide la cámara de nuevo
+    let limpiarCubrir = () => {};
     const vigia = setInterval(() => { const v = video.current; if (vivo && listo && !document.hidden && v && (!v.videoWidth || !camaraViva())) conectar(true); }, 2500);
     (async () => {
       try {
@@ -417,7 +418,7 @@ function Escaner({ onCerrar, onGuardado }) {
         // iPhone a veces dibuja el video chico (con bordes negros) hasta que algo lo obliga a re-medirse:
         // cuando llega la imagen o cambia su tamaño, se fuerza un re-dibujo a pantalla completa (09/11)
         const v = video.current;
-        const remedir = () => { v.style.width = "99.9%"; requestAnimationFrame(() => { v.style.width = "100%"; }); };
+        const remedir = () => cubrirVideo(v);
         ["loadedmetadata", "playing", "resize"].forEach((ev) => v.addEventListener(ev, remedir));
         v.srcObject = stream; await v.play();
         // Queda invisible (negro) mientras el iPhone se acomoda y recién ahí aparece, ya a pantalla completa
@@ -426,6 +427,8 @@ function Escaner({ onCerrar, onGuardado }) {
         // Se respeta la espera de 350 ms que tapa ese reacomodo del iPhone.
         setTimeout(() => { remedir(); requestAnimationFrame(() => requestAnimationFrame(() => { if (vivo) v.style.opacity = "1"; })); }, 350);
         setTimeout(remedir, 1000);
+        const sana = setInterval(remedir, 1000); window.addEventListener("resize", remedir);
+        limpiarCubrir = () => { clearInterval(sana); window.removeEventListener("resize", remedir); };
         listo = true;
       } catch { setError("No se pudo abrir la cámara. Revisá el permiso en Ajustes › Safari › Cámara."); return; }
       let ocupado = false;
@@ -446,7 +449,7 @@ function Escaner({ onCerrar, onGuardado }) {
         } finally { ocupado = false; }
       }, 250);
     })();
-    return () => { vivo = false; clearInterval(timer); clearInterval(vigia); document.removeEventListener("visibilitychange", alVolver); if (video.current) video.current.srcObject = null; soltarCamara(); };
+    return () => { vivo = false; limpiarCubrir(); clearInterval(timer); clearInterval(vigia); document.removeEventListener("visibilitychange", alVolver); if (video.current) video.current.srcObject = null; soltarCamara(); };
   }, [procesar]);
 
   // Pantalla fija mientras se escanea: sin pellizcar para hacer zoom (iOS ignora user-scalable=no)
