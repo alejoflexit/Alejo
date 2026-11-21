@@ -10,6 +10,7 @@ const CASOS = [
   ["Honduras 5083 (Soho norte)", -34.588187, -58.430905, "B"],
   ["Arce 743 (Cañitas)", -34.56859, -58.43479, "B"],
   ["Sinclair 3223 (Palermo Nuevo)", -34.572872, -58.422242, "B"],
+  ["Mansilla 2986 (Recoleta, ruta de Palermo)", -34.5947, -58.4084, "A"],
 ];
 
 test.each(CASOS)("%s", (_n, lat, lng, z) => { expect(zonaPalermo(lat, lng)).toBe(z); });
@@ -28,6 +29,8 @@ test("acepta texto con coma o punto", () => {
 test("fuera del recuadro de Palermo", () => {
   expect(zonaPalermo(-34.6037, -58.3816)).toBe("fuera"); // Obelisco
   expect(zonaPalermo(-34.5627, -58.4565)).toBe("fuera"); // Belgrano
+  expect(zonaPalermo(-34.5598, -58.4468)).toBe("fuera"); // Sucre 1530, Belgrano (caso real 21/11, salía B)
+  expect(zonaPalermo(-34.5745, -58.4475)).toBe("fuera"); // Colegiales
 });
 
 test("el polígono A está cerrado y es coherente", () => {
