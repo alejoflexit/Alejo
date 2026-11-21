@@ -15,7 +15,7 @@ const LEGACY_KEY = 'db1d987c9cfbd82b949d61f31ffcedaceceddd10a19b556b'; // BORRAR
 
 let funcionDisponible = true; // se apaga si Supabase responde que la función no existe
 
-// Devuelve el Response (igual que fetch). `ruta`: reparto | colecta | colecta-detalle | zonas | geo | envio-qr | envio-ubicacion
+// Devuelve el Response (igual que fetch). `ruta`: reparto | colecta | colecta-detalle | zonas | geo | envio-qr | envio-ubicacion | envios-palermo
 export async function bridgeFetch(ruta, params = null, opciones = {}) {
   const qs = params ? `?${new URLSearchParams(params).toString()}` : '';
   const { signal, cache } = opciones;

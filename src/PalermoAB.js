@@ -83,10 +83,25 @@ function geocodificarUSIG(direccion) {
     document.head.appendChild(sc);
   });
 }
+// Foto del día (21/11): el bridge baja cada 60 s lo movido hoy en LightData y le pasa a la app los del
+// recuadro de Palermo. Se suma a la precarga, así un paquete que ingresó hace un rato se clasifica sin red.
+async function traerFotoDia() {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 15000);
+  try {
+    const r = await bridgeFetch("envios-palermo", null, { signal: ctl.signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return Array.isArray(j && j.envios) ? j.envios : null;
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
 async function buscarCompleto(codigo, local) {
+  if (local && zonaPalermo(local.latitud, local.longitud)) return local;
+  // Caché y LightData en paralelo: antes se esperaba una y después la otra.
+  const vivoP = buscarEnVivo(codigo);
   let env = local || (await buscarEnvio(codigo).catch(() => null));
   if (env && zonaPalermo(env.latitud, env.longitud)) return env;
-  const vivo = await buscarEnVivo(codigo);
+  const vivo = await vivoP;
   if (vivo) env = { ...(env || {}), ...vivo };
   if (env && !zonaPalermo(env.latitud, env.longitud) && env.direccion) {
     const g = await geocodificarUSIG(env.direccion);
@@ -126,6 +141,20 @@ export default function PalermoAB() {
     }
   }, []);
   useEffect(() => { cargar(); const t = setInterval(cargar, 5 * 60 * 1000); return () => clearInterval(t); }, [cargar]);
+  // Lo recién movido en LightData pisa a la caché (trae la ubicación al día). Cada 60 s mientras está abierta.
+  useEffect(() => {
+    let vivo = true;
+    const sumar = async () => {
+      const envios = await traerFotoDia();
+      if (!vivo || !envios) return;
+      const mapa = new Map(mapaRef.current);
+      for (const e of envios) for (const k of claves(e)) mapa.set(k, e);
+      mapaRef.current = mapa;
+    };
+    sumar();
+    const t = setInterval(sumar, 60 * 1000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
   useEffect(() => {
     if (!/[?&]escanear=1/.test(window.location.search)) return;
     window.history.replaceState(null, "", window.location.pathname + window.location.hash);
