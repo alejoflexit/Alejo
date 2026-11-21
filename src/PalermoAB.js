@@ -64,11 +64,34 @@ async function buscarEnVivo(codigo) {
     return j && j.encontrado && j.envio ? j.envio : null;
   } catch (e) { return null; } finally { clearTimeout(t); }
 }
-async function buscarCompleto(codigo) {
-  const env = await buscarEnvio(codigo).catch(() => null);
+// Sin coordenadas en LightData (21/11, caso Fitz Roy 2469): se ubica la dirección con el geocodificador de la
+// Ciudad (USIG). Va por JSONP (script) porque USIG no habilita CORS; solo se acepta un resultado de CABA.
+function geocodificarUSIG(direccion) {
+  const limpia = String(direccion || "").split(/\s\/\s|Referencia|,|\(/i)[0].replace(/\b(calle|avenida|av\.?)\s+/gi, "").trim();
+  if (!limpia || !/\d/.test(limpia)) return Promise.resolve(null);
+  return new Promise((ok) => {
+    const cb = "__usig" + Date.now() + Math.floor(Math.random() * 1000);
+    const sc = document.createElement("script");
+    const fin = (v) => { clearTimeout(t); delete window[cb]; sc.remove(); ok(v); };
+    const t = setTimeout(() => fin(null), 6000);
+    window[cb] = (j) => {
+      const d = ((j && j.direccionesNormalizadas) || []).find((x) => x.cod_partido === "caba" && x.coordenadas);
+      fin(d ? { latitud: Number(d.coordenadas.y), longitud: Number(d.coordenadas.x), geocodificado: true } : null);
+    };
+    sc.onerror = () => fin(null);
+    sc.src = `https://servicios.usig.buenosaires.gob.ar/normalizar/?direccion=${encodeURIComponent(limpia)}&geocodificar=true&srid=4326&maxOptions=5&callback=${cb}`;
+    document.head.appendChild(sc);
+  });
+}
+async function buscarCompleto(codigo, local) {
+  let env = local || (await buscarEnvio(codigo).catch(() => null));
   if (env && zonaPalermo(env.latitud, env.longitud)) return env;
   const vivo = await buscarEnVivo(codigo);
-  if (vivo) return { ...(env || {}), ...vivo };
+  if (vivo) env = { ...(env || {}), ...vivo };
+  if (env && !zonaPalermo(env.latitud, env.longitud) && env.direccion) {
+    const g = await geocodificarUSIG(env.direccion);
+    if (g) env = { ...env, ...g };
+  }
   return env;
 }
 
@@ -259,7 +282,7 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
     const local = mapaRef.current.get(String(l.codigo).toLowerCase());
     if (local && zonaPalermo(local.latitud, local.longitud)) { mostrar(l.codigo, local); return; }
     setRes({ codigo: l.codigo, buscando: true });
-    buscarCompleto(l.codigo)
+    buscarCompleto(l.codigo, local)
       .then((env) => mostrar(l.codigo, env || local || null))
       .catch(() => { beep(false); setRes({ codigo: l.codigo, tipo: "error", env: null }); });
   }, [mapaRef, mostrar]);
