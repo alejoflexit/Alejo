@@ -42,3 +42,8 @@
 - Aplicado a: Palermo A/B (escáner + pantalla de inicio, nuevo "tipear código"), Doble bulto (botón central = lista de lo cargado; sin tipear, por pedido del 09/11) e ingreso de Devoluciones (último resultado en hoja; lista y "A revisar" desde la barra; tipear desde el botón central). Lógica de los tres sin cambios.
 - Contingencia y el escáner de remitos quedan con el diseño anterior.
 - Probado: build + E2E con cámara simulada en los tres. No probado en iPhone real.
+
+## Búsqueda en vivo (21/11)
+- Si el paquete no está en la caché o no tiene ubicación (ingresó a planta hace minutos), la app pregunta al bridge del VPS: `envio-ubicacion?codigo=` (ruta nueva, solo lectura, 1-2 s). Habilitada en la función `bridge` de Supabase.
+- La caché además se actualiza cada 5 min de 13:00 a 16:00 (workflow envios_agente.yml).
+- Bridge: commit en obsidian-flexit `vps/lightdata-bridge.js`; deploy con `vps/PEDIDO-hermes-bridge-ubicacion.md`.

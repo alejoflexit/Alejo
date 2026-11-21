@@ -16,7 +16,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 // Rutas que usa la app hoy. Cualquier otra se rechaza.
-const RUTAS = new Set(["reparto", "colecta", "colecta-detalle", "zonas", "geo", "envio-qr"]);
+const RUTAS = new Set(["reparto", "colecta", "colecta-detalle", "zonas", "geo", "envio-qr", "envio-ubicacion"]);
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

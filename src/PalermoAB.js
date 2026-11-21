@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import jsQR from "jsqr";
 import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
+import { bridgeFetch } from "./bridge";
 import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara } from "./camaraQR";
 import { leerEtiqueta, envioCoincide, filtroEnvios, diaAR } from "./dobleBultoShared";
 import { zonaPalermo, CARRITOS, FILTRO_RECUADRO } from "./palermoShared";
@@ -48,6 +49,27 @@ async function buscarEnvio(codigo) {
     rows = await sbFetch(`envios_busqueda?${f}&select=${COLS_SIN_COORD}&limit=5`);
   }
   return (rows || []).find((e) => envioCoincide(e, codigo)) || null;
+}
+
+// En vivo (21/11): si el envío no está en la caché o no tiene ubicación (p. ej. ingresó a planta hace
+// minutos), se le pregunta a LightData por el bridge del VPS (/envio-ubicacion, 1-2 s). Solo códigos numéricos.
+async function buscarEnVivo(codigo) {
+  if (!/^\d{5,20}$/.test(String(codigo))) return null;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 12000);
+  try {
+    const r = await bridgeFetch("envio-ubicacion", { codigo: String(codigo) }, { signal: ctl.signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.encontrado && j.envio ? j.envio : null;
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
+async function buscarCompleto(codigo) {
+  const env = await buscarEnvio(codigo).catch(() => null);
+  if (env && zonaPalermo(env.latitud, env.longitud)) return env;
+  const vivo = await buscarEnVivo(codigo);
+  if (vivo) return { ...(env || {}), ...vivo };
+  return env;
 }
 
 // envío (o null) → { tipo: "A" | "B" | "fuera" | "sinubic" | "noesta", env }
@@ -235,10 +257,10 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
     ultimo.current = { c: l.codigo, at: ahora };
     pausa.current = true;
     const local = mapaRef.current.get(String(l.codigo).toLowerCase());
-    if (local) { mostrar(l.codigo, local); return; }
+    if (local && zonaPalermo(local.latitud, local.longitud)) { mostrar(l.codigo, local); return; }
     setRes({ codigo: l.codigo, buscando: true });
-    buscarEnvio(l.codigo)
-      .then((env) => mostrar(l.codigo, env))
+    buscarCompleto(l.codigo)
+      .then((env) => mostrar(l.codigo, env || local || null))
       .catch(() => { beep(false); setRes({ codigo: l.codigo, tipo: "error", env: null }); });
   }, [mapaRef, mostrar]);
 
@@ -335,7 +357,7 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
       <EscMarco estado={res && !res.buscando && !esCarro ? "aviso" : null} />
       <EscArriba titulo="Palermo A/B" onVolver={onCerrar} derecha={<EscPastilla>{sesion.A + sesion.B} hoy</EscPastilla>} />
       {!res && !tipear && <EscAyuda tono={error ? "aviso" : null}>{error || "Apuntá al QR de la etiqueta"}</EscAyuda>}
-      {res && res.buscando && <EscAyuda>Buscando envío {res.codigo}…</EscAyuda>}
+      {res && res.buscando && <EscAyuda>Buscando en LightData…</EscAyuda>}
 
       {esCarro && (
         <button className={"pab-res t-" + res.tipo} onClick={seguir}>
