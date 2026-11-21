@@ -61,4 +61,29 @@ function cubrirVideo(v) {
   for (const [k2, val] of Object.entries(nuevo)) if (st[k2] !== val) st[k2] = val;
 }
 
-export { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo };
+// Además (21/11, 2º intento): Safari a veces pinta la imagen recortada en una franja aunque el elemento
+// tenga bien el tamaño. Por eso en Palermo A/B y Doble bulto la imagen se copia cuadro a cuadro a un <canvas>
+// a pantalla completa (recorte tipo "cover"); el <video> queda invisible y sigue sirviendo para leer los QR.
+function espejarVideo(v, cv) {
+  if (!v || !cv) return () => {};
+  const ctx = cv.getContext("2d", { alpha: false });
+  let id = 0, vivo = true;
+  const cuadro = () => {
+    if (!vivo) return;
+    id = requestAnimationFrame(cuadro);
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw || !vh || v.readyState < 2) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return;
+    const pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+    if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+    const k = Math.max(pw / vw, ph / vh);
+    const dw = vw * k, dh = vh * k;
+    try { ctx.drawImage(v, (pw - dw) / 2, (ph - dh) / 2, dw, dh); } catch (e) { /* cuadro no listo */ }
+  };
+  id = requestAnimationFrame(cuadro);
+  return () => { vivo = false; cancelAnimationFrame(id); };
+}
+
+export { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo, espejarVideo };

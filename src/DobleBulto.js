@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import jsQR from "jsqr";
 import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
-import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo } from "./camaraQR";
-import { ESC_CSS, EscArriba, EscPastilla, EscMarco, EscAyuda, EscBarra, EscHoja, EscEtiqueta, EscGrupo, EscFila, IcoAviso, IcoCaja, IcoLista } from "./escanerUI";
+import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo, espejarVideo } from "./camaraQR";
+import { ESC_CSS, EscArriba, EscPastilla, EscMarco, EscAyuda, EscBarra, EscHoja, EscEtiqueta, EscGrupo, EscFila, IcoAviso, IcoLista } from "./escanerUI";
 import {
   leerEtiqueta, envioCoincide, filtroEnvios, datosDeEnvio, fechaCorta, horaCorta,
   desdeRango, hastaRango, diaAR, diasDelRango, etiquetaDia, estadoFila, textoParaExcel, resumen,
@@ -285,6 +285,8 @@ export default function DobleBulto() {
 
 function Escaner({ onCerrar, onGuardado }) {
   const video = useRef();
+  const lienzo = useRef();
+  useEffect(() => espejarVideo(video.current, lienzo.current), []);
   const pausa = useRef(false);
   const ultimo = useRef({ c: "", at: 0 });
   const [card, setCard] = useState(null);
@@ -492,7 +494,8 @@ function Escaner({ onCerrar, onGuardado }) {
     <div className="esc" onPointerDown={prepararAudio}>
       <style>{ESC_CSS}</style>
       <div className="esc-abriendo">Abriendo cámara…</div>
-      <video ref={video} playsInline muted autoPlay disablePictureInPicture className="esc-video" style={{ opacity: 0 }} />
+      <video ref={video} playsInline muted autoPlay disablePictureInPicture className="esc-video espejado" style={{ opacity: 0 }} />
+      <canvas ref={lienzo} className="esc-lienzo" aria-hidden="true" />
       <div className="esc-vineta" />
       <EscMarco estado={card ? "ok" : null} />
       <EscArriba titulo="Doble bulto" onVolver={terminar} volverLabel={cerrando ? "Guardando" : "Cerrar"} derecha={cerrando ? <EscPastilla>Guardando…</EscPastilla> : conError.length ? <EscPastilla onClick={() => conError.forEach((x) => guardarFondo(x.l, x.info, x.bultos))}>⚠ {conError.length} reintentar</EscPastilla> : null} />
@@ -502,11 +505,8 @@ function Escaner({ onCerrar, onGuardado }) {
 
       {card && (
         <EscHoja titulo={card.cliente || (card.buscando ? "Buscando cliente…" : "Cliente: se completa solo")} onCerrar={soltar}>
-          <EscGrupo>
-            <EscFila k="Envío" v={card.l.codigo} />
-            <EscFila k="Destino" v={card.env && card.env.localidad ? card.env.localidad : card.buscando ? "Buscando…" : "Todavía no está en LightData"} />
-          </EscGrupo>
-          {card.ex && <EscEtiqueta icono={<IcoAviso />} tono="aviso">Ya estaba cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos} bultos. Tocá otro número para corregirlo.</EscEtiqueta>}
+          <div className="db-sub">{card.l.codigo} · {card.env && card.env.localidad ? card.env.localidad : card.buscando ? "buscando…" : "todavía no está en LightData"}</div>
+          {card.ex && <EscEtiqueta icono={<IcoAviso />} tono="aviso">Ya cargado el {fechaCorta(card.ex.escaneado_at)} con {card.ex.bultos}. Tocá otro para corregir.</EscEtiqueta>}
           {card.mas ? (
             <>
               <div className="db-pasos">
@@ -521,7 +521,6 @@ function Escaner({ onCerrar, onGuardado }) {
             </>
           ) : (
             <>
-              <EscEtiqueta icono={<IcoCaja />}>¿Cuántos bultos? Tocá el número y se guarda.</EscEtiqueta>
               <div className="db-nums2">
                 {[2, 3, 4, 5, 6].map((n) => (
                   <button key={n} className={"db-num2" + ((actual ? actual === n : n === 2) ? " on" : "")} disabled={bloqueado} onClick={() => guardar(n)}>{n}</button>
@@ -558,6 +557,7 @@ function Escaner({ onCerrar, onGuardado }) {
 
 const CSS = `
 .db-nums2{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;padding:12px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.05)}
+.db-sub{margin-top:-8px;text-align:center;color:rgba(255,255,255,.55);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .db-num2{aspect-ratio:1/1;min-height:48px;border-radius:999px;border:0;background:rgba(255,255,255,.08);color:#fff;font:inherit;font-size:20px;font-weight:600;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .db-num2.on{background:#fff;color:#000}
 .db-num2.mas{font-size:14px}

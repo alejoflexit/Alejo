@@ -84,6 +84,8 @@ export const ESC_CSS = `
 .esc{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:90;overflow:hidden;background:#0b0a1e;color:#fff;font-family:-apple-system,'SF Pro Text','SF Pro Display',Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 .esc *{box-sizing:border-box}
 .esc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;transition:opacity .18s}
+.esc-lienzo~.esc-video,.esc-video.espejado{opacity:0!important}
+.esc-lienzo{position:absolute;inset:0;width:100%;height:100%;display:block;background:#000;pointer-events:none}
 .esc-vineta{position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 50%,rgba(0,0,0,0) 55%,rgba(11,10,30,.6) 100%)}
 .esc-abriendo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.55);font-size:15px}
 .esc-vidrio,.esc-circ,.esc-pill,.esc-ayuda,.esc-barra{background:linear-gradient(160deg,rgba(34,30,96,.55) 0%,rgba(10,37,52,.55) 100%);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);border:1px solid rgba(160,170,255,.18)}

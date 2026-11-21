@@ -4,7 +4,7 @@ import jsQR from "jsqr";
 import { getSession } from "./auth";
 import { sbFetch } from "./colectasShared";
 import { bridgeFetch } from "./bridge";
-import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo } from "./camaraQR";
+import { prepararAudio, beep, camaraViva, obtenerCamara, apagarCamara, soltarCamara, cubrirVideo, espejarVideo } from "./camaraQR";
 import { leerEtiqueta, envioCoincide, filtroEnvios, diaAR } from "./dobleBultoShared";
 import { zonaPalermo, CARRITOS, FILTRO_RECUADRO } from "./palermoShared";
 import { ESC_CSS, EscArriba, EscPastilla, EscMarco, EscAyuda, EscBarra, EscHoja, EscEtiqueta, EscGrupo, EscFila, IcoAviso, IcoPin, IcoEscanear, IcoLista } from "./escanerUI";
@@ -281,6 +281,8 @@ export default function PalermoAB() {
 // =====================================================================================
 function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
   const video = useRef();
+  const lienzo = useRef();
+  useEffect(() => espejarVideo(video.current, lienzo.current), []);
   const pausa = useRef(false);
   const ultimo = useRef({ c: "", at: 0 });
   const [res, setRes] = useState(null); // { codigo, tipo, env, buscando, repetido }
@@ -413,7 +415,8 @@ function Escaner({ mapaRef, anotar, sesion, onCerrar }) {
     <div className="esc" onPointerDown={prepararAudio}>
       <style>{ESC_CSS}{CSS_RES}</style>
       <div className="esc-abriendo">Abriendo cámara…</div>
-      <video ref={video} playsInline muted autoPlay disablePictureInPicture className="esc-video" style={{ opacity: 0 }} />
+      <video ref={video} playsInline muted autoPlay disablePictureInPicture className="esc-video espejado" style={{ opacity: 0 }} />
+      <canvas ref={lienzo} className="esc-lienzo" aria-hidden="true" />
       <div className="esc-vineta" />
       <EscMarco estado={res && !res.buscando && !esCarro ? "aviso" : null} />
       <EscArriba titulo="Palermo A/B" onVolver={onCerrar} derecha={<EscPastilla>{sesion.A + sesion.B} hoy</EscPastilla>} />
