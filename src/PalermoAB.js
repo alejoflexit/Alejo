@@ -69,10 +69,11 @@ async function buscarEnVivo(codigo) {
 // Variantes de una dirección para USIG (21/11, caso "Avenida Presidente J Figueroa Alcorta 3265": USIG no
 // reconoce "Presidente J", sí "Figueroa Alcorta"). Se prueba la dirección limpia y, si no aparece, sin
 // títulos (Presidente, General, Dr…) ni iniciales sueltas, y después con las últimas palabras del nombre.
-const TITULOS = /\b(presidente|pres|general|gral|doctor|dr|teniente|tte|coronel|cnel|ingeniero|ing|intendente|capit[aá]n|cap|almirante|alte|comodoro|mariscal|obispo|monse[nñ]or|profesor|prof)\b\.?/gi;
+const TITULOS = /\b(presidente|pres|pte|general|gral|doctor|dr|teniente|tte|coronel|cnel|ingeniero|ing|intendente|capit[aá]n|cap|almirante|alte|comodoro|mariscal|obispo|monse[nñ]or|profesor|prof)\b\.?/gi;
 export function variantesDireccion(direccion) {
   const limpia = String(direccion || "").replace(/\s*,\s*(?=\d)/g, " ").split(/\s\/\s|Referencia|,|\(|\bpiso\b|\bdepto\b|\bdpto\b/i)[0].replace(/\b(calle|avenida|av\.?|pasaje|pje\.?)\s+/gi, "").replace(/\s+/g, " ").trim();
-  const m = limpia.match(/^(.*?[^\d\s].*?)\s+(\d{1,5})\b/);
+  // "2751 Scalabrini Ortiz" (número adelante) → "Scalabrini Ortiz 2751": USIG solo lo entiende así
+  const m = limpia.replace(/^(\d{1,5})\s+([^\d].*)$/, "$2 $1").match(/^(.*?[^\d\s].*?)\s+(\d{1,5})\b/);
   if (!m) return /\d/.test(limpia) ? [limpia] : [];
   const nombre = m[1].trim(), num = m[2];
   const sin = nombre.replace(TITULOS, " ").replace(/(^|\s)[a-záéíóúñ]\.?(?=\s|$)/gi, " ").replace(/\s+/g, " ").trim();
