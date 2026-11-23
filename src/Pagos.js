@@ -2449,9 +2449,52 @@ function PagosInner({ session }) {
                             onCommit={n => setColectaOvPersist(o => { const nn = { ...o }; if (n === Math.round(f.colectaOriginal || 0)) delete nn[f.key]; else nn[f.key] = n; return nn; })}
                             onRestore={() => setColectaOvPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })} />
                         ))}
-                        {fila(<span>Descuentos</span>, <span style={{ color: f.ajusteTotal ? BRAND.red : BRAND.muted }}>{f.ajusteTotal ? money(-f.ajusteTotal) : '$0'}</span>)}
-                        <button onClick={irATabla} style={{ marginTop: 6, background: 'none', border: 'none', color: BRAND.blue, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>Ver detalle, colectas día por día y descuentos ›</button>
-                        {trabada && <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 4 }}>Está confirmado: para cambiar envíos o colecta, reabrilo.</div>}
+                        {trabada && <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 6 }}>Está confirmado: para cambiar envíos o colecta, reabrilo.</div>}
+                      </div>
+
+                      {(() => {
+                        // Colectas día por día (lo mismo que copia "Copiar colectas")
+                        const items = [...(calc.colectaItems.get(f.key) || [])].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || a.cliente.localeCompare(b.cliente));
+                        if (!items.length) return null;
+                        return (
+                          <div style={{ ...card }}>
+                            <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 2 }}>Colectas de la semana · {items.length}</div>
+                            {items.map((it, n) => {
+                              const [y, m, d] = (it.fecha || '').split('-');
+                              const dia = y ? DIAS_CORTOS[new Date(Number(y), Number(m) - 1, Number(d)).getDay()] + ` ${d}/${m}` : 'Sin fecha';
+                              return fila(
+                                <span style={{ fontSize: 14, minWidth: 0 }}><span style={{ color: BRAND.muted, fontSize: 12, marginRight: 6 }}>{dia}</span>{it.cliente}{it.con.length ? <span style={{ color: BRAND.muted, fontSize: 12 }}> · dividida</span> : null}</span>,
+                                <span style={{ fontSize: 14, whiteSpace: 'nowrap' }}>{money(it.monto)}</span>,
+                                n === 0 ? { borderTop: 'none' } : {}
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+
+                      <div style={{ ...card }}>
+                        <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 2 }}>Descuentos de la semana</div>
+                        {f.ajusteRows.length === 0 && <div style={{ fontSize: 14, color: BRAND.muted, padding: '6px 0' }}>Sin descuentos</div>}
+                        {f.ajusteRows.map((a, n) => fila(
+                          <span style={{ fontSize: 14 }}>{a.concepto}</span>,
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            <b style={{ color: BRAND.red }}>−{money(a.monto)}</b>
+                            {!cierre?.pagado && <button onClick={() => borrarAjuste(a, cierre)} disabled={busyAccion} aria-label="borrar descuento" style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.muted, cursor: 'pointer' }}>✕</button>}
+                          </span>,
+                          n === 0 ? { borderTop: 'none' } : {}
+                        ))}
+                        {!cierre?.pagado && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 8, marginTop: 10 }}>
+                            <input placeholder="Concepto (ej. faltante de colecta)" value={ajusteForm.concepto} onChange={e => setAjusteForm(x => ({ ...x, concepto: e.target.value }))}
+                              style={{ minWidth: 0, height: 44, padding: '0 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 16, outline: 'none' }} />
+                            <input className="no-spin" placeholder="Monto" type="number" inputMode="numeric" value={ajusteForm.monto} onChange={e => setAjusteForm(x => ({ ...x, monto: e.target.value }))}
+                              style={{ minWidth: 0, height: 44, padding: '0 12px', borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'rgba(0,0,0,0.22)', color: BRAND.white, fontSize: 16, fontWeight: 700, textAlign: 'right', outline: 'none' }} />
+                            <button onClick={() => agregarAjuste(f, cierre)} disabled={busyAccion || !ajusteForm.concepto.trim() || !ajusteForm.monto}
+                              style={{ gridColumn: '1 / -1', height: 44, borderRadius: 10, border: '1px solid rgba(232,97,95,0.4)', background: 'rgba(232,97,95,0.12)', color: BRAND.red, fontSize: 14, fontWeight: 800, cursor: 'pointer' }}>Descontar</button>
+                          </div>
+                        )}
+                        {f.ajusteRows.length > 0 && fila(<span style={{ color: BRAND.muted, fontSize: 13 }}>Total descuentos</span>, <b style={{ color: BRAND.red }}>−{money(f.ajusteTotal)}</b>, { marginTop: 8 })}
+
                       </div>
 
                       {f.factura && t && (t.alias || t.cuil || t.cbu) && (
@@ -2482,8 +2525,8 @@ function PagosInner({ session }) {
                       {estado === 'excluido' && boton('Volver a incluir', () => incluirChofer(cierre), { disabled: busyAccion, color: BRAND.teal })}
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, gap: 8 }}>
-                        <button disabled={!anterior} onClick={() => anterior && setFichaKey(anterior.key)} style={{ background: 'none', border: 'none', color: anterior ? BRAND.muted : 'transparent', fontSize: 14, cursor: 'pointer', padding: '8px 0' }}>‹ Anterior</button>
-                        <button disabled={!siguiente} onClick={() => siguiente && setFichaKey(siguiente.key)} style={{ background: 'none', border: 'none', color: siguiente ? BRAND.teal : BRAND.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '8px 0' }}>{siguiente ? `Siguiente sin confirmar: ${siguiente.nombre.split(/\s+/)[0]} ›` : 'No quedan sin confirmar ✓'}</button>
+                        <button disabled={!anterior} onClick={() => { if (anterior) { setFichaKey(anterior.key); setAjusteForm({ concepto: '', monto: '' }); } }} style={{ background: 'none', border: 'none', color: anterior ? BRAND.muted : 'transparent', fontSize: 14, cursor: 'pointer', padding: '8px 0' }}>‹ Anterior</button>
+                        <button disabled={!siguiente} onClick={() => { if (siguiente) { setFichaKey(siguiente.key); setAjusteForm({ concepto: '', monto: '' }); } }} style={{ background: 'none', border: 'none', color: siguiente ? BRAND.teal : BRAND.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '8px 0' }}>{siguiente ? `Siguiente sin confirmar: ${siguiente.nombre.split(/\s+/)[0]} ›` : 'No quedan sin confirmar ✓'}</button>
                       </div>
                     </div>
                   </div>
