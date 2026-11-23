@@ -1,5 +1,5 @@
 // xubio
-// (deploy: 2026-11-19)
+// (deploy: 2026-11-23)
 // Puente entre la app y la API de Xubio (etapa 2 de facturas por link — ver ESTADO-FACTURAS-LINK.md).
 // Las credenciales viven SOLO acá como secretos de la función: XUBIO_CLIENT_ID / XUBIO_SECRET_ID
 // (Supabase › Edge Functions › Secrets). Nunca van al front: el repo es público.
@@ -151,9 +151,14 @@ async function cargarCierre(token: string, cierreId: string, quien: string) {
     } else {
       r.yaEstaba = true;
     }
-    await svc(`/rest/v1/facturas_comprobantes?id=eq.${c.id}`, {
-      method: "PATCH", body: JSON.stringify({ xubio_id: transaccion, xubio_at: new Date().toISOString(), xubio_por: quien }),
+    const rpatch = await svc(`/rest/v1/facturas_comprobantes?id=eq.${c.id}`, {
+      method: "PATCH", headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ xubio_id: transaccion, xubio_at: new Date().toISOString(), xubio_por: quien }),
     });
+    const filas = await leer(rpatch);
+    if (!rpatch.ok || !Array.isArray(filas) || !filas.length) {
+      r.error = `Se cargó en Xubio (transacción ${transaccion}) pero no pude marcarlo en la app (${rpatch.status})`; r.detalle = filas; continue;
+    }
     r.ok = true; r.xubio_id = transaccion;
   }
   return { ok: resultados.every((r) => r.ok), resultados };
@@ -177,7 +182,11 @@ Deno.serve(async (req) => {
     if (!cierre_id) return responder(400, { ok: false, error: "Falta cierre_id" });
     const tk = await tokenXubio();
     if (!tk.ok) return responder(200, { ok: false, error: "No pude conectar con Xubio", detalle: tk });
-    return responder(200, await cargarCierre(tk.token!, String(cierre_id), String(yo.email || "")));
+    try {
+      return responder(200, await cargarCierre(tk.token!, String(cierre_id), String(yo.email || "")));
+    } catch (e) {
+      return responder(200, { ok: false, error: `Falla interna: ${String((e as Error)?.message || e)}` });
+    }
   }
   if (accion !== "probar") return responder(400, { ok: false, error: "Acción desconocida" });
 

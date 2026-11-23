@@ -463,19 +463,27 @@ export default function PagosPagador({ tarifas }) {
   async function cargarEnXubio(f) {
     if (!window.confirm(`¿Cargar en Xubio la factura de ${f.nombre} por ${money(f.facturaMonto ?? f.total)}?\n\nSe carga como compra a su nombre (producto "Costo envios").`)) return;
     setXubioBusy(f.key); setError('');
+    let msg = ''; // se muestra DESPUÉS de recargar (cargarCierres limpia el error)
     try {
       const res = await authedFetch(`${SUPABASE_URL}/functions/v1/xubio`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accion: 'cargar', cierre_id: f.id }),
       });
-      const j = await res.json().catch(() => ({}));
-      const errores = (j.resultados || []).filter(r => r.error).map(r => r.error);
-      if (j.error || errores.length) setError(`Xubio · ${f.nombre}: ${[j.error, ...errores].filter(Boolean).join(' · ')}`);
+      const txt = await res.text();
+      let j = null; try { j = JSON.parse(txt); } catch { /* respuesta no JSON */ }
+      const errores = ((j && j.resultados) || []).filter(r => r.error).map(r => r.error + (r.detalle ? ` — ${JSON.stringify(r.detalle).slice(0, 300)}` : ''));
+      // Siempre decir qué pasó: éxito, error de Xubio, o respuesta rara (la mostramos tal cual).
+      if (!res.ok || !j) msg = (`Xubio · ${f.nombre}: respuesta ${res.status} — ${txt.slice(0, 300) || 'vacía'}`);
+      else if (j.error || errores.length) msg = (`Xubio · ${f.nombre}: ${[j.error, ...errores].filter(Boolean).join(' · ')}`);
+      else if (j.yaCargado) window.alert(`${f.nombre}: ya estaba cargada en Xubio.`);
+      else if (j.ok) window.alert(`${f.nombre}: cargada en Xubio ✓` + ((j.resultados || []).some(r => r.yaEstaba) ? ' (ya existía, no se duplicó)' : ''));
+      else msg = (`Xubio · ${f.nombre}: no cargó — ${txt.slice(0, 300)}`);
     } catch (e) {
-      setError(`Xubio · ${f.nombre}: ${e.message}`);
+      msg = `Xubio · ${f.nombre}: ${e.message}`;
     } finally {
       setXubioBusy(null);
       cargarCierres(semanaSel);
+      if (msg) { setError(msg); window.scrollTo({ top: 0, behavior: 'smooth' }); } // el aviso está arriba de todo
     }
   }
 
