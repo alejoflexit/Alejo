@@ -80,7 +80,10 @@ function cargarPdfJs() {
 // y después el formato punto de venta-comprobante (00003-00001234).
 function nroDesdeTexto(texto) {
   const t = String(texto || '');
+  // PDF real de ARCA (23/11): pdf.js trae "Comp. Nro: 00002 00000105" (punto de venta y número
+  // juntos, después de las etiquetas). Primero el par PPPPP NNNNNNNN; si no, los patrones de antes.
   const pats = [
+    /\b\d{4,5}\s*-?\s+(\d{8})\b/,
     /Comp\.?\s*N[roº°.]*\s*[:.]?\s*(\d{4,13})/i,
     /N[uú]mero\s*[:.]?\s*(?:\d{1,5}\s*-\s*)?(\d{4,13})/i,
     /N[roº°]+\s*[:.]?\s*(?:\d{1,5}\s*-\s*)?(\d{4,13})/i,

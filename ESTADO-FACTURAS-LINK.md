@@ -38,6 +38,12 @@ Que cada cadete suba su factura desde un link propio, en vez de que Alejo junte 
 - `npm run build` OK (sin warnings nuevos).
 - **No probado en producción**: falta correr la migración.
 
+## Piloto 23/11 — lo que aprendimos
+- PDF real de ARCA: pdf.js devuelve las etiquetas juntas y los valores aparte ("Punto de Venta: Comp. Nro: 00002 00000105 … Importe Total: $ CAE N°:"). El lector v1 no encontraba el importe → caía a "importe a mano" → "Revisar factura" y sin datos fiscales. Arreglado (23/11): primero el **nombre del archivo** de ARCA (`CUIT_TIPO_PV_NUMERO.pdf`), después patrones que no dependen del orden (par PPPPP NNNNNNNN, importe más alto, 1ª fecha, 1er CUIT). Probado con el PDF real de Enzo (también renombrado) y end-to-end → "lista", C-00002-00000105.
+- La lista `/ProveedorBean` de Xubio NO trae CUIT (solo nombre e id): el proveedor se busca por nombre parecido al cadete (titular/nombre en Config) y se confirma el CUIT en la ficha `/ProveedorBean/{id}`; si no, recorre todas las fichas en tandas.
+- El aviso del botón Xubio se borraba al recargar Pagar: ahora se muestra después y siempre dice qué pasó.
+- Primera carga real en Xubio OK: Enzo (C-00002-00000105, $645.380) el 23/11.
+
 ## Pendiente para el lunes
 1. Alejo: correr la migración en Supabase › SQL Editor.
 2. Alejo: en Config, crear el link de los 5 cadetes del piloto (y revisar que tengan el CUIL cargado: si no, el chequeo de CUIT no corre).

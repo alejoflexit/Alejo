@@ -181,42 +181,59 @@ input[type=file]{display:none}
     return isFinite(n) && n > 0 ? n : null;
   }
   // Exportada para los tests (window.__leer)
-  function leerTexto(texto) {
+  // OJO (23/11, PDF real de ARCA): pdf.js devuelve las ETIQUETAS juntas y los VALORES aparte
+  // ("Punto de Venta: Comp. Nro: 00002 00000105 … Importe Total: $ CAE N°: …"), así que no se
+  // puede buscar "el valor al lado de la etiqueta". Fuentes, en orden:
+  //  1) el nombre del archivo que pone ARCA: CUIT_TIPO_PTOVTA_NUMERO.pdf (20395104803_011_00002_00000105.pdf)
+  //  2) patrones que no dependen del orden: PPPPP NNNNNNNN juntos, el importe más alto, la 1ª fecha, el 1er CUIT
+  function leerTexto(texto, nombreArchivo) {
     var t = String(texto || "").replace(/\s+/g, " ");
-    var tipo = null;
-    if (/NOTA\s+DE\s+D[ÉE]BITO/i.test(t)) tipo = "nd";
-    else if (/NOTA\s+DE\s+CR[ÉE]DITO/i.test(t)) tipo = "nc";
-    else if (/FACTURA/i.test(t)) tipo = "factura";
-    var monto = null, m;
-    var reTot = /Importe\s+Total\s*:?\s*\$?\s*([\d.]+(?:,\d{1,2})?)/ig, ult = null;
-    while ((m = reTot.exec(t))) ult = m[1];
-    if (!ult) { var reT2 = /\bTotal\s*:?\s*\$\s*([\d.]+(?:,\d{1,2})?)/ig; while ((m = reT2.exec(t))) ult = m[1]; }
-    if (ult) monto = numeroAR(ult);
-    var nro = null;
-    var pats = [/Comp\.?\s*N[roº°.]*\s*[:.]?\s*(\d{4,13})/i, /N[uú]mero\s*[:.]?\s*(?:\d{1,5}\s*-\s*)?(\d{4,13})/i,
-                /N[roº°]+\s*[:.]?\s*(?:\d{1,5}\s*-\s*)?(\d{4,13})/i, /\b\d{1,5}\s*-\s*(\d{8})\b(?!\s*-)/];
-    for (var i = 0; i < pats.length && !nro; i++) { m = t.match(pats[i]); if (m && m[1].replace(/\D/g, "").length >= 4) nro = m[1].replace(/\D/g, "").slice(-4); }
-    var cuit = null; m = t.match(/\b(20|23|24|27|30|33|34)-?(\d{8})-?(\d)\b/);
-    if (m) cuit = m[1] + m[2] + m[3];
-    // Datos fiscales completos (para Xubio): letra, punto de venta, número y fecha de emisión.
-    // El código AFIP define letra y tipo: 011 Factura C, 012 ND C, 013 NC C (001-003 A, 006-008 B).
-    var letra = null, cod = t.match(/C[OÓ]D(?:IGO)?\.?\s*N?[º°]?\s*:?\s*0*(\d{1,3})\b/i);
-    if (cod) {
-      var c = Number(cod[1]), LET = { 1: "A", 2: "A", 3: "A", 6: "B", 7: "B", 8: "B", 11: "C", 12: "C", 13: "C" };
-      letra = LET[c] || null;
-      if (c === 1 || c === 6 || c === 11) tipo = tipo || "factura";
-      if (c === 2 || c === 7 || c === 12) tipo = "nd";
-      if (c === 3 || c === 8 || c === 13) tipo = "nc";
+    var r = { tipo: null, monto: null, nro: null, cuit: null, letra: null, pv: null, numero: null, fecha: null };
+    var LET = { 1: "A", 2: "A", 3: "A", 6: "B", 7: "B", 8: "B", 11: "C", 12: "C", 13: "C" };
+    var TIPO = { 1: "factura", 6: "factura", 11: "factura", 2: "nd", 7: "nd", 12: "nd", 3: "nc", 8: "nc", 13: "nc" };
+    var m;
+    // 1) nombre de archivo de ARCA
+    m = String(nombreArchivo || "").match(/(\d{11})_0*(\d{1,3})_(\d{1,5})_(\d{1,8})/);
+    if (m) {
+      var c1 = Number(m[2]);
+      r.cuit = m[1]; r.letra = LET[c1] || null; r.tipo = TIPO[c1] || null;
+      r.pv = m[3]; r.numero = m[4];
     }
-    if (!letra) { m = t.match(/\b(?:FACTURA|NOTA\s+DE\s+(?:D[ÉE]BITO|CR[ÉE]DITO))\s+([ABC])\b/i) || t.match(/^\s*([ABC])\s+(?:C[OÓ]D|FACTURA)/i); if (m) letra = m[1].toUpperCase(); }
-    var pv = null, numero = null;
-    m = t.match(/Punto\s+de\s+Venta\s*:?\s*(\d{1,5})/i); if (m) pv = m[1];
-    m = t.match(/Comp\.?\s*N[roº°.]*\s*:?\s*(\d{1,8})\b/i); if (m) numero = m[1];
-    if (!pv || !numero) { m = t.match(/\b(\d{4,5})\s*-\s*(\d{8})\b(?!\s*-)/); if (m) { pv = pv || m[1]; numero = numero || m[2]; } }
-    var fecha = null; m = t.match(/Fecha\s+de\s+Emisi[oó]n\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i);
-    if (m) fecha = m[3] + "-" + m[2] + "-" + m[1];
-    if (numero && !nro) nro = numero.slice(-4);
-    return { tipo: tipo, monto: monto, nro: nro, cuit: cuit, letra: letra, pv: pv, numero: numero, fecha: fecha };
+    // 2) texto
+    if (!r.tipo) {
+      if (/NOTA\s+DE\s+D[ÉE]BITO/i.test(t)) r.tipo = "nd";
+      else if (/NOTA\s+DE\s+CR[ÉE]DITO/i.test(t)) r.tipo = "nc";
+      else if (/FACTURA/i.test(t)) r.tipo = "factura";
+    }
+    var cod = t.match(/C[OÓ]D(?:IGO)?\.?\s*N?[º°]?\s*:?\s*0*(\d{1,3})\b/i);
+    if (cod) {
+      var c = Number(cod[1]);
+      r.letra = r.letra || LET[c] || null;
+      if (TIPO[c]) r.tipo = TIPO[c];
+    }
+    if (!r.letra) { m = t.match(/\b(?:FACTURA|NOTA\s+DE\s+(?:D[ÉE]BITO|CR[ÉE]DITO))\s+([ABC])\b/i); if (m) r.letra = m[1].toUpperCase(); }
+    if (!r.pv || !r.numero) {
+      // "Comp. Nro: 00002 00000105" (etiquetas juntas) o "Punto de Venta: 00002 Comp. Nro: 00000105" o "00002-00000105"
+      m = t.match(/\b(\d{4,5})\s*-?\s+(\d{8})\b/) || t.match(/\b(\d{4,5})-(\d{8})\b(?!\s*-)/);
+      if (m) { r.pv = m[1]; r.numero = m[2]; }
+      else {
+        var mp = t.match(/Punto\s+de\s+Venta\s*:?\s*(\d{1,5})\b/i), mn = t.match(/Comp\.?\s*N[roº°.]*\s*:?\s*(\d{8})\b/i);
+        if (mp && mn) { r.pv = mp[1]; r.numero = mn[1]; }
+      }
+    }
+    // Importe: el que sigue a "Importe Total" si está pegado; si no, el más alto del comprobante
+    // (en una factura C el total es el importe mayor).
+    m = t.match(/Importe\s+Total\s*:?\s*\$?\s*([\d.]+,\d{2})/i);
+    if (m) r.monto = numeroAR(m[1]);
+    if (!r.monto) {
+      var montos = (t.match(/\b\d{1,3}(?:\.\d{3})*,\d{2}\b|\b\d+,\d{2}\b/g) || []).map(numeroAR).filter(Boolean);
+      if (montos.length) r.monto = Math.max.apply(null, montos);
+    }
+    m = t.match(/Fecha\s+de\s+Emisi[oó]n\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i) || t.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+    if (m) r.fecha = m[3] + "-" + m[2] + "-" + m[1];
+    if (!r.cuit) { m = t.match(/\b(20|23|24|27|30|33|34)-?(\d{8})-?(\d)\b/); if (m) r.cuit = m[1] + m[2] + m[3]; }
+    if (r.numero) r.nro = String(r.numero).slice(-4);
+    return r;
   }
   window.__leer = leerTexto;
   function leerPdf(file) {
@@ -225,7 +242,7 @@ input[type=file]{display:none}
     }).then(function (doc) {
       return doc.getPage(1).then(function (p) { return p.getTextContent(); });
     }).then(function (tc) {
-      return leerTexto(tc.items.map(function (i) { return i.str; }).join(" "));
+      return leerTexto(tc.items.map(function (i) { return i.str; }).join(" "), file.name);
     }).catch(function () { return { tipo: null, monto: null, nro: null, cuit: null, letra: null, pv: null, numero: null, fecha: null }; });
   }
 
