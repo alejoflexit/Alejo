@@ -1436,6 +1436,8 @@ function PagosInner({ session }) {
   const [colectas, setColectas] = useState([]);
   const [ajustes, setAjustes] = useState([]);
   const [cierres, setCierres] = useState([]);
+  const [fichaKey, setFichaKey] = useState(null); // ficha del cadete (pantalla completa, pensada para el celu)
+  const [fichaAviso, setFichaAviso] = useState(null);
   const [menuKey, setMenuKey] = useState(null);   // fila con el menú ⋯ de Método abierto
   const [aviso, setAviso] = useState(null); const [avisoKey, setAvisoKey] = useState(null); // confirmación corta en la fila
   const [avisados, setAvisados] = useState(() => new Set()); // norm(cadete) que ya recibieron el mensaje (pagos_avisos)
@@ -1482,6 +1484,19 @@ function PagosInner({ session }) {
     }
     return `Buen día ${nombrePila}, tengo ${f.cantidad} envíos entregados` + (f.colecta ? ` y ${money(f.colecta)} de colecta` : '') + `.` + link;
   }, [tarifas]);
+  // Abre (o cierra) el editor de división de pago de una fila. Lo usan el ⋯ y la ficha del cadete.
+  function abrirDivision(f, cierre) {
+    const abrir = divKey !== f.key;
+                                      setDivKey(abrir ? f.key : null);
+                                      const partes = Array.isArray(cierre?.pagos) ? cierre.pagos : [];
+                                      const transferencias = partes.filter(p => p.via !== 'efectivo');
+                                      const sonDosFacturas = transferencias.length > 1 && partes.every(p => p.via !== 'efectivo');
+                                      setDivTipo(sonDosFacturas ? 'dos_facturas' : 'mixto');
+                                      setDivFactura(abrir && transferencias[0] ? String(transferencias[0].monto) : '');
+                                      setDivAlias1(abrir && transferencias[0] ? String(transferencias[0].alias || '') : '');
+                                      setDivAlias2(abrir && transferencias[1] ? String(transferencias[1].alias || '') : '');
+  }
+
   function copiarMensaje(f) {
     const msg = armarMensaje(f);
     navigator.clipboard.writeText(msg).then(() => {
@@ -2365,6 +2380,115 @@ function PagosInner({ session }) {
                   llegar a Estado/Confirmar no se veía de quién era la fila) */}
               <style>{`.pg-fija{position:sticky;left:0;z-index:2;box-shadow:6px 0 10px -6px rgba(0,0,0,.55)}
 @media (max-width:700px){.pg-fija{max-width:128px;min-width:110px;white-space:normal;overflow-wrap:anywhere;font-size:13px}}`}</style>
+              {fichaKey && (() => {
+                // ── Ficha del cadete (23/11): todo lo de la semana de UN cadete, en pantalla completa,
+                // para resolverlo desde el celu sin la tabla ancha. Reusa las mismas acciones que la fila.
+                const f = filasTodas.find(x => x.key === fichaKey);
+                if (!f) return null;
+                const cierre = cierrePorCadete.get(norm(f.nombre));
+                const trabada = cierre?.estado === 'confirmado';
+                const t = f.tarifaId ? tarifas.find(x => x.id === f.tarifaId) : null;
+                const precioUnit = f.cantidad ? (f.monto || 0) / f.cantidad : (f.precioFijo || 0);
+                const avisado = avisados.has(norm(f.nombre));
+                const estado = !cierre || cierre.estado === 'borrador' ? 'pendiente' : cierre.estado === 'excluido' ? 'excluido' : cierre.pagado ? 'pagado' : 'confirmado';
+                const lista = filasVisibles;
+                const idx = lista.findIndex(x => x.key === f.key);
+                const pendiente = x => { const c = cierrePorCadete.get(norm(x.nombre)); return !c || c.estado === 'borrador'; };
+                const siguiente = [...lista.slice(idx + 1), ...lista.slice(0, Math.max(idx, 0))].find(x => x.key !== f.key && pendiente(x));
+                const anterior = idx > 0 ? lista[idx - 1] : null;
+                const flash = msg => { setFichaAviso(msg); setTimeout(() => setFichaAviso(a => (a === msg ? null : a)), 1500); };
+                const copiar = (txt, msg) => navigator.clipboard.writeText(txt).then(() => flash(msg)).catch(() => {});
+                const irATabla = () => { setFichaKey(null); setBusqueda(f.nombre); setExpandido(f.key); };
+                const card = { background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: '12px 14px', marginBottom: 10 };
+                const fila = (izq, der, extra) => (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: `1px solid ${BRAND.border}`, fontSize: 15, ...extra }}>{izq}{der}</div>
+                );
+                const boton = (txt, fn, opts = {}) => (
+                  <button onClick={fn} disabled={opts.disabled}
+                    style={{ height: 46, borderRadius: 12, border: `1px solid ${opts.color || BRAND.border}`, background: opts.bg || BRAND.faint, color: opts.color || BRAND.white, fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '0 12px' }}>{txt}</button>
+                );
+                const chip = (txt, color) => <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20, color: color || BRAND.muted, border: `1px solid ${BRAND.border}`, background: BRAND.chipBg, whiteSpace: 'nowrap' }}>{txt}</span>;
+                return (
+                  <div onClick={() => setFichaKey(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(4,10,20,0.72)', display: 'flex', justifyContent: 'center', alignItems: 'stretch' }}>
+                    <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, height: '100%', overflowY: 'auto', background: BRAND.navy || '#0b1626', padding: '14px 14px 28px', boxSizing: 'border-box' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                        <button onClick={() => setFichaKey(null)} aria-label="volver" style={{ width: 38, height: 38, borderRadius: 10, border: `1px solid ${BRAND.border}`, background: 'none', color: BRAND.white, fontSize: 18, cursor: 'pointer' }}>‹</button>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: BRAND.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.nombre}</div>
+                          <div style={{ fontSize: 12, color: BRAND.muted }}>{t && t.nombre && norm(t.nombre) !== norm(f.nombre) ? `${t.nombre} · ` : ''}{f.esFletero ? 'fletero' : f.modo === 'cp' ? 'cobra por CP' : 'precio fijo'}</div>
+                        </div>
+                        {estado === 'pendiente' && chip('Falta confirmar', BRAND.amber)}
+                        {estado === 'confirmado' && chip('✓ Confirmado', BRAND.teal)}
+                        {estado === 'pagado' && chip('✓ Pagado', BRAND.teal)}
+                        {estado === 'excluido' && chip('Fuera de la semana')}
+                      </div>
+
+                      <div style={{ ...card, textAlign: 'center' }}>
+                        <div style={{ fontSize: 12, color: BRAND.muted }}>Total a pagar</div>
+                        <div style={{ fontSize: 32, fontWeight: 800, color: BRAND.white, margin: '4px 0 8px' }}>{money(f.total)}</div>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+                          {chip(f.factura ? '🏦 Transferencia' : '💵 Efectivo')}
+                          {avisado ? <button onClick={() => toggleAviso(f)} title="tocá para desmarcar" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>{chip('✓ Avisado', BRAND.teal)}</button> : chip('Sin avisar')}
+                          {f.factura && (cierre?.factura_ok ? chip('✓ Mandó factura', BRAND.teal) : chip('Factura pendiente', BRAND.amber))}
+                        </div>
+                        {fichaAviso && <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: BRAND.teal }}>{fichaAviso}</div>}
+                      </div>
+
+                      <div style={{ ...card }}>
+                        {!f.esFletero && fila(<span>Envíos entregados</span>, (
+                          <CantidadInput value={f.cantidad} original={f.cantidadOriginal} editado={f.cantEditado} disabled={trabada}
+                            onCommit={n => setOverridesPersist(o => { const nn = { ...o }; if (n === f.cantidadOriginal) delete nn[f.key]; else nn[f.key] = n; return nn; })}
+                            onRestore={() => setOverridesPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })} />
+                        ), { borderTop: 'none' })}
+                        {!f.esFletero && f.cantEditado && fila(<span style={{ color: BRAND.muted, fontSize: 13 }}>LightData contó</span>, <span style={{ color: BRAND.muted, fontSize: 13 }}>{f.cantidadOriginal}</span>)}
+                        {f.esFletero && fila(<span>Colectas de la semana</span>, <span>{f.colectasCant}</span>, { borderTop: 'none' })}
+                        {!f.esFletero && fila(<span>Precio</span>, <span>{f.faltaPrecio ? <b style={{ color: BRAND.red }}>FALTA PRECIO</b> : money(precioUnit)}</span>)}
+                        {!f.esFletero && fila(<span>Envíos</span>, <span>{money(trabada ? (cierre.detalle?.monto ?? f.monto) : f.monto)}</span>)}
+                        {fila(<span>Colecta</span>, (
+                          <ColectaInput value={f.colecta} editado={f.colectaEditado} disabled={trabada}
+                            onCommit={n => setColectaOvPersist(o => { const nn = { ...o }; if (n === Math.round(f.colectaOriginal || 0)) delete nn[f.key]; else nn[f.key] = n; return nn; })}
+                            onRestore={() => setColectaOvPersist(o => { const nn = { ...o }; delete nn[f.key]; return nn; })} />
+                        ))}
+                        {fila(<span>Descuentos</span>, <span style={{ color: f.ajusteTotal ? BRAND.red : BRAND.muted }}>{f.ajusteTotal ? money(-f.ajusteTotal) : '$0'}</span>)}
+                        <button onClick={irATabla} style={{ marginTop: 6, background: 'none', border: 'none', color: BRAND.blue, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>Ver detalle, colectas día por día y descuentos ›</button>
+                        {trabada && <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 4 }}>Está confirmado: para cambiar envíos o colecta, reabrilo.</div>}
+                      </div>
+
+                      {f.factura && t && (t.alias || t.cuil || t.cbu) && (
+                        <div style={{ ...card }}>
+                          <div style={{ fontSize: 12, color: BRAND.muted, marginBottom: 2 }}>Datos para pagar{t.factura_nombre && facturaDeOtro(t.factura_nombre, t.nombre, t.nombre_lightdata) ? <> · factura <b style={{ color: BRAND.amber }}>{t.factura_nombre}</b></> : ''}</div>
+                          {[['Alias', t.alias], ['CUIL', t.cuil], ['CBU', t.cbu]].filter(x => x[1]).map(([k, v], n) => fila(
+                            <span style={{ color: BRAND.muted, fontSize: 13 }}>{k}</span>,
+                            <button onClick={() => copiar(String(v), `✓ ${k} copiado`)} style={{ background: 'none', border: 'none', color: BRAND.white, fontSize: 15, cursor: 'pointer', padding: 0 }}>{v} <span style={{ fontSize: 13 }}>📋</span></button>,
+                            n === 0 ? { borderTop: 'none' } : {}
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 8 }}>
+                        {boton('💬 Copiar mensaje', () => { copiarMensaje(f); flash('✓ Mensaje copiado'); })}
+                        {t && t.factura_token && f.factura ? boton('🔗 Copiar link', () => copiar(linkFactura(t.factura_token), '✓ Link copiado')) : <span />}
+                        {(calc.colectaItems.get(f.key) || []).length > 0 && boton('📋 Copiar colectas', () => { copiarDetalleColectas(f); flash('✓ Colectas copiadas'); })}
+                        {!cierre?.pagado && boton('½ Dividir pago', () => { irATabla(); abrirDivision(f, cierre); })}
+                      </div>
+
+                      {estado === 'pendiente' && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                          {boton(`Confirmar ${money(f.total)}`, async () => { await confirmarChofer(f, cierre); flash('✓ Confirmado'); }, { disabled: busyAccion, color: BRAND.teal, bg: 'rgba(46,230,182,0.12)' })}
+                          {boton('Sacar de la semana', () => excluirChofer(f, cierre), { disabled: busyAccion, color: BRAND.muted })}
+                        </div>
+                      )}
+                      {estado === 'confirmado' && boton('↺ Reabrir para editar', () => reabrirChofer(cierre), { disabled: busyAccion, color: BRAND.muted })}
+                      {estado === 'excluido' && boton('Volver a incluir', () => incluirChofer(cierre), { disabled: busyAccion, color: BRAND.teal })}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, gap: 8 }}>
+                        <button disabled={!anterior} onClick={() => anterior && setFichaKey(anterior.key)} style={{ background: 'none', border: 'none', color: anterior ? BRAND.muted : 'transparent', fontSize: 14, cursor: 'pointer', padding: '8px 0' }}>‹ Anterior</button>
+                        <button disabled={!siguiente} onClick={() => siguiente && setFichaKey(siguiente.key)} style={{ background: 'none', border: 'none', color: siguiente ? BRAND.teal : BRAND.muted, fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '8px 0' }}>{siguiente ? `Siguiente sin confirmar: ${siguiente.nombre.split(/\s+/)[0]} ›` : 'No quedan sin confirmar ✓'}</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div style={{ position: 'relative', marginBottom: 10 }}>
                 <input type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar cadete"
                   style={{ width: '100%', boxSizing: 'border-box', height: 42, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: BRAND.navyCard, color: BRAND.white, fontSize: 16, padding: '0 40px 0 14px', outline: 'none' }} />
@@ -2410,12 +2534,12 @@ function PagosInner({ session }) {
                             onMouseEnter={() => setHoverKey(f.key)}
                             onMouseLeave={() => setHoverKey(h => (h === f.key ? null : h))}
                             style={{ borderTop: `1px solid ${BRAND.border}`, background: rowTint }}>
-                            <td className="pg-fija" onClick={() => setExpandido(open ? null : f.key)} title="ver / ocultar detalle" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}`, background: `linear-gradient(${rowTint}, ${rowTint}), ${BRAND.navyCard}` }}>
+                            <td className="pg-fija" onClick={() => setFichaKey(f.key)} title="abrir la ficha del cadete" style={{ padding: '8px 12px', fontWeight: 600, cursor: 'pointer', borderLeft: `3px solid ${open ? BRAND.teal : 'transparent'}`, background: `linear-gradient(${rowTint}, ${rowTint}), ${BRAND.navyCard}` }}>
                               <span style={{ borderBottom: `1px dotted ${BRAND.muted}` }}>{f.nombre}</span>
                               {f.esFletero && <span title="fletero: solo colectas" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, color: BRAND.muted, border: `1px solid ${BRAND.border}` }}>fletero</span>}
                               {!f.activo && <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>(inactivo)</span>}
                               {f.editado && <span title="cantidad editada manualmente" style={{ marginLeft: 6, fontSize: 10, color: BRAND.amber }}>✎</span>}
-                              <span style={{ marginLeft: 6, fontSize: 10, color: BRAND.muted }}>{open ? '▲' : '▾'}</span>
+                              <span onClick={e => { e.stopPropagation(); setExpandido(open ? null : f.key); }} title="ver / ocultar detalle en la tabla" style={{ marginLeft: 4, fontSize: 10, color: BRAND.muted, padding: '4px 6px', cursor: 'pointer' }}>{open ? '▲' : '▾'}</span>
                             </td>
                             <td style={{ padding: '8px 12px', background: (f.cantEditado || f.splitEditado) ? 'rgba(245,192,68,0.12)' : 'transparent' }}>
                               {f.esFletero ? (
@@ -2486,18 +2610,7 @@ function PagosInner({ session }) {
                                     {tf && tf.factura_token && item('🔗 Copiar link de factura', () => navigator.clipboard.writeText(linkFactura(tf.factura_token)).then(() => avisar('✓ Link copiado')).catch(() => {}), 'el link para que suba su factura')}
                                     {(calc.colectaItems.get(f.key) || []).length > 0 && item('📋 Copiar colectas', () => { copiarDetalleColectas(f); avisar('✓ Colectas copiadas'); }, 'detalle día por día (fecha · cliente · monto). No lo marca como avisado.')}
                                     {f.modo === 'cp' && item('👁 Ver detalle por CP', () => { setExpandido(open ? null : f.key); setMenuKey(null); })}
-                                    {!cierre?.pagado && item('½ Dividir pago', () => {
-                                      setMenuKey(null);
-                                    const abrir = divKey !== f.key;
-                                      setDivKey(abrir ? f.key : null);
-                                      const partes = Array.isArray(cierre?.pagos) ? cierre.pagos : [];
-                                      const transferencias = partes.filter(p => p.via !== 'efectivo');
-                                      const sonDosFacturas = transferencias.length > 1 && partes.every(p => p.via !== 'efectivo');
-                                      setDivTipo(sonDosFacturas ? 'dos_facturas' : 'mixto');
-                                      setDivFactura(abrir && transferencias[0] ? String(transferencias[0].monto) : '');
-                                      setDivAlias1(abrir && transferencias[0] ? String(transferencias[0].alias || '') : '');
-                                      setDivAlias2(abrir && transferencias[1] ? String(transferencias[1].alias || '') : '');
-                                    }, 'factura + efectivo, o dos facturas')}
+                                    {!cierre?.pagado && item('½ Dividir pago', () => { setMenuKey(null); abrirDivision(f, cierre); }, 'factura + efectivo, o dos facturas')}
                                   </div>
                                 );
                               })()}
