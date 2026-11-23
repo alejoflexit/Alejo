@@ -1656,6 +1656,18 @@ function PagosInner({ session }) {
     return filasPorMetodo.filter(f => filtroEstado === 'todos' ? true : estadoDeFila(f) === filtroEstado);
   }, [filasPorMetodo, filasExcluidas, filtroEstado, filtroMetodo, estadoDeFila]);
 
+  // Buscador de cadete (23/11, pedido para el celu): filtra SOLO la tabla, no los KPIs ni la barra.
+  // Busca por nombre de LightData y por el nombre/apodo de Config.
+  const [busqueda, setBusqueda] = useState('');
+  const filasTabla = useMemo(() => {
+    const q = norm(busqueda);
+    if (!q) return filasVisibles;
+    return filasVisibles.filter(f => {
+      const t = f.tarifaId ? tarifas.find(x => x.id === f.tarifaId) : null;
+      return norm(f.nombre).includes(q) || (t && norm(t.nombre || '').includes(q));
+    });
+  }, [filasVisibles, busqueda, tarifas]);
+
   // Si un guardado a Supabase falla, NO se deja el cambio como "guardado": se avisa y se recarga
   // la verdad de la nube. Si la nube está inaccesible (sin red), el borrador queda en el navegador
   // y el aviso lo dice explícitamente.
@@ -2353,6 +2365,14 @@ function PagosInner({ session }) {
                   llegar a Estado/Confirmar no se veía de quién era la fila) */}
               <style>{`.pg-fija{position:sticky;left:0;z-index:2;box-shadow:6px 0 10px -6px rgba(0,0,0,.55)}
 @media (max-width:700px){.pg-fija{max-width:128px;min-width:110px;white-space:normal;overflow-wrap:anywhere;font-size:13px}}`}</style>
+              <div style={{ position: 'relative', marginBottom: 10 }}>
+                <input type="search" value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar cadete"
+                  style={{ width: '100%', boxSizing: 'border-box', height: 42, borderRadius: 12, border: `1px solid ${BRAND.border}`, background: BRAND.navyCard, color: BRAND.white, fontSize: 16, padding: '0 40px 0 14px', outline: 'none' }} />
+                {busqueda && (
+                  <button onClick={() => setBusqueda('')} aria-label="borrar búsqueda"
+                    style={{ position: 'absolute', right: 6, top: 6, width: 30, height: 30, border: 'none', background: 'none', color: BRAND.muted, fontSize: 18, cursor: 'pointer' }}>×</button>
+                )}
+              </div>
               <div style={{ ...cardSt, padding: 0, overflow: 'auto', maxHeight: '72vh', marginBottom: 20 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720, fontSize: 13 }}>
                   <thead>
@@ -2370,7 +2390,7 @@ function PagosInner({ session }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filasVisibles.map((f, i) => {
+                    {filasTabla.map((f, i) => {
                       const precioUnit = f.cantidad ? (f.monto || 0) / f.cantidad : (f.precioFijo || 0);
                       const open = expandido === f.key;
                       const cierre = cierrePorCadete.get(norm(f.nombre));
@@ -2698,8 +2718,8 @@ function PagosInner({ session }) {
                         </React.Fragment>
                       );
                     })}
-                    {filasVisibles.length === 0 && (
-                      <tr><td colSpan={nCols} style={{ padding: '2rem', textAlign: 'center', color: BRAND.muted }}>Sin datos para esta semana / filtro.</td></tr>
+                    {filasTabla.length === 0 && (
+                      <tr><td colSpan={nCols} style={{ padding: '2rem', textAlign: 'center', color: BRAND.muted }}>{busqueda ? `Ningún cadete con "${busqueda}"` : 'Sin datos para esta semana / filtro.'}</td></tr>
                     )}
                   </tbody>
                   {filasVisibles.length > 0 && (
