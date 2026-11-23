@@ -1436,6 +1436,7 @@ function PagosInner({ session }) {
   const [colectas, setColectas] = useState([]);
   const [ajustes, setAjustes] = useState([]);
   const [cierres, setCierres] = useState([]);
+  const [linkCopiadoKey, setLinkCopiadoKey] = useState(null); // 🔗 link de factura copiado (fila)
   const [avisados, setAvisados] = useState(() => new Set()); // norm(cadete) que ya recibieron el mensaje (pagos_avisos)
 
   const [loadingConfig, setLoadingConfig] = useState(true);
@@ -2454,6 +2455,25 @@ function PagosInner({ session }) {
                                     title={'copiar mensaje para el cadete: "Buen día ..., tengo X envíos entregados y $Y de colecta". Al copiarlo queda marcado como avisado.'}
                                     style={{ marginLeft: 6, fontSize: 14, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${BRAND.border}`, cursor: 'pointer', color: BRAND.muted, verticalAlign: 'middle', lineHeight: 1 }}>
                                     💬
+                                  </button>
+                                );
+                              })()}
+                              {/* Link de factura del cadete, a mano en la fila (antes había que ir a Config a copiarlo) */}
+                              {(() => {
+                                const tf = f.factura && f.tarifaId ? tarifas.find(x => x.id === f.tarifaId) : null;
+                                if (!tf || !tf.factura_token) return null;
+                                const ok = linkCopiadoKey === f.key;
+                                return (
+                                  <button onClick={e => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(linkFactura(tf.factura_token)).then(() => {
+                                        setLinkCopiadoKey(f.key);
+                                        setTimeout(() => setLinkCopiadoKey(k => (k === f.key ? null : k)), 1500);
+                                      }).catch(() => {});
+                                    }}
+                                    title="copiar el link para que suba su factura"
+                                    style={{ marginLeft: 4, fontSize: ok ? 10.5 : 13, fontWeight: 700, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${ok ? 'rgba(46,230,182,0.45)' : BRAND.border}`, cursor: 'pointer', color: ok ? BRAND.teal : BRAND.muted, verticalAlign: 'middle', lineHeight: 1, whiteSpace: 'nowrap' }}>
+                                    {ok ? '✓ Link copiado' : '🔗'}
                                   </button>
                                 );
                               })()}
