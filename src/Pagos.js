@@ -1085,7 +1085,13 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                       {isDirty && (
                         <>
                           <button style={{ ...btn, padding: '3px 10px' }} disabled={busy} onClick={() => doAction(async () => {
-                            await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(drafts[t.id]) });
+                            // Si queda facturando y con CUIL completo, se le crea el link de factura solo
+                            // (decisión de Alejo 23/11: no tener que tocar "+ Link factura" a mano).
+                            const cambios = { ...drafts[t.id] };
+                            const factura = cambios.factura !== undefined ? cambios.factura : t.factura;
+                            const cuil = String((cambios.cuil !== undefined ? cambios.cuil : t.cuil) || '').replace(/\D/g, '');
+                            if (factura && cuil.length === 11 && !t.factura_token) cambios.factura_token = nuevoTokenFactura();
+                            await sb(`cadetes_tarifas?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify(cambios) });
                             setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; });
                           })}>Guardar</button>
                           <button title="deshacer cambios sin guardar" style={{ ...btn, padding: '3px 10px', borderColor: BRAND.border, color: BRAND.muted, background: BRAND.faint }} disabled={busy} onClick={() => setDrafts(d => { const n = { ...d }; delete n[t.id]; return n; })}>↺</button>
@@ -1468,7 +1474,7 @@ function PagosInner({ session }) {
     const nombrePila = (f.nombre || '').trim().split(/\s+/)[0];
     // Si factura y tiene link, se lo sumamos: ahí ve el monto cuando lo confirmamos y sube la factura.
     const t = f.factura && f.tarifaId ? tarifas.find(x => x.id === f.tarifaId) : null;
-    const link = t && t.factura_token ? `\n\nCuando te confirme el monto, subí tu factura acá: ${linkFactura(t.factura_token)}` : '';
+    const link = t && t.factura_token ? `\n\nCuando te confirme el monto, subí tu factura en PDF (el que descargás de ARCA) acá: ${linkFactura(t.factura_token)}` : '';
     if (f.esFletero) {
       return `Buen día ${nombrePila}, tengo ${f.colectasCant} colecta${f.colectasCant === 1 ? '' : 's'} por ${money(f.colecta)}.` + link;
     }
