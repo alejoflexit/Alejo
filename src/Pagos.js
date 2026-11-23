@@ -1436,7 +1436,8 @@ function PagosInner({ session }) {
   const [colectas, setColectas] = useState([]);
   const [ajustes, setAjustes] = useState([]);
   const [cierres, setCierres] = useState([]);
-  const [linkCopiadoKey, setLinkCopiadoKey] = useState(null); // 🔗 link de factura copiado (fila)
+  const [menuKey, setMenuKey] = useState(null);   // fila con el menú ⋯ de Método abierto
+  const [aviso, setAviso] = useState(null); const [avisoKey, setAvisoKey] = useState(null); // confirmación corta en la fila
   const [avisados, setAvisados] = useState(() => new Set()); // norm(cadete) que ya recibieron el mensaje (pagos_avisos)
 
   const [loadingConfig, setLoadingConfig] = useState(true);
@@ -2436,76 +2437,50 @@ function PagosInner({ session }) {
                               <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 20, color: BRAND.muted, background: BRAND.chipBg, border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                                 {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
                               </span>
-                              {/* UN solo control, no dos. Sin avisar = 💬 (copiar el mensaje);
-                                  al copiarlo queda "✓ Avisado"; tocando el chip vuelve a 💬 y se
-                                  desmarca. Antes convivían el 💬 y un chip "Avisar" aparte, que
-                                  hacían casi lo mismo y ocupaban el doble. */}
-                              {(() => {
-                                const av = avisados.has(norm(f.nombre));
-                                const copiado = copiadoKey === f.key;
-                                if (av || copiado) return (
-                                  <button onClick={e => { e.stopPropagation(); toggleAviso(f); }}
-                                    title="ya le avisaste — tocá para desmarcar y volver a copiar el mensaje"
-                                    style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: 'rgba(46,230,182,0.12)', border: '1px solid rgba(46,230,182,0.45)', borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 11, fontWeight: 700, color: BRAND.teal, whiteSpace: 'nowrap' }}>
-                                    {copiado ? '✓ Copiado' : '✓ Avisado'}
-                                  </button>
-                                );
-                                return (
-                                  <button onClick={e => { e.stopPropagation(); copiarMensaje(f); }}
-                                    title={'copiar mensaje para el cadete: "Buen día ..., tengo X envíos entregados y $Y de colecta". Al copiarlo queda marcado como avisado.'}
-                                    style={{ marginLeft: 6, fontSize: 14, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${BRAND.border}`, cursor: 'pointer', color: BRAND.muted, verticalAlign: 'middle', lineHeight: 1 }}>
-                                    💬
-                                  </button>
-                                );
-                              })()}
-                              {/* Link de factura del cadete, a mano en la fila (antes había que ir a Config a copiarlo) */}
-                              {(() => {
-                                const tf = f.factura && f.tarifaId ? tarifas.find(x => x.id === f.tarifaId) : null;
-                                if (!tf || !tf.factura_token) return null;
-                                const ok = linkCopiadoKey === f.key;
-                                return (
-                                  <button onClick={e => {
-                                      e.stopPropagation();
-                                      navigator.clipboard.writeText(linkFactura(tf.factura_token)).then(() => {
-                                        setLinkCopiadoKey(f.key);
-                                        setTimeout(() => setLinkCopiadoKey(k => (k === f.key ? null : k)), 1500);
-                                      }).catch(() => {});
-                                    }}
-                                    title="copiar el link para que suba su factura"
-                                    style={{ marginLeft: 4, fontSize: ok ? 10.5 : 13, fontWeight: 700, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${ok ? 'rgba(46,230,182,0.45)' : BRAND.border}`, cursor: 'pointer', color: ok ? BRAND.teal : BRAND.muted, verticalAlign: 'middle', lineHeight: 1, whiteSpace: 'nowrap' }}>
-                                    {ok ? '✓ Link copiado' : '🔗'}
-                                  </button>
-                                );
-                              })()}
-                              {(calc.colectaItems.get(f.key) || []).length > 0 && (
-                                <button onClick={e => { e.stopPropagation(); copiarDetalleColectas(f); }}
-                                  title="copiar el detalle de colectas día por día (fecha · cliente · monto) para cruzarlo con el cadete. No lo marca como avisado."
-                                  style={{ marginLeft: 4, fontSize: colCopiadoKey === f.key ? 10.5 : 13, fontWeight: 700, padding: '4px 8px', borderRadius: 20, background: 'none', border: `1px solid ${colCopiadoKey === f.key ? 'rgba(46,230,182,0.45)' : BRAND.border}`, cursor: 'pointer', color: colCopiadoKey === f.key ? BRAND.teal : BRAND.muted, verticalAlign: 'middle', lineHeight: 1, whiteSpace: 'nowrap' }}>
-                                  {colCopiadoKey === f.key ? '✓ Copiado' : '📋'}
+                              {/* Método (A, 23/11): a la vista solo el estado ("✓ Avisado"); las acciones van
+                                  en un menú ⋯ con nombre, igual que en Pagar. El menú se abre con un toque y
+                                  se despliega dentro de la celda (la tabla tiene scroll y un popup se cortaría). */}
+                              {(avisados.has(norm(f.nombre)) || copiadoKey === f.key) && (
+                                <button onClick={e => { e.stopPropagation(); toggleAviso(f); }}
+                                  title="ya le avisaste — tocá para desmarcar"
+                                  style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', background: 'rgba(46,230,182,0.12)', border: '1px solid rgba(46,230,182,0.45)', borderRadius: 20, cursor: 'pointer', padding: '3px 9px', fontSize: 11, fontWeight: 700, color: BRAND.teal, whiteSpace: 'nowrap' }}>
+                                  {copiadoKey === f.key ? '✓ Copiado' : '✓ Avisado'}
                                 </button>
                               )}
-                              {f.modo === 'cp' && (
-                                <button onClick={() => setExpandido(open ? null : f.key)} title="ver detalle por CP" style={{ marginLeft: 2, fontSize: 13, color: BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>👁</button>
+                              {aviso && avisoKey === f.key && (
+                                <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: BRAND.teal, verticalAlign: 'middle' }}>{aviso}</span>
                               )}
-                              {/* Dividir: parte por transferencia (lo que factura) y parte en efectivo.
-                                  Se decide acá, junto con el método, que es donde Alejo ya está mirando
-                                  cómo le paga a cada uno. En Pagar salen como dos filas separadas. */}
-                              {!cierre?.pagado && (
-                                <button onClick={e => {
-                                    e.stopPropagation();
+                              <button onClick={e => { e.stopPropagation(); setMenuKey(k => (k === f.key ? null : f.key)); }}
+                                aria-label="más acciones" title="más acciones"
+                                style={{ marginLeft: 6, width: 30, height: 26, borderRadius: 8, background: menuKey === f.key ? BRAND.faint : 'none', border: `1px solid ${BRAND.border}`, cursor: 'pointer', color: BRAND.muted, verticalAlign: 'middle', lineHeight: 1, fontSize: 14 }}>⋯</button>
+                              {menuKey === f.key && (() => {
+                                const tf = f.factura && f.tarifaId ? tarifas.find(x => x.id === f.tarifaId) : null;
+                                const item = (txt, fn, title) => (
+                                  <button key={txt} title={title} onClick={e => { e.stopPropagation(); fn(); }}
+                                    style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', borderTop: `1px solid ${BRAND.border}`, color: BRAND.white, fontSize: 12, padding: '7px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{txt}</button>
+                                );
+                                const avisar = (msg) => { setAvisoKey(f.key); setAviso(msg); setMenuKey(null); setTimeout(() => setAviso(a => (a === msg ? null : a)), 1500); };
+                                return (
+                                  <div onClick={e => e.stopPropagation()} style={{ marginTop: 6, minWidth: 190, border: `1px solid ${BRAND.border}`, borderRadius: 10, background: BRAND.navyCard, overflow: 'hidden' }}>
+                                    {item('💬 Copiar mensaje', () => { copiarMensaje(f); setMenuKey(null); }, 'copia "Buen día…, tengo X envíos…" (con el link si tiene) y lo marca como avisado')}
+                                    {tf && tf.factura_token && item('🔗 Copiar link de factura', () => navigator.clipboard.writeText(linkFactura(tf.factura_token)).then(() => avisar('✓ Link copiado')).catch(() => {}), 'el link para que suba su factura')}
+                                    {(calc.colectaItems.get(f.key) || []).length > 0 && item('📋 Copiar colectas', () => { copiarDetalleColectas(f); avisar('✓ Colectas copiadas'); }, 'detalle día por día (fecha · cliente · monto). No lo marca como avisado.')}
+                                    {f.modo === 'cp' && item('👁 Ver detalle por CP', () => { setExpandido(open ? null : f.key); setMenuKey(null); })}
+                                    {!cierre?.pagado && item('½ Dividir pago', () => {
+                                      setMenuKey(null);
                                     const abrir = divKey !== f.key;
-                                    setDivKey(abrir ? f.key : null);
-                                    const partes = Array.isArray(cierre?.pagos) ? cierre.pagos : [];
-                                    const transferencias = partes.filter(p => p.via !== 'efectivo');
-                                    const sonDosFacturas = transferencias.length > 1 && partes.every(p => p.via !== 'efectivo');
-                                    setDivTipo(sonDosFacturas ? 'dos_facturas' : 'mixto');
-                                    setDivFactura(abrir && transferencias[0] ? String(transferencias[0].monto) : '');
-                                    setDivAlias1(abrir && transferencias[0] ? String(transferencias[0].alias || '') : '');
-                                    setDivAlias2(abrir && transferencias[1] ? String(transferencias[1].alias || '') : '');
-                                  }}
-                                  title="dividir en factura + efectivo o en dos facturas"
-                                  style={{ marginLeft: 2, fontSize: 12, fontWeight: 700, color: divKey === f.key ? BRAND.teal : BRAND.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px' }}>½</button>
-                              )}
+                                      setDivKey(abrir ? f.key : null);
+                                      const partes = Array.isArray(cierre?.pagos) ? cierre.pagos : [];
+                                      const transferencias = partes.filter(p => p.via !== 'efectivo');
+                                      const sonDosFacturas = transferencias.length > 1 && partes.every(p => p.via !== 'efectivo');
+                                      setDivTipo(sonDosFacturas ? 'dos_facturas' : 'mixto');
+                                      setDivFactura(abrir && transferencias[0] ? String(transferencias[0].monto) : '');
+                                      setDivAlias1(abrir && transferencias[0] ? String(transferencias[0].alias || '') : '');
+                                      setDivAlias2(abrir && transferencias[1] ? String(transferencias[1].alias || '') : '');
+                                    }, 'factura + efectivo, o dos facturas')}
+                                  </div>
+                                );
+                              })()}
                               {/* La división ya guardada, a la vista: es parte del método de pago. */}
                               {Array.isArray(cierre?.pagos) && cierre.pagos.length > 1 && (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 6, flexWrap: 'wrap' }}>
