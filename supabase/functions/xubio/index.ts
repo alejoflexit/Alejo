@@ -1,5 +1,5 @@
 // xubio
-// (deploy: 2026-11-23)
+// (deploy: 2026-11-23 b)
 // Puente entre la app y la API de Xubio (etapa 2 de facturas por link — ver ESTADO-FACTURAS-LINK.md).
 // Las credenciales viven SOLO acá como secretos de la función: XUBIO_CLIENT_ID / XUBIO_SECRET_ID
 // (Supabase › Edge Functions › Secrets). Nunca van al front: el repo es público.
@@ -85,6 +85,30 @@ async function mapaApi() {
 const PRODUCTO_ENVIOS = 1853000;   // "Costo envios" (lo que usa Adrián)
 const soloDigitos = (x: unknown) => String(x ?? "").replace(/\D/g, "");
 
+
+// La LISTA de proveedores de Xubio trae solo nombre e id (sin CUIT): el CUIT está en la ficha
+// (/ProveedorBean/{id}). Primero miramos las fichas de los que se parecen por nombre al cadete
+// (titular / nombre en Config); si no aparece, recorremos todas las fichas en tandas.
+async function buscarProveedor(token: string, lista: any[], cuit: string, nombres: unknown[]) {
+  const sinTilde = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  const palabras = new Set(nombres.flatMap((n) => sinTilde(n).split(/[^A-Z]+/)).filter((w) => w.length >= 3));
+  const idDe = (p: any) => p.proveedorid ?? p.id ?? p.ID;
+  const fichaOk = async (p: any) => {
+    const f = await getXubio(token, `/ProveedorBean/${idDe(p)}`);
+    return soloDigitos(f.cuerpo?.cuit) === cuit ? { ...p, ...f.cuerpo } : null;
+  };
+  const puntaje = (p: any) => sinTilde(p.nombre).split(/[^A-Z]+/).filter((w: string) => palabras.has(w)).length;
+  const candidatos = lista.filter((p) => puntaje(p) > 0).sort((a, b) => puntaje(b) - puntaje(a)).slice(0, 25);
+  for (const p of candidatos) { const ok = await fichaOk(p); if (ok) return ok; }
+  const resto = lista.filter((p) => !candidatos.includes(p));
+  const limite = Date.now() + 90_000;
+  for (let i = 0; i < resto.length && Date.now() < limite; i += 15) {
+    const tanda = await Promise.all(resto.slice(i, i + 15).map(fichaOk));
+    const ok = tanda.find(Boolean); if (ok) return ok;
+  }
+  return null;
+}
+
 async function cargarCierre(token: string, cierreId: string, quien: string) {
   const rc = await svc(`/rest/v1/pagos_cierres?select=id,cadete,semana_label,factura_ok,pagado,total&id=eq.${encodeURIComponent(cierreId)}`);
   const cierre = (await leer(rc))?.[0];
@@ -98,7 +122,7 @@ async function cargarCierre(token: string, cierreId: string, quien: string) {
   if (!pendientes.length) return { ok: true, resultados: [], yaCargado: true };
 
   // CUIT del cadete: el del PDF, o el de Config
-  const rt = await svc(`/rest/v1/cadetes_tarifas?select=cuil,nombre,nombre_lightdata`);
+  const rt = await svc(`/rest/v1/cadetes_tarifas?select=cuil,nombre,nombre_lightdata,titular`);
   const tarifas = (await leer(rt)) || [];
   const norm = (x: string) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
   const tarifa = tarifas.find((t: any) => norm(t.nombre_lightdata) === norm(cierre.cadete)) || {};
@@ -116,7 +140,7 @@ async function cargarCierre(token: string, cierreId: string, quien: string) {
     if (!c.letra || !c.punto_venta || !c.numero || !c.monto) { r.error = "No pude leer letra/punto de venta/número/importe del PDF: cargala a mano"; continue; }
     const cuit = soloDigitos(c.cuit) || soloDigitos(tarifa.cuil);
     if (cuit.length !== 11) { r.error = "Falta el CUIT del cadete (cargalo en Config)"; continue; }
-    const prov = listaProv.find((p: any) => soloDigitos(p.cuit) === cuit);
+    const prov = await buscarProveedor(token, listaProv, cuit, [tarifa.titular, tarifa.nombre, tarifa.nombre_lightdata, cierre.cadete]);
     if (!prov) { r.error = `El CUIT ${cuit} no está como proveedor en Xubio: crealo una vez y volvé a tocar`; continue; }
     const provId = prov.proveedorid ?? prov.id ?? prov.ID;
     const doc = `${c.letra}-${c.punto_venta}-${c.numero}`;
