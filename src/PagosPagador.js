@@ -78,6 +78,16 @@ function cargarPdfJs() {
 // Busca el número de comprobante en el texto de una factura AFIP y devuelve los
 // últimos 4 dígitos. Prueba primero los rótulos típicos ("Comp. Nro", "Número")
 // y después el formato punto de venta-comprobante (00003-00001234).
+// ¿La factura sale a nombre de otra persona? (cadetes_tarifas.factura_nombre = como figura en Xubio).
+// Distinto = no comparte ninguna palabra (≥3 letras) con el nombre del cadete.
+function facturaDeOtro(facturaNombre, ...nombresCadete) {
+  const pal = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/[^A-Z]+/).filter(w => w.length >= 3);
+  const f = pal(facturaNombre);
+  if (!f.length) return false;
+  const c = new Set(nombresCadete.flatMap(pal));
+  return !f.some(w => c.has(w));
+}
+
 function nroDesdeTexto(texto) {
   const t = String(texto || '');
   // PDF real de ARCA (23/11): pdf.js trae "Comp. Nro: 00002 00000105" (punto de venta y número
@@ -270,6 +280,8 @@ export default function PagosPagador({ tarifas }) {
         facturaFile: c.factura_file || null, // path del archivo en el bucket 'facturas'
         facturaMonto: c.factura_monto ?? null, // neto de lo que subió el cadete por su link (si lo usó)
         alias, cuil: t.cuil || '', cbu,
+        facturaNombre: t.factura_nombre || '',
+        facturaDeOtro: facturaDeOtro(t.factura_nombre, t.nombre, t.nombre_lightdata, c.cadete),
       };
       const partes = (Array.isArray(c.pagos) ? c.pagos : []).filter(p => (+p.monto || 0) > 0);
       if (partes.length > 1) {
@@ -881,6 +893,12 @@ export default function PagosPagador({ tarifas }) {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                       <CopyField label="Alias" valor={f.alias} campoKey={`alias-${f.key}`} copiado={copiado} setCopiado={setCopiado} />
                       <CopyField label="CUIL" valor={f.cuil} campoKey={`cuil-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
+                      {/* Le factura otra persona (Config → factura_nombre): avisarlo para no dudar al ver la factura */}
+                      {f.facturaDeOtro && (
+                        <span title="La factura sale a nombre de otra persona (así figura en Xubio)" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 10px', borderRadius: 8, border: `1px solid ${BRAND.border}`, color: BRAND.muted }}>
+                          Factura <b style={{ color: BRAND.amber, fontWeight: 600 }}>{f.facturaNombre}</b>
+                        </span>
+                      )}
                       <CopyField label="CBU" valor={f.cbu} display={maskCbu(f.cbu)} campoKey={`cbu-${f.id}`} copiado={copiado} setCopiado={setCopiado} />
                       {f.sinDatos && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: BRAND.amber }}>⚠ falta alias o CBU para transferir</span>}
                     </div>

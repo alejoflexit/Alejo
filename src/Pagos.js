@@ -847,6 +847,16 @@ async function exportarExcel({ filas, aparte, porDarAlta, semanaLunes, subtotale
 // ───────────────────────── sub-vista: Config de cadetes (solo admin) ─────────────────────────
 
 // Link de factura del cadete (ver ESTADO-FACTURAS-LINK.md). El token es al azar: no se deduce del nombre.
+// ¿La factura sale a nombre de otra persona? (cadetes_tarifas.factura_nombre = como figura en Xubio).
+// Distinto = no comparte ninguna palabra (≥3 letras) con el nombre del cadete.
+function facturaDeOtro(facturaNombre, ...nombresCadete) {
+  const pal = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/[^A-Z]+/).filter(w => w.length >= 3);
+  const f = pal(facturaNombre);
+  if (!f.length) return false;
+  const c = new Set(nombresCadete.flatMap(pal));
+  return !f.some(w => c.has(w));
+}
+
 function nuevoTokenFactura() {
   const b = new Uint8Array(18);
   window.crypto.getRandomValues(b);
@@ -1057,6 +1067,12 @@ function ConfigCadetes({ tarifas, alias, cpOverrides, cpTarifas, cpsPorCadete, o
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     <input disabled={!esFactura} title={bancoTitle} style={{ ...bancoInp, width: 110 }} placeholder={esFactura ? 'sin CUIL' : '—'} value={draftVal(t, 'cuil') ?? ''} onChange={e => setDraft(t.id, 'cuil', e.target.value)} />
+                    {/* A nombre de quién factura (como figura en Xubio). En ámbar si es otra persona, igual que Titular. */}
+                    {esFactura && t.factura_nombre && (
+                      <div title="A nombre de quién sale la factura (proveedor en Xubio)" style={{ fontSize: 10, marginTop: 3, maxWidth: 140, color: facturaDeOtro(t.factura_nombre, t.nombre, t.nombre_lightdata) ? BRAND.amber : BRAND.muted, fontWeight: facturaDeOtro(t.factura_nombre, t.nombre, t.nombre_lightdata) ? 600 : 400 }}>
+                        Factura: {t.factura_nombre}
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '5px 6px' }}>
                     <input disabled={!esFactura} title={bancoTitle} style={{ ...bancoInp, width: 130 }} placeholder={esFactura ? 'sin CBU' : '—'} value={draftVal(t, 'cbu') ?? ''} onChange={e => setDraft(t.id, 'cbu', e.target.value)} />
