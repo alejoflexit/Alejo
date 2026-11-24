@@ -280,6 +280,16 @@ input[type=file]{display:none}
   }
 
   function subir(file, tipo, monto, origen, leido) {
+    // Misma factura dos veces (23/11, Hernan Merlo): mismo tipo, número e importe que una ya subida → no se carga.
+    var sem = semanaDe(semanaSubiendo);
+    var nroNuevo = leido && (leido.numero ? String(leido.numero).slice(-4) : leido.nro);
+    if (sem && nroNuevo && sem.comprobantes.some(function (c) {
+      return c.tipo === tipo && c.nro === nroNuevo && Math.round(Number(c.monto)) === Math.round(Number(monto));
+    })) {
+      pendiente = null; ocupado = false;
+      mensaje = "Esa factura ya la subiste (Nº …" + nroNuevo + "). No hace falta subirla de nuevo.";
+      return render();
+    }
     ocupado = true; pendiente = null; render();
     var esPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
     var ext = esPdf ? "pdf" : ((file.type.split("/")[1] || "jpg").replace("jpeg", "jpg").replace(/[^a-z0-9]/g, "") || "jpg");
