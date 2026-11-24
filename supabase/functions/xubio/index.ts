@@ -1,5 +1,5 @@
 // xubio
-// (deploy: 2026-11-23 b)
+// (deploy: 2026-11-24 masivo)
 // Puente entre la app y la API de Xubio (etapa 2 de facturas por link — ver ESTADO-FACTURAS-LINK.md).
 // Las credenciales viven SOLO acá como secretos de la función: XUBIO_CLIENT_ID / XUBIO_SECRET_ID
 // (Supabase › Edge Functions › Secrets). Nunca van al front: el repo es público.
@@ -7,7 +7,7 @@
 // Acciones (POST {accion}):
 //   probar  → saca un token, mira qué expone la API para compras/proveedores y trae 1 comprobante
 //             de compra de ejemplo para copiar exactamente cómo los carga Adrián. No escribe nada.
-//   cargar  → {cierre_id}: carga en Xubio las facturas que el cadete subió por su link (botón
+//   cargar  → {cierre_id} o {cierre_ids: [...]} (carga masiva, comparte token y listas de Xubio): carga en Xubio las facturas que el cadete subió por su link (botón
 //             "Cargar en Xubio" de Pagar). Copia el molde de Adrián (19/11): producto "Costo envios",
 //             descripción "Envios", sin IVA, número C-PPPPP-NNNNNNNN, proveedor = el cadete por CUIT.
 //             No crea proveedores ni carga notas de débito/crédito (eso sigue a mano). Si el mismo
@@ -89,27 +89,57 @@ const soloDigitos = (x: unknown) => String(x ?? "").replace(/\D/g, "");
 // La LISTA de proveedores de Xubio trae solo nombre e id (sin CUIT): el CUIT está en la ficha
 // (/ProveedorBean/{id}). Primero miramos las fichas de los que se parecen por nombre al cadete
 // (titular / nombre en Config); si no aparece, recorremos todas las fichas en tandas.
-async function buscarProveedor(token: string, lista: any[], cuit: string, nombres: unknown[]) {
+// porCuit: CUIT -> ficha, compartido entre cadetes de una misma tanda (cada ficha se pide una sola vez).
+async function buscarProveedor(token: string, lista: any[], cuit: string, nombres: unknown[], porCuit: Map<string, any>, vistos: Set<unknown>) {
+  if (porCuit.has(cuit)) return porCuit.get(cuit);
   const sinTilde = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
   const palabras = new Set(nombres.flatMap((n) => sinTilde(n).split(/[^A-Z]+/)).filter((w) => w.length >= 3));
   const idDe = (p: any) => p.proveedorid ?? p.id ?? p.ID;
   const fichaOk = async (p: any) => {
+    if (vistos.has(idDe(p))) return null;
+    vistos.add(idDe(p));
     const f = await getXubio(token, `/ProveedorBean/${idDe(p)}`);
-    return soloDigitos(f.cuerpo?.cuit) === cuit ? { ...p, ...f.cuerpo } : null;
+    const c = soloDigitos(f.cuerpo?.cuit);
+    if (c.length === 11 && !porCuit.has(c)) porCuit.set(c, { ...p, ...f.cuerpo });
+    return c === cuit ? { ...p, ...f.cuerpo } : null;
   };
   const puntaje = (p: any) => sinTilde(p.nombre).split(/[^A-Z]+/).filter((w: string) => palabras.has(w)).length;
   const candidatos = lista.filter((p) => puntaje(p) > 0).sort((a, b) => puntaje(b) - puntaje(a)).slice(0, 25);
   for (const p of candidatos) { const ok = await fichaOk(p); if (ok) return ok; }
   const resto = lista.filter((p) => !candidatos.includes(p));
   const limite = Date.now() + 90_000;
-  for (let i = 0; i < resto.length && Date.now() < limite; i += 15) {
-    const tanda = await Promise.all(resto.slice(i, i + 15).map(fichaOk));
+  for (let i = 0; i < resto.length && Date.now() < limite; i += 25) {
+    const tanda = await Promise.all(resto.slice(i, i + 25).map(fichaOk));
     const ok = tanda.find(Boolean); if (ok) return ok;
   }
   return null;
 }
 
-async function cargarCierre(token: string, cierreId: string, quien: string) {
+type Ctx = { tarifas: any[]; listaProv: any[]; listaCompras: any[]; porCuit: Map<string, any>; vistos: Set<unknown> };
+
+async function contexto(token: string): Promise<Ctx> {
+  const rt = await svc(`/rest/v1/cadetes_tarifas?select=*`);
+  const tarifas = (await leer(rt)) || [];
+  const provs = await getXubio(token, "/ProveedorBean");
+  const compras = await getXubio(token, "/comprobanteCompraBean");
+  const ctx: Ctx = {
+    tarifas: Array.isArray(tarifas) ? tarifas : [],
+    listaProv: Array.isArray(provs.cuerpo) ? provs.cuerpo : [],
+    listaCompras: Array.isArray(compras.cuerpo) ? compras.cuerpo : [],
+    porCuit: new Map(), vistos: new Set(),
+  };
+  // Proveedores ya encontrados otras veces (cadetes_tarifas.xubio_proveedor_id): no hay que buscarlos.
+  for (const t of ctx.tarifas) {
+    const c = soloDigitos(t.cuil), id = t.xubio_proveedor_id;
+    if (c.length === 11 && id) {
+      const p = ctx.listaProv.find((x: any) => Number(x.proveedorid ?? x.id ?? x.ID) === Number(id));
+      if (p) ctx.porCuit.set(c, { ...p, cuit: c });
+    }
+  }
+  return ctx;
+}
+
+async function cargarCierre(token: string, cierreId: string, quien: string, ctx: Ctx) {
   const rc = await svc(`/rest/v1/pagos_cierres?select=id,cadete,semana_label,factura_ok,pagado,total&id=eq.${encodeURIComponent(cierreId)}`);
   const cierre = (await leer(rc))?.[0];
   if (!cierre) return { ok: false, error: "No encontré esa liquidación" };
@@ -122,15 +152,9 @@ async function cargarCierre(token: string, cierreId: string, quien: string) {
   if (!pendientes.length) return { ok: true, resultados: [], yaCargado: true };
 
   // CUIT del cadete: el del PDF, o el de Config
-  const rt = await svc(`/rest/v1/cadetes_tarifas?select=cuil,nombre,nombre_lightdata,titular`);
-  const tarifas = (await leer(rt)) || [];
+  const { tarifas, listaProv, listaCompras } = ctx;
   const norm = (x: string) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
   const tarifa = tarifas.find((t: any) => norm(t.nombre_lightdata) === norm(cierre.cadete)) || {};
-
-  const provs = await getXubio(token, "/ProveedorBean");
-  const listaProv = Array.isArray(provs.cuerpo) ? provs.cuerpo : [];
-  const compras = await getXubio(token, "/comprobanteCompraBean");
-  const listaCompras = Array.isArray(compras.cuerpo) ? compras.cuerpo : [];
 
   const resultados: any[] = [];
   for (const c of pendientes) {
@@ -140,9 +164,14 @@ async function cargarCierre(token: string, cierreId: string, quien: string) {
     if (!c.letra || !c.punto_venta || !c.numero || !c.monto) { r.error = "No pude leer letra/punto de venta/número/importe del PDF: cargala a mano"; continue; }
     const cuit = soloDigitos(c.cuit) || soloDigitos(tarifa.cuil);
     if (cuit.length !== 11) { r.error = "Falta el CUIT del cadete (cargalo en Config)"; continue; }
-    const prov = await buscarProveedor(token, listaProv, cuit, [tarifa.titular, tarifa.nombre, tarifa.nombre_lightdata, cierre.cadete]);
+    const prov = await buscarProveedor(token, listaProv, cuit, [tarifa.factura_nombre, tarifa.titular, tarifa.nombre, tarifa.nombre_lightdata, cierre.cadete], ctx.porCuit, ctx.vistos);
     if (!prov) { r.error = `El CUIT ${cuit} no está como proveedor en Xubio: crealo una vez y volvé a tocar`; continue; }
     const provId = prov.proveedorid ?? prov.id ?? prov.ID;
+    // Recordar el proveedor para la próxima (si la columna existe; si no, no pasa nada).
+    if (tarifa.id && Number(tarifa.xubio_proveedor_id) !== Number(provId) && "xubio_proveedor_id" in tarifa) {
+      await svc(`/rest/v1/cadetes_tarifas?id=eq.${tarifa.id}`, { method: "PATCH", body: JSON.stringify({ xubio_proveedor_id: provId }) }).catch(() => null);
+      tarifa.xubio_proveedor_id = provId;
+    }
     const doc = `${c.letra}-${c.punto_venta}-${c.numero}`;
     r.documento = doc; r.proveedor = prov.nombre;
 
@@ -172,6 +201,7 @@ async function cargarCierre(token: string, cierreId: string, quien: string) {
       const jp = await leer(rp);
       if (!rp.ok || !jp?.transaccionid) { r.error = `Xubio rechazó la carga (${rp.status})`; r.detalle = jp; continue; }
       transaccion = jp.transaccionid;
+      listaCompras.push({ numeroDocumento: doc, proveedor: { ID: provId }, transaccionid: transaccion });
     } else {
       r.yaEstaba = true;
     }
@@ -201,13 +231,21 @@ Deno.serve(async (req) => {
   const filaYo = (await leer(rp))?.[0];
   if (!filaYo || filaYo.rol !== "admin") return responder(403, { ok: false, error: "Solo un administrador puede usar esto" });
 
-  const { accion, cierre_id } = await req.json().catch(() => ({}));
+  const { accion, cierre_id, cierre_ids } = await req.json().catch(() => ({}));
   if (accion === "cargar") {
-    if (!cierre_id) return responder(400, { ok: false, error: "Falta cierre_id" });
+    const ids: string[] = Array.isArray(cierre_ids) ? cierre_ids.map(String).slice(0, 10) : cierre_id ? [String(cierre_id)] : [];
+    if (!ids.length) return responder(400, { ok: false, error: "Falta cierre_id" });
     const tk = await tokenXubio();
     if (!tk.ok) return responder(200, { ok: false, error: "No pude conectar con Xubio", detalle: tk });
     try {
-      return responder(200, await cargarCierre(tk.token!, String(cierre_id), String(yo.email || "")));
+      const ctx = await contexto(tk.token!);
+      if (!Array.isArray(cierre_ids)) return responder(200, await cargarCierre(tk.token!, ids[0], String(yo.email || ""), ctx));
+      const porCierre: Record<string, unknown> = {};
+      for (const id of ids) {
+        try { porCierre[id] = await cargarCierre(tk.token!, id, String(yo.email || ""), ctx); }
+        catch (e) { porCierre[id] = { ok: false, error: `Falla interna: ${String((e as Error)?.message || e)}` }; }
+      }
+      return responder(200, { ok: Object.values(porCierre).every((r: any) => r.ok), porCierre });
     } catch (e) {
       return responder(200, { ok: false, error: `Falla interna: ${String((e as Error)?.message || e)}` });
     }

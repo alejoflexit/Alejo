@@ -57,3 +57,13 @@ Que cada cadete suba su factura desde un link propio, en vez de que Alejo junte 
 - `accion: "cargar"` (botón **Cargar en Xubio** en Pagar, solo filas con factura OK que vino por el link): carga cada factura con ese molde y guarda `facturas_comprobantes.xubio_id/_at/_por`. Si ese número ya está en Xubio para ese proveedor, no duplica: lo marca. **No** crea proveedores (si falta, avisa) ni carga ND/NC (a mano). El cadete ya no puede sacar un comprobante que está en Xubio.
 - La página lee del PDF letra, punto de venta, número completo y fecha de emisión (código AFIP 011/012/013 → C).
 - **No probado contra Xubio todavía la carga real** (solo lectura). La primera vez: probar con una factura del piloto y mirar en Xubio que quede igual a las de Adrián.
+
+## 24/11 — Carga masiva + planilla Galicia
+- Pagar › "☑ Seleccionar varios": tildar filas (o "Todas" / "Sin cargar en Xubio") y abajo aparece la barra:
+  - **Cargar en Xubio (N)**: manda de a 4 cierres por llamada (`cierre_ids`), comparte token, lista de proveedores
+    y de compras; resumen arriba con OK y problemas.
+  - **Planilla Galicia (N)**: llena la plantilla oficial (`public/plantillas/galicia-transferencias.xlsx`, hoja
+    Formulario): CBU de 22 dígitos o alias, monto, concepto "Factura", descripción "Fact NNNN". Máx. 30 por archivo.
+  - **Marcar pagadas · Galicia (N)**: pagado_via=galicia con quién paga. Las partes de un dividido van en su fila.
+- Velocidad: `cadetes_tarifas.xubio_proveedor_id` (migración 20261124200000) guarda el proveedor encontrado;
+  la búsqueda por fichas se hace una vez por cadete. Sin la columna funciona igual, solo más lento.

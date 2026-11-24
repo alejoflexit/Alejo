@@ -75,6 +75,29 @@ function cargarPdfJs() {
   return pdfJsPromise;
 }
 
+// ExcelJS a demanda (solo para armar la planilla de Galicia).
+let excelJsPromise = null;
+function cargarExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (excelJsPromise) return excelJsPromise;
+  excelJsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = () => (window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error('ExcelJS no cargó')));
+    s.onerror = () => { excelJsPromise = null; reject(new Error('No se pudo descargar ExcelJS (¿sin internet?)')); };
+    document.head.appendChild(s);
+  });
+  return excelJsPromise;
+}
+
+// Destino para Galicia: CBU/CVU de 22 dígitos si está; si no, el alias (6 a 20 caracteres).
+function destinoGalicia(f) {
+  const cbu = String(f.cbu || '').replace(/\D/g, '');
+  if (cbu.length === 22) return cbu;
+  const alias = String(f.alias || '').trim();
+  return alias.length >= 6 && alias.length <= 20 && !/\s/.test(alias) ? alias : '';
+}
+
 // Busca el número de comprobante en el texto de una factura AFIP y devuelve los
 // últimos 4 dígitos. Prueba primero los rótulos típicos ("Comp. Nro", "Número")
 // y después el formato punto de venta-comprobante (00003-00001234).
@@ -218,7 +241,12 @@ export default function PagosPagador({ tarifas }) {
   // Comprobantes subidos por el link (cierre_id -> lista) — para el botón "Cargar en Xubio".
   // Si la migración de facturas por link no está corrida, la tabla no existe: queda vacío y no se muestra nada.
   const [comprobantes, setComprobantes] = useState({});
-  const [xubioBusy, setXubioBusy] = useState(null);   // borrador del input "últimos 4" por fila (cuando el PDF no se pudo leer)
+  const [xubioBusy, setXubioBusy] = useState(null);
+  // Selección múltiple (carga masiva a Xubio, planilla de Galicia, marcar pagados de una).
+  const [selMode, setSelMode] = useState(false);
+  const [sel, setSel] = useState(() => new Set());
+  const [masivo, setMasivo] = useState('');      // texto de progreso de la acción masiva en curso
+  const [resumenMasivo, setResumenMasivo] = useState(null); // { titulo, ok: [], errores: [] }   // borrador del input "últimos 4" por fila (cuando el PDF no se pudo leer)
 
   function elegirQuienPaga(v) {
     const limpio = String(v || '').trim();
@@ -502,6 +530,114 @@ export default function PagosPagador({ tarifas }) {
     }
   }
 
+  // ── acciones masivas ──
+  const pendienteXubio = f => f.factura && f.facturaOk && (comprobantes[f.id] || []).some(c => c.tipo === 'factura' && !c.xubio_id);
+  const seleccionadas = filas.filter(f => sel.has(f.key));
+  const selXubio = seleccionadas.filter(pendienteXubio);
+  const selGalicia = seleccionadas.filter(f => f.factura && !f.pagado && destinoGalicia(f));
+  const selPagar = seleccionadas.filter(f => !f.pagado && f.factura && f.facturaOk);
+  const toggleSel = key => setSel(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+
+  async function cargarXubioMasivo(lista) {
+    const ids = Array.from(new Set(lista.map(f => f.id)));
+    if (!ids.length) return;
+    if (!window.confirm(`¿Cargar en Xubio ${ids.length} ${ids.length === 1 ? 'factura' : 'facturas'}?\n\nSe cargan como compra a nombre de cada cadete (producto "Costo envios"). Las que ya estén en Xubio no se duplican.`)) return;
+    const nombre = id => (filas.find(f => f.id === id) || {}).nombre || id;
+    const ok = [], errores = [];
+    const TANDA = 4;
+    try {
+      for (let i = 0; i < ids.length; i += TANDA) {
+        const tanda = ids.slice(i, i + TANDA);
+        setMasivo(`Cargando en Xubio ${Math.min(i + TANDA, ids.length)}/${ids.length}…`);
+        try {
+          const res = await authedFetch(`${SUPABASE_URL}/functions/v1/xubio`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accion: 'cargar', cierre_ids: tanda }),
+          });
+          const txt = await res.text();
+          let j = null; try { j = JSON.parse(txt); } catch { /* no JSON */ }
+          if (!res.ok || !j || !j.porCierre) { tanda.forEach(id => errores.push(`${nombre(id)}: ${(j && j.error) || `respuesta ${res.status}`}`)); continue; }
+          tanda.forEach(id => {
+            const r = j.porCierre[id] || {};
+            const errs = [r.error, ...((r.resultados || []).filter(x => x.error).map(x => x.error))].filter(Boolean);
+            if (errs.length) errores.push(`${nombre(id)}: ${errs.join(' · ')}`);
+            else ok.push(nombre(id) + ((r.resultados || []).some(x => x.yaEstaba) || r.yaCargado ? ' (ya estaba)' : ''));
+          });
+        } catch (e) { tanda.forEach(id => errores.push(`${nombre(id)}: ${e.message}`)); }
+      }
+    } finally {
+      setMasivo('');
+      setResumenMasivo({ titulo: 'Carga en Xubio', ok, errores });
+      setSel(new Set());
+      cargarCierres(semanaSel);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  // Planilla de Galicia Office (plantilla oficial en /plantillas). Máximo 30 pagos por archivo:
+  // si hay más, salen varios archivos.
+  async function planillaGalicia(lista) {
+    if (!lista.length) return;
+    setMasivo('Armando planilla de Galicia…');
+    try {
+      const ExcelJS = await cargarExcelJS();
+      const resp = await fetch('/plantillas/galicia-transferencias.xlsx');
+      if (!resp.ok) throw new Error('No encontré la plantilla de Galicia');
+      const plantilla = await resp.arrayBuffer();
+      const partes = [];
+      for (let i = 0; i < lista.length; i += 30) partes.push(lista.slice(i, i + 30));
+      for (let k = 0; k < partes.length; k++) {
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(plantilla);
+        const ws = wb.getWorksheet('Formulario');
+        partes[k].forEach((f, i) => {
+          const fila = ws.getRow(i + 2);
+          fila.getCell(1).value = destinoGalicia(f);
+          fila.getCell(2).value = Math.round(Number(f.total) * 100) / 100;
+          fila.getCell(3).value = 'Factura';
+          fila.getCell(4).value = (f.facturaNro ? `Fact ${f.facturaNro}` : 'Envios').slice(0, 12);
+          fila.commit();
+        });
+        const buf = await wb.xlsx.writeBuffer();
+        const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Transferencias_Galicia_${semanaSel || ''}${partes.length > 1 ? `_${k + 1}de${partes.length}` : ''}.xlsx`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+      const total = lista.reduce((t, f) => t + (Number(f.total) || 0), 0);
+      setResumenMasivo({ titulo: 'Planilla de Galicia', ok: [`${lista.length} transferencias por ${money(total)}${partes.length > 1 ? ` en ${partes.length} archivos (máx. 30 por archivo)` : ''}. Importala en Galicia Office y, cuando salgan, marcalas como pagadas.`], errores: [] });
+    } catch (e) {
+      setResumenMasivo({ titulo: 'Planilla de Galicia', ok: [], errores: [e.message] });
+    } finally { setMasivo(''); }
+  }
+
+  // Marca como pagadas por Galicia todas las seleccionadas (de a una, en orden).
+  async function pagarMasivo(lista) {
+    if (!lista.length) return;
+    if (!quienPaga) { setError('Antes de marcar un pago, elegí quién está pagando (arriba a la derecha).'); return; }
+    const total = lista.reduce((t, f) => t + (Number(f.total) || 0), 0);
+    if (!window.confirm(`¿Marcar ${lista.length} como pagadas por Galicia (${money(total)})?\n\nHacelo recién cuando las transferencias hayan salido.`)) return;
+    // Las partes de un cadete dividido van de a una en su fila (comparten el mismo cierre).
+    const divididas = lista.filter(f => f.parte != null);
+    const simples = lista.filter(f => f.parte == null);
+    const ok = [], errores = [];
+    for (let i = 0; i < simples.length; i++) {
+      const f = simples[i];
+      setMasivo(`Marcando pagadas ${i + 1}/${simples.length}…`);
+      const cambio = { pagado: true, pagado_via: 'galicia', pagado_por: quienPaga, pagado_at: new Date().toISOString() };
+      try {
+        await sb(`pagos_cierres?id=eq.${f.id}`, { method: 'PATCH', body: JSON.stringify(cambio) });
+        setCierres(prev => prev.map(c => c.id === f.id ? { ...c, ...cambio } : c));
+        ok.push(f.nombre);
+      } catch (e) { errores.push(`${f.nombre}: ${e.message}`); }
+    }
+    divididas.forEach(f => errores.push(`${f.nombre} (parte ${f.parte + 1}): está dividido, marcalo en su fila`));
+    setMasivo(''); setSel(new Set());
+    setResumenMasivo({ titulo: 'Pagos marcados (Galicia)', ok, errores });
+  }
+
   async function marcarFactura(f, valor) {
     setBusyId(f.key);
     setCierres(prev => prev.map(c => c.id === f.id ? { ...c, factura_ok: valor, factura_ok_at: valor ? new Date().toISOString() : null } : c));
@@ -680,6 +816,40 @@ export default function PagosPagador({ tarifas }) {
             )}
           </div>
 
+          {resumenMasivo && (
+            <div style={{ ...cardSt, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <b style={{ fontSize: 14 }}>{resumenMasivo.titulo}</b>
+                <span style={{ fontSize: 12, color: BRAND.muted }}>
+                  {resumenMasivo.ok.length > 0 && <><span style={{ color: BRAND.teal }}>✓</span> {resumenMasivo.ok.length} ok</>}
+                  {resumenMasivo.errores.length > 0 && <> · <span style={{ color: BRAND.amber }}>{resumenMasivo.errores.length} con problema</span></>}
+                </span>
+                <button onClick={() => setResumenMasivo(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: BRAND.muted, cursor: 'pointer', fontSize: 16 }}>✕</button>
+              </div>
+              {resumenMasivo.errores.map((e, i) => <div key={'e' + i} style={{ fontSize: 12, color: BRAND.amber }}>⚠ {e}</div>)}
+              {resumenMasivo.ok.length > 0 && <div style={{ fontSize: 12, color: BRAND.muted }}>{resumenMasivo.ok.join(' · ')}</div>}
+            </div>
+          )}
+
+          {!loading && filasFiltradas.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              <button onClick={() => { setSelMode(m => !m); setSel(new Set()); }} style={pill(selMode, BRAND.blue)}>
+                {selMode ? '✕ Cancelar selección' : '☑ Seleccionar varios'}
+              </button>
+              {selMode && (() => {
+                const elegibles = filasFiltradas.filter(f => f.factura && !f.pagado);
+                const xub = filasFiltradas.filter(pendienteXubio);
+                return (
+                  <>
+                    <button onClick={() => setSel(new Set(elegibles.map(f => f.key)))} style={pill(false)}>Todas ({elegibles.length})</button>
+                    {xub.length > 0 && <button onClick={() => setSel(new Set(xub.map(f => f.key)))} style={pill(false)}>Sin cargar en Xubio ({xub.length})</button>}
+                    {sel.size > 0 && <button onClick={() => setSel(new Set())} style={pill(false)}>Ninguna</button>}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
           {loading && <div style={{ color: BRAND.muted, fontSize: 13, padding: 20, textAlign: 'center' }}>Cargando…</div>}
 
           {!loading && filasFiltradas.length === 0 && (
@@ -750,6 +920,13 @@ export default function PagosPagador({ tarifas }) {
                     background: enDrag ? 'rgba(46,230,182,0.10)' : BRAND.navyCard,
                     borderColor: enDrag ? BRAND.teal : f.pagado ? 'rgba(46,230,182,0.3)' : sinFactura ? 'rgba(245,192,68,0.4)' : BRAND.border }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    {selMode && f.factura && !f.pagado && (
+                      <button onClick={() => toggleSel(f.key)} aria-label={sel.has(f.key) ? 'quitar de la selección' : 'seleccionar'}
+                        style={{ width: 28, height: 28, borderRadius: 8, cursor: 'pointer', fontSize: 15, fontWeight: 800, lineHeight: 1,
+                          border: `1.5px solid ${sel.has(f.key) ? BRAND.teal : BRAND.border}`, background: sel.has(f.key) ? 'rgba(46,230,182,0.18)' : 'transparent', color: BRAND.teal }}>
+                        {sel.has(f.key) ? '✓' : ''}
+                      </button>
+                    )}
                     {/* Método de pago (cómo se le paga) — badge neutro */}
                     <span title={f.factura ? 'Transferencia' : 'Efectivo'} style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, color: BRAND.muted, background: 'rgba(255,255,255,0.06)', border: `1px solid ${BRAND.border}`, whiteSpace: 'nowrap' }}>
                       {f.factura ? '🏦 Transferencia' : '💵 Efectivo'}
@@ -909,6 +1086,33 @@ export default function PagosPagador({ tarifas }) {
             })}
           </div>
         </>
+      )}
+
+      {/* Barra de acciones masivas: aparece abajo, fija, cuando hay algo seleccionado o algo corriendo. */}
+      {selMode && (sel.size > 0 || masivo) && (
+        <div style={{ position: 'sticky', bottom: 12, zIndex: 40, marginTop: 16, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: '12px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          {masivo ? (
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{masivo}</span>
+          ) : (
+            <>
+              <span style={{ fontSize: 13, fontWeight: 700, marginRight: 4 }}>
+                {sel.size} {sel.size === 1 ? 'seleccionada' : 'seleccionadas'} · {money(seleccionadas.reduce((t, f) => t + (Number(f.total) || 0), 0))}
+              </span>
+              <button onClick={() => cargarXubioMasivo(selXubio)} disabled={!selXubio.length}
+                style={{ ...pill(false), color: selXubio.length ? BRAND.white : BRAND.muted, cursor: selXubio.length ? 'pointer' : 'default' }}>
+                Cargar en Xubio ({selXubio.length})
+              </button>
+              <button onClick={() => planillaGalicia(selGalicia)} disabled={!selGalicia.length}
+                style={{ ...pill(false), color: selGalicia.length ? BRAND.white : BRAND.muted, cursor: selGalicia.length ? 'pointer' : 'default' }}>
+                Planilla Galicia ({selGalicia.length})
+              </button>
+              <button onClick={() => pagarMasivo(selPagar)} disabled={!selPagar.length}
+                style={{ ...pill(false), color: selPagar.length ? BRAND.white : BRAND.muted, cursor: selPagar.length ? 'pointer' : 'default' }}>
+                ✓ Marcar pagadas · Galicia ({selPagar.length})
+              </button>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
