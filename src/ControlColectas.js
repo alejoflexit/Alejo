@@ -89,7 +89,7 @@ function Fila({ it, cuentasLD, onMarcar, onVincular }) {
         </div>
         {derecha}
       </div>
-      {it.estado !== 'colectada' && (
+      {(it.estado === 'vencida' || it.estado === 'sin_vincular' || it.estado === 'sin_datos') && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
           <BotonConfirmar label="Marcar colectada" confirmar="✓ Confirmar" color={C.verde} onOk={() => onMarcar(it, true)} />
         </div>
@@ -107,6 +107,11 @@ function Fila({ it, cuentasLD, onMarcar, onVincular }) {
 export default function ControlColectas({ control, corte, ldOk, actualizado, tablaFalta, cuentasLD, onMarcar, onVincular }) {
   const [verColectadas, setVerColectadas] = useState(false);
   if (!control || control.total === 0) return null;
+  if (tablaFalta) return (
+    <div style={{ background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: '14px 18px', marginBottom: 16, fontSize: 13, color: C.amarillo }}>
+      Control de colectas: falta correr la migración en Supabase para activarlo.
+    </div>
+  );
   const { items, total, colectadas, vencidas } = control;
   const pct = Math.round(colectadas / total * 100);
   const faltan = items.filter(i => i.estado !== 'colectada');
@@ -125,9 +130,6 @@ export default function ControlColectas({ control, corte, ldOk, actualizado, tab
         Corte {corte}{faltan.length ? ` · faltan ${faltan.length}` : ''}
         {ldOk ? (actualizado ? ` · LightData ${hora(actualizado)}` : '') : ' · no se pudo leer LightData'}
       </div>
-      {tablaFalta && (
-        <div style={{ fontSize: 12, color: C.amarillo, marginTop: 6 }}>Falta correr la migración de control de colectas: no se pueden guardar vínculos ni marcas.</div>
-      )}
       {faltan.map(it => <Fila key={it.clienteId} it={it} cuentasLD={cuentasLD} onMarcar={onMarcar} onVincular={onVincular} />)}
       {faltan.length === 0 && <div style={{ fontSize: 12, color: C.verde, marginTop: 10, fontWeight: 600 }}>✓ Se colectó todo</div>}
       {hechas.length > 0 && (
