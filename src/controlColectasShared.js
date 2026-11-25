@@ -62,7 +62,10 @@ export function colectasAsignadas(registros, clientes) {
 //   sin_datos    → no se pudo leer LightData: nunca se marca vencida por un error nuestro
 // ldPorCliente: { [idCliente LD]: cantidad } | null si el bridge falló.
 export function evaluarControl({ asignadas, vinculos, ldPorCliente, ahoraMin, corteMin, esHoy, esPasado }) {
-  const compartidas = cuentasCompartidas(vinculos);
+  // "compartida" solo si otra colecta ASIGNADA HOY usa la misma cuenta (fichas duplicadas de sábado no cuentan)
+  const vincHoy = {};
+  (asignadas || []).forEach(a => { if (vinculos && vinculos[a.clienteId]) vincHoy[a.clienteId] = vinculos[a.clienteId]; });
+  const compartidas = cuentasCompartidas(vincHoy);
   const items = (asignadas || []).map(a => {
     const cuentas = (vinculos && vinculos[a.clienteId]) || [];
     const cantidad = ldPorCliente
