@@ -7,6 +7,8 @@ import {
 import ColectasBot from './ColectasBot';
 import { FX_FONT } from "./theme";
 import { bridgeFetch } from './bridge';
+import ControlColectas from './ControlColectas';
+import { CORTE_COLECTAS, minutosDe, indexVinculos, colectasAsignadas, evaluarControl, resumenPorChofer, buscarCuentas } from './controlColectasShared';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
 const ClienteUbicacion = React.lazy(() => import('./ClienteUbicacion'));
@@ -261,6 +263,11 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [detalleLD, setDetalleLD] = useState({}); // cache lazy del detalle de colecta por cadete: { [canonNombre]: {loading, ok, total, localidades, fecha} }
   const [detalleAbierto, setDetalleAbierto] = useState(null); // cadete cuyo panel de detalle está expandido
   const [aliasCadetes, setAliasCadetes] = useState([]); // pagos_cadete_alias, para matchear nombres LightData
+  // Control de colectas (25/11): vínculos cliente ↔ cuenta(s) LightData y lista de cuentas para vincular
+  const [vinculosLD, setVinculosLD] = useState([]); // filas de colectas_cliente_ld
+  const [cuentasLD, setCuentasLD] = useState([]); // [{ id, nombre }] de clientes_tokens (id_interno = idCliente LD)
+  const [controlFalta, setControlFalta] = useState(false); // la migración todavía no se corrió
+  const [cuentaQ, setCuentaQ] = useState(''); // buscador de cuentas LD en la ficha del cliente
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
   const [zonasArribosAbierto, setZonasArribosAbierto] = useState(false); // desglose por zona plegable (arranca cerrado)
   const [zonaArribos, setZonaArribos] = useState(null); // zona elegida en el desglose: filtra la lista
@@ -580,6 +587,50 @@ function ColectasInner({ soloArribos = false, irA }) {
       .finally(() => setLoadingPagos(false));
   }, [navView, semanaFecha]);
 
+  // Control de colectas — vínculos y cuentas de LightData (Arribos y ficha de cliente)
+  const cargarVinculosLD = useCallback(async () => {
+    try { setVinculosLD(await sbFetch('colectas_cliente_ld?select=id,cliente_id,ld_id,ld_nombre,origen')); setControlFalta(false); }
+    catch (e) { setControlFalta(true); }
+  }, []);
+  useEffect(() => {
+    if (navView !== 'arribos' && navView !== 'clientes') return;
+    cargarVinculosLD();
+    if (cuentasLD.length === 0) {
+      sbFetch('clientes_tokens?select=id_interno,nombre&limit=5000')
+        .then(rows => setCuentasLD(rows.filter(r => r.id_interno != null).map(r => ({ id: Number(r.id_interno), nombre: String(r.nombre || '').trim() }))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))))
+        .catch(() => {});
+    }
+  }, [navView, cargarVinculosLD, cuentasLD.length]);
+
+  const vincularCuentaLD = async (clienteId, cuenta) => {
+    try {
+      await sbFetch('colectas_cliente_ld', { method: 'POST', headers: { 'Prefer': 'return=minimal,resolution=ignore-duplicates' },
+        body: JSON.stringify({ cliente_id: clienteId, ld_id: cuenta.id, ld_nombre: cuenta.nombre, origen: 'manual' }) });
+      await cargarVinculosLD();
+    } catch (e) { setError('No se pudo vincular la cuenta: ' + e.message); }
+  };
+  const desvincularCuentaLD = async (filaId) => {
+    try {
+      await sbFetch(`colectas_cliente_ld?id=eq.${filaId}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+      await cargarVinculosLD();
+    } catch (e) { setError('No se pudo desvincular la cuenta: ' + e.message); }
+  };
+  // Marca manual "colectada" (colectas sin envíos o sin cuenta). Vive en el registro del día.
+  const marcarColectada = async (item, si) => {
+    const reg = registros[item.clienteId];
+    if (!reg || !reg.id) return;
+    const patch = si ? { colectado_manual_at: new Date().toISOString(), colectado_manual_por: (getSession() || {}).nombre || null }
+                     : { colectado_manual_at: null, colectado_manual_por: null };
+    setRegistros(prev => ({ ...prev, [item.clienteId]: { ...prev[item.clienteId], ...patch } }));
+    try {
+      await sbFetch(`colectas_registros?id=eq.${reg.id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify(patch) });
+    } catch (e) {
+      setRegistros(prev => ({ ...prev, [item.clienteId]: { ...prev[item.clienteId], colectado_manual_at: reg.colectado_manual_at || null, colectado_manual_por: reg.colectado_manual_por || null } }));
+      setError('No se pudo guardar la marca: ' + e.message);
+    }
+  };
+
   // Arribos — cargar cuando navView === 'arribos'
   useEffect(() => {
     if (navView !== 'arribos' || !fecha) return;
@@ -601,7 +652,7 @@ function ColectasInner({ soloArribos = false, irA }) {
     const d = new Date(fecha + 'T12:00:00');
     const fechaLD = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
     // Reset al cambiar de fecha/vista: nunca mostrar cantidades de otro día si el bridge falla
-    setColectaLD({ porChofer: {}, actualizado: null, ok: false });
+    setColectaLD({ porChofer: {}, idPorChofer: {}, porCliente: {}, clientesOk: false, actualizado: null, ok: false });
     let cancelado = false, ctrlActual = null, retryTimer = null;
     const intentar = (nro) => {
       const ctrl = new AbortController();
@@ -611,13 +662,19 @@ function ColectasInner({ soloArribos = false, irA }) {
         .then(r => { if (!r.ok) throw new Error(r.status === 401 ? 'Iniciá sesión para ver la colecta en vivo' : 'bridge ' + r.status); return r.json(); })
         .then(json => {
           if (cancelado) return;
-          const porChofer = {}; const idPorChofer = {};
+          const porChofer = {}; const idPorChofer = {}; const porCliente = {};
           (json.choferes || []).forEach(row => {
             const key = normNombre(row.chofer);
             porChofer[key] = (porChofer[key] || 0) + Number(row.cantidad || 0);
             if (row.idChofer != null) idPorChofer[key] = row.idChofer;
           });
-          setColectaLD({ porChofer, idPorChofer, actualizado: json.actualizado || new Date().toISOString(), ok: true });
+          // Control de colectas: envíos colectados hoy por cuenta de LightData (idCliente)
+          (json.clientes || []).forEach(row => {
+            if (row.idCliente == null) return;
+            const k = Number(row.idCliente);
+            porCliente[k] = (porCliente[k] || 0) + Number(row.cantidad || 0);
+          });
+          setColectaLD({ porChofer, idPorChofer, porCliente, clientesOk: Array.isArray(json.clientes), actualizado: json.actualizado || new Date().toISOString(), ok: true });
         })
         .catch(() => {
           // El primer intento puede pillar al bridge haciendo su login inicial (503): reintento deliberado
@@ -626,7 +683,10 @@ function ColectasInner({ soloArribos = false, irA }) {
         .finally(() => clearTimeout(timer));
     };
     intentar(1);
-    return () => { cancelado = true; clearTimeout(retryTimer); if (ctrlActual) ctrlActual.abort(); };
+    // Control de colectas: el día de hoy se refresca cada 2 min (el bridge cachea 60 s).
+    // Sin reset entre refrescos: si uno falla, queda el último dato bueno.
+    const iv = fecha === todayStr() ? setInterval(() => { if (document.visibilityState === 'visible') intentar(2); }, 120000) : null;
+    return () => { cancelado = true; clearTimeout(retryTimer); clearInterval(iv); if (ctrlActual) ctrlActual.abort(); };
   }, [navView, fecha, aliasCadetes.length]);
 
   // Arribos — GPS real (bridge /geo). Polling cada 45s. Fallback silencioso: si el bridge no responde,
@@ -1714,6 +1774,43 @@ function ColectasInner({ soloArribos = false, irA }) {
               {preciosError && <div style={{ fontSize:12, color:'#F87171', marginTop:8 }}>{preciosError}</div>}
             </div>
 
+            {/* Cuentas en LightData (25/11/2026): para el control de colectas de Arribos. Un cliente puede tener
+                varias cuentas. Se guarda al toque (no espera a "Guardar"). */}
+            <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${BRAND.border}` }}>
+              <div style={{ display:'flex', alignItems:'baseline', gap:10, flexWrap:'wrap', marginBottom:8 }}>
+                <div style={{ ...lblSt, marginBottom:0 }}>Cuentas en LightData</div>
+                <span style={{ fontSize:12, color:BRAND.muted }}>Con esto Arribos sabe si la colecta se hizo. Se guarda al elegirla.</span>
+              </div>
+              {!editId ? (
+                <div style={{ fontSize:12, color:BRAND.muted }}>Guardá el cliente primero y después vinculá su cuenta.</div>
+              ) : controlFalta ? (
+                <div style={{ fontSize:12, color:'#F5C044' }}>Falta correr la migración de control de colectas.</div>
+              ) : (
+                <>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:8 }}>
+                    {vinculosLD.filter(v => v.cliente_id === editId).map(v => (
+                      <span key={v.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 6px 4px 10px', borderRadius:10, border:`1px solid rgba(46,230,182,0.45)`, color:'#2EE6B6', fontSize:12 }}>
+                        {v.ld_nombre || `#${v.ld_id}`} <span style={{ color:BRAND.muted }}>#{v.ld_id}</span>
+                        <button type="button" title="Desvincular" onClick={() => desvincularCuentaLD(v.id)}
+                          style={{ border:'none', background:'none', color:BRAND.muted, cursor:'pointer', fontSize:14, padding:'0 4px' }}>×</button>
+                      </span>
+                    ))}
+                    {vinculosLD.filter(v => v.cliente_id === editId).length === 0 && (
+                      <span style={{ fontSize:12, color:'#F5C044' }}>Sin cuenta vinculada: Arribos no puede controlar esta colecta.</span>
+                    )}
+                  </div>
+                  <input value={cuentaQ} onChange={e => setCuentaQ(e.target.value)} placeholder="Buscar cuenta para agregar"
+                    style={{ ...ctlSt, maxWidth:320 }} />
+                  {buscarCuentas(cuentasLD, cuentaQ).map(c => (
+                    <button key={c.id} type="button" onClick={() => { vincularCuentaLD(editId, c); setCuentaQ(''); }}
+                      style={{ display:'flex', justifyContent:'space-between', width:'100%', maxWidth:320, marginTop:4, padding:'6px 10px', borderRadius:8, border:'none', background:BRAND.faint, color:BRAND.white, fontSize:12, cursor:'pointer', textAlign:'left' }}>
+                      <span>{c.nombre}</span><span style={{ color:BRAND.muted }}>#{c.id}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+
             {/* Ubicación en el mapa */}
             <div style={{ marginTop:14, paddingTop:14, borderTop:`1px solid ${BRAND.border}` }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
@@ -1993,6 +2090,16 @@ function ColectasInner({ soloArribos = false, irA }) {
     const d = new Date(fecha + 'T12:00:00');
     const fechaFmt = d.toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
     const faltan = lista.filter(c => !arribos[c.cadete]?.llego_at);
+    // Control de colectas (25/11): ¿el chofer pasó por cada colecta asignada? Corte 13:30.
+    const hoyStr = todayStr();
+    const controlCol = evaluarControl({
+      asignadas: colectasAsignadas(registros, clientes),
+      vinculos: indexVinculos(vinculosLD),
+      ldPorCliente: colectaLD.ok && colectaLD.clientesOk ? colectaLD.porCliente : null,
+      ahoraMin: minutosAR(ahora), corteMin: minutosDe(CORTE_COLECTAS),
+      esHoy: fecha === hoyStr, esPasado: fecha < hoyStr,
+    });
+    const colPorChofer = resumenPorChofer(controlCol.items);
 
     return (
       <div style={{ maxWidth:560 }}>
@@ -2014,6 +2121,10 @@ function ColectasInner({ soloArribos = false, irA }) {
               : '○ Conectando GPS…'}
           </div>
         </div>
+
+        <ControlColectas control={controlCol} corte={CORTE_COLECTAS} ldOk={colectaLD.ok && colectaLD.clientesOk}
+          actualizado={colectaLD.actualizado} tablaFalta={controlFalta} cuentasLD={cuentasLD}
+          onMarcar={marcarColectada} onVincular={vincularCuentaLD} />
 
         {total === 0 ? (
           <div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>
@@ -2107,6 +2218,14 @@ function ColectasInner({ soloArribos = false, irA }) {
                             : cercaGps ? `está por llegar · a ${gp.dist < 1000 ? gp.dist + ' m' : (gp.dist/1000).toFixed(1) + ' km'} del depósito`
                             : cercaEta ? `está por llegar · ETA ${eta}`
                             : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
+                          {(() => {
+                            const rc = colPorChofer[c.cadete];
+                            if (!rc) return null;
+                            const ok = rc.colectadas === rc.total;
+                            return <span style={{ marginLeft:8, padding:'1px 7px', borderRadius:8, fontSize:11, fontWeight:600,
+                              border:`1px solid ${ok ? 'rgba(46,230,182,0.5)' : 'rgba(245,192,68,0.6)'}`, color: ok ? '#2EE6B6' : '#F5C044' }}>
+                              {rc.colectadas}/{rc.total} colectadas</span>;
+                          })()}
                         </div>
                       } />
 
