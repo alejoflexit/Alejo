@@ -536,6 +536,13 @@ export default function PagosPagador({ tarifas }) {
   const selXubio = seleccionadas.filter(pendienteXubio);
   const selGalicia = seleccionadas.filter(f => f.factura && !f.pagado && destinoGalicia(f));
   const selPagar = seleccionadas.filter(f => !f.pagado && f.factura && f.facturaOk);
+  // Botones de la barra masiva: grandes y claros (antes parecían chips y no se veían).
+  const btnMasivo = (activo, principal) => ({
+    height: 38, padding: '0 16px', fontSize: 13, fontWeight: 700, borderRadius: 10, whiteSpace: 'nowrap',
+    cursor: activo ? 'pointer' : 'default', opacity: activo ? 1 : 0.4,
+    border: `1px solid ${principal ? BRAND.teal : 'rgba(255,255,255,0.35)'}`,
+    background: principal ? BRAND.teal : 'rgba(255,255,255,0.08)', color: principal ? BRAND.navy || '#0b1a2b' : BRAND.white,
+  });
   const toggleSel = key => setSel(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   async function cargarXubioMasivo(lista) {
@@ -1090,7 +1097,7 @@ export default function PagosPagador({ tarifas }) {
 
       {/* Barra de acciones masivas: aparece abajo, fija, cuando hay algo seleccionado o algo corriendo. */}
       {selMode && (sel.size > 0 || masivo) && (
-        <div style={{ position: 'sticky', bottom: 12, zIndex: 40, marginTop: 16, background: BRAND.navyCard, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: '12px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <div style={{ position: 'sticky', bottom: 12, zIndex: 40, marginTop: 16, background: BRAND.navyCard, border: `1px solid ${BRAND.teal}`, borderRadius: 14, padding: '12px 14px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           {masivo ? (
             <span style={{ fontSize: 13, fontWeight: 700 }}>{masivo}</span>
           ) : (
@@ -1099,15 +1106,15 @@ export default function PagosPagador({ tarifas }) {
                 {sel.size} {sel.size === 1 ? 'seleccionada' : 'seleccionadas'} · {money(seleccionadas.reduce((t, f) => t + (Number(f.total) || 0), 0))}
               </span>
               <button onClick={() => cargarXubioMasivo(selXubio)} disabled={!selXubio.length}
-                style={{ ...pill(false), color: selXubio.length ? BRAND.white : BRAND.muted, cursor: selXubio.length ? 'pointer' : 'default' }}>
-                Cargar en Xubio ({selXubio.length})
+                style={btnMasivo(selXubio.length > 0, false)}>
+                ⬆ Cargar en Xubio ({selXubio.length})
               </button>
               <button onClick={() => planillaGalicia(selGalicia)} disabled={!selGalicia.length}
-                style={{ ...pill(false), color: selGalicia.length ? BRAND.white : BRAND.muted, cursor: selGalicia.length ? 'pointer' : 'default' }}>
-                Planilla Galicia ({selGalicia.length})
+                style={btnMasivo(selGalicia.length > 0, false)}>
+                ⬇ Descargar planilla Galicia ({selGalicia.length})
               </button>
               <button onClick={() => pagarMasivo(selPagar)} disabled={!selPagar.length}
-                style={{ ...pill(false), color: selPagar.length ? BRAND.white : BRAND.muted, cursor: selPagar.length ? 'pointer' : 'default' }}>
+                style={btnMasivo(selPagar.length > 0, true)}>
                 ✓ Marcar pagadas · Galicia ({selPagar.length})
               </button>
             </>
