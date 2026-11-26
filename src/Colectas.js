@@ -8,7 +8,7 @@ import ColectasBot from './ColectasBot';
 import { FX_FONT } from "./theme";
 import { bridgeFetch } from './bridge';
 import ControlColectas from './ControlColectas';
-import { CORTE_COLECTAS, minutosDe, indexVinculos, colectasAsignadas, evaluarControl, buscarCuentas, ingresoPorCuenta } from './controlColectasShared';
+import { CORTE_COLECTAS, minutosDe, indexVinculos, colectasAsignadas, evaluarControl, buscarCuentas, ingresoPorCuenta, normCuenta } from './controlColectasShared';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
 const ClienteUbicacion = React.lazy(() => import('./ClienteUbicacion'));
@@ -592,7 +592,7 @@ function ColectasInner({ soloArribos = false, irA }) {
 
   // Control de colectas — vínculos y cuentas de LightData (Arribos y ficha de cliente)
   const cargarVinculosLD = useCallback(async () => {
-    try { setVinculosLD(await sbFetch('colectas_cliente_ld?select=id,cliente_id,ld_id,ld_nombre,origen')); setControlFalta(false); }
+    try { setVinculosLD(await sbFetch('colectas_cliente_ld?select=id,cliente_id,ld_id,ld_nombre,ld_codigo,origen')); setControlFalta(false); }
     catch (e) { setControlFalta(true); }
   }, []);
   useEffect(() => {
@@ -614,14 +614,21 @@ function ColectasInner({ soloArribos = false, irA }) {
     const [y, m, d] = fecha.split('-');
     let vivo = true;
     // La consulta puede tardar (tabla grande): un reintento a los 5 s si da timeout. Si falla, queda el último dato.
-    const traer = (intento = 1) => sbFetch(`envios_busqueda?select=cod_cliente,estado&fecha_flexit=like.${d}/${m}/${y}*&limit=20000`)
-      .then(rows => { if (vivo) setIngresoLD(ingresoPorCuenta(rows, codigoAId)); })
+    // Código de cada cuenta: clientes_tokens, o el guardado en el vínculo (ld_codigo), o por nombre de fantasía.
+    const codigos = { ...codigoAId };
+    const nombres = {};
+    vinculosLD.forEach(v => {
+      if (v.ld_codigo) codigos[String(v.ld_codigo).replace(/^0+/, '')] = Number(v.ld_id);
+      if (v.ld_nombre) nombres[normCuenta(v.ld_nombre)] = Number(v.ld_id);
+    });
+    const traer = (intento = 1) => sbFetch(`envios_busqueda?select=cod_cliente,estado,nombre_fantasia&fecha_flexit=like.${d}/${m}/${y}*&limit=20000`)
+      .then(rows => { if (vivo) setIngresoLD(ingresoPorCuenta(rows, codigos, nombres)); })
       .catch(() => { if (vivo && intento < 2) setTimeout(() => { if (vivo) traer(2); }, 5000); });
     setIngresoLD(null);
     traer();
     const iv = fecha === todayStr() ? setInterval(() => traer(), 300000) : null;
     return () => { vivo = false; clearInterval(iv); };
-  }, [navView, fecha, codigoAId]);
+  }, [navView, fecha, codigoAId, vinculosLD]);
 
   const vincularCuentaLD = async (clienteId, cuenta) => {
     try {

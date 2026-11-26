@@ -119,12 +119,15 @@ export function buscarCuentas(lista, q, max = 8) {
 
 // Envíos del día por cuenta LD que ya salieron de "A retirar" (entraron al circuito).
 // filas: envios_busqueda {cod_cliente, estado}; codigoAId: { [codigo sin ceros]: idCliente LD }.
-export function ingresoPorCuenta(filas, codigoAId) {
+// nombreAId (opcional): { [nombre normalizado]: idCliente } para cuentas sin código conocido (nombre_fantasia).
+export const normCuenta = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+export function ingresoPorCuenta(filas, codigoAId, nombreAId = {}) {
   const out = {};
   (filas || []).forEach(f => {
     const est = String(f.estado || '').toLowerCase();
     if (!est || est === 'a retirar' || est === 'cancelado') return;
-    const id = codigoAId[String(f.cod_cliente || '').replace(/^0+/, '')];
+    let id = codigoAId[String(f.cod_cliente || '').replace(/^0+/, '')];
+    if (id == null && f.nombre_fantasia) id = nombreAId[normCuenta(f.nombre_fantasia)];
     if (id == null) return;
     out[id] = (out[id] || 0) + 1;
   });

@@ -178,6 +178,8 @@ async function main() {
       cadete: S(r["Cadete"]),
       cod_cliente: S(r["Cod.Cliente"]),
       razon_social: S(r["Razon Social"] || r["Nombre Fantasia"]),
+      // Control de colectas (25/11): el nombre de la cuenta en LightData, para cruzar con colectas_cliente_ld
+      nombre_fantasia: S(r["Nombre Fantasia"]) || null,
       id_venta_ml: S(r["ID venta ML"]),
       origen: S(r["Origen"]),
       tracking: S(r["Número Tracking"]),
