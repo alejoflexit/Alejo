@@ -61,7 +61,9 @@ export function colectasAsignadas(registros, clientes) {
 //   vencida      → pasó el corte (o es un día anterior) y no se colectó
 //   sin_datos    → no se pudo leer LightData: nunca se marca vencida por un error nuestro
 // ldPorCliente: { [idCliente LD]: cantidad } | null si el bridge falló.
-export function evaluarControl({ asignadas, vinculos, ldPorCliente, ahoraMin, corteMin, esHoy, esPasado }) {
+// ingresoPorLd: { [idCliente LD]: envíos del día que ya no están "A retirar" } — respaldo para cuando el
+// chofer se saltea el paso "colectado" y lo pone directo en planta (Alejo 25/11). null si no hay dato.
+export function evaluarControl({ asignadas, vinculos, ldPorCliente, ingresoPorLd, ahoraMin, corteMin, esHoy, esPasado }) {
   // "compartida" solo si otra colecta ASIGNADA HOY usa la misma cuenta (fichas duplicadas de sábado no cuentan)
   const vincHoy = {};
   (asignadas || []).forEach(a => { if (vinculos && vinculos[a.clienteId]) vincHoy[a.clienteId] = vinculos[a.clienteId]; });
@@ -72,14 +74,15 @@ export function evaluarControl({ asignadas, vinculos, ldPorCliente, ahoraMin, co
       ? cuentas.reduce((s, v) => s + Number(ldPorCliente[v.ld_id] || 0), 0)
       : 0;
     const compartida = cuentas.some(v => compartidas.has(v.ld_id));
+    const ingresados = ingresoPorLd ? cuentas.reduce((s, v) => s + Number(ingresoPorLd[v.ld_id] || 0), 0) : 0;
     let estado;
     if (a.manualAt) estado = 'colectada';
     else if (!cuentas.length) estado = 'sin_vincular';
+    else if (cantidad > 0 || ingresados > 0) estado = 'colectada';
     else if (!ldPorCliente) estado = 'sin_datos';
-    else if (cantidad > 0) estado = 'colectada';
     else if (esPasado || (esHoy && corteMin != null && ahoraMin >= corteMin)) estado = 'vencida';
     else estado = 'pendiente';
-    return { ...a, cuentas, cantidad, compartida, estado, manual: !!a.manualAt };
+    return { ...a, cuentas, cantidad, ingresados, compartida, estado, manual: !!a.manualAt };
   });
   const orden = { vencida: 0, pendiente: 1, sin_vincular: 2, sin_datos: 3, colectada: 4 };
   items.sort((x, y) => (orden[x.estado] - orden[y.estado]) || x.nombre.localeCompare(y.nombre, 'es'));
@@ -112,4 +115,18 @@ export function buscarCuentas(lista, q, max = 8) {
   const qq = n(q);
   if (!qq) return [];
   return (lista || []).filter(c => n(c.nombre).includes(qq) || String(c.id) === String(q).trim()).slice(0, max);
+}
+
+// Envíos del día por cuenta LD que ya salieron de "A retirar" (entraron al circuito).
+// filas: envios_busqueda {cod_cliente, estado}; codigoAId: { [codigo sin ceros]: idCliente LD }.
+export function ingresoPorCuenta(filas, codigoAId) {
+  const out = {};
+  (filas || []).forEach(f => {
+    const est = String(f.estado || '').toLowerCase();
+    if (!est || est === 'a retirar' || est === 'cancelado') return;
+    const id = codigoAId[String(f.cod_cliente || '').replace(/^0+/, '')];
+    if (id == null) return;
+    out[id] = (out[id] || 0) + 1;
+  });
+  return out;
 }

@@ -66,7 +66,9 @@ function Fila({ it, cuentasLD, onMarcar, onVincular }) {
   if (it.estado === 'colectada') {
     derecha = it.manual
       ? <span style={{ fontSize: 12, color: C.verde }}>a mano{it.manualPor ? ` · ${it.manualPor}` : ''} {hora(it.manualAt)}</span>
-      : <span style={{ fontSize: 12, color: C.verde }}>{it.cantidad} envíos</span>;
+      : it.cantidad > 0
+        ? <span style={{ fontSize: 12, color: C.verde }}>{it.cantidad} envíos</span>
+        : <span style={{ fontSize: 12, color: C.verde }} title="El chofer no marcó la colecta, pero los envíos ya entraron">entró a planta · {it.ingresados}</span>;
   } else if (it.estado === 'vencida') {
     derecha = <span style={{ fontSize: 12, color: C.rojo, fontWeight: 600 }}>sin colectar</span>;
   } else if (it.estado === 'pendiente') {

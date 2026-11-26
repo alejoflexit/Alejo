@@ -8,7 +8,7 @@ import ColectasBot from './ColectasBot';
 import { FX_FONT } from "./theme";
 import { bridgeFetch } from './bridge';
 import ControlColectas from './ControlColectas';
-import { CORTE_COLECTAS, minutosDe, indexVinculos, colectasAsignadas, evaluarControl, buscarCuentas } from './controlColectasShared';
+import { CORTE_COLECTAS, minutosDe, indexVinculos, colectasAsignadas, evaluarControl, buscarCuentas, ingresoPorCuenta } from './controlColectasShared';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
 const ClienteUbicacion = React.lazy(() => import('./ClienteUbicacion'));
@@ -268,6 +268,8 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [cuentasLD, setCuentasLD] = useState([]); // [{ id, nombre }] de clientes_tokens (id_interno = idCliente LD)
   const [controlFalta, setControlFalta] = useState(false); // la migración todavía no se corrió
   const [cuentaQ, setCuentaQ] = useState(''); // buscador de cuentas LD en la ficha del cliente
+  const [ingresoLD, setIngresoLD] = useState(null); // { [idCliente LD]: envíos del día ya ingresados } (respaldo del control)
+  const [codigoAId, setCodigoAId] = useState({}); // clientes_tokens: codigo LD → id_interno
   const [verControlCol, setVerControlCol] = useState(false); // Arribos: pantalla aparte del control de colectas (Alejo: Arribos = solo llegadas)
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
   const [zonasArribosAbierto, setZonasArribosAbierto] = useState(false); // desglose por zona plegable (arranca cerrado)
@@ -597,12 +599,28 @@ function ColectasInner({ soloArribos = false, irA }) {
     if (navView !== 'arribos' && navView !== 'clientes') return;
     cargarVinculosLD();
     if (cuentasLD.length === 0) {
-      sbFetch('clientes_tokens?select=id_interno,nombre&limit=5000')
+      sbFetch('clientes_tokens?select=id_interno,nombre,codigo&limit=5000')
+        .then(rows => (setCodigoAId(Object.fromEntries(rows.filter(r => r.codigo != null && r.id_interno != null).map(r => [String(r.codigo).replace(/^0+/, ''), Number(r.id_interno)]))), rows))
         .then(rows => setCuentasLD(rows.filter(r => r.id_interno != null).map(r => ({ id: Number(r.id_interno), nombre: String(r.nombre || '').trim() }))
           .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))))
         .catch(() => {});
     }
   }, [navView, cargarVinculosLD, cuentasLD.length]);
+
+  // Respaldo del control: envíos del día (Fecha Flexit) que ya no están "A retirar". La tabla
+  // envios_busqueda se sincroniza cada 5 min de 13 a 16 hs. Si falla, el control sigue con LightData.
+  useEffect(() => {
+    if (navView !== 'arribos' || !fecha || !Object.keys(codigoAId).length) return;
+    const [y, m, d] = fecha.split('-');
+    let vivo = true;
+    const traer = () => sbFetch(`envios_busqueda?select=cod_cliente,estado&fecha_flexit=like.${d}/${m}/${y}*&limit=20000`)
+      .then(rows => { if (vivo) setIngresoLD(ingresoPorCuenta(rows, codigoAId)); })
+      .catch(() => { if (vivo) setIngresoLD(null); });
+    setIngresoLD(null);
+    traer();
+    const iv = fecha === todayStr() ? setInterval(traer, 300000) : null;
+    return () => { vivo = false; clearInterval(iv); };
+  }, [navView, fecha, codigoAId]);
 
   const vincularCuentaLD = async (clienteId, cuenta) => {
     try {
@@ -2097,6 +2115,7 @@ function ColectasInner({ soloArribos = false, irA }) {
       asignadas: colectasAsignadas(registros, clientes),
       vinculos: indexVinculos(vinculosLD),
       ldPorCliente: colectaLD.ok && colectaLD.clientesOk ? colectaLD.porCliente : null,
+      ingresoPorLd: ingresoLD,
       ahoraMin: minutosAR(ahora), corteMin: minutosDe(CORTE_COLECTAS),
       esHoy: fecha === hoyStr, esPasado: fecha < hoyStr,
     });

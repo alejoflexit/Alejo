@@ -1,4 +1,4 @@
-import { colectasAsignadas, evaluarControl, indexVinculos, resumenPorChofer, buscarCuentas, minutosDe } from './controlColectasShared';
+import { ingresoPorCuenta, colectasAsignadas, evaluarControl, indexVinculos, resumenPorChofer, buscarCuentas, minutosDe } from './controlColectasShared';
 
 const clientes = [
   { id: 'a', nombre: 'Cliente A' }, { id: 'b', nombre: 'Cliente B' }, { id: 'c', nombre: 'Cliente C' },
@@ -48,4 +48,12 @@ test('resumen por chofer y búsqueda', () => {
   const r = evaluarControl({ asignadas: colectasAsignadas(registros, clientes), vinculos, ldPorCliente: { 10: 1 }, ahoraMin: 0, corteMin: 810, esHoy: true });
   expect(resumenPorChofer(r.items)).toEqual({ Ana: { total: 2, colectadas: 1 }, Beto: { total: 1, colectadas: 0 } });
   expect(buscarCuentas([{ id: 1, nombre: 'Ámbito Pinturerías' }], 'ambito').length).toBe(1);
+});
+
+test('respaldo: envíos de hoy fuera de "A retirar" cuentan como colectada', () => {
+  const ing = ingresoPorCuenta([{ cod_cliente: '0183', estado: 'Entregado' }, { cod_cliente: '0183', estado: 'A retirar' }, { cod_cliente: '9', estado: 'A retirar' }], { '183': 10, '9': 20 });
+  expect(ing).toEqual({ 10: 1 });
+  const r = evaluarControl({ asignadas: colectasAsignadas(registros, clientes), vinculos, ldPorCliente: {}, ingresoPorLd: ing, ahoraMin: 900, corteMin: 810, esHoy: true });
+  expect(r.items.find(i => i.clienteId === 'a').estado).toBe('colectada');
+  expect(r.items.find(i => i.clienteId === 'b').estado).toBe('vencida');
 });
