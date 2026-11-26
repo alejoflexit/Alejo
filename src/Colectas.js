@@ -8,7 +8,7 @@ import ColectasBot from './ColectasBot';
 import { FX_FONT } from "./theme";
 import { bridgeFetch } from './bridge';
 import ControlColectas from './ControlColectas';
-import { CORTE_COLECTAS, minutosDe, indexVinculos, colectasAsignadas, evaluarControl, resumenPorChofer, buscarCuentas } from './controlColectasShared';
+import { CORTE_COLECTAS, minutosDe, indexVinculos, colectasAsignadas, evaluarControl, buscarCuentas } from './controlColectasShared';
 
 const ColectasMapa = React.lazy(() => import('./ColectasMapa'));
 const ClienteUbicacion = React.lazy(() => import('./ClienteUbicacion'));
@@ -268,6 +268,7 @@ function ColectasInner({ soloArribos = false, irA }) {
   const [cuentasLD, setCuentasLD] = useState([]); // [{ id, nombre }] de clientes_tokens (id_interno = idCliente LD)
   const [controlFalta, setControlFalta] = useState(false); // la migración todavía no se corrió
   const [cuentaQ, setCuentaQ] = useState(''); // buscador de cuentas LD en la ficha del cliente
+  const [verControlCol, setVerControlCol] = useState(false); // Arribos: pantalla aparte del control de colectas (Alejo: Arribos = solo llegadas)
   const [busquedaArribos, setBusquedaArribos] = useState(''); // filtro por nombre de cadete en Arribos
   const [zonasArribosAbierto, setZonasArribosAbierto] = useState(false); // desglose por zona plegable (arranca cerrado)
   const [zonaArribos, setZonaArribos] = useState(null); // zona elegida en el desglose: filtra la lista
@@ -2099,7 +2100,6 @@ function ColectasInner({ soloArribos = false, irA }) {
       ahoraMin: minutosAR(ahora), corteMin: minutosDe(CORTE_COLECTAS),
       esHoy: fecha === hoyStr, esPasado: fecha < hoyStr,
     });
-    const colPorChofer = resumenPorChofer(controlCol.items);
 
     return (
       <div style={{ maxWidth:560 }}>
@@ -2111,6 +2111,16 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
           <input type="text" value={busquedaArribos} onChange={e => setBusquedaArribos(e.target.value)}
             placeholder="Buscar cadete..." style={{ ...inpSt, padding:'5px 10px', width:180 }} />
+          {controlCol.total > 0 && !controlFalta && (() => {
+            const col = controlCol.vencidas > 0 ? '#E8615F' : controlCol.colectadas === controlCol.total ? '#2EE6B6' : '#F5C044';
+            return (
+              <button onClick={() => setVerControlCol(v => !v)} aria-pressed={verControlCol}
+                style={{ height:32, padding:'0 12px', borderRadius:10, cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:'inherit', display:'flex', alignItems:'center', gap:6,
+                  border:`1px solid ${col}`, background: verControlCol ? `${col}22` : 'transparent', color: col }}>
+                {verControlCol ? '← Volver a Arribos' : <>Control colectas · {controlCol.colectadas}/{controlCol.total}{controlCol.vencidas > 0 ? ` · ${controlCol.vencidas} sin colectar` : ''}</>}
+              </button>
+            );
+          })()}
           {saveStatus === 'error' && (
             <div style={{ fontSize:12, marginTop:2, color:'#E8615F' }}>✗ Error al guardar</div>
           )}
@@ -2122,11 +2132,11 @@ function ColectasInner({ soloArribos = false, irA }) {
           </div>
         </div>
 
-        <ControlColectas control={controlCol} corte={CORTE_COLECTAS} ldOk={colectaLD.ok && colectaLD.clientesOk}
-          actualizado={colectaLD.actualizado} tablaFalta={controlFalta} cuentasLD={cuentasLD}
-          onMarcar={marcarColectada} onVincular={vincularCuentaLD} />
-
-        {total === 0 ? (
+        {verControlCol ? (
+          <ControlColectas control={controlCol} corte={CORTE_COLECTAS} ldOk={colectaLD.ok && colectaLD.clientesOk}
+            actualizado={colectaLD.actualizado} tablaFalta={controlFalta} cuentasLD={cuentasLD}
+            onMarcar={marcarColectada} onVincular={vincularCuentaLD} />
+        ) : total === 0 ? (
           <div style={{ color:BRAND.muted, padding:'3rem', textAlign:'center' }}>
             <div style={{ fontSize:32, marginBottom:8 }}>🚚</div>
             <div>No hay cadetes con colectas confirmadas para {fechaFmt}.</div>
@@ -2218,14 +2228,6 @@ function ColectasInner({ soloArribos = false, irA }) {
                             : cercaGps ? `está por llegar · a ${gp.dist < 1000 ? gp.dist + ' m' : (gp.dist/1000).toFixed(1) + ' km'} del depósito`
                             : cercaEta ? `está por llegar · ETA ${eta}`
                             : `${c.confirmadas} colecta${c.confirmadas>1?'s':''}`}
-                          {(() => {
-                            const rc = colPorChofer[c.cadete];
-                            if (!rc) return null;
-                            const ok = rc.colectadas === rc.total;
-                            return <span style={{ marginLeft:8, padding:'1px 7px', borderRadius:8, fontSize:11, fontWeight:600,
-                              border:`1px solid ${ok ? 'rgba(46,230,182,0.5)' : 'rgba(245,192,68,0.6)'}`, color: ok ? '#2EE6B6' : '#F5C044' }}>
-                              {rc.colectadas}/{rc.total} colectadas</span>;
-                          })()}
                         </div>
                       } />
 

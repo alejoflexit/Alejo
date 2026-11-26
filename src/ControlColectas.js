@@ -84,7 +84,7 @@ function Fila({ it, cuentasLD, onMarcar, onVincular }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.nombre}</div>
           <div style={{ fontSize: 11, color: BRAND.muted }}>
-            {it.choferes.join(' / ')}{it.compartida ? ' · cuenta compartida con otra sucursal' : ''}
+            {it.choferes.length > 1 ? `dividida: ${it.choferes.join(' / ')}` : ''}{it.compartida ? `${it.choferes.length > 1 ? ' · ' : ''}cuenta compartida con otra sucursal` : ''}
           </div>
         </div>
         {derecha}
@@ -104,6 +104,20 @@ function Fila({ it, cuentasLD, onMarcar, onVincular }) {
   );
 }
 
+function Grupo({ g, soloFaltan, cuentasLD, onMarcar, onVincular }) {
+  const its = soloFaltan ? g.items.filter(i => i.estado !== 'colectada') : g.items;
+  const color = g.hechas === g.total ? C.verde : g.vencidas > 0 ? C.rojo : C.amarillo;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, padding: '0 2px' }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: BRAND.white }}>{g.chofer}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color }}>{g.hechas}/{g.total} colectadas</span>
+      </div>
+      {its.map(it => <Fila key={it.clienteId} it={it} cuentasLD={cuentasLD} onMarcar={onMarcar} onVincular={onVincular} />)}
+    </div>
+  );
+}
+
 export default function ControlColectas({ control, corte, ldOk, actualizado, tablaFalta, cuentasLD, onMarcar, onVincular }) {
   const [verColectadas, setVerColectadas] = useState(false);
   if (!control || control.total === 0) return null;
@@ -117,6 +131,17 @@ export default function ControlColectas({ control, corte, ldOk, actualizado, tab
   const faltan = items.filter(i => i.estado !== 'colectada');
   const hechas = items.filter(i => i.estado === 'colectada');
   const colorPct = pct === 100 ? C.verde : vencidas > 0 ? C.rojo : C.amarillo;
+  // Agrupado por cadete (Alejo 25/11): una colecta dividida aparece en cada chofer.
+  const porChofer = {};
+  items.forEach(it => it.choferes.forEach(ch => { (porChofer[ch] = porChofer[ch] || []).push(it); }));
+  const grupos = Object.entries(porChofer).map(([chofer, its]) => ({
+    chofer, items: its, total: its.length,
+    hechas: its.filter(i => i.estado === 'colectada').length,
+    vencidas: its.filter(i => i.estado === 'vencida').length,
+  }));
+  const gruposFaltan = grupos.filter(g => g.hechas < g.total)
+    .sort((a, b) => (b.vencidas > 0) - (a.vencidas > 0) || a.chofer.localeCompare(b.chofer, 'es'));
+  const gruposOk = grupos.filter(g => g.hechas === g.total).sort((a, b) => a.chofer.localeCompare(b.chofer, 'es'));
   return (
     <div style={{ background: BRAND.navyCard, border: `1px solid ${vencidas > 0 ? 'rgba(232,97,95,0.45)' : BRAND.border}`, borderRadius: 14, padding: '16px 18px', marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
@@ -130,16 +155,16 @@ export default function ControlColectas({ control, corte, ldOk, actualizado, tab
         Corte {corte}{faltan.length ? ` · faltan ${faltan.length}` : ''}
         {ldOk ? (actualizado ? ` · LightData ${hora(actualizado)}` : '') : ' · no se pudo leer LightData'}
       </div>
-      {faltan.map(it => <Fila key={it.clienteId} it={it} cuentasLD={cuentasLD} onMarcar={onMarcar} onVincular={onVincular} />)}
+      {gruposFaltan.map(g => <Grupo key={g.chofer} g={g} soloFaltan cuentasLD={cuentasLD} onMarcar={onMarcar} onVincular={onVincular} />)}
       {faltan.length === 0 && <div style={{ fontSize: 12, color: C.verde, marginTop: 10, fontWeight: 600 }}>✓ Se colectó todo</div>}
-      {hechas.length > 0 && (
+      {gruposOk.length > 0 && (
         <>
           <button onClick={() => setVerColectadas(v => !v)} aria-expanded={verColectadas}
-            style={{ marginTop: 10, padding: '6px 0', background: 'transparent', border: 'none', color: C.verde, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ marginTop: 12, padding: '6px 0', background: 'transparent', border: 'none', color: C.verde, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontFamily: 'inherit' }}>
             <span style={{ display: 'inline-block', transform: verColectadas ? 'rotate(180deg)' : 'none', fontSize: 11 }}>▼</span>
-            {verColectadas ? 'Ocultar colectadas' : `Ver las ${hechas.length} colectadas`}
+            {verColectadas ? 'Ocultar los que completaron' : `Ver los ${gruposOk.length} cadetes que completaron (${hechas.length} colectas)`}
           </button>
-          {verColectadas && hechas.map(it => <Fila key={it.clienteId} it={it} cuentasLD={cuentasLD} onMarcar={onMarcar} onVincular={onVincular} />)}
+          {verColectadas && gruposOk.map(g => <Grupo key={g.chofer} g={g} cuentasLD={cuentasLD} onMarcar={onMarcar} onVincular={onVincular} />)}
         </>
       )}
     </div>
