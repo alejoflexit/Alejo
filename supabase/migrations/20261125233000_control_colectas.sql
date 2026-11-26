@@ -22,3 +22,7 @@ create policy "equipo todo" on public.colectas_cliente_ld
 alter table public.colectas_registros
   add column if not exists colectado_manual_at timestamptz,
   add column if not exists colectado_manual_por text;
+
+-- (agregado 25/11 21:40) El control lee los envíos del día por fecha_flexit con LIKE 'dd/mm/yyyy%':
+-- sin índice tarda ~6 s y a veces da timeout. Índice para búsquedas por prefijo.
+create index if not exists envios_busqueda_fecha_flexit_pref on public.envios_busqueda (fecha_flexit text_pattern_ops);

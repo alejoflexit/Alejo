@@ -613,12 +613,13 @@ function ColectasInner({ soloArribos = false, irA }) {
     if (navView !== 'arribos' || !fecha || !Object.keys(codigoAId).length) return;
     const [y, m, d] = fecha.split('-');
     let vivo = true;
-    const traer = () => sbFetch(`envios_busqueda?select=cod_cliente,estado&fecha_flexit=like.${d}/${m}/${y}*&limit=20000`)
+    // La consulta puede tardar (tabla grande): un reintento a los 5 s si da timeout. Si falla, queda el último dato.
+    const traer = (intento = 1) => sbFetch(`envios_busqueda?select=cod_cliente,estado&fecha_flexit=like.${d}/${m}/${y}*&limit=20000`)
       .then(rows => { if (vivo) setIngresoLD(ingresoPorCuenta(rows, codigoAId)); })
-      .catch(() => { if (vivo) setIngresoLD(null); });
+      .catch(() => { if (vivo && intento < 2) setTimeout(() => { if (vivo) traer(2); }, 5000); });
     setIngresoLD(null);
     traer();
-    const iv = fecha === todayStr() ? setInterval(traer, 300000) : null;
+    const iv = fecha === todayStr() ? setInterval(() => traer(), 300000) : null;
     return () => { vivo = false; clearInterval(iv); };
   }, [navView, fecha, codigoAId]);
 
