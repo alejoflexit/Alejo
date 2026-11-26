@@ -24,7 +24,13 @@ Saber si cada chofer pasó por las colectas que se le asignaron (el 25/11 dos ca
 ## Vínculos iniciales
 Cruzados por Claude el 25/11 (nombre + días en que el cliente estuvo verde y LightData registró colecta, 16 días hábiles) y confirmados por Alejo los dudosos. Se cargan con `origen='auto'`.
 
+## Respaldo "entró a planta" (25/11 noche)
+- Algunos choferes se saltean "colectado" y lo ponen directo en planta. Por eso también cuenta como colectada si los envíos del cliente con Fecha Flexit de hoy ya no están "A retirar" (envios_busqueda, sync cada 5 min de 13 a 16 hs).
+- Código LD de cada cuenta: `colectas_cliente_ld.ld_codigo` (llenado por nombre de fantasía) o `clientes_tokens`. El sync ahora guarda `envios_busqueda.nombre_fantasia`.
+- Índice `envios_busqueda_fecha_flexit_pref` (la consulta pasó de ~6 s a 0,2 s).
+- Resultado 25/11: 112 de 120. Rojas reales: Titilandia, Energon, Van Beek, SC Neumáticos, Phi Digital, Iamique, SecoTop (+ Imperial Imports sin cuenta).
+
 ## Pendiente
-1. Alejo corre la migración (Supabase › SQL Editor). Después se cargan los vínculos iniciales.
+1. ~~Migración y vínculos iniciales~~ hechos (229 vínculos, 217 con código).
 2. Clientes sin cuenta y clientes verdes que LightData casi nunca registra (Lemirk, Ursino, Gastrofactory, etc.): definir con Alejo.
 3. Alerta 13:30 al grupo de soporte (falta definir canal y armarla).
