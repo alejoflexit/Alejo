@@ -1467,10 +1467,16 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
     const n = new Map();
     casos.forEach((c) => { if (c.etapa === "deposito" && !c.cerrado) n.set(c.cliente || "(sin cliente)", (n.get(c.cliente || "(sin cliente)") || 0) + 1); });
     Object.keys(mapa).forEach((k) => { if (!n.has(k)) n.set(k, 0); });
+    // 27/11/2026 (caso Dinámica): también los sellers sin nada en el cuartito ahora (calle, devueltos, retiros),
+    // así se les puede dar lugar antes de que llegue el paquete
+    casos.forEach((c) => { if (c.cliente && !n.has(c.cliente)) n.set(c.cliente, 0); });
     return [...n.entries()].map(([cliente, cant]) => ({ cliente, cant })).sort((a, b) => b.cant - a.cant || a.cliente.localeCompare(b.cliente));
   }, [casos, mapa]);
   const q = busca.trim().toLowerCase();
-  const vis = filas.filter((f) => !q || f.cliente.toLowerCase().includes(q) || String(mapa[f.cliente] || "").toLowerCase().includes(q));
+  const qn = q.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const vis = filas.filter((f) => !q || f.cliente.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(qn) || String(mapa[f.cliente] || "").toLowerCase().includes(q));
+  // Seller que todavía no aparece en ninguna devolución: se agrega con el nombre tal cual figura en LightData
+  const nuevo = busca.trim().length >= 3 && !filas.some((f) => f.cliente.toLowerCase() === q) ? busca.trim() : null;
   return createPortal(
     <div className="dv-modal-fondo" onClick={onCerrar}>
       <div className="dv-modal" style={{ width: "min(560px,100%)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Ubicaciones del cuartito">
@@ -1480,6 +1486,20 @@ function UbicacionesModal({ casos, mapa, onGuardar, onCerrar }) {
           <input className="dv-input" style={{ width: "100%", marginTop: 10 }} placeholder="Buscar seller o código" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
         <div className="dv-modal-cuerpo" style={{ padding: "4px 12px" }}>
+          {nuevo && (
+            <div className="dv-listo" style={{ cursor: "default" }}>
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <b>{nuevo}</b>
+                <span style={{ display: "block", fontSize: 12, color: C.ink3 }}>{vis.length ? "¿No es ninguno de abajo? Agregalo con el nombre como figura en LightData" : "No tiene devoluciones todavía: agregalo con el nombre como figura en LightData"}</span>
+                {estado[nuevo] === "ok" && <span style={{ display: "block", fontSize: 12, color: C.teal }}>✓ Guardado</span>}
+                {estado[nuevo] && !["ok", "guardando"].includes(estado[nuevo]) && <span style={{ display: "block", fontSize: 12, color: "#f87171" }}>No se guardó: {estado[nuevo]}</span>}
+              </span>
+              <select className="dv-input" style={{ width: 170, fontFamily: C.grotesk, fontWeight: 700 }} value="" onChange={(e) => e.target.value && guardar(nuevo, e.target.value)} aria-label={`Ubicación de ${nuevo}`}>
+                <option value="">Elegir lugar…</option>
+                {LUGARES.map((x) => <option key={x} value={x}>{NOTA_LUGAR[x] || x}</option>)}
+              </select>
+            </div>
+          )}
           {vis.map((f) => {
             const sugerir = !mapa[f.cliente] && f.cant >= 5;
             return (
