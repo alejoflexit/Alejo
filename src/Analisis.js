@@ -450,7 +450,14 @@ export default function Analisis({ semanas }) {
     let alive = true;
     (async () => {
       try {
-        const z = await sbGet("semanas_zonas?select=fecha,label,localidad,localidad_norm,cantidad,entregados,pendientes,demorados,dem21,post21,envios_ml,nadie,sameday,zona_cp&order=fecha.asc&limit=100000");
+        // Supabase corta en 10.000 filas por pedido: traer por paginas para no perder los dias nuevos.
+        const z = [];
+        for (let off = 0; ; off += 5000) {
+          const pag = await sbGet(`semanas_zonas?select=fecha,label,localidad,localidad_norm,cantidad,entregados,pendientes,demorados,dem21,post21,envios_ml,nadie,sameday,zona_cp&order=fecha.asc,id.asc&limit=5000&offset=${off}`);
+          if (!Array.isArray(pag)) break;
+          z.push(...pag);
+          if (pag.length < 5000) break;
+        }
         if (alive) setZonasRaw(Array.isArray(z) ? z : []);
       } catch (e) { if (alive) { setZonasRaw([]); setZonasErr(String(e.message || e)); } }
       try {

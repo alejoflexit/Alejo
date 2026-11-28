@@ -271,13 +271,26 @@ async function supabaseFetch(path, options = {}) {
   return text ? JSON.parse(text) : [];
 }
 
+// Supabase devuelve como maximo 10.000 filas por pedido: traer por paginas
+// para no perder los dias mas nuevos cuando la tabla crece.
+async function supabaseFetchTodo(base) {
+  const PAGINA = 5000;
+  let todas = [];
+  for (let offset = 0; ; offset += PAGINA) {
+    const filas = await supabaseFetch(`${base}&order=fecha.asc,id.asc&limit=${PAGINA}&offset=${offset}`);
+    todas = todas.concat(filas);
+    if (filas.length < PAGINA) break;
+  }
+  return todas;
+}
+
 async function cargarDesdeSupabase() {
   let rows;
   try {
-    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,demorados_flexit,horas,demorados_detalle,dem21_detalle,sin_datos_detalle&order=fecha.asc&limit=50000");
+    rows = await supabaseFetchTodo("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta,demorados_flexit,horas,demorados_detalle,dem21_detalle,sin_datos_detalle");
   } catch(e) {
-    // Columna demorados_detalle no existe aún — usar query sin ella
-    rows = await supabaseFetch("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta&order=fecha.asc&limit=50000");
+    // Columna demorados_detalle no existe aun — usar query sin ella
+    rows = await supabaseFetchTodo("semanas?select=id,label,fecha,cadete,cantidad,pendientes,demorados,envios_ml,post21,dem21,envios_particular,inicio_ruta,fin_ruta");
   }
   const map = {};
   for (const r of rows) {
